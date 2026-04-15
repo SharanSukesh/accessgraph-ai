@@ -1,0 +1,554 @@
+{
+  "org_name": "Acme Corp Demo",
+  "org_domain": "acme-demo.com",
+  "users": [
+    {
+      "Id": "005000000001AAA",
+      "Username": "alice@acme-demo.com",
+      "Name": "Alice Johnson",
+      "Email": "alice@acme-demo.com",
+      "ProfileId": "00e000000001AAA",
+      "UserRoleId": "00E000000001AAA",
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Sales",
+      "Title": "Sales Manager"
+    },
+    {
+      "Id": "005000000001BBB",
+      "Username": "bob@acme-demo.com",
+      "Name": "Bob Smith",
+      "Email": "bob@acme-demo.com",
+      "ProfileId": "00e000000001AAA",
+      "UserRoleId": "00E000000001BBB",
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Sales",
+      "Title": "Sales Representative"
+    },
+    {
+      "Id": "005000000001CCC",
+      "Username": "carol@acme-demo.com",
+      "Name": "Carol Martinez",
+      "Email": "carol@acme-demo.com",
+      "ProfileId": "00e000000001BBB",
+      "UserRoleId": "00E000000001CCC",
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Support",
+      "Title": "Support Agent"
+    },
+    {
+      "Id": "005000000001DDD",
+      "Username": "david@acme-demo.com",
+      "Name": "David Lee",
+      "Email": "david@acme-demo.com",
+      "ProfileId": "00e000000001AAA",
+      "UserRoleId": "00E000000001BBB",
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Sales",
+      "Title": "Sales Representative"
+    },
+    {
+      "Id": "005000000001EEE",
+      "Username": "emma@acme-demo.com",
+      "Name": "Emma Wilson",
+      "Email": "emma@acme-demo.com",
+      "ProfileId": "00e000000001BBB",
+      "UserRoleId": "00E000000001CCC",
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Support",
+      "Title": "Support Agent"
+    },
+    {
+      "Id": "005000000001FFF",
+      "Username": "frank@acme-demo.com",
+      "Name": "Frank Chen",
+      "Email": "frank@acme-demo.com",
+      "ProfileId": "00e000000001CCC",
+      "UserRoleId": "00E000000001DDD",
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Engineering",
+      "Title": "Senior Engineer"
+    },
+    {
+      "Id": "005000000001GGG",
+      "Username": "grace@acme-demo.com",
+      "Name": "Grace Taylor",
+      "Email": "grace@acme-demo.com",
+      "ProfileId": "00e000000001DDD",
+      "UserRoleId": null,
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "Finance",
+      "Title": "Accountant"
+    },
+    {
+      "Id": "005000000001HHH",
+      "Username": "henry@acme-demo.com",
+      "Name": "Henry Rodriguez",
+      "Email": "henry@acme-demo.com",
+      "ProfileId": "00e000000001EEE",
+      "UserRoleId": null,
+      "IsActive": true,
+      "UserType": "Standard",
+      "Department": "HR",
+      "Title": "HR Manager"
+    }
+  ],
+  "roles": [
+    {
+      "Id": "00E000000001AAA",
+      "Name": "Sales Manager",
+      "ParentRoleId": null
+    },
+    {
+      "Id": "00E000000001BBB",
+      "Name": "Sales Representative",
+      "ParentRoleId": "00E000000001AAA"
+    },
+    {
+      "Id": "00E000000001CCC",
+      "Name": "Support Agent",
+      "ParentRoleId": null
+    },
+    {
+      "Id": "00E000000001DDD",
+      "Name": "Engineering",
+      "ParentRoleId": null
+    }
+  ],
+  "profiles": [
+    {
+      "Id": "00e000000001AAA",
+      "Name": "Sales User"
+    },
+    {
+      "Id": "00e000000001BBB",
+      "Name": "Support User"
+    },
+    {
+      "Id": "00e000000001CCC",
+      "Name": "Standard User"
+    },
+    {
+      "Id": "00e000000001DDD",
+      "Name": "Read Only"
+    },
+    {
+      "Id": "00e000000001EEE",
+      "Name": "Custom Limited"
+    }
+  ],
+  "permission_sets": [
+    {
+      "Id": "0PS000000001AAA",
+      "Name": "Sales_User_Profile_PS",
+      "Label": "Sales User Profile",
+      "IsOwnedByProfile": true,
+      "ProfileId": "00e000000001AAA"
+    },
+    {
+      "Id": "0PS000000001BBB",
+      "Name": "Support_User_Profile_PS",
+      "Label": "Support User Profile",
+      "IsOwnedByProfile": true,
+      "ProfileId": "00e000000001BBB"
+    },
+    {
+      "Id": "0PS000000001CCC",
+      "Name": "Standard_User_Profile_PS",
+      "Label": "Standard User Profile",
+      "IsOwnedByProfile": true,
+      "ProfileId": "00e000000001CCC"
+    },
+    {
+      "Id": "0PS000000001DDD",
+      "Name": "Read_Only_Profile_PS",
+      "Label": "Read Only Profile",
+      "IsOwnedByProfile": true,
+      "ProfileId": "00e000000001DDD"
+    },
+    {
+      "Id": "0PS000000001EEE",
+      "Name": "Custom_Limited_Profile_PS",
+      "Label": "Custom Limited Profile",
+      "IsOwnedByProfile": true,
+      "ProfileId": "00e000000001EEE"
+    },
+    {
+      "Id": "0PS000000001FFF",
+      "Name": "Opportunity_Full_Access",
+      "Label": "Opportunity Full Access",
+      "IsOwnedByProfile": false,
+      "ProfileId": null
+    },
+    {
+      "Id": "0PS000000001GGG",
+      "Name": "Account_Manager",
+      "Label": "Account Manager",
+      "IsOwnedByProfile": false,
+      "ProfileId": null
+    },
+    {
+      "Id": "0PS000000001HHH",
+      "Name": "Case_Manager",
+      "Label": "Case Manager",
+      "IsOwnedByProfile": false,
+      "ProfileId": null
+    },
+    {
+      "Id": "0PS000000001III",
+      "Name": "Contact_Full",
+      "Label": "Contact Full Access",
+      "IsOwnedByProfile": false,
+      "ProfileId": null
+    },
+    {
+      "Id": "0PS000000001JJJ",
+      "Name": "Quote_Access",
+      "Label": "Quote Access",
+      "IsOwnedByProfile": false,
+      "ProfileId": null
+    },
+    {
+      "Id": "0PS000000001KKK",
+      "Name": "Sensitive_Data_Access",
+      "Label": "Sensitive Data Access",
+      "IsOwnedByProfile": false,
+      "ProfileId": null
+    }
+  ],
+  "permission_set_groups": [
+    {
+      "Id": "0PG000000001AAA",
+      "DeveloperName": "Sales_Manager_PSG",
+      "MasterLabel": "Sales Manager PSG"
+    },
+    {
+      "Id": "0PG000000001BBB",
+      "DeveloperName": "Sales_Rep_PSG",
+      "MasterLabel": "Sales Representative PSG"
+    }
+  ],
+  "permission_set_group_components": [
+    {
+      "Id": "0PC000000001AAA",
+      "PermissionSetGroupId": "0PG000000001AAA",
+      "PermissionSetId": "0PS000000001FFF"
+    },
+    {
+      "Id": "0PC000000001BBB",
+      "PermissionSetGroupId": "0PG000000001AAA",
+      "PermissionSetId": "0PS000000001GGG"
+    },
+    {
+      "Id": "0PC000000001CCC",
+      "PermissionSetGroupId": "0PG000000001BBB",
+      "PermissionSetId": "0PS000000001FFF"
+    }
+  ],
+  "permission_set_assignments": [
+    {
+      "Id": "0Pa000000001AAA",
+      "AssigneeId": "005000000001AAA",
+      "PermissionSetId": "0PS000000001AAA"
+    },
+    {
+      "Id": "0Pa000000001AAB",
+      "AssigneeId": "005000000001AAA",
+      "PermissionSetId": "0PG000000001AAA"
+    },
+    {
+      "Id": "0Pa000000001AAC",
+      "AssigneeId": "005000000001AAA",
+      "PermissionSetId": "0PS000000001HHH"
+    },
+    {
+      "Id": "0Pa000000001AAD",
+      "AssigneeId": "005000000001AAA",
+      "PermissionSetId": "0PS000000001III"
+    },
+    {
+      "Id": "0Pa000000001AAE",
+      "AssigneeId": "005000000001AAA",
+      "PermissionSetId": "0PS000000001JJJ"
+    },
+    {
+      "Id": "0Pa000000001AAF",
+      "AssigneeId": "005000000001AAA",
+      "PermissionSetId": "0PS000000001KKK"
+    },
+    {
+      "Id": "0Pa000000001BBB",
+      "AssigneeId": "005000000001BBB",
+      "PermissionSetId": "0PS000000001AAA"
+    },
+    {
+      "Id": "0Pa000000001CCC",
+      "AssigneeId": "005000000001CCC",
+      "PermissionSetId": "0PS000000001BBB"
+    },
+    {
+      "Id": "0Pa000000001CCD",
+      "AssigneeId": "005000000001CCC",
+      "PermissionSetId": "0PS000000001HHH"
+    },
+    {
+      "Id": "0Pa000000001CCE",
+      "AssigneeId": "005000000001CCC",
+      "PermissionSetId": "0PS000000001III"
+    },
+    {
+      "Id": "0Pa000000001DDD",
+      "AssigneeId": "005000000001DDD",
+      "PermissionSetId": "0PS000000001AAA"
+    },
+    {
+      "Id": "0Pa000000001DDE",
+      "AssigneeId": "005000000001DDD",
+      "PermissionSetId": "0PG000000001BBB"
+    },
+    {
+      "Id": "0Pa000000001EEE",
+      "AssigneeId": "005000000001EEE",
+      "PermissionSetId": "0PS000000001BBB"
+    },
+    {
+      "Id": "0Pa000000001EEF",
+      "AssigneeId": "005000000001EEE",
+      "PermissionSetId": "0PS000000001HHH"
+    },
+    {
+      "Id": "0Pa000000001FFF",
+      "AssigneeId": "005000000001FFF",
+      "PermissionSetId": "0PS000000001CCC"
+    },
+    {
+      "Id": "0Pa000000001GGG",
+      "AssigneeId": "005000000001GGG",
+      "PermissionSetId": "0PS000000001DDD"
+    },
+    {
+      "Id": "0Pa000000001HHH",
+      "AssigneeId": "005000000001HHH",
+      "PermissionSetId": "0PS000000001EEE"
+    }
+  ],
+  "object_permissions": [
+    {
+      "Id": "100000000001AAA",
+      "ParentId": "0PS000000001AAA",
+      "SobjectType": "Account",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001AAB",
+      "ParentId": "0PS000000001AAA",
+      "SobjectType": "Contact",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001AAC",
+      "ParentId": "0PS000000001AAA",
+      "SobjectType": "Opportunity",
+      "PermissionsRead": true,
+      "PermissionsCreate": false,
+      "PermissionsEdit": false,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001BBB",
+      "ParentId": "0PS000000001BBB",
+      "SobjectType": "Case",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001BBC",
+      "ParentId": "0PS000000001BBB",
+      "SobjectType": "Contact",
+      "PermissionsRead": true,
+      "PermissionsCreate": false,
+      "PermissionsEdit": false,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001CCC",
+      "ParentId": "0PS000000001CCC",
+      "SobjectType": "Account",
+      "PermissionsRead": true,
+      "PermissionsCreate": false,
+      "PermissionsEdit": false,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001DDD",
+      "ParentId": "0PS000000001DDD",
+      "SobjectType": "Account",
+      "PermissionsRead": true,
+      "PermissionsCreate": false,
+      "PermissionsEdit": false,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001EEE",
+      "ParentId": "0PS000000001FFF",
+      "SobjectType": "Opportunity",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": false,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001FFF",
+      "ParentId": "0PS000000001GGG",
+      "SobjectType": "Account",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": true,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001GGG",
+      "ParentId": "0PS000000001HHH",
+      "SobjectType": "Case",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": true,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001HHH",
+      "ParentId": "0PS000000001III",
+      "SobjectType": "Contact",
+      "PermissionsRead": true,
+      "PermissionsCreate": true,
+      "PermissionsEdit": true,
+      "PermissionsDelete": true,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001III",
+      "ParentId": "0PS000000001JJJ",
+      "SobjectType": "Quote",
+      "PermissionsRead": true,
+      "PermissionsCreate": false,
+      "PermissionsEdit": false,
+      "PermissionsDelete": true,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
+    }
+  ],
+  "field_permissions": [
+    {
+      "Id": "200000000001AAA",
+      "ParentId": "0PS000000001AAA",
+      "SobjectType": "Account",
+      "Field": "Account.AnnualRevenue",
+      "PermissionsRead": true,
+      "PermissionsEdit": false
+    },
+    {
+      "Id": "200000000001BBB",
+      "ParentId": "0PS000000001BBB",
+      "SobjectType": "Contact",
+      "Field": "Contact.Email",
+      "PermissionsRead": true,
+      "PermissionsEdit": false
+    },
+    {
+      "Id": "200000000001CCC",
+      "ParentId": "0PS000000001FFF",
+      "SobjectType": "Opportunity",
+      "Field": "Opportunity.Amount",
+      "PermissionsRead": true,
+      "PermissionsEdit": true
+    },
+    {
+      "Id": "200000000001DDD",
+      "ParentId": "0PS000000001GGG",
+      "SobjectType": "Account",
+      "Field": "Account.AnnualRevenue",
+      "PermissionsRead": true,
+      "PermissionsEdit": true
+    },
+    {
+      "Id": "200000000001EEE",
+      "ParentId": "0PS000000001HHH",
+      "SobjectType": "Case",
+      "Field": "Case.Internal_Severity__c",
+      "PermissionsRead": true,
+      "PermissionsEdit": true
+    },
+    {
+      "Id": "200000000001FFF",
+      "ParentId": "0PS000000001III",
+      "SobjectType": "Contact",
+      "Field": "Contact.SSN__c",
+      "PermissionsRead": true,
+      "PermissionsEdit": false
+    },
+    {
+      "Id": "200000000001GGG",
+      "ParentId": "0PS000000001KKK",
+      "SobjectType": "Account",
+      "Field": "Account.CreditScore__c",
+      "PermissionsRead": true,
+      "PermissionsEdit": true
+    },
+    {
+      "Id": "200000000001HHH",
+      "ParentId": "0PS000000001KKK",
+      "SobjectType": "Contact",
+      "Field": "Contact.SSN__c",
+      "PermissionsRead": true,
+      "PermissionsEdit": true
+    }
+  ],
+  "sensitive_objects": ["Quote"],
+  "sensitive_fields": [
+    "Account.AnnualRevenue",
+    "Account.CreditScore__c",
+    "Contact.SSN__c",
+    "Opportunity.Amount",
+    "Case.Internal_Severity__c"
+  ],
+  "anomaly_notes": {
+    "alice_over_permissioned": "Alice has 6 permission set assignments including sensitive data access. Has edit on AnnualRevenue. Has unique Quote delete access. 27+ effective permissions vs peer median 9.",
+    "bob_under_permissioned": "Bob only has profile permissions, missing standard PSG that David has despite same role.",
+    "carol_sensitive_exposure": "Carol (Support) has SSN field access which is unusual for support role. Also has Case edit which creates anomaly."
+  }
+}

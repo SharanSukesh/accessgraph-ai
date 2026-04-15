@@ -1,0 +1,56 @@
+# ==============================================
+# AccessGraph AI - Backend Dependencies
+# ==============================================
+
+# Core Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Database - PostgreSQL / SQLite
+sqlalchemy>=2.0.25
+# asyncpg requires compilation on Python 3.14 - use psycopg3 instead
+psycopg[binary]>=3.2.0
+aiosqlite>=0.20.0
+alembic>=1.13.1
+
+# Database - Neo4j
+neo4j==5.16.0
+
+# Cache - Redis
+redis>=5.0.1
+# hiredis requires compilation on Python 3.14 - redis works without it
+
+# HTTP & Networking
+httpx==0.26.0
+python-multipart==0.0.6
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+
+# Utilities
+python-json-logger==2.0.7
+tenacity==8.2.3
+# pydantic-core is automatically installed with pydantic
+
+# Machine Learning & Analytics
+# NOTE: Uncomment these if you have Python 3.9-3.13 or build tools installed
+# For Python 3.14+, these may need to be installed separately when wheels become available
+# scikit-learn>=1.5.2
+# numpy>=1.26.4
+# pandas>=2.2.3
+
+# Graph Utilities
+networkx==3.2.1
+
+# Development
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+black==24.1.1
+ruff==0.1.13
+mypy==1.8.0
+faker==22.6.0

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod +x apps/backend/scripts/seed_demo.py)",
+      "Bash(python -m alembic revision --autogenerate -m \"initial_schema\")",
+      "Bash(pip install -r requirements.txt)",
+      "Bash(python -m alembic upgrade head)",
+      "Bash(pip install aiosqlite)",
+      "Bash(npm install cytoscape cytoscape-cose-bilkent)",
+      "Bash(npm install)",
+      "Bash(npm run dev)",
+      "Bash(python -m uvicorn app.main:app --reload --port 8000)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

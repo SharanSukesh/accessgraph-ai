@@ -1,0 +1,28 @@
+{
+  "name": "accessgraph-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AccessGraph AI - Enterprise Access Intelligence Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker-compose up",
+    "dev:backend": "cd apps/backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:frontend": "cd apps/frontend && npm run dev",
+    "build": "npm run build:packages && npm run build:frontend",
+    "build:packages": "npm run build --workspace=packages/shared-types --workspace=packages/shared-config",
+    "build:frontend": "npm run build --workspace=apps/frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/.next"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
