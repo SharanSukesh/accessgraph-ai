@@ -90,7 +90,7 @@ export function GraphVisualization({
       elements = filterGraphElements(elements, filters)
     }
 
-    // Initialize Cytoscape instance
+    // Initialize Cytoscape instance with enhanced performance settings
     const cy = cytoscape({
       container: containerRef.current,
       elements,
@@ -98,16 +98,21 @@ export function GraphVisualization({
       layout: getLayoutOptions(layout),
       minZoom: 0.1,
       maxZoom: 3,
-      wheelSensitivity: 0.2,
+      wheelSensitivity: 0.15, // Smoother zoom
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: true,
+      // Performance optimizations
+      hideEdgesOnViewport: false, // Keep edges visible for better UX
+      textureOnViewport: true, // Faster rendering during pan/zoom
+      motionBlur: false, // Disabled for snappier feel
+      pixelRatio: 'auto', // Better on retina displays
     })
 
     // Store reference
     cyRef.current = cy
 
-    // Event: Node click
+    // Event: Node click with smooth animation
     cy.on('tap', 'node', (event) => {
       const node = event.target as NodeSingular
       const nodeData = {
@@ -118,6 +123,11 @@ export function GraphVisualization({
       }
       setSelectedNode(node.id())
       setSelectedEdge(null)
+
+      // Add subtle pulse animation on click
+      node.addClass('clicked')
+      setTimeout(() => node.removeClass('clicked'), 300)
+
       onNodeSelect?.(nodeData)
     })
 
@@ -135,6 +145,31 @@ export function GraphVisualization({
       setSelectedEdge(edge.id())
       setSelectedNode(null)
       onEdgeSelect?.(edgeData)
+    })
+
+    // Event: Node hover - highlight connections
+    cy.on('mouseover', 'node', (event) => {
+      const node = event.target as NodeSingular
+      node.addClass('hovered')
+      // Highlight connected edges
+      node.connectedEdges().addClass('highlighted')
+    })
+
+    cy.on('mouseout', 'node', (event) => {
+      const node = event.target as NodeSingular
+      node.removeClass('hovered')
+      node.connectedEdges().removeClass('highlighted')
+    })
+
+    // Event: Edge hover
+    cy.on('mouseover', 'edge', (event) => {
+      const edge = event.target as EdgeSingular
+      edge.addClass('hovered')
+    })
+
+    cy.on('mouseout', 'edge', (event) => {
+      const edge = event.target as EdgeSingular
+      edge.removeClass('hovered')
     })
 
     // Event: Background click
@@ -277,10 +312,28 @@ export function GraphVisualization({
         className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
       />
 
-      {/* Add dimmed class styles */}
+      {/* Add interaction styles */}
       <style jsx global>{`
         .cy-element.dimmed {
           opacity: 0.2;
+        }
+        /* Hover effects */
+        node.hovered {
+          border-width: 5px !important;
+          border-color: #3b82f6 !important;
+        }
+        edge.hovered {
+          width: 4px !important;
+          line-color: #3b82f6 !important;
+        }
+        edge.highlighted {
+          width: 3px !important;
+          opacity: 1 !important;
+        }
+        /* Click animation */
+        node.clicked {
+          transform: scale(1.1);
+          transition: transform 0.3s ease-out;
         }
       `}</style>
     </div>
