@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
