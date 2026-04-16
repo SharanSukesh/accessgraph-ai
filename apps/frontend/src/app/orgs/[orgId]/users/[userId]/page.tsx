@@ -34,7 +34,6 @@ import {
   useUser,
   useUserObjectAccess,
   useUserFieldAccess,
-  useUserExplanations,
   useUserRisk,
   useUserRecommendations,
 } from '@/lib/api/hooks/useUsers'

@@ -8,9 +8,11 @@ import { endpoints } from '../endpoints'
 
 // Types
 interface AnomalyFilters {
+  search?: string
   severity?: string
   userId?: string
   reasonType?: string
+  type?: string
   limit?: number
   offset?: number
 }
