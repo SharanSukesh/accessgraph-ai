@@ -208,8 +208,9 @@ export default function OnboardingPage() {
               if (step < 3) {
                 setStep(step + 1)
               } else {
-                // Final step - would trigger sync and redirect
-                router.push('/orgs/demo-org/dashboard')
+                // Redirect to Salesforce OAuth
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
+                window.location.href = `${apiUrl}/auth/salesforce/authorize`
               }
             }}
           >
