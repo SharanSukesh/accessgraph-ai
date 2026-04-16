@@ -8,6 +8,7 @@ import { endpoints } from '../endpoints'
 
 // Types
 interface RecommendationFilters {
+  search?: string
   type?: string
   severity?: string
   status?: string
