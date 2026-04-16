@@ -52,10 +52,9 @@ git push -u origin main
 4. **Deploy backend**:
    - "+ New" → GitHub Repo → your repo
    - Settings:
-     - Service Name: `backend`
      - Root Directory: `apps/backend`
      - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-   - Variables (add these):
+   - Variables (add these - **TEMPORARY placeholders**, we'll update later):
      ```
      DATABASE_URL=${{Postgres.DATABASE_URL}}
      REDIS_URL=${{Redis.REDIS_URL}}
@@ -65,37 +64,48 @@ git push -u origin main
      BACKEND_HOST=0.0.0.0
      BACKEND_PORT=$PORT
      BACKEND_LOG_LEVEL=info
-     BACKEND_CORS_ORIGINS=http://localhost:3000
+     BACKEND_CORS_ORIGINS=http://localhost:3000  # ⚠️ TEMPORARY - will update in step 7
      DEMO_MODE=true
      SALESFORCE_CLIENT_ID=placeholder
      SALESFORCE_CLIENT_SECRET=placeholder
-     SALESFORCE_REDIRECT_URI=http://localhost:8000/auth/salesforce/callback
+     SALESFORCE_REDIRECT_URI=http://localhost:8000/auth/salesforce/callback  # ⚠️ TEMPORARY
      SALESFORCE_LOGIN_URL=https://login.salesforce.com
      ```
+
+   **Note:** The localhost values are just initial placeholders. We'll update them to real production URLs after Railway generates domains.
 
 5. **Deploy frontend**:
    - "+ New" → GitHub Repo → your repo
    - Settings:
-     - Service Name: `frontend`
      - Root Directory: `apps/frontend`
      - Build Command: `npm run build`
      - Start Command: `npm start`
-   - Variables:
+   - Variables (**TEMPORARY placeholders**):
      ```
-     NEXT_PUBLIC_API_URL=http://localhost:8000
+     NEXT_PUBLIC_API_URL=http://localhost:8000  # ⚠️ TEMPORARY - will update in step 7
      NEXT_PUBLIC_APP_NAME=AccessGraph AI
      NODE_ENV=production
      ```
 
-6. **Generate domains**:
-   - Backend → Settings → Generate Domain → Copy URL
-   - Frontend → Settings → Generate Domain → Copy URL
+6. **Generate Railway domains**:
+   - Backend → Settings → Networking → Generate Domain → **COPY THE URL** 📋
+     - Example: `https://backend-production-abc123.up.railway.app`
+   - Frontend → Settings → Networking → Generate Domain → **COPY THE URL** 📋
+     - Example: `https://frontend-production-xyz789.up.railway.app`
 
-7. **Update frontend env**:
-   - Frontend → Variables → Update:
-     ```
-     NEXT_PUBLIC_API_URL=https://your-backend.up.railway.app
-     ```
+7. **Update variables with REAL production URLs** (this makes it actually work):
+
+   **Backend → Variables → Update these:**
+   ```bash
+   BACKEND_CORS_ORIGINS=https://frontend-production-xyz789.up.railway.app  # ← YOUR ACTUAL FRONTEND URL
+   ```
+
+   **Frontend → Variables → Update this:**
+   ```bash
+   NEXT_PUBLIC_API_URL=https://backend-production-abc123.up.railway.app  # ← YOUR ACTUAL BACKEND URL
+   ```
+
+   **✅ Now it's publicly accessible!** Both services auto-redeploy with real URLs.
 
 **✅ Test**: Visit frontend URL - should load in demo mode!
 
