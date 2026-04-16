@@ -43,7 +43,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            # Don't auto-commit - let the endpoint handle commits
+            # This avoids conflicts with nested commits
         except Exception:
             await session.rollback()
             raise
@@ -55,8 +56,7 @@ async def test_connection() -> bool:
     """Test database connection"""
     try:
         async with engine.begin() as conn:
-            result = await conn.execute(text("SELECT 1"))
-            await result.fetchone()
+            await conn.execute(text("SELECT 1"))
         logger.info("Database connection test successful")
         return True
     except Exception as e:
