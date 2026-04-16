@@ -87,8 +87,16 @@ async def create_organization(
 async def list_organizations(
     db: AsyncSession = Depends(get_database),
 ):
-    """List all organizations"""
-    result = await db.execute(select(Organization))
+    """List all organizations (excludes demo orgs when DEMO_MODE=false)"""
+    from app.core.config import settings
+
+    query = select(Organization)
+
+    # Filter out demo orgs if not in demo mode
+    if not settings.DEMO_MODE:
+        query = query.where(Organization.is_demo == False)
+
+    result = await db.execute(query)
     orgs = result.scalars().all()
     return orgs
 
