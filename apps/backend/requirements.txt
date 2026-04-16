@@ -37,11 +37,9 @@ tenacity==8.2.3
 # pydantic-core is automatically installed with pydantic
 
 # Machine Learning & Analytics
-# NOTE: Uncomment these if you have Python 3.9-3.13 or build tools installed
-# For Python 3.14+, these may need to be installed separately when wheels become available
-# scikit-learn>=1.5.2
-# numpy>=1.26.4
-# pandas>=2.2.3
+scikit-learn>=1.5.2
+numpy>=1.26.4
+pandas>=2.2.3
 
 # Graph Utilities
 networkx==3.2.1
