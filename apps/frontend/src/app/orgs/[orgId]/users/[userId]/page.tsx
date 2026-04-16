@@ -100,7 +100,7 @@ export default function UserDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {user.riskLevel && <RiskBadge level={user.riskLevel} />}
+          {user.riskLevel && <RiskBadge level={user.riskLevel as "low" | "medium" | "high" | "critical"} />}
           <Badge variant={user.isActive ? 'success' : 'default'}>
             {user.isActive ? 'Active' : 'Inactive'}
           </Badge>
