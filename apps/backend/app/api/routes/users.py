@@ -1199,15 +1199,22 @@ async def get_user_graph(
                 "label": "assigned"
             })
 
-    # Add some object nodes that the user has access to (via profile)
+    # Add object and field nodes for all permission sources (profile + permission sets)
+    permission_source_ids = []
     if user.profile_id:
+        permission_source_ids.append(user.profile_id)
+    permission_source_ids.extend([ps.salesforce_id for ps in ps_assignments if ps])
+
+    # Get all object permissions from all sources
+    if permission_source_ids:
         obj_perms_query = select(ObjectPermissionSnapshot).where(
             ObjectPermissionSnapshot.organization_id == org_id,
-            ObjectPermissionSnapshot.parent_id == user.profile_id
-        ).limit(5)  # Limit to avoid overwhelming
+            ObjectPermissionSnapshot.parent_id.in_(permission_source_ids)
+        )
         obj_perms_result = await db.execute(obj_perms_query)
         obj_perms = obj_perms_result.scalars().all()
 
+        # Group by object and source
         for obj_perm in obj_perms:
             object_id = f"object_{obj_perm.sobject_type}"
             # Check if object node already exists
@@ -1216,15 +1223,94 @@ async def get_user_graph(
                     "id": object_id,
                     "type": "object",
                     "label": obj_perm.sobject_type,
-                    "properties": {}
+                    "properties": {
+                        "canRead": obj_perm.permissions_read,
+                        "canCreate": obj_perm.permissions_create,
+                        "canEdit": obj_perm.permissions_edit,
+                        "canDelete": obj_perm.permissions_delete,
+                    }
                 })
-            edges.append({
-                "id": f"profile_obj_{user.profile_id}_{obj_perm.sobject_type}",
-                "source": user.profile_id,
-                "target": object_id,
-                "type": "GRANTS_ACCESS",
-                "label": "grants access"
-            })
+
+            # Create edge from permission source to object
+            source_id = obj_perm.parent_id
+            edge_id = f"ps_obj_{source_id}_{obj_perm.sobject_type}"
+            if not any(e["id"] == edge_id for e in edges):
+                # Build permission label
+                perms = []
+                if obj_perm.permissions_read: perms.append("R")
+                if obj_perm.permissions_create: perms.append("C")
+                if obj_perm.permissions_edit: perms.append("E")
+                if obj_perm.permissions_delete: perms.append("D")
+                perm_label = ",".join(perms) if perms else "access"
+
+                edges.append({
+                    "id": edge_id,
+                    "source": source_id,
+                    "target": object_id,
+                    "type": "GRANTS_ACCESS",
+                    "label": perm_label,
+                    "properties": {
+                        "read": obj_perm.permissions_read,
+                        "create": obj_perm.permissions_create,
+                        "edit": obj_perm.permissions_edit,
+                        "delete": obj_perm.permissions_delete,
+                    }
+                })
+
+    # Add field nodes (limited to avoid overwhelming the graph)
+    from app.domain.models import FieldPermissionSnapshot
+    if permission_source_ids:
+        field_perms_query = select(FieldPermissionSnapshot).where(
+            FieldPermissionSnapshot.organization_id == org_id,
+            FieldPermissionSnapshot.parent_id.in_(permission_source_ids)
+        ).limit(20)  # Limit fields to keep graph manageable
+        field_perms_result = await db.execute(field_perms_query)
+        field_perms = field_perms_result.scalars().all()
+
+        for field_perm in field_perms:
+            field_id = f"field_{field_perm.field}"
+            # Check if field node already exists
+            if not any(n["id"] == field_id for n in nodes):
+                # Parse object.field format
+                if '.' in field_perm.field:
+                    obj_name, field_name = field_perm.field.split('.', 1)
+                else:
+                    obj_name = "Unknown"
+                    field_name = field_perm.field
+
+                nodes.append({
+                    "id": field_id,
+                    "type": "field",
+                    "label": field_name,
+                    "properties": {
+                        "fullName": field_perm.field,
+                        "objectName": obj_name,
+                        "canRead": field_perm.permissions_read,
+                        "canEdit": field_perm.permissions_edit,
+                    }
+                })
+
+            # Create edge from permission source to field
+            source_id = field_perm.parent_id
+            edge_id = f"ps_field_{source_id}_{field_perm.field}"
+            if not any(e["id"] == edge_id for e in edges):
+                # Build permission label
+                perms = []
+                if field_perm.permissions_read: perms.append("R")
+                if field_perm.permissions_edit: perms.append("E")
+                perm_label = ",".join(perms) if perms else "access"
+
+                edges.append({
+                    "id": edge_id,
+                    "source": source_id,
+                    "target": field_id,
+                    "type": "GRANTS_FIELD_ACCESS",
+                    "label": perm_label,
+                    "properties": {
+                        "read": field_perm.permissions_read,
+                        "edit": field_perm.permissions_edit,
+                    }
+                })
 
     return {
         "nodes": nodes,
@@ -1234,6 +1320,154 @@ async def get_user_graph(
             "edgeCount": len(edges),
             "centerNodeId": user_sf_id,
             "generatedAt": datetime.utcnow().isoformat()
+        }
+    }
+
+
+@router.get("/orgs/{org_id}/graph/node/{node_id}/details")
+async def get_node_details(
+    org_id: str,
+    node_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get detailed breakdown of what a specific node (permission set, profile) grants access to"""
+    from app.domain.models import (
+        PermissionSetSnapshot,
+        ProfileSnapshot,
+        ObjectPermissionSnapshot,
+        FieldPermissionSnapshot,
+    )
+
+    # Determine node type and get basic info
+    node_info = {}
+
+    # Try to find it as a permission set
+    ps_query = select(PermissionSetSnapshot).where(
+        PermissionSetSnapshot.organization_id == org_id,
+        PermissionSetSnapshot.salesforce_id == node_id
+    )
+    ps_result = await db.execute(ps_query)
+    ps = ps_result.scalar_one_or_none()
+
+    if ps:
+        node_info = {
+            "id": ps.salesforce_id,
+            "type": "permission_set",
+            "name": ps.name,
+            "label": ps.label,
+            "description": ps.description,
+        }
+    else:
+        # Try as a profile
+        profile_query = select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id,
+            ProfileSnapshot.salesforce_id == node_id
+        )
+        profile_result = await db.execute(profile_query)
+        profile = profile_result.scalar_one_or_none()
+
+        if profile:
+            node_info = {
+                "id": profile.salesforce_id,
+                "type": "profile",
+                "name": profile.name,
+                "description": profile.description,
+            }
+        else:
+            raise HTTPException(status_code=404, detail="Node not found")
+
+    # Get object permissions
+    obj_perms_query = select(ObjectPermissionSnapshot).where(
+        ObjectPermissionSnapshot.organization_id == org_id,
+        ObjectPermissionSnapshot.parent_id == node_id
+    )
+    obj_perms_result = await db.execute(obj_perms_query)
+    obj_perms = obj_perms_result.scalars().all()
+
+    objects_granted = []
+    for obj_perm in obj_perms:
+        permissions = []
+        if obj_perm.permissions_read: permissions.append("Read")
+        if obj_perm.permissions_create: permissions.append("Create")
+        if obj_perm.permissions_edit: permissions.append("Edit")
+        if obj_perm.permissions_delete: permissions.append("Delete")
+        if obj_perm.permissions_view_all_records: permissions.append("View All")
+        if obj_perm.permissions_modify_all_records: permissions.append("Modify All")
+
+        objects_granted.append({
+            "objectName": obj_perm.sobject_type,
+            "permissions": permissions,
+            "canRead": obj_perm.permissions_read,
+            "canCreate": obj_perm.permissions_create,
+            "canEdit": obj_perm.permissions_edit,
+            "canDelete": obj_perm.permissions_delete,
+            "viewAll": obj_perm.permissions_view_all_records,
+            "modifyAll": obj_perm.permissions_modify_all_records,
+        })
+
+    # Get field permissions
+    field_perms_query = select(FieldPermissionSnapshot).where(
+        FieldPermissionSnapshot.organization_id == org_id,
+        FieldPermissionSnapshot.parent_id == node_id
+    )
+    field_perms_result = await db.execute(field_perms_query)
+    field_perms = field_perms_result.scalars().all()
+
+    fields_granted = []
+    for field_perm in field_perms:
+        # Parse object.field format
+        if '.' in field_perm.field:
+            obj_name, field_name = field_perm.field.split('.', 1)
+        else:
+            obj_name = "Unknown"
+            field_name = field_perm.field
+
+        permissions = []
+        if field_perm.permissions_read: permissions.append("Read")
+        if field_perm.permissions_edit: permissions.append("Edit")
+
+        fields_granted.append({
+            "fieldName": field_perm.field,
+            "objectName": obj_name,
+            "displayName": field_name,
+            "permissions": permissions,
+            "canRead": field_perm.permissions_read,
+            "canEdit": field_perm.permissions_edit,
+        })
+
+    # Record-level access is a placeholder for now
+    records_info = {
+        "note": "Record-level access analysis requires additional Salesforce data sync",
+        "potentialSources": [
+            "Sharing Rules (criteria-based and owner-based)",
+            "Manual Shares",
+            "Role Hierarchy access",
+            "Territory Rules",
+            "Account/Opportunity/Case Teams",
+        ],
+        "implementationRequired": True,
+    }
+
+    # Other access aspects
+    other_access = {
+        "systemPermissions": [],  # Would need SystemPermissionSnapshot
+        "customPermissions": [],  # Would need CustomPermissionSnapshot
+        "tabVisibility": [],      # Would need TabVisibilitySnapshot
+        "apexClasses": [],        # Would need SetupEntityAccessSnapshot
+    }
+
+    return {
+        "node": node_info,
+        "objectsGranted": objects_granted,
+        "fieldsGranted": fields_granted,
+        "recordsInfo": records_info,
+        "otherAccess": other_access,
+        "summary": {
+            "totalObjects": len(objects_granted),
+            "totalFields": len(fields_granted),
+            "objectsWithFullAccess": sum(1 for obj in objects_granted if
+                obj["canRead"] and obj["canCreate"] and obj["canEdit"] and obj["canDelete"]),
+            "objectsWithModifyAll": sum(1 for obj in objects_granted if obj["modifyAll"]),
         }
     }
 

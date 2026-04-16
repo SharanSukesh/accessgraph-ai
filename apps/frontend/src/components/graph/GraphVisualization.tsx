@@ -273,6 +273,7 @@ export function GraphVisualization({
       {/* Cytoscape container */}
       <div
         ref={containerRef}
+        data-graph-container
         className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
       />
 

@@ -81,42 +81,44 @@ export default function GraphExplorerPage() {
 
   const handleNavigateToNode = (nodeId: string) => {
     // If it's a user node, center on it or load their graph
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
+    const api = getGraphAPI()
     if (api) {
       api.centerOnNode(nodeId)
       api.highlightNeighborhood(nodeId)
     }
   }
 
+  // Get the graph API from the nested container
+  const getGraphAPI = useCallback(() => {
+    const container = graphRef.current?.querySelector('[data-graph-container]') as any
+    return container?.graphAPI as GraphAPI | undefined
+  }, [])
+
   const handleZoomIn = () => {
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
-    api?.zoomIn()
+    getGraphAPI()?.zoomIn()
   }
 
   const handleZoomOut = () => {
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
-    api?.zoomOut()
+    getGraphAPI()?.zoomOut()
   }
 
   const handleFit = () => {
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
-    api?.fitToView()
+    getGraphAPI()?.fitToView()
   }
 
   const handleReset = () => {
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
+    const api = getGraphAPI()
     api?.resetZoom()
     api?.clearHighlight()
   }
 
   const handleLayoutChange = (newLayout: typeof layout) => {
     setLayout(newLayout)
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
-    api?.runLayout(newLayout)
+    getGraphAPI()?.runLayout(newLayout)
   }
 
   const handleExport = (format: 'png' | 'json') => {
-    const api = (graphRef.current as any)?.graphAPI as GraphAPI
+    const api = getGraphAPI()
     if (format === 'png') {
       api?.exportAsPNG(`graph-${selectedUserId}.png`)
     } else {
@@ -319,6 +321,7 @@ export default function GraphExplorerPage() {
           {/* Right Sidebar - Detail Panel */}
           <div className="lg:col-span-1">
             <GraphDetailPanel
+              orgId={orgId}
               selectedNode={selectedNode}
               selectedEdge={selectedEdge}
               onClose={handleBackgroundClick}

@@ -5,11 +5,14 @@
  * Shows details for selected nodes and edges
  */
 
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Badge, RiskBadge } from '@/components/shared/Badge'
 import { Button } from '@/components/shared/Button'
-import { X, ExternalLink, User, Shield, Database, Key, Users } from 'lucide-react'
+import { X, ExternalLink, User, Shield, Database, Key, Users, FileText, Lock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { NODE_TYPES, EDGE_TYPES } from '@/lib/constants'
+import { apiClient } from '@/lib/api/client'
+import { useState } from 'react'
 
 interface NodeData {
   id: string
@@ -28,6 +31,7 @@ interface EdgeData {
 }
 
 interface GraphDetailPanelProps {
+  orgId: string
   selectedNode?: NodeData | null
   selectedEdge?: EdgeData | null
   onClose?: () => void
@@ -36,6 +40,7 @@ interface GraphDetailPanelProps {
 }
 
 export function GraphDetailPanel({
+  orgId,
   selectedNode,
   selectedEdge,
   onClose,
@@ -56,7 +61,7 @@ export function GraphDetailPanel({
   }
 
   if (selectedNode) {
-    return <NodeDetailPanel node={selectedNode} onClose={onClose} onNavigate={onNavigate} className={className} />
+    return <NodeDetailPanel orgId={orgId} node={selectedNode} onClose={onClose} onNavigate={onNavigate} className={className} />
   }
 
   if (selectedEdge) {
@@ -67,16 +72,21 @@ export function GraphDetailPanel({
 }
 
 function NodeDetailPanel({
+  orgId,
   node,
   onClose,
   onNavigate,
   className,
 }: {
+  orgId: string
   node: NodeData
   onClose?: () => void
   onNavigate?: (nodeId: string) => void
   className?: string
 }) {
+  const [showObjects, setShowObjects] = useState(true)
+  const [showFields, setShowFields] = useState(true)
+
   const getNodeIcon = (type: string) => {
     switch (type) {
       case NODE_TYPES.USER.value:
@@ -98,6 +108,18 @@ function NodeDetailPanel({
 
   const Icon = getNodeIcon(node.type)
   const nodeTypeLabel = Object.values(NODE_TYPES).find((t) => t.value === node.type)?.label || node.type
+
+  // Fetch detailed breakdown for permission sets and profiles
+  const shouldFetchDetails = node.type === NODE_TYPES.PERMISSION_SET.value || node.type === NODE_TYPES.PROFILE.value
+
+  const { data: nodeDetails, isLoading: detailsLoading } = useQuery({
+    queryKey: ['node-details', orgId, node.id],
+    queryFn: async () => {
+      const response = await apiClient.get(`/orgs/${orgId}/graph/node/${node.id}/details`)
+      return response
+    },
+    enabled: shouldFetchDetails,
+  })
 
   return (
     <Card variant="bordered" className={className}>
@@ -121,7 +143,7 @@ function NodeDetailPanel({
           )}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 max-h-[600px] overflow-y-auto">
         {/* Node ID */}
         <div>
           <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -235,6 +257,138 @@ function NodeDetailPanel({
                   </span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced details for Permission Sets and Profiles */}
+        {shouldFetchDetails && nodeDetails && (
+          <>
+            {/* Summary */}
+            {nodeDetails.summary && (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                  Access Summary
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">Objects</div>
+                    <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                      {nodeDetails.summary.totalObjects}
+                    </div>
+                  </div>
+                  <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                    <div className="text-xs text-green-600 dark:text-green-400 mb-1">Fields</div>
+                    <div className="text-2xl font-bold text-green-900 dark:text-green-100">
+                      {nodeDetails.summary.totalFields}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Objects Granted Access */}
+            {nodeDetails.objectsGranted && nodeDetails.objectsGranted.length > 0 && (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setShowObjects(!showObjects)}
+                  className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <Database className="h-4 w-4" />
+                    Objects ({nodeDetails.objectsGranted.length})
+                  </span>
+                  {showObjects ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {showObjects && (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {nodeDetails.objectsGranted.map((obj: any) => (
+                      <div
+                        key={obj.objectName}
+                        className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white mb-1">
+                          {obj.objectName}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {obj.permissions.map((perm: string) => (
+                            <Badge key={perm} variant="success" size="sm">
+                              {perm}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Fields Granted Access */}
+            {nodeDetails.fieldsGranted && nodeDetails.fieldsGranted.length > 0 && (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setShowFields(!showFields)}
+                  className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Fields ({nodeDetails.fieldsGranted.length})
+                  </span>
+                  {showFields ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+                {showFields && (
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {nodeDetails.fieldsGranted.map((field: any) => (
+                      <div
+                        key={field.fieldName}
+                        className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs"
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {field.displayName}
+                        </div>
+                        <div className="text-gray-500 dark:text-gray-400 text-xs mb-1">
+                          {field.objectName}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {field.permissions.map((perm: string) => (
+                            <Badge key={perm} variant="success" size="sm">
+                              {perm}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Record-Level Access Info */}
+            {nodeDetails.recordsInfo && (
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  Record-Level Access
+                </div>
+                <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-900 dark:text-amber-100">
+                      {nodeDetails.recordsInfo.note}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Loading state for details */}
+        {shouldFetchDetails && detailsLoading && (
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+              Loading detailed access information...
             </div>
           </div>
         )}
