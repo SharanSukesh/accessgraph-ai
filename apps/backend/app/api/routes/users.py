@@ -387,7 +387,7 @@ async def list_recommendations(
 async def list_objects(
     org_id: str,
     search: Optional[str] = None,
-    limit: int = Query(100, le=1000),
+    limit: int = Query(500, le=10000),
     db: AsyncSession = Depends(get_database),
 ):
     """List unique Salesforce objects from permissions data"""
@@ -412,9 +412,28 @@ async def list_objects(
     result = await db.execute(query)
     objects = result.all()
 
+    def create_label(api_name: str) -> str:
+        """Create a human-readable label from API name"""
+        # Remove __c suffix for custom objects
+        if api_name.endswith('__c'):
+            api_name = api_name[:-3]
+        # Handle camel case (e.g., AccountContactRole -> Account Contact Role)
+        import re
+        # Insert space before uppercase letters
+        label = re.sub(r'([a-z])([A-Z])', r'\1 \2', api_name)
+        # Replace underscores with spaces
+        label = label.replace('_', ' ')
+        return label
+
     return [
         {
+            "id": obj.sobject_type,
             "name": obj.sobject_type,
+            "apiName": obj.sobject_type,
+            "label": create_label(obj.sobject_type),
+            "isCustom": obj.sobject_type.endswith('__c'),
+            "fieldCount": 0,  # Would need to count from field permissions
+            "userCount": obj.permission_count,
             "permissionCount": obj.permission_count,
         }
         for obj in objects
@@ -426,7 +445,7 @@ async def list_fields(
     org_id: str,
     search: Optional[str] = None,
     object_type: Optional[str] = None,
-    limit: int = Query(100, le=1000),
+    limit: int = Query(500, le=10000),
     db: AsyncSession = Depends(get_database),
 ):
     """List unique Salesforce fields from permissions data"""
@@ -459,10 +478,28 @@ async def list_fields(
     result = await db.execute(query)
     fields = result.all()
 
+    def create_label(api_name: str) -> str:
+        """Create a human-readable label from API name"""
+        # Remove object prefix (e.g., Account.Name -> Name)
+        if '.' in api_name:
+            api_name = api_name.split('.')[-1]
+        # Remove __c suffix for custom fields
+        if api_name.endswith('__c'):
+            api_name = api_name[:-3]
+        # Replace underscores with spaces and title case
+        return ' '.join(word.capitalize() for word in api_name.replace('_', ' ').split())
+
     return [
         {
-            "objectType": field.sobject_type,
-            "fieldName": field.field,
+            "id": f"{field.sobject_type}.{field.field}",
+            "objectName": field.sobject_type,
+            "apiName": field.field,
+            "label": create_label(field.field),
+            "dataType": "String",  # We don't have this info yet
+            "isSensitive": False,  # Would need field metadata to determine
+            "isEncrypted": False,  # Would need field metadata to determine
+            "isCustom": field.field.endswith('__c'),
+            "userCount": field.permission_count,
             "permissionCount": field.permission_count,
         }
         for field in fields
