@@ -83,8 +83,15 @@ class SyncOrchestrator:
 
     async def _extract_live_data(self, org_id: str) -> Dict:
         """Extract data from live Salesforce org"""
-        # Get Salesforce connection
-        org = await self.db.get(Organization, org_id)
+        from sqlalchemy.orm import selectinload
+
+        # Get Salesforce connection with eager loading
+        stmt = select(Organization).where(Organization.id == org_id).options(
+            selectinload(Organization.salesforce_connections)
+        )
+        result = await self.db.execute(stmt)
+        org = result.scalar_one_or_none()
+
         if not org:
             raise ValueError(f"Organization not found: {org_id}")
 
