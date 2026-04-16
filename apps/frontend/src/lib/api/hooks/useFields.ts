@@ -41,10 +41,24 @@ export interface FieldFilters {
   sensitive?: string
   isCustom?: boolean
   isEncrypted?: boolean
+  startsWith?: string  // Letter filter A-Z
+  page?: number
+  limit?: number
+}
+
+export interface PaginatedFieldsResponse {
+  fields: SalesforceField[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasMore: boolean
+  }
 }
 
 /**
- * Fetch all fields for an organization
+ * Fetch all fields for an organization with pagination
  */
 export function useFields(orgId: string, filters?: FieldFilters) {
   return useQuery({
@@ -52,15 +66,18 @@ export function useFields(orgId: string, filters?: FieldFilters) {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (filters?.search) params.append('search', filters.search)
-      if (filters?.objectName) params.append('objectName', filters.objectName)
+      if (filters?.objectName) params.append('object_type', filters.objectName)
       if (filters?.sensitive) params.append('sensitive', filters.sensitive)
       if (filters?.isCustom !== undefined)
         params.append('isCustom', String(filters.isCustom))
       if (filters?.isEncrypted !== undefined)
         params.append('isEncrypted', String(filters.isEncrypted))
+      if (filters?.startsWith) params.append('starts_with', filters.startsWith)
+      if (filters?.page) params.append('page', String(filters.page))
+      if (filters?.limit) params.append('limit', String(filters.limit))
 
       const query = params.toString() ? `?${params.toString()}` : ''
-      const data = await apiClient.get<SalesforceField[]>(
+      const data = await apiClient.get<PaginatedFieldsResponse>(
         `${endpoints.fields(orgId)}${query}`
       )
       return data
