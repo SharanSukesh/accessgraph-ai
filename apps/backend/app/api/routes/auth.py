@@ -170,9 +170,17 @@ async def callback(
             logger.info(f"Created new org: {org_id}")
 
         # Redirect to frontend with org ID
-        # In production, redirect to frontend success page
-        frontend_url = settings.BACKEND_CORS_ORIGINS[0] if settings.BACKEND_CORS_ORIGINS else "http://localhost:3000"
+        # Get frontend URL from CORS origins
+        frontend_url = "http://localhost:3000"  # Default for local dev
+        if settings.cors_origins_list:
+            # Use the first CORS origin that looks like a frontend URL
+            for origin in settings.cors_origins_list:
+                if "gentle-love" in origin or "localhost:3000" in origin:
+                    frontend_url = origin
+                    break
+
         redirect_url = f"{frontend_url}/orgs/{org_id}/dashboard?connected=true"
+        logger.info(f"Redirecting to frontend: {redirect_url}")
 
         return RedirectResponse(url=redirect_url)
 
@@ -182,7 +190,14 @@ async def callback(
         logger.error(f"OAuth callback error: {e}", exc_info=True)
 
         # Redirect to frontend error page
-        frontend_url = settings.BACKEND_CORS_ORIGINS[0] if settings.BACKEND_CORS_ORIGINS else "http://localhost:3000"
+        frontend_url = "http://localhost:3000"  # Default for local dev
+        if settings.cors_origins_list:
+            # Use the first CORS origin that looks like a frontend URL
+            for origin in settings.cors_origins_list:
+                if "gentle-love" in origin or "localhost:3000" in origin:
+                    frontend_url = origin
+                    break
+
         error_url = f"{frontend_url}/?error=oauth_failed&message={str(e)}"
 
         return RedirectResponse(url=error_url)
