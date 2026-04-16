@@ -136,7 +136,7 @@ export default function FieldsPage() {
         <CardContent className="py-4">
           <div className="flex flex-wrap gap-2">
             <Button
-              variant={selectedLetter === '' ? 'primary' : 'outline'}
+              variant={selectedLetter === '' ? 'primary' : 'ghost'}
               size="sm"
               onClick={() => handleLetterClick('')}
               className="min-w-[60px]"
@@ -146,7 +146,7 @@ export default function FieldsPage() {
             {ALPHABET.map((letter) => (
               <Button
                 key={letter}
-                variant={selectedLetter === letter ? 'primary' : 'outline'}
+                variant={selectedLetter === letter ? 'primary' : 'ghost'}
                 size="sm"
                 onClick={() => handleLetterClick(letter)}
                 className="w-10 h-10 p-0 font-semibold"
@@ -303,7 +303,7 @@ export default function FieldsPage() {
               {pagination && pagination.totalPages > 1 && (
                 <div className="mt-6 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => handlePageChange(page - 1)}
                     disabled={page === 1}
@@ -342,7 +342,7 @@ export default function FieldsPage() {
                   </div>
 
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={() => handlePageChange(page + 1)}
                     disabled={!pagination.hasMore}
