@@ -495,9 +495,9 @@ async def get_object_details(
     perms_result = await db.execute(perms_query)
     permissions = perms_result.scalars().all()
 
-    # Get profiles and permission sets that grant access
-    profiles_with_access = []
-    permission_sets_with_access = []
+    # Get profiles and permission sets that grant access (deduplicate by ID)
+    profiles_dict = {}
+    permission_sets_dict = {}
 
     for perm in permissions:
         # Check if it's a profile or permission set
@@ -509,7 +509,7 @@ async def get_object_details(
         profile = profile_result.scalar_one_or_none()
 
         if profile:
-            profiles_with_access.append({
+            profiles_dict[profile.salesforce_id] = {
                 "id": profile.salesforce_id,
                 "name": profile.name,
                 "read": perm.permissions_read,
@@ -518,7 +518,7 @@ async def get_object_details(
                 "delete": perm.permissions_delete,
                 "viewAll": perm.permissions_view_all_records,
                 "modifyAll": perm.permissions_modify_all_records,
-            })
+            }
         else:
             # It's a permission set
             ps_query = select(PermissionSetSnapshot).where(
@@ -529,7 +529,7 @@ async def get_object_details(
             ps = ps_result.scalar_one_or_none()
 
             if ps:
-                permission_sets_with_access.append({
+                permission_sets_dict[ps.salesforce_id] = {
                     "id": ps.salesforce_id,
                     "name": ps.name,
                     "label": ps.label,
@@ -539,7 +539,10 @@ async def get_object_details(
                     "delete": perm.permissions_delete,
                     "viewAll": perm.permissions_view_all_records,
                     "modifyAll": perm.permissions_modify_all_records,
-                })
+                }
+
+    profiles_with_access = list(profiles_dict.values())
+    permission_sets_with_access = list(permission_sets_dict.values())
 
     # Get users with access (through profiles or permission sets)
     users_with_access_set = set()
