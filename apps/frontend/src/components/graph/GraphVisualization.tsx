@@ -94,7 +94,7 @@ export function GraphVisualization({
     const cy = cytoscape({
       container: containerRef.current,
       elements,
-      style: getCytoscapeStylesheet(),
+      style: getCytoscapeStylesheet() as any,
       layout: getLayoutOptions(layout),
       minZoom: 0.1,
       maxZoom: 3,
