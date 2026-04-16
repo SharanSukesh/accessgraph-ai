@@ -88,16 +88,37 @@ export const userKeys = {
 }
 
 /**
+ * Normalize user data from API (handles both snake_case and camelCase)
+ */
+function normalizeUser(user: any): User {
+  return {
+    id: user.id,
+    salesforceUserId: user.salesforceUserId || user.salesforce_id,
+    username: user.username,
+    email: user.email,
+    name: user.name,
+    firstName: user.firstName || user.first_name,
+    lastName: user.lastName || user.last_name,
+    isActive: user.isActive !== undefined ? user.isActive : user.is_active,
+    role: user.role,
+    profile: user.profile,
+    department: user.department,
+    title: user.title,
+    lastLoginDate: user.lastLoginDate || user.last_login_date,
+  }
+}
+
+/**
  * Get users list with optional filters
  */
 export function useUsers(orgId: string, filters?: UserFilters) {
   return useQuery({
     queryKey: userKeys.list(orgId, filters),
     queryFn: async () => {
-      const data = await apiClient.get<User[]>(endpoints.users(orgId), {
+      const data = await apiClient.get<any[]>(endpoints.users(orgId), {
         params: filters as any,
       })
-      return data
+      return data.map(normalizeUser)
     },
     enabled: !!orgId,
   })
