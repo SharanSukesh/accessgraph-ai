@@ -53,10 +53,28 @@ class SyncJobResponse(BaseModel):
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_message: Optional[str]
-    metadata: dict
+    metadata: dict = {}
 
     class Config:
         from_attributes = True
+        # Map sync_metadata from DB model to metadata in response
+        populate_by_name = True
+
+    @classmethod
+    def model_validate(cls, obj):
+        """Custom validation to handle sync_metadata -> metadata mapping"""
+        if hasattr(obj, 'sync_metadata'):
+            data = {
+                'id': obj.id,
+                'organization_id': obj.organization_id,
+                'status': obj.status.value if hasattr(obj.status, 'value') else obj.status,
+                'started_at': obj.started_at,
+                'completed_at': obj.completed_at,
+                'error_message': obj.error_message,
+                'metadata': obj.sync_metadata if obj.sync_metadata else {}
+            }
+            return super().model_validate(data)
+        return super().model_validate(obj)
 
 
 # ============================================================================
@@ -144,7 +162,7 @@ async def trigger_sync(
         raise HTTPException(status_code=500, detail=str(e))
 
     await db.refresh(sync_job)
-    return sync_job
+    return SyncJobResponse.model_validate(sync_job)
 
 
 @router.post("/{org_id}/build-graph", status_code=status.HTTP_202_ACCEPTED)
@@ -223,4 +241,4 @@ async def list_sync_jobs(
         .limit(limit)
     )
     jobs = result.scalars().all()
-    return jobs
+    return [SyncJobResponse.model_validate(job) for job in jobs]
