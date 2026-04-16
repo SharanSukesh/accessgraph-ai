@@ -295,21 +295,32 @@ class SalesforceAPIClient:
         Extract all data in one operation
 
         Returns:
-            Dict with all extracted data
+            Dict with all extracted data (Pydantic models converted to dicts)
         """
         logger.info("Starting full extraction")
 
         # Extract all in parallel would be better, but let's keep it simple for now
+        users = await self.extract_users()
+        roles = await self.extract_user_roles()
+        profiles = await self.extract_profiles()
+        permission_sets = await self.extract_permission_sets()
+        permission_set_assignments = await self.extract_permission_set_assignments()
+        permission_set_groups = await self.extract_permission_set_groups()
+        permission_set_group_components = await self.extract_permission_set_group_components()
+        object_permissions = await self.extract_object_permissions()
+        field_permissions = await self.extract_field_permissions()
+
+        # Convert Pydantic models to dicts
         data = {
-            "users": await self.extract_users(),
-            "roles": await self.extract_user_roles(),
-            "profiles": await self.extract_profiles(),
-            "permission_sets": await self.extract_permission_sets(),
-            "permission_set_assignments": await self.extract_permission_set_assignments(),
-            "permission_set_groups": await self.extract_permission_set_groups(),
-            "permission_set_group_components": await self.extract_permission_set_group_components(),
-            "object_permissions": await self.extract_object_permissions(),
-            "field_permissions": await self.extract_field_permissions(),
+            "users": [u.model_dump() for u in users],
+            "roles": [r.model_dump() for r in roles],
+            "profiles": [p.model_dump() for p in profiles],
+            "permission_sets": [ps.model_dump() for ps in permission_sets],
+            "permission_set_assignments": [psa.model_dump() for psa in permission_set_assignments],
+            "permission_set_groups": [psg.model_dump() for psg in permission_set_groups],
+            "permission_set_group_components": [psgc.model_dump() for psgc in permission_set_group_components],
+            "object_permissions": [op.model_dump() for op in object_permissions],
+            "field_permissions": [fp.model_dump() for fp in field_permissions],
         }
 
         logger.info("Extraction complete")
