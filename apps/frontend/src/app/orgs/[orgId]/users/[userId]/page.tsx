@@ -162,7 +162,7 @@ export default function UserDetailPage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="overview">
         <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview">
             <User className="h-4 w-4 mr-2" />
