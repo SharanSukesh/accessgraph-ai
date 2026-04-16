@@ -120,13 +120,15 @@ async def list_users(
     return [
         {
             "id": u.id,
-            "salesforce_id": u.salesforce_id,
+            "salesforceUserId": u.salesforce_id,  # Frontend expects camelCase
+            "salesforce_id": u.salesforce_id,  # Keep for backwards compatibility
             "username": u.username,
             "name": u.name,
             "email": u.email,
             "department": u.department,
             "title": u.title,
-            "is_active": u.is_active,
+            "isActive": u.is_active,  # Frontend expects camelCase
+            "is_active": u.is_active,  # Keep for backwards compatibility
         }
         for u in users
     ]
