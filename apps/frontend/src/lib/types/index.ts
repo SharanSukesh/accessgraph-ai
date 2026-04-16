@@ -1,12 +1,9 @@
 /**
  * Frontend type definitions
- * Re-exports shared types and adds frontend-specific types
+ * Frontend-specific types
  */
 
-// Re-export shared types
-export * from '@accessgraph/shared-types'
-
-// Frontend-specific types can be added here
+// Frontend-specific types
 export interface ApiResponse<T> {
   data: T
   message?: string
