@@ -251,7 +251,7 @@ async def get_user(
     }
 
 
-@router.get("/orgs/{org_id}/users/{user_sf_id}/access/objects", response_model=AccessResponse)
+@router.get("/orgs/{org_id}/users/{user_sf_id}/access/objects")
 async def get_user_object_access(
     org_id: str,
     user_sf_id: str,
@@ -266,7 +266,7 @@ async def get_user_object_access(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/orgs/{org_id}/users/{user_sf_id}/access/fields", response_model=FieldAccessResponse)
+@router.get("/orgs/{org_id}/users/{user_sf_id}/access/fields")
 async def get_user_field_access(
     org_id: str,
     user_sf_id: str,
@@ -633,7 +633,8 @@ async def get_object_details(
     permission_sets_with_access = list(permission_sets_dict.values())
 
     # Get users with access (through profiles or permission sets)
-    users_with_access_set = set()
+    # Use a dict to group access methods by user to avoid double-counting
+    users_dict = {}
 
     # Users through profiles
     for profile in profiles_with_access:
@@ -644,7 +645,14 @@ async def get_object_details(
         users_result = await db.execute(users_query)
         users = users_result.scalars().all()
         for user in users:
-            users_with_access_set.add((user.salesforce_id, user.name, user.email, "Profile: " + profile["name"]))
+            if user.salesforce_id not in users_dict:
+                users_dict[user.salesforce_id] = {
+                    "id": user.salesforce_id,
+                    "name": user.name,
+                    "email": user.email,
+                    "access_methods": []
+                }
+            users_dict[user.salesforce_id]["access_methods"].append("Profile: " + profile["name"])
 
     # Users through permission sets
     for ps in permission_sets_with_access:
@@ -663,16 +671,24 @@ async def get_object_details(
             user_result = await db.execute(user_query)
             user = user_result.scalar_one_or_none()
             if user:
-                users_with_access_set.add((user.salesforce_id, user.name, user.email, "Permission Set: " + ps["name"]))
+                if user.salesforce_id not in users_dict:
+                    users_dict[user.salesforce_id] = {
+                        "id": user.salesforce_id,
+                        "name": user.name,
+                        "email": user.email,
+                        "access_methods": []
+                    }
+                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["name"])
 
+    # Convert to list and format access via
     users_with_access = [
         {
-            "salesforceUserId": uid,
-            "name": name,
-            "email": email,
-            "accessVia": via
+            "salesforceUserId": user_info["id"],
+            "name": user_info["name"],
+            "email": user_info["email"],
+            "accessVia": ", ".join(user_info["access_methods"][:2]) + (" and more..." if len(user_info["access_methods"]) > 2 else "")
         }
-        for uid, name, email, via in sorted(users_with_access_set, key=lambda x: x[1])
+        for user_info in sorted(users_dict.values(), key=lambda x: x["name"])
     ]
 
     def create_label(api_name: str) -> str:
@@ -840,7 +856,8 @@ async def get_field_details(
     permission_sets_with_access = list(permission_sets_dict.values())
 
     # Get users with access (through profiles or permission sets)
-    users_with_access_set = set()
+    # Use a dict to group access methods by user to avoid double-counting
+    users_dict = {}
 
     # Users through profiles
     for profile in profiles_with_access:
@@ -851,7 +868,14 @@ async def get_field_details(
         users_result = await db.execute(users_query)
         users = users_result.scalars().all()
         for user in users:
-            users_with_access_set.add((user.salesforce_id, user.name, user.email, "Profile: " + profile["name"]))
+            if user.salesforce_id not in users_dict:
+                users_dict[user.salesforce_id] = {
+                    "id": user.salesforce_id,
+                    "name": user.name,
+                    "email": user.email,
+                    "access_methods": []
+                }
+            users_dict[user.salesforce_id]["access_methods"].append("Profile: " + profile["name"])
 
     # Users through permission sets
     for ps in permission_sets_with_access:
@@ -870,16 +894,24 @@ async def get_field_details(
             user_result = await db.execute(user_query)
             user = user_result.scalar_one_or_none()
             if user:
-                users_with_access_set.add((user.salesforce_id, user.name, user.email, "Permission Set: " + ps["name"]))
+                if user.salesforce_id not in users_dict:
+                    users_dict[user.salesforce_id] = {
+                        "id": user.salesforce_id,
+                        "name": user.name,
+                        "email": user.email,
+                        "access_methods": []
+                    }
+                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["name"])
 
+    # Convert to list and format access via
     users_with_access = [
         {
-            "salesforceUserId": uid,
-            "name": name,
-            "email": email,
-            "accessVia": via
+            "salesforceUserId": user_info["id"],
+            "name": user_info["name"],
+            "email": user_info["email"],
+            "accessVia": ", ".join(user_info["access_methods"][:2]) + (" and more..." if len(user_info["access_methods"]) > 2 else "")
         }
-        for uid, name, email, via in sorted(users_with_access_set, key=lambda x: x[1])
+        for user_info in sorted(users_dict.values(), key=lambda x: x["name"])
     ]
 
     def create_label(api_name: str) -> str:

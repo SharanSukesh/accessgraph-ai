@@ -217,8 +217,13 @@ export default function FieldDetailPage() {
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                   {field.permissionSetsWithAccess.map((ps: any) => (
                     <tr key={ps.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        {ps.label || ps.name}
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                        <div>{ps.label || ps.name}</div>
+                        {ps.label && ps.name && ps.label !== ps.name && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            API Name: {ps.name}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.read ? (

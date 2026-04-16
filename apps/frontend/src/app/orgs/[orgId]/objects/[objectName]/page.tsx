@@ -308,13 +308,15 @@ export default function ObjectDetailPage() {
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                   {objectDetail.permissionSetsWithAccess.map((ps) => (
                     <tr key={ps.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
                           {ps.label || ps.name}
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {ps.name}
-                        </div>
+                        {ps.label && ps.name && ps.label !== ps.name && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            API Name: {ps.name}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.read ? (

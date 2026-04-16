@@ -80,17 +80,23 @@ class EffectiveAccessService:
                 "delete": perm.permissions_delete,
             })
 
-        return {
-            "user_id": user_sf_id,
-            "objects": [
-                {
-                    "object": obj_name,
-                    "access": perms,
-                    "granted_by_count": len(grants_by_object[obj_name]),
-                }
-                for obj_name, perms in access.items()
-            ],
-        }
+        # Format response for frontend
+        objects_list = []
+        for obj_name, perms in access.items():
+            objects_list.append({
+                "objectName": obj_name,
+                "objectLabel": obj_name,  # We don't have label metadata, use name
+                "permissions": {
+                    "canRead": perms["read"],
+                    "canCreate": perms["create"],
+                    "canEdit": perms["edit"],
+                    "canDelete": perms["delete"],
+                },
+                "isSensitive": False,  # Would need metadata to determine
+                "grantedByCount": len(grants_by_object[obj_name]),
+            })
+
+        return objects_list
 
     async def get_user_field_access(self, org_id: str, user_sf_id: str) -> Dict:
         """Get effective field access for user"""
@@ -132,17 +138,27 @@ class EffectiveAccessService:
                 "edit": perm.permissions_edit,
             })
 
-        return {
-            "user_id": user_sf_id,
-            "fields": [
-                {
-                    "field": field_name,
-                    "access": perms,
-                    "granted_by_count": len(grants_by_field[field_name]),
-                }
-                for field_name, perms in access.items()
-            ],
-        }
+        # Format response for frontend
+        fields_list = []
+        for field_name, perms in access.items():
+            # Parse object and field from field name (format: Object.Field)
+            if '.' in field_name:
+                object_name, field_api_name = field_name.split('.', 1)
+            else:
+                object_name = "Unknown"
+                field_api_name = field_name
+
+            fields_list.append({
+                "objectName": object_name,
+                "fieldName": field_api_name,
+                "fieldLabel": field_api_name,  # We don't have label metadata
+                "canRead": perms["read"],
+                "canEdit": perms["edit"],
+                "isSensitive": False,  # Would need metadata to determine
+                "grantedByCount": len(grants_by_field[field_name]),
+            })
+
+        return fields_list
 
     async def explain_user_object_access(
         self, org_id: str, user_sf_id: str, object_name: str

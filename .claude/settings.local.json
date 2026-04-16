@@ -1,15 +1,24 @@
 {
   "permissions": {
     "allow": [
-      "Bash(chmod +x apps/backend/scripts/seed_demo.py)",
-      "Bash(python -m alembic revision --autogenerate -m \"initial_schema\")",
-      "Bash(pip install -r requirements.txt)",
-      "Bash(python -m alembic upgrade head)",
-      "Bash(pip install aiosqlite)",
-      "Bash(npm install cytoscape cytoscape-cose-bilkent)",
-      "Bash(npm install)",
-      "Bash(npm run dev)",
-      "Bash(python -m uvicorn app.main:app --reload --port 8000)"
+      "Bash(git commit -m \"fix: Add missing select import in orchestrator\n\n- Import select from sqlalchemy for eager loading\n- Fixes ''select is not defined'' error\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(curl -X POST https://accessgraph-ai-production.up.railway.app/orgs/e21a9d47-1931-4ffb-8202-c979bf35aa3d/sync -H \"Content-Type: application/json\" --max-time 180)",
+      "Bash(git add apps/backend/app/api/routes/orgs.py)",
+      "Bash(git commit -m \"fix: Fix SyncJobResponse metadata field mapping\n\n- Add custom model_validate to map sync_metadata to metadata\n- Fix validation errors in sync job endpoints\n- Properly convert SyncJob models to response models\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(git add apps/frontend/src/components/layout/Sidebar.tsx)",
+      "Bash(git commit -m \"fix: Make sidebar navigation dynamic based on current org\n\n- Extract org ID from current URL path\n- Build navigation links dynamically with correct org ID\n- Fixes sidebar links using ''demo-org'' instead of actual org ID\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(git add apps/backend/app/api/routes/users.py)",
+      "Bash(git commit -m \"fix: Add camelCase field names for frontend compatibility\n\n- Add salesforceUserId (in addition to salesforce_id)\n- Add isActive (in addition to is_active)\n- Fixes user status showing as inactive\n- Fixes userId=undefined in graph explorer\n- Fixes user detail page navigation\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(curl -s \"https://accessgraph-ai-production.up.railway.app/orgs/e21a9d47-1931-4ffb-8202-c979bf35aa3d/users?limit=1\")",
+      "Bash(python -m json.tool)",
+      "Bash(git commit -m \"feat: Add object detail endpoint with permission breakdown\n\n- Add GET /orgs/{org_id}/objects/{object_name} endpoint\n- Shows profiles and permission sets that grant access\n- Lists all users with access and how they get it\n- Shows CRUD permissions for each profile/permission set\n- Enables object detail page functionality\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(curl -s \"http://localhost:8000/orgs/e21a9d47-1931-4ffb-8202-c979bf35aa3d/users?limit=1\")",
+      "Bash(git add apps/frontend/src/lib/api/hooks/useUsers.ts)",
+      "Bash(git commit -m \"fix: Add data normalization to handle snake_case API responses\n\n- Add normalizeUser function to handle both snake_case and camelCase\n- Fixes users showing as inactive\n- Fixes salesforceUserId being undefined  \n- Provides fallback until backend deploys properly\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(git add apps/frontend/src/app/orgs/[orgId]/objects/[objectName]/page.tsx)",
+      "Bash(git commit -m \"feat: Add object detail page with comprehensive permissions view\n\n- Show profiles and permission sets that grant access\n- Display CRUD permissions matrix (Read, Create, Edit, Delete, View All, Modify All)\n- List all users with access and how they get it\n- Summary cards showing totals\n- Navigate to user details from object page\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(git add apps/frontend/src/app/orgs/[orgId]/fields/[fieldId]/page.tsx apps/backend/app/api/routes/users.py)",
+      "Bash(git commit -m \"feat: Add field detail page and graph/user endpoint\n\n- Create field detail page (placeholder for now)\n- Add /orgs/{org_id}/graph/user/{user_sf_id} endpoint for graph explorer\n- Fixes 404 errors when clicking fields or using graph explorer\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")"
     ],
     "deny": [],
     "ask": []
