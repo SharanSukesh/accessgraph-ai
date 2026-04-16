@@ -96,7 +96,7 @@ class RecommendationResponse(BaseModel):
 # ============================================================================
 
 
-@router.get("/orgs/{org_id}/users", response_model=List[UserResponse])
+@router.get("/orgs/{org_id}/users")
 async def list_users(
     org_id: str,
     is_active: Optional[bool] = None,
@@ -105,6 +105,8 @@ async def list_users(
     db: AsyncSession = Depends(get_database),
 ):
     """List users in organization"""
+    from app.domain.models import ProfileSnapshot, RoleSnapshot, RiskScore
+
     query = select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
 
     if is_active is not None:
@@ -117,30 +119,73 @@ async def list_users(
     result = await db.execute(query)
     users = result.scalars().all()
 
-    return [
-        {
+    # Build response with role, profile, and risk data
+    user_list = []
+    for u in users:
+        # Get profile name
+        profile_name = None
+        if u.profile_id:
+            profile_query = select(ProfileSnapshot).where(
+                ProfileSnapshot.organization_id == org_id,
+                ProfileSnapshot.salesforce_id == u.profile_id
+            )
+            profile_result = await db.execute(profile_query)
+            profile = profile_result.scalar_one_or_none()
+            if profile:
+                profile_name = profile.name
+
+        # Get role name
+        role_name = None
+        if u.user_role_id:
+            role_query = select(RoleSnapshot).where(
+                RoleSnapshot.organization_id == org_id,
+                RoleSnapshot.salesforce_id == u.user_role_id
+            )
+            role_result = await db.execute(role_query)
+            role = role_result.scalar_one_or_none()
+            if role:
+                role_name = role.name
+
+        # Get risk level
+        risk_level = None
+        risk_query = select(RiskScore).where(
+            RiskScore.organization_id == org_id,
+            RiskScore.entity_type == "user",
+            RiskScore.entity_id == u.salesforce_id
+        ).order_by(RiskScore.calculated_at.desc()).limit(1)
+        risk_result = await db.execute(risk_query)
+        risk = risk_result.scalar_one_or_none()
+        if risk:
+            risk_level = risk.risk_level.value
+
+        user_list.append({
             "id": u.id,
-            "salesforceUserId": u.salesforce_id,  # Frontend expects camelCase
-            "salesforce_id": u.salesforce_id,  # Keep for backwards compatibility
+            "salesforceUserId": u.salesforce_id,
+            "salesforce_id": u.salesforce_id,
             "username": u.username,
             "name": u.name,
             "email": u.email,
             "department": u.department,
             "title": u.title,
-            "isActive": u.is_active,  # Frontend expects camelCase
-            "is_active": u.is_active,  # Keep for backwards compatibility
-        }
-        for u in users
-    ]
+            "isActive": u.is_active,
+            "is_active": u.is_active,
+            "role": role_name,
+            "profile": profile_name,
+            "risk": risk_level,
+        })
+
+    return user_list
 
 
-@router.get("/orgs/{org_id}/users/{user_sf_id}", response_model=UserResponse)
+@router.get("/orgs/{org_id}/users/{user_sf_id}")
 async def get_user(
     org_id: str,
     user_sf_id: str,
     db: AsyncSession = Depends(get_database),
 ):
     """Get user details"""
+    from app.domain.models import ProfileSnapshot, RoleSnapshot, RiskScore
+
     result = await db.execute(
         select(UserSnapshot).where(
             UserSnapshot.organization_id == org_id,
@@ -152,15 +197,57 @@ async def get_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Get profile name
+    profile_name = None
+    if user.profile_id:
+        profile_query = select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id,
+            ProfileSnapshot.salesforce_id == user.profile_id
+        )
+        profile_result = await db.execute(profile_query)
+        profile = profile_result.scalar_one_or_none()
+        if profile:
+            profile_name = profile.name
+
+    # Get role name
+    role_name = None
+    if user.user_role_id:
+        role_query = select(RoleSnapshot).where(
+            RoleSnapshot.organization_id == org_id,
+            RoleSnapshot.salesforce_id == user.user_role_id
+        )
+        role_result = await db.execute(role_query)
+        role = role_result.scalar_one_or_none()
+        if role:
+            role_name = role.name
+
+    # Get risk level
+    risk_level = None
+    risk_query = select(RiskScore).where(
+        RiskScore.organization_id == org_id,
+        RiskScore.entity_type == "user",
+        RiskScore.entity_id == user.salesforce_id
+    ).order_by(RiskScore.calculated_at.desc()).limit(1)
+    risk_result = await db.execute(risk_query)
+    risk = risk_result.scalar_one_or_none()
+    if risk:
+        risk_level = risk.risk_level.value
+
     return {
         "id": user.id,
+        "salesforceUserId": user.salesforce_id,
         "salesforce_id": user.salesforce_id,
         "username": user.username,
         "name": user.name,
         "email": user.email,
         "department": user.department,
         "title": user.title,
+        "isActive": user.is_active,
         "is_active": user.is_active,
+        "role": role_name,
+        "profile": profile_name,
+        "riskLevel": risk_level,
+        "lastLoginDate": None,  # We don't have this data yet
     }
 
 
@@ -427,7 +514,7 @@ async def list_objects(
         label = label.replace('_', ' ')
         return label
 
-    # For each object, calculate actual user count
+    # For each object, calculate actual user count with proper deduplication
     object_list = []
     for obj in objects:
         # Get all parent_ids (profiles and permission sets) for this object
@@ -438,24 +525,25 @@ async def list_objects(
         perms_result = await db.execute(perms_query)
         parent_ids = [p[0] for p in perms_result.all()]
 
-        # Count users with these profiles
-        user_count_query = select(func.count(distinct(UserSnapshot.salesforce_id))).where(
+        # Get unique user IDs through profiles
+        users_from_profiles_query = select(distinct(UserSnapshot.salesforce_id)).where(
             UserSnapshot.organization_id == org_id,
             UserSnapshot.profile_id.in_(parent_ids)
         )
-        user_count_result = await db.execute(user_count_query)
-        user_count_from_profiles = user_count_result.scalar() or 0
+        users_from_profiles_result = await db.execute(users_from_profiles_query)
+        users_from_profiles = set(row[0] for row in users_from_profiles_result.all())
 
-        # Count users with these permission sets
-        ps_user_count_query = select(func.count(distinct(PermissionSetAssignmentSnapshot.assignee_id))).where(
+        # Get unique user IDs through permission sets
+        users_from_ps_query = select(distinct(PermissionSetAssignmentSnapshot.assignee_id)).where(
             PermissionSetAssignmentSnapshot.organization_id == org_id,
             PermissionSetAssignmentSnapshot.permission_set_id.in_(parent_ids)
         )
-        ps_user_count_result = await db.execute(ps_user_count_query)
-        user_count_from_ps = ps_user_count_result.scalar() or 0
+        users_from_ps_result = await db.execute(users_from_ps_query)
+        users_from_ps = set(row[0] for row in users_from_ps_result.all())
 
-        # Total unique users (may have some overlap, but this is an approximation)
-        total_users = user_count_from_profiles + user_count_from_ps
+        # Union the sets to get truly unique user count
+        all_users = users_from_profiles.union(users_from_ps)
+        total_users = len(all_users)
 
         object_list.append({
             "id": obj.sobject_type,
@@ -676,6 +764,149 @@ async def list_fields(
     ]
 
 
+@router.get("/orgs/{org_id}/fields/{field_id}")
+async def get_field_details(
+    org_id: str,
+    field_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get detailed information about a Salesforce field"""
+    from sqlalchemy import func
+    from app.domain.models import (
+        FieldPermissionSnapshot,
+        PermissionSetSnapshot,
+        ProfileSnapshot,
+        PermissionSetAssignmentSnapshot,
+        UserSnapshot
+    )
+
+    # Parse field_id format "ObjectName.FieldName"
+    if '.' not in field_id:
+        raise HTTPException(status_code=400, detail="Invalid field_id format. Expected 'ObjectName.FieldName'")
+
+    object_name, field_name = field_id.split('.', 1)
+
+    # Get all permissions for this field
+    perms_query = select(FieldPermissionSnapshot).where(
+        FieldPermissionSnapshot.organization_id == org_id,
+        FieldPermissionSnapshot.sobject_type == object_name,
+        FieldPermissionSnapshot.field == field_name
+    )
+    perms_result = await db.execute(perms_query)
+    permissions = perms_result.scalars().all()
+
+    if not permissions:
+        raise HTTPException(status_code=404, detail="Field not found")
+
+    # Get profiles and permission sets that grant access (deduplicate by ID)
+    profiles_dict = {}
+    permission_sets_dict = {}
+
+    for perm in permissions:
+        # Check if it's a profile or permission set
+        profile_query = select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id,
+            ProfileSnapshot.salesforce_id == perm.parent_id
+        )
+        profile_result = await db.execute(profile_query)
+        profile = profile_result.scalar_one_or_none()
+
+        if profile:
+            profiles_dict[profile.salesforce_id] = {
+                "id": profile.salesforce_id,
+                "name": profile.name,
+                "read": perm.permissions_read,
+                "edit": perm.permissions_edit,
+            }
+        else:
+            # It's a permission set
+            ps_query = select(PermissionSetSnapshot).where(
+                PermissionSetSnapshot.organization_id == org_id,
+                PermissionSetSnapshot.salesforce_id == perm.parent_id
+            )
+            ps_result = await db.execute(ps_query)
+            ps = ps_result.scalar_one_or_none()
+
+            if ps:
+                permission_sets_dict[ps.salesforce_id] = {
+                    "id": ps.salesforce_id,
+                    "name": ps.name,
+                    "label": ps.label,
+                    "read": perm.permissions_read,
+                    "edit": perm.permissions_edit,
+                }
+
+    profiles_with_access = list(profiles_dict.values())
+    permission_sets_with_access = list(permission_sets_dict.values())
+
+    # Get users with access (through profiles or permission sets)
+    users_with_access_set = set()
+
+    # Users through profiles
+    for profile in profiles_with_access:
+        users_query = select(UserSnapshot).where(
+            UserSnapshot.organization_id == org_id,
+            UserSnapshot.profile_id == profile["id"]
+        )
+        users_result = await db.execute(users_query)
+        users = users_result.scalars().all()
+        for user in users:
+            users_with_access_set.add((user.salesforce_id, user.name, user.email, "Profile: " + profile["name"]))
+
+    # Users through permission sets
+    for ps in permission_sets_with_access:
+        assignments_query = select(PermissionSetAssignmentSnapshot).where(
+            PermissionSetAssignmentSnapshot.organization_id == org_id,
+            PermissionSetAssignmentSnapshot.permission_set_id == ps["id"]
+        )
+        assignments_result = await db.execute(assignments_query)
+        assignments = assignments_result.scalars().all()
+
+        for assignment in assignments:
+            user_query = select(UserSnapshot).where(
+                UserSnapshot.organization_id == org_id,
+                UserSnapshot.salesforce_id == assignment.assignee_id
+            )
+            user_result = await db.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            if user:
+                users_with_access_set.add((user.salesforce_id, user.name, user.email, "Permission Set: " + ps["name"]))
+
+    users_with_access = [
+        {
+            "salesforceUserId": uid,
+            "name": name,
+            "email": email,
+            "accessVia": via
+        }
+        for uid, name, email, via in sorted(users_with_access_set, key=lambda x: x[1])
+    ]
+
+    def create_label(api_name: str) -> str:
+        """Create a human-readable label from API name"""
+        if '.' in api_name:
+            api_name = api_name.split('.')[-1]
+        if api_name.endswith('__c'):
+            api_name = api_name[:-3]
+        return ' '.join(word.capitalize() for word in api_name.replace('_', ' ').split())
+
+    return {
+        "id": field_id,
+        "objectName": object_name,
+        "fieldName": field_name,
+        "label": create_label(field_name),
+        "isCustom": field_name.endswith('__c'),
+        "dataType": "String",  # We don't have this metadata yet
+        "isSensitive": False,  # Would need field metadata
+        "isEncrypted": False,  # Would need field metadata
+        "profilesWithAccess": profiles_with_access,
+        "permissionSetsWithAccess": permission_sets_with_access,
+        "usersWithAccess": users_with_access,
+        "totalUsers": len(users_with_access),
+        "totalProfiles": len(profiles_with_access),
+        "totalPermissionSets": len(permission_sets_with_access),
+    }
+
 
 @router.get("/orgs/{org_id}/graph/user/{user_sf_id}")
 async def get_user_graph(
@@ -683,16 +914,154 @@ async def get_user_graph(
     user_sf_id: str,
     db: AsyncSession = Depends(get_database),
 ):
-    """Get graph data for a user - placeholder for now"""
-    # This is a placeholder endpoint for the graph explorer
-    # Full implementation would build a graph showing:
-    # - User node
-    # - Connected roles, profiles, permission sets
-    # - Objects and fields the user has access to
+    """Get graph data for a user showing their access relationships"""
+    from datetime import datetime
+    from app.domain.models import (
+        UserSnapshot,
+        ProfileSnapshot,
+        RoleSnapshot,
+        PermissionSetAssignmentSnapshot,
+        PermissionSetSnapshot,
+        ObjectPermissionSnapshot,
+    )
+
+    # Get user
+    user_query = select(UserSnapshot).where(
+        UserSnapshot.organization_id == org_id,
+        UserSnapshot.salesforce_id == user_sf_id
+    )
+    user_result = await db.execute(user_query)
+    user = user_result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    nodes = []
+    edges = []
+
+    # Add user node
+    nodes.append({
+        "id": user_sf_id,
+        "type": "user",
+        "label": user.name,
+        "properties": {
+            "username": user.username,
+            "email": user.email,
+            "isActive": user.is_active,
+        }
+    })
+
+    # Add profile node and edge
+    if user.profile_id:
+        profile_query = select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id,
+            ProfileSnapshot.salesforce_id == user.profile_id
+        )
+        profile_result = await db.execute(profile_query)
+        profile = profile_result.scalar_one_or_none()
+        if profile:
+            nodes.append({
+                "id": profile.salesforce_id,
+                "type": "profile",
+                "label": profile.name,
+                "properties": {}
+            })
+            edges.append({
+                "id": f"user_profile_{user_sf_id}_{profile.salesforce_id}",
+                "source": user_sf_id,
+                "target": profile.salesforce_id,
+                "type": "HAS_PROFILE",
+                "label": "has profile"
+            })
+
+    # Add role node and edge
+    if user.user_role_id:
+        role_query = select(RoleSnapshot).where(
+            RoleSnapshot.organization_id == org_id,
+            RoleSnapshot.salesforce_id == user.user_role_id
+        )
+        role_result = await db.execute(role_query)
+        role = role_result.scalar_one_or_none()
+        if role:
+            nodes.append({
+                "id": role.salesforce_id,
+                "type": "role",
+                "label": role.name,
+                "properties": {}
+            })
+            edges.append({
+                "id": f"user_role_{user_sf_id}_{role.salesforce_id}",
+                "source": user_sf_id,
+                "target": role.salesforce_id,
+                "type": "HAS_ROLE",
+                "label": "has role"
+            })
+
+    # Add permission set nodes and edges
+    ps_assignments_query = select(PermissionSetAssignmentSnapshot).where(
+        PermissionSetAssignmentSnapshot.organization_id == org_id,
+        PermissionSetAssignmentSnapshot.assignee_id == user_sf_id
+    ).limit(10)  # Limit to avoid overwhelming the graph
+    ps_assignments_result = await db.execute(ps_assignments_query)
+    ps_assignments = ps_assignments_result.scalars().all()
+
+    for assignment in ps_assignments:
+        ps_query = select(PermissionSetSnapshot).where(
+            PermissionSetSnapshot.organization_id == org_id,
+            PermissionSetSnapshot.salesforce_id == assignment.permission_set_id
+        )
+        ps_result = await db.execute(ps_query)
+        ps = ps_result.scalar_one_or_none()
+        if ps:
+            nodes.append({
+                "id": ps.salesforce_id,
+                "type": "permission_set",
+                "label": ps.label or ps.name,
+                "properties": {}
+            })
+            edges.append({
+                "id": f"user_ps_{user_sf_id}_{ps.salesforce_id}",
+                "source": user_sf_id,
+                "target": ps.salesforce_id,
+                "type": "ASSIGNED_PERMISSION_SET",
+                "label": "assigned"
+            })
+
+    # Add some object nodes that the user has access to (via profile)
+    if user.profile_id:
+        obj_perms_query = select(ObjectPermissionSnapshot).where(
+            ObjectPermissionSnapshot.organization_id == org_id,
+            ObjectPermissionSnapshot.parent_id == user.profile_id
+        ).limit(5)  # Limit to avoid overwhelming
+        obj_perms_result = await db.execute(obj_perms_query)
+        obj_perms = obj_perms_result.scalars().all()
+
+        for obj_perm in obj_perms:
+            object_id = f"object_{obj_perm.sobject_type}"
+            # Check if object node already exists
+            if not any(n["id"] == object_id for n in nodes):
+                nodes.append({
+                    "id": object_id,
+                    "type": "object",
+                    "label": obj_perm.sobject_type,
+                    "properties": {}
+                })
+            edges.append({
+                "id": f"profile_obj_{user.profile_id}_{obj_perm.sobject_type}",
+                "source": user.profile_id,
+                "target": object_id,
+                "type": "GRANTS_ACCESS",
+                "label": "grants access"
+            })
+
     return {
-        "nodes": [
-            {"id": user_sf_id, "label": "User", "type": "user"}
-        ],
-        "edges": []
+        "nodes": nodes,
+        "edges": edges,
+        "metadata": {
+            "nodeCount": len(nodes),
+            "edgeCount": len(edges),
+            "centerNodeId": user_sf_id,
+            "generatedAt": datetime.utcnow().isoformat()
+        }
     }
 

@@ -84,3 +84,19 @@ export function useField(orgId: string, fieldApiName: string) {
     enabled: !!orgId && !!fieldApiName,
   })
 }
+
+/**
+ * Fetch detailed field information with access breakdown
+ */
+export function useFieldDetails(orgId: string, fieldId: string) {
+  return useQuery({
+    queryKey: [...fieldKeys.details(), orgId, fieldId, 'full'],
+    queryFn: async () => {
+      const data = await apiClient.get<any>(
+        `/orgs/${orgId}/fields/${encodeURIComponent(fieldId)}`
+      )
+      return data
+    },
+    enabled: !!orgId && !!fieldId,
+  })
+}
