@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@accessgraph/shared-types', '@accessgraph/shared-config'],
 
   // Environment variables exposed to the browser
   env: {

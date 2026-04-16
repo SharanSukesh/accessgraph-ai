@@ -13,8 +13,6 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@accessgraph/shared-types": "*",
-    "@accessgraph/shared-config": "*",
     "@tanstack/react-query": "^5.17.19",
     "@tanstack/react-query-devtools": "^5.17.19",
     "next": "14.1.0",
