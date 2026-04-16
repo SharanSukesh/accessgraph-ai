@@ -75,173 +75,252 @@ export function transformGraphToCytoscape(graph: Graph): ElementDefinition[] {
 }
 
 /**
- * Get Cytoscape stylesheet
+ * Get Cytoscape stylesheet - Enhanced professional design
  */
 export function getCytoscapeStylesheet() {
   return [
-    // Default node style
+    // Default node style - Modern and sleek
     {
       selector: 'node',
       style: {
-        'background-color': '#94a3b8', // gray-400
-        'border-width': 2,
-        'border-color': '#64748b', // gray-500
+        'background-color': '#f1f5f9', // Soft light background
+        'background-opacity': 0.95,
+        'border-width': 3,
+        'border-color': '#94a3b8',
+        'border-opacity': 0.8,
         label: 'data(label)',
         'text-valign': 'center',
         'text-halign': 'center',
-        'font-size': '12px',
-        'font-weight': '500',
-        color: '#1e293b', // gray-900
+        'font-size': '13px',
+        'font-weight': '600',
+        'font-family': 'Inter, system-ui, -apple-system, sans-serif',
+        color: '#0f172a', // Deep dark text
         'text-wrap': 'wrap',
-        'text-max-width': '100px',
-        width: 60,
-        height: 60,
+        'text-max-width': '110px',
+        'text-outline-color': '#ffffff',
+        'text-outline-width': 2,
+        'text-outline-opacity': 0.8,
+        width: 70,
+        height: 70,
+        // Add subtle shadow
+        'shadow-blur': 12,
+        'shadow-color': '#1e293b',
+        'shadow-opacity': 0.15,
+        'shadow-offset-x': 0,
+        'shadow-offset-y': 2,
       },
     },
 
-    // User nodes
+    // User nodes - Modern gradient blue
     {
       selector: `node[type="${NODE_TYPES.USER.value}"]`,
       style: {
-        'background-color': '#3b82f6', // blue-500
-        'border-color': '#2563eb', // blue-600
+        'background-color': '#60a5fa', // blue-400
+        'background-opacity': 1,
+        'border-color': '#3b82f6', // blue-500
+        'border-width': 4,
         shape: 'ellipse',
+        'shadow-blur': 16,
+        'shadow-color': '#3b82f6',
+        'shadow-opacity': 0.3,
       },
     },
 
-    // Profile nodes
+    // Profile nodes - Elegant violet
     {
       selector: `node[type="${NODE_TYPES.PROFILE.value}"]`,
       style: {
-        'background-color': '#8b5cf6', // violet-500
-        'border-color': '#7c3aed', // violet-600
+        'background-color': '#a78bfa', // violet-400
+        'background-opacity': 1,
+        'border-color': '#8b5cf6', // violet-500
+        'border-width': 4,
         shape: 'round-rectangle',
+        'shadow-blur': 16,
+        'shadow-color': '#8b5cf6',
+        'shadow-opacity': 0.3,
       },
     },
 
-    // Permission set nodes
+    // Permission set nodes - Vibrant cyan
     {
       selector: `node[type="${NODE_TYPES.PERMISSION_SET.value}"]`,
       style: {
-        'background-color': '#06b6d4', // cyan-500
-        'border-color': '#0891b2', // cyan-600
+        'background-color': '#22d3ee', // cyan-400
+        'background-opacity': 1,
+        'border-color': '#06b6d4', // cyan-500
+        'border-width': 4,
         shape: 'round-rectangle',
+        'shadow-blur': 16,
+        'shadow-color': '#06b6d4',
+        'shadow-opacity': 0.3,
       },
     },
 
-    // Role nodes
+    // Role nodes - Golden amber
     {
       selector: `node[type="${NODE_TYPES.ROLE.value}"]`,
       style: {
-        'background-color': '#f59e0b', // amber-500
-        'border-color': '#d97706', // amber-600
+        'background-color': '#fbbf24', // amber-400
+        'background-opacity': 1,
+        'border-color': '#f59e0b', // amber-500
+        'border-width': 4,
         shape: 'diamond',
+        'shadow-blur': 16,
+        'shadow-color': '#f59e0b',
+        'shadow-opacity': 0.3,
       },
     },
 
-    // Object nodes
+    // Object nodes - Fresh emerald
     {
       selector: `node[type="${NODE_TYPES.OBJECT.value}"]`,
       style: {
-        'background-color': '#10b981', // emerald-500
-        'border-color': '#059669', // emerald-600
+        'background-color': '#34d399', // emerald-400
+        'background-opacity': 1,
+        'border-color': '#10b981', // emerald-500
+        'border-width': 4,
         shape: 'round-rectangle',
+        'shadow-blur': 16,
+        'shadow-color': '#10b981',
+        'shadow-opacity': 0.3,
       },
     },
 
-    // Field nodes
+    // Field nodes - Bright lime
     {
       selector: `node[type="${NODE_TYPES.FIELD.value}"]`,
       style: {
-        'background-color': '#a3e635', // lime-400
-        'border-color': '#84cc16', // lime-500
+        'background-color': '#bef264', // lime-300
+        'background-opacity': 1,
+        'border-color': '#a3e635', // lime-400
+        'border-width': 3,
         shape: 'ellipse',
-        width: 50,
-        height: 50,
-        'font-size': '10px',
+        width: 55,
+        height: 55,
+        'font-size': '11px',
+        'shadow-blur': 14,
+        'shadow-color': '#a3e635',
+        'shadow-opacity': 0.25,
       },
     },
 
-    // Group nodes
+    // Group nodes - Modern pink
     {
       selector: `node[type="${NODE_TYPES.GROUP.value}"]`,
       style: {
-        'background-color': '#ec4899', // pink-500
-        'border-color': '#db2777', // pink-600
+        'background-color': '#f472b6', // pink-400
+        'background-opacity': 1,
+        'border-color': '#ec4899', // pink-500
+        'border-width': 4,
         shape: 'round-hexagon',
+        'shadow-blur': 16,
+        'shadow-color': '#ec4899',
+        'shadow-opacity': 0.3,
       },
     },
 
-    // Center node (highlighted)
+    // Center node (highlighted) - Stunning focal point
     {
       selector: 'node.center',
       style: {
-        'border-width': 4,
-        'border-color': '#ef4444', // red-500
-        'background-color': '#fca5a5', // red-300
-        width: 80,
-        height: 80,
-        'font-size': '14px',
+        'border-width': 5,
+        'border-color': '#f97316', // orange-500
+        'border-opacity': 1,
+        width: 90,
+        height: 90,
+        'font-size': '15px',
         'font-weight': 'bold',
+        'shadow-blur': 24,
+        'shadow-color': '#f97316',
+        'shadow-opacity': 0.5,
+        'shadow-offset-x': 0,
+        'shadow-offset-y': 4,
+        // Pulsing effect with border
+        'border-style': 'solid',
       },
     },
 
-    // Selected node
+    // Selected node - Vibrant highlight
     {
       selector: 'node:selected',
       style: {
-        'border-width': 4,
+        'border-width': 5,
         'border-color': '#eab308', // yellow-500
-        'overlay-color': '#eab308',
-        'overlay-opacity': 0.2,
-        'overlay-padding': 8,
+        'border-opacity': 1,
+        'overlay-color': '#fef08a', // yellow-200
+        'overlay-opacity': 0.25,
+        'overlay-padding': 10,
+        'shadow-blur': 20,
+        'shadow-color': '#eab308',
+        'shadow-opacity': 0.4,
       },
     },
 
-    // Default edge style
+    // Default edge style - Sleek and modern
     {
       selector: 'edge',
       style: {
-        width: 2,
+        width: 2.5,
         'line-color': '#cbd5e1', // gray-300
-        'target-arrow-color': '#cbd5e1',
+        'line-opacity': 0.7,
+        'target-arrow-color': '#94a3b8',
         'target-arrow-shape': 'triangle',
+        'target-arrow-fill': 'filled',
+        'arrow-scale': 1.2,
         'curve-style': 'bezier',
         label: 'data(label)',
-        'font-size': '10px',
+        'font-size': '11px',
+        'font-weight': '500',
+        'font-family': 'Inter, system-ui, -apple-system, sans-serif',
         'text-rotation': 'autorotate',
-        'text-margin-y': -10,
-        color: '#64748b', // gray-500
+        'text-margin-y': -12,
+        'text-background-color': '#ffffff',
+        'text-background-opacity': 0.9,
+        'text-background-padding': '3px',
+        'text-background-shape': 'roundrectangle',
+        'text-border-color': '#e2e8f0',
+        'text-border-width': 1,
+        'text-border-opacity': 0.5,
+        color: '#475569', // gray-600
+        // Smooth transitions
+        'transition-property': 'line-color, width, target-arrow-color',
+        'transition-duration': '0.2s',
       },
     },
 
-    // HasProfile edge
+    // HasProfile edge - Elegant violet
     {
       selector: `edge[type="${EDGE_TYPES.HAS_PROFILE.value}"]`,
       style: {
-        'line-color': '#8b5cf6', // violet-500
-        'target-arrow-color': '#8b5cf6',
+        'line-color': '#a78bfa', // violet-400
+        'target-arrow-color': '#8b5cf6', // violet-500
         'line-style': 'solid',
+        'line-opacity': 0.85,
+        width: 3,
       },
     },
 
-    // HasPermissionSet edge
+    // HasPermissionSet edge - Vibrant cyan
     {
       selector: `edge[type="${EDGE_TYPES.HAS_PERMISSION_SET.value}"]`,
       style: {
-        'line-color': '#06b6d4', // cyan-500
-        'target-arrow-color': '#06b6d4',
+        'line-color': '#22d3ee', // cyan-400
+        'target-arrow-color': '#06b6d4', // cyan-500
         'line-style': 'solid',
+        'line-opacity': 0.85,
+        width: 3,
       },
     },
 
-    // HasRole edge
+    // HasRole edge - Golden amber
     {
       selector: `edge[type="${EDGE_TYPES.HAS_ROLE.value}"]`,
       style: {
-        'line-color': '#f59e0b', // amber-500
-        'target-arrow-color': '#f59e0b',
+        'line-color': '#fbbf24', // amber-400
+        'target-arrow-color': '#f59e0b', // amber-500
         'line-style': 'solid',
+        'line-opacity': 0.85,
+        width: 3,
       },
     },
 
@@ -255,65 +334,88 @@ export function getCytoscapeStylesheet() {
       },
     },
 
-    // CanAccess edge
+    // CanAccess / GRANTS_ACCESS edge - Fresh emerald
     {
-      selector: `edge[type="${EDGE_TYPES.CAN_ACCESS.value}"]`,
+      selector: `edge[type="${EDGE_TYPES.CAN_ACCESS.value}"], edge[type="GRANTS_ACCESS"]`,
       style: {
-        'line-color': '#10b981', // emerald-500
-        'target-arrow-color': '#10b981',
+        'line-color': '#34d399', // emerald-400
+        'target-arrow-color': '#10b981', // emerald-500
         'line-style': 'solid',
+        'line-opacity': 0.85,
         width: 3,
       },
     },
 
-    // CanRead/Create/Edit/Delete edges
+    // ASSIGNED_PERMISSION_SET edge - Vibrant cyan dashed
+    {
+      selector: `edge[type="ASSIGNED_PERMISSION_SET"]`,
+      style: {
+        'line-color': '#22d3ee', // cyan-400
+        'target-arrow-color': '#06b6d4', // cyan-500
+        'line-style': 'dashed',
+        'line-opacity': 0.8,
+        'line-dash-pattern': [8, 4],
+        width: 2.5,
+      },
+    },
+
+    // CanRead/Create/Edit/Delete edges - Bright lime
     {
       selector: `edge[type="${EDGE_TYPES.CAN_READ.value}"], edge[type="${EDGE_TYPES.CAN_CREATE.value}"], edge[type="${EDGE_TYPES.CAN_EDIT.value}"], edge[type="${EDGE_TYPES.CAN_DELETE.value}"]`,
       style: {
-        'line-color': '#a3e635', // lime-400
-        'target-arrow-color': '#a3e635',
+        'line-color': '#bef264', // lime-300
+        'target-arrow-color': '#a3e635', // lime-400
         'line-style': 'dotted',
-        width: 1.5,
+        'line-opacity': 0.75,
+        width: 2,
       },
     },
 
-    // MemberOf edge
+    // MemberOf edge - Modern pink
     {
       selector: `edge[type="${EDGE_TYPES.MEMBER_OF.value}"]`,
       style: {
-        'line-color': '#ec4899', // pink-500
-        'target-arrow-color': '#ec4899',
+        'line-color': '#f472b6', // pink-400
+        'target-arrow-color': '#ec4899', // pink-500
         'line-style': 'solid',
+        'line-opacity': 0.85,
+        width: 3,
       },
     },
 
-    // Selected edge
+    // Selected edge - Bright highlight
     {
       selector: 'edge:selected',
       style: {
-        width: 4,
-        'line-color': '#eab308', // yellow-500
-        'target-arrow-color': '#eab308',
-        'overlay-color': '#eab308',
-        'overlay-opacity': 0.2,
+        width: 5,
+        'line-color': '#fbbf24', // amber-400
+        'line-opacity': 1,
+        'target-arrow-color': '#f59e0b', // amber-500
+        'overlay-color': '#fef3c7', // amber-100
+        'overlay-opacity': 0.3,
+        'z-index': 999,
       },
     },
 
-    // Hovered elements
+    // Hovered node - Subtle glow
     {
       selector: 'node:active',
       style: {
-        'overlay-color': '#3b82f6', // blue-500
-        'overlay-opacity': 0.3,
-        'overlay-padding': 6,
+        'overlay-color': '#60a5fa', // blue-400
+        'overlay-opacity': 0.25,
+        'overlay-padding': 8,
+        'border-width': 5,
       },
     },
+
+    // Hovered edge - Enhanced visibility
     {
       selector: 'edge:active',
       style: {
-        width: 3,
-        'overlay-color': '#3b82f6',
-        'overlay-opacity': 0.3,
+        width: 4,
+        'line-opacity': 1,
+        'overlay-color': '#60a5fa', // blue-400
+        'overlay-opacity': 0.25,
       },
     },
   ]

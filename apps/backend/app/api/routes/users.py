@@ -719,14 +719,23 @@ async def list_fields(
     org_id: str,
     search: Optional[str] = None,
     object_type: Optional[str] = None,
-    limit: int = Query(500, le=10000),
+    starts_with: Optional[str] = None,  # Letter filter (A-Z)
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_database),
 ):
-    """List unique Salesforce fields from permissions data"""
+    """
+    List unique Salesforce fields from permissions data
+
+    Supports alphabetical filtering and pagination:
+    - starts_with: Filter fields starting with a specific letter (A-Z)
+    - page: Page number (1-indexed)
+    - limit: Items per page (default 100, max 500)
+    """
     from sqlalchemy import func
     from app.domain.models import FieldPermissionSnapshot
 
-    # Get distinct fields
+    # Get distinct fields with counts
     query = select(
         FieldPermissionSnapshot.sobject_type,
         FieldPermissionSnapshot.field,
@@ -738,16 +747,36 @@ async def list_fields(
         FieldPermissionSnapshot.field
     )
 
+    # Apply filters
     if search:
         query = query.where(FieldPermissionSnapshot.field.ilike(f'%{search}%'))
 
     if object_type:
         query = query.where(FieldPermissionSnapshot.sobject_type == object_type)
 
+    # Alphabetical filter - match fields starting with the specified letter
+    if starts_with:
+        letter = starts_with.upper()
+        if letter.isalpha() and len(letter) == 1:
+            # Match fields starting with the letter (case-insensitive)
+            query = query.where(FieldPermissionSnapshot.field.ilike(f'{letter}%'))
+
+    # Order by field name alphabetically
     query = query.order_by(
-        FieldPermissionSnapshot.sobject_type,
-        FieldPermissionSnapshot.field
-    ).limit(limit)
+        FieldPermissionSnapshot.field,
+        FieldPermissionSnapshot.sobject_type
+    )
+
+    # Get total count for pagination
+    count_query = select(func.count()).select_from(
+        query.alias('subquery')
+    )
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
+
+    # Apply pagination
+    offset = (page - 1) * limit
+    query = query.offset(offset).limit(limit)
 
     result = await db.execute(query)
     fields = result.all()
@@ -763,21 +792,33 @@ async def list_fields(
         # Replace underscores with spaces and title case
         return ' '.join(word.capitalize() for word in api_name.replace('_', ' ').split())
 
-    return [
-        {
-            "id": f"{field.sobject_type}.{field.field}",
-            "objectName": field.sobject_type,
-            "apiName": field.field,
-            "label": create_label(field.field),
-            "dataType": "String",  # We don't have this info yet
-            "isSensitive": False,  # Would need field metadata to determine
-            "isEncrypted": False,  # Would need field metadata to determine
-            "isCustom": field.field.endswith('__c'),
-            "userCount": field.permission_count,
-            "permissionCount": field.permission_count,
+    # Calculate pagination metadata
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+
+    return {
+        "fields": [
+            {
+                "id": f"{field.sobject_type}.{field.field}",
+                "objectName": field.sobject_type,
+                "apiName": field.field,
+                "label": create_label(field.field),
+                "dataType": "String",  # We don't have this info yet
+                "isSensitive": False,  # Would need field metadata to determine
+                "isEncrypted": False,  # Would need field metadata to determine
+                "isCustom": field.field.endswith('__c'),
+                "userCount": field.permission_count,
+                "permissionCount": field.permission_count,
+            }
+            for field in fields
+        ],
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total_count,
+            "totalPages": total_pages,
+            "hasMore": page < total_pages,
         }
-        for field in fields
-    ]
+    }
 
 
 @router.get("/orgs/{org_id}/fields/{field_id}")
