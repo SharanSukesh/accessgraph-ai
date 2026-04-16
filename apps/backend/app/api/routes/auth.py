@@ -107,9 +107,9 @@ async def callback(
         if not state:
             logger.warning("OAuth callback received without state parameter")
 
-        # Exchange code for tokens
+        # Exchange code for tokens (with state for PKCE)
         oauth_client = SalesforceOAuthClient()
-        token_response = await oauth_client.exchange_code_for_token(code)
+        token_response = await oauth_client.exchange_code_for_token(code, state)
 
         logger.info(
             "Successfully exchanged code for tokens",
