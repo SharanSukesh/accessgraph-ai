@@ -381,3 +381,89 @@ async def list_recommendations(
         }
         for r in recs
     ]
+
+
+@router.get("/orgs/{org_id}/objects")
+async def list_objects(
+    org_id: str,
+    search: Optional[str] = None,
+    limit: int = Query(100, le=1000),
+    db: AsyncSession = Depends(get_database),
+):
+    """List unique Salesforce objects from permissions data"""
+    from sqlalchemy import func, distinct
+    from app.domain.models import ObjectPermissionSnapshot
+
+    # Get distinct object types
+    query = select(
+        ObjectPermissionSnapshot.sobject_type,
+        func.count(ObjectPermissionSnapshot.id).label('permission_count')
+    ).where(
+        ObjectPermissionSnapshot.organization_id == org_id
+    ).group_by(
+        ObjectPermissionSnapshot.sobject_type
+    )
+
+    if search:
+        query = query.where(ObjectPermissionSnapshot.sobject_type.ilike(f'%{search}%'))
+
+    query = query.order_by(ObjectPermissionSnapshot.sobject_type).limit(limit)
+
+    result = await db.execute(query)
+    objects = result.all()
+
+    return [
+        {
+            "name": obj.sobject_type,
+            "permissionCount": obj.permission_count,
+        }
+        for obj in objects
+    ]
+
+
+@router.get("/orgs/{org_id}/fields")
+async def list_fields(
+    org_id: str,
+    search: Optional[str] = None,
+    object_type: Optional[str] = None,
+    limit: int = Query(100, le=1000),
+    db: AsyncSession = Depends(get_database),
+):
+    """List unique Salesforce fields from permissions data"""
+    from sqlalchemy import func
+    from app.domain.models import FieldPermissionSnapshot
+
+    # Get distinct fields
+    query = select(
+        FieldPermissionSnapshot.sobject_type,
+        FieldPermissionSnapshot.field,
+        func.count(FieldPermissionSnapshot.id).label('permission_count')
+    ).where(
+        FieldPermissionSnapshot.organization_id == org_id
+    ).group_by(
+        FieldPermissionSnapshot.sobject_type,
+        FieldPermissionSnapshot.field
+    )
+
+    if search:
+        query = query.where(FieldPermissionSnapshot.field.ilike(f'%{search}%'))
+
+    if object_type:
+        query = query.where(FieldPermissionSnapshot.sobject_type == object_type)
+
+    query = query.order_by(
+        FieldPermissionSnapshot.sobject_type,
+        FieldPermissionSnapshot.field
+    ).limit(limit)
+
+    result = await db.execute(query)
+    fields = result.all()
+
+    return [
+        {
+            "objectType": field.sobject_type,
+            "fieldName": field.field,
+            "permissionCount": field.permission_count,
+        }
+        for field in fields
+    ]
