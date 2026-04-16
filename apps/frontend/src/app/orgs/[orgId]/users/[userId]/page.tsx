@@ -211,9 +211,9 @@ export default function UserDetailPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                          {risk.riskScore}
+                          {risk.score}
                         </div>
-                        <RiskBadge level={risk.riskLevel} />
+                        <RiskBadge level={risk.level as "low" | "medium" | "high" | "critical"} />
                       </div>
                     </div>
                     {risk.factors && risk.factors.length > 0 && (
