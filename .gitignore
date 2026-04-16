@@ -10,8 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# lib/  # Commented out - too broad, was ignoring frontend src/lib
+**/lib64/  # Only ignore Python lib64
 parts/
 sdist/
 var/
