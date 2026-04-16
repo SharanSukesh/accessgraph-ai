@@ -337,12 +337,12 @@ function EdgeDetailPanel({
         )}
 
         {/* Permission details for CRUD edges */}
-        {[
+        {([
           EDGE_TYPES.CAN_READ.value,
           EDGE_TYPES.CAN_CREATE.value,
           EDGE_TYPES.CAN_EDIT.value,
           EDGE_TYPES.CAN_DELETE.value,
-        ].includes(edge.type) && (
+        ] as string[]).includes(edge.type) && (
           <div>
             <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               Permission Type
