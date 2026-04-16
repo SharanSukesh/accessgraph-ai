@@ -51,7 +51,6 @@ export default function UserDetailPage() {
   const { data: user, isLoading: userLoading, error: userError } = useUser(orgId, userId)
   const { data: objectAccess, isLoading: objectsLoading } = useUserObjectAccess(orgId, userId)
   const { data: fieldAccess, isLoading: fieldsLoading } = useUserFieldAccess(orgId, userId)
-  const { data: explanations, isLoading: explanationsLoading } = useUserExplanations(orgId, userId)
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
   const { data: recommendations, isLoading: recommendationsLoading } = useUserRecommendations(orgId, userId)
   const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId)
@@ -180,10 +179,6 @@ export default function UserDetailPage() {
           <TabsTrigger value="graph">
             <Network className="h-4 w-4 mr-2" />
             Graph
-          </TabsTrigger>
-          <TabsTrigger value="explanations">
-            <FileCheck className="h-4 w-4 mr-2" />
-            Explanations
           </TabsTrigger>
           <TabsTrigger value="recommendations">
             <AlertTriangle className="h-4 w-4 mr-2" />
@@ -471,48 +466,6 @@ export default function UserDetailPage() {
               )}
             </div>
           </div>
-        </TabsContent>
-
-        {/* Explanations Tab */}
-        <TabsContent value="explanations">
-          <Card variant="bordered">
-            <CardHeader>
-              <CardTitle>Access Explanations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {explanationsLoading ? (
-                <TableSkeleton rows={5} />
-              ) : explanations && explanations.length > 0 ? (
-                <div className="space-y-4">
-                  {explanations.map((exp: any) => (
-                    <div
-                      key={exp.id}
-                      className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {exp.target}
-                        </div>
-                        <Badge variant="info" size="sm">
-                          {exp.pathType}
-                        </Badge>
-                      </div>
-                      <div className="space-y-2">
-                        {exp.steps?.map((step: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                            <span className="text-primary-500">→</span>
-                            <span>{step.description || step.type}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState title="No Explanations" description="No access explanations available" icon="default" />
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Recommendations Tab */}
