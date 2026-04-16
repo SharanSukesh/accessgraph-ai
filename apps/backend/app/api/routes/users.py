@@ -394,12 +394,16 @@ async def list_objects(
 ):
     """List unique Salesforce objects from permissions data"""
     from sqlalchemy import func, distinct
-    from app.domain.models import ObjectPermissionSnapshot
+    from app.domain.models import (
+        ObjectPermissionSnapshot,
+        UserSnapshot,
+        PermissionSetAssignmentSnapshot
+    )
 
-    # Get distinct object types
+    # Get distinct object types with permission count
     query = select(
         ObjectPermissionSnapshot.sobject_type,
-        func.count(ObjectPermissionSnapshot.id).label('permission_count')
+        func.count(distinct(ObjectPermissionSnapshot.parent_id)).label('permission_set_count')
     ).where(
         ObjectPermissionSnapshot.organization_id == org_id
     ).group_by(
@@ -416,30 +420,55 @@ async def list_objects(
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
-        # Remove __c suffix for custom objects
         if api_name.endswith('__c'):
             api_name = api_name[:-3]
-        # Handle camel case (e.g., AccountContactRole -> Account Contact Role)
         import re
-        # Insert space before uppercase letters
         label = re.sub(r'([a-z])([A-Z])', r'\1 \2', api_name)
-        # Replace underscores with spaces
         label = label.replace('_', ' ')
         return label
 
-    return [
-        {
+    # For each object, calculate actual user count
+    object_list = []
+    for obj in objects:
+        # Get all parent_ids (profiles and permission sets) for this object
+        perms_query = select(ObjectPermissionSnapshot.parent_id).where(
+            ObjectPermissionSnapshot.organization_id == org_id,
+            ObjectPermissionSnapshot.sobject_type == obj.sobject_type
+        )
+        perms_result = await db.execute(perms_query)
+        parent_ids = [p[0] for p in perms_result.all()]
+
+        # Count users with these profiles
+        user_count_query = select(func.count(distinct(UserSnapshot.salesforce_id))).where(
+            UserSnapshot.organization_id == org_id,
+            UserSnapshot.profile_id.in_(parent_ids)
+        )
+        user_count_result = await db.execute(user_count_query)
+        user_count_from_profiles = user_count_result.scalar() or 0
+
+        # Count users with these permission sets
+        ps_user_count_query = select(func.count(distinct(PermissionSetAssignmentSnapshot.assignee_id))).where(
+            PermissionSetAssignmentSnapshot.organization_id == org_id,
+            PermissionSetAssignmentSnapshot.permission_set_id.in_(parent_ids)
+        )
+        ps_user_count_result = await db.execute(ps_user_count_query)
+        user_count_from_ps = ps_user_count_result.scalar() or 0
+
+        # Total unique users (may have some overlap, but this is an approximation)
+        total_users = user_count_from_profiles + user_count_from_ps
+
+        object_list.append({
             "id": obj.sobject_type,
             "name": obj.sobject_type,
             "apiName": obj.sobject_type,
             "label": create_label(obj.sobject_type),
             "isCustom": obj.sobject_type.endswith('__c'),
-            "fieldCount": 0,  # Would need to count from field permissions
-            "userCount": obj.permission_count,
-            "permissionCount": obj.permission_count,
-        }
-        for obj in objects
-    ]
+            "fieldCount": 0,
+            "userCount": total_users,
+            "permissionSetCount": obj.permission_set_count,
+        })
+
+    return object_list
 
 
 @router.get("/orgs/{org_id}/objects/{object_name}")
