@@ -8,9 +8,6 @@ const nextConfig = {
     NEXT_PUBLIC_APP_NAME: process.env.NEXT_PUBLIC_APP_NAME || 'AccessGraph AI',
   },
 
-  // Production output
-  output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
-
   // Logging
   logging: {
     fetches: {
