@@ -30,6 +30,7 @@ import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton
 import { GraphVisualization } from '@/components/graph/GraphVisualization'
 import { GraphLegend } from '@/components/graph/GraphLegend'
 import { GraphControls } from '@/components/graph/GraphControls'
+import { RecordAccessInfo } from '@/components/users/RecordAccessInfo'
 import {
   useUser,
   useUserObjectAccess,
@@ -175,6 +176,10 @@ export default function UserDetailPage() {
           <TabsTrigger value="fields">
             <FileText className="h-4 w-4 mr-2" />
             Field Access
+          </TabsTrigger>
+          <TabsTrigger value="records">
+            <Shield className="h-4 w-4 mr-2" />
+            Record Access
           </TabsTrigger>
           <TabsTrigger value="graph">
             <Network className="h-4 w-4 mr-2" />
@@ -437,6 +442,24 @@ export default function UserDetailPage() {
               ) : (
                 <EmptyState title="No Field Access" description="No field permissions found" icon="file-text" />
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Record Access Tab */}
+        <TabsContent value="records">
+          <Card variant="bordered">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5" />
+                Record-Level Access
+              </CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                Understand which specific records this user can access based on ownership, role hierarchy, sharing rules, and team assignments
+              </p>
+            </CardHeader>
+            <CardContent>
+              <RecordAccessInfo userId={userId} orgId={orgId} />
             </CardContent>
           </Card>
         </TabsContent>
