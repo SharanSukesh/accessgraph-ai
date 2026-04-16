@@ -442,6 +442,142 @@ async def list_objects(
     ]
 
 
+@router.get("/orgs/{org_id}/objects/{object_name}")
+async def get_object_details(
+    org_id: str,
+    object_name: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get detailed information about a Salesforce object"""
+    from sqlalchemy import func
+    from app.domain.models import (
+        ObjectPermissionSnapshot,
+        PermissionSetSnapshot,
+        ProfileSnapshot,
+        PermissionSetAssignmentSnapshot,
+        UserSnapshot
+    )
+
+    # Get all permissions for this object
+    perms_query = select(ObjectPermissionSnapshot).where(
+        ObjectPermissionSnapshot.organization_id == org_id,
+        ObjectPermissionSnapshot.sobject_type == object_name
+    )
+    perms_result = await db.execute(perms_query)
+    permissions = perms_result.scalars().all()
+
+    # Get profiles and permission sets that grant access
+    profiles_with_access = []
+    permission_sets_with_access = []
+
+    for perm in permissions:
+        # Check if it's a profile or permission set
+        profile_query = select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id,
+            ProfileSnapshot.salesforce_id == perm.parent_id
+        )
+        profile_result = await db.execute(profile_query)
+        profile = profile_result.scalar_one_or_none()
+
+        if profile:
+            profiles_with_access.append({
+                "id": profile.salesforce_id,
+                "name": profile.name,
+                "read": perm.permissions_read,
+                "create": perm.permissions_create,
+                "edit": perm.permissions_edit,
+                "delete": perm.permissions_delete,
+                "viewAll": perm.permissions_view_all_records,
+                "modifyAll": perm.permissions_modify_all_records,
+            })
+        else:
+            # It's a permission set
+            ps_query = select(PermissionSetSnapshot).where(
+                PermissionSetSnapshot.organization_id == org_id,
+                PermissionSetSnapshot.salesforce_id == perm.parent_id
+            )
+            ps_result = await db.execute(ps_query)
+            ps = ps_result.scalar_one_or_none()
+
+            if ps:
+                permission_sets_with_access.append({
+                    "id": ps.salesforce_id,
+                    "name": ps.name,
+                    "label": ps.label,
+                    "read": perm.permissions_read,
+                    "create": perm.permissions_create,
+                    "edit": perm.permissions_edit,
+                    "delete": perm.permissions_delete,
+                    "viewAll": perm.permissions_view_all_records,
+                    "modifyAll": perm.permissions_modify_all_records,
+                })
+
+    # Get users with access (through profiles or permission sets)
+    users_with_access_set = set()
+
+    # Users through profiles
+    for profile in profiles_with_access:
+        users_query = select(UserSnapshot).where(
+            UserSnapshot.organization_id == org_id,
+            UserSnapshot.profile_id == profile["id"]
+        )
+        users_result = await db.execute(users_query)
+        users = users_result.scalars().all()
+        for user in users:
+            users_with_access_set.add((user.salesforce_id, user.name, user.email, "Profile: " + profile["name"]))
+
+    # Users through permission sets
+    for ps in permission_sets_with_access:
+        assignments_query = select(PermissionSetAssignmentSnapshot).where(
+            PermissionSetAssignmentSnapshot.organization_id == org_id,
+            PermissionSetAssignmentSnapshot.permission_set_id == ps["id"]
+        )
+        assignments_result = await db.execute(assignments_query)
+        assignments = assignments_result.scalars().all()
+
+        for assignment in assignments:
+            user_query = select(UserSnapshot).where(
+                UserSnapshot.organization_id == org_id,
+                UserSnapshot.salesforce_id == assignment.assignee_id
+            )
+            user_result = await db.execute(user_query)
+            user = user_result.scalar_one_or_none()
+            if user:
+                users_with_access_set.add((user.salesforce_id, user.name, user.email, "Permission Set: " + ps["name"]))
+
+    users_with_access = [
+        {
+            "salesforceUserId": uid,
+            "name": name,
+            "email": email,
+            "accessVia": via
+        }
+        for uid, name, email, via in sorted(users_with_access_set, key=lambda x: x[1])
+    ]
+
+    def create_label(api_name: str) -> str:
+        """Create a human-readable label from API name"""
+        if api_name.endswith('__c'):
+            api_name = api_name[:-3]
+        import re
+        label = re.sub(r'([a-z])([A-Z])', r'\1 \2', api_name)
+        label = label.replace('_', ' ')
+        return label
+
+    return {
+        "name": object_name,
+        "apiName": object_name,
+        "label": create_label(object_name),
+        "isCustom": object_name.endswith('__c'),
+        "profilesWithAccess": profiles_with_access,
+        "permissionSetsWithAccess": permission_sets_with_access,
+        "usersWithAccess": users_with_access,
+        "totalUsers": len(users_with_access),
+        "totalProfiles": len(profiles_with_access),
+        "totalPermissionSets": len(permission_sets_with_access),
+    }
+
+
 @router.get("/orgs/{org_id}/fields")
 async def list_fields(
     org_id: str,
