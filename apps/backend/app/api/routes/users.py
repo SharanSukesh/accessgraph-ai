@@ -299,6 +299,55 @@ async def list_anomalies(
     ]
 
 
+class TopAnomalousUserResponse(BaseModel):
+    userId: str
+    userName: str
+    userEmail: str
+    anomalyScore: float
+    severity: str
+    topReasons: List[str]
+    riskScore: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/orgs/{org_id}/anomalies/users/top", response_model=List[TopAnomalousUserResponse])
+async def get_top_anomalous_users(
+    org_id: str,
+    limit: int = Query(10, le=100),
+    db: AsyncSession = Depends(get_database),
+):
+    """Get top anomalous users with aggregated metrics"""
+    # Query anomalies with user info
+    query = (
+        select(AccessAnomaly, UserSnapshot)
+        .join(UserSnapshot, AccessAnomaly.user_id == UserSnapshot.salesforce_id)
+        .where(
+            AccessAnomaly.organization_id == org_id,
+            UserSnapshot.organization_id == org_id,
+        )
+        .order_by(AccessAnomaly.anomaly_score.desc())
+        .limit(limit)
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        {
+            "userId": user.salesforce_id,
+            "userName": user.name,
+            "userEmail": user.email or "",
+            "anomalyScore": anomaly.anomaly_score,
+            "severity": anomaly.severity.value,
+            "topReasons": anomaly.reasons[:3] if anomaly.reasons else [],
+            "riskScore": None,  # Could be joined from RiskScore if needed
+        }
+        for anomaly, user in rows
+    ]
+
+
 @router.get("/orgs/{org_id}/recommendations", response_model=List[RecommendationResponse])
 async def list_recommendations(
     org_id: str,
