@@ -18,49 +18,28 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
-// TODO: Make this dynamic based on selected org
-const mockOrgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID || 'demo-org'
-
-const navigation = [
-  {
-    name: 'Dashboard',
-    href: mockOrgId ? `/orgs/${mockOrgId}/dashboard` : '/',
-    icon: LayoutDashboard,
-  },
-  {
-    name: 'Users',
-    href: mockOrgId ? `/orgs/${mockOrgId}/users` : '/users',
-    icon: Users,
-  },
-  {
-    name: 'Objects',
-    href: mockOrgId ? `/orgs/${mockOrgId}/objects` : '/objects',
-    icon: Database,
-  },
-  {
-    name: 'Fields',
-    href: mockOrgId ? `/orgs/${mockOrgId}/fields` : '/fields',
-    icon: FileText,
-  },
-  {
-    name: 'Anomalies',
-    href: mockOrgId ? `/orgs/${mockOrgId}/anomalies` : '/anomalies',
-    icon: AlertTriangle,
-  },
-  {
-    name: 'Recommendations',
-    href: mockOrgId ? `/orgs/${mockOrgId}/recommendations` : '/recommendations',
-    icon: CheckCircle,
-  },
-  {
-    name: 'Graph Explorer',
-    href: mockOrgId ? `/orgs/${mockOrgId}/graph` : '/graph',
-    icon: Network,
-  },
+const navigationItems = [
+  { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
+  { name: 'Users', path: 'users', icon: Users },
+  { name: 'Objects', path: 'objects', icon: Database },
+  { name: 'Fields', path: 'fields', icon: FileText },
+  { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
+  { name: 'Recommendations', path: 'recommendations', icon: CheckCircle },
+  { name: 'Graph Explorer', path: 'graph', icon: Network },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
+
+  // Extract orgId from current path (e.g., /orgs/abc123/dashboard -> abc123)
+  const orgIdMatch = pathname.match(/\/orgs\/([^/]+)/)
+  const orgId = orgIdMatch ? orgIdMatch[1] : 'demo-org'
+
+  // Build navigation with current orgId
+  const navigation = navigationItems.map(item => ({
+    ...item,
+    href: `/orgs/${orgId}/${item.path}`
+  }))
 
   return (
     <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
