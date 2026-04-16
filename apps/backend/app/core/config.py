@@ -14,7 +14,10 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="allow"
+        extra="allow",
+        # Don't try to parse env vars as JSON - use validators instead
+        env_parse_none_str="",
+        env_parse_enums=False,
     )
 
     # Application
@@ -22,9 +25,9 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = Field(default=8000, description="Backend port")
     BACKEND_RELOAD: bool = Field(default=False, description="Enable auto-reload")
     BACKEND_LOG_LEVEL: str = Field(default="info", description="Log level")
-    BACKEND_CORS_ORIGINS: List[str] = Field(
-        default=["http://localhost:3000", "http://localhost:3001"],
-        description="CORS allowed origins"
+    BACKEND_CORS_ORIGINS: str = Field(
+        default="http://localhost:3000,http://localhost:3001",
+        description="CORS allowed origins (comma-separated)"
     )
 
     # Database - PostgreSQL (or SQLite for demo)
@@ -65,17 +68,12 @@ class Settings(BaseSettings):
         description="Salesforce login URL"
     )
 
-    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: str | List[str]) -> List[str]:
-        """Parse CORS origins from string or list"""
-        if isinstance(v, str):
-            # Handle empty string
-            if not v or v.strip() == "":
-                return ["http://localhost:3000"]
-            # Split comma-separated string
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v if v else ["http://localhost:3000"]
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Parse CORS origins string into list"""
+        if not self.BACKEND_CORS_ORIGINS or self.BACKEND_CORS_ORIGINS.strip() == "":
+            return ["http://localhost:3000", "http://localhost:3001"]
+        return [origin.strip() for origin in self.BACKEND_CORS_ORIGINS.split(",") if origin.strip()]
 
     @property
     def async_database_url(self) -> str:
