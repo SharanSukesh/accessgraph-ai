@@ -674,3 +674,25 @@ async def list_fields(
         }
         for field in fields
     ]
+
+
+
+@router.get("/orgs/{org_id}/graph/user/{user_sf_id}")
+async def get_user_graph(
+    org_id: str,
+    user_sf_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get graph data for a user - placeholder for now"""
+    # This is a placeholder endpoint for the graph explorer
+    # Full implementation would build a graph showing:
+    # - User node
+    # - Connected roles, profiles, permission sets
+    # - Objects and fields the user has access to
+    return {
+        "nodes": [
+            {"id": user_sf_id, "label": "User", "type": "user"}
+        ],
+        "edges": []
+    }
+
