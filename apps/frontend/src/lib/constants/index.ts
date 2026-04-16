@@ -7,10 +7,10 @@
 // ======================
 
 export const RISK_LEVELS = {
-  LOW: { value: 'low', label: 'Low', color: 'green', threshold: 25 },
-  MEDIUM: { value: 'medium', label: 'Medium', color: 'yellow', threshold: 50 },
-  HIGH: { value: 'high', label: 'High', color: 'orange', threshold: 75 },
-  CRITICAL: { value: 'critical', label: 'Critical', color: 'red', threshold: 100 },
+  LOW: { level: 'low' as const, label: 'Low', color: 'green', threshold: 25 },
+  MEDIUM: { level: 'medium' as const, label: 'Medium', color: 'yellow', threshold: 50 },
+  HIGH: { level: 'high' as const, label: 'High', color: 'orange', threshold: 75 },
+  CRITICAL: { level: 'critical' as const, label: 'Critical', color: 'red', threshold: 100 },
 } as const
 
 export type RiskLevel = keyof typeof RISK_LEVELS
