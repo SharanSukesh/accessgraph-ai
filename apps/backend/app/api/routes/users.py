@@ -1148,6 +1148,7 @@ async def get_user_graph(
     ps_assignments_result = await db.execute(ps_assignments_query)
     ps_assignments = ps_assignments_result.scalars().all()
 
+    permission_set_ids = []  # Collect permission set IDs for later use
     for assignment in ps_assignments:
         ps_query = select(PermissionSetSnapshot).where(
             PermissionSetSnapshot.organization_id == org_id,
@@ -1156,6 +1157,7 @@ async def get_user_graph(
         ps_result = await db.execute(ps_query)
         ps = ps_result.scalar_one_or_none()
         if ps:
+            permission_set_ids.append(ps.salesforce_id)
             nodes.append({
                 "id": ps.salesforce_id,
                 "type": "permission_set",
@@ -1174,7 +1176,7 @@ async def get_user_graph(
     permission_source_ids = []
     if user.profile_id:
         permission_source_ids.append(user.profile_id)
-    permission_source_ids.extend([ps.salesforce_id for ps in ps_assignments if ps])
+    permission_source_ids.extend(permission_set_ids)
 
     # Get all object permissions from all sources
     if permission_source_ids:
