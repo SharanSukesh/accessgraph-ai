@@ -2,9 +2,10 @@
 
 /**
  * Sidebar Navigation Component
- * Main navigation for the application
+ * Main navigation for the application - Collapsible on hover
  */
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -15,6 +16,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Network,
+  Menu,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -30,6 +32,7 @@ const navigationItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [isExpanded, setIsExpanded] = useState(false)
 
   // Extract orgId from current path (e.g., /orgs/abc123/dashboard -> abc123)
   const orgIdMatch = pathname.match(/\/orgs\/([^/]+)/)
@@ -42,25 +45,41 @@ export function Sidebar() {
   }))
 
   return (
-    <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
+    <aside
+      className={cn(
+        "bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 transition-all duration-300 ease-in-out relative z-50",
+        isExpanded ? "w-64" : "w-16"
+      )}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
       <div className="flex flex-col h-full">
-        {/* Logo */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        {/* Logo / Hamburger */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <Link href="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
-              <Network className="h-6 w-6 text-white" />
+            <div className={cn(
+              "bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all flex-shrink-0",
+              isExpanded ? "w-10 h-10" : "w-8 h-8"
+            )}>
+              {isExpanded ? (
+                <Network className="h-6 w-6 text-white" />
+              ) : (
+                <Menu className="h-5 w-5 text-white" />
+              )}
             </div>
-            <div>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white">
-                AccessGraph
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">AI Platform</p>
-            </div>
+            {isExpanded && (
+              <div className="overflow-hidden">
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                  AccessGraph
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">AI Platform</p>
+              </div>
+            )}
           </Link>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
             const Icon = item.icon
             const isActive =
@@ -71,25 +90,36 @@ export function Sidebar() {
                 key={item.name}
                 href={item.href}
                 className={cn(
-                  'flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-150',
+                  'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group',
+                  isExpanded ? 'space-x-3 px-4 py-3' : 'justify-center p-3',
                   isActive
                     ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
                     : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                 )}
+                title={!isExpanded ? item.name : undefined}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
-                <span>{item.name}</span>
+                {isExpanded && <span className="whitespace-nowrap">{item.name}</span>}
+
+                {/* Tooltip for collapsed state */}
+                {!isExpanded && (
+                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                    {item.name}
+                  </div>
+                )}
               </Link>
             )
           })}
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-            v0.1.0 • MVP
-          </p>
-        </div>
+        {isExpanded && (
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+              v0.1.0 • MVP
+            </p>
+          </div>
+        )}
       </div>
     </aside>
   )
