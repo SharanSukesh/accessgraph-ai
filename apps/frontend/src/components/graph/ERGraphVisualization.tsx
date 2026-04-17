@@ -281,8 +281,12 @@ export function ERGraphVisualization({
       const sourceNode = graph.nodes.find(n => n.id === edge.source)
       const targetNode = graph.nodes.find(n => n.id === edge.target)
 
-      // Only add edge if both nodes are non-objects OR will be added later
-      if (sourceNode?.type !== 'field' && targetNode?.type !== 'field') {
+      // Only add edge if both nodes are non-objects AND non-fields
+      // Objects will be added dynamically later with their edges
+      const sourceIsBase = sourceNode && sourceNode.type !== 'object' && sourceNode.type !== 'field'
+      const targetIsBase = targetNode && targetNode.type !== 'object' && targetNode.type !== 'field'
+
+      if (sourceIsBase && targetIsBase) {
         initialElements.push({
           group: 'edges',
           data: {
@@ -305,7 +309,7 @@ export function ERGraphVisualization({
       layout: getLayoutOptions('cose-bilkent'),
       minZoom: 0.1,
       maxZoom: 3,
-      wheelSensitivity: 0.15,
+      // wheelSensitivity: 0.15, // Removed to avoid warning - using default
     })
 
     cyRef.current = cy
