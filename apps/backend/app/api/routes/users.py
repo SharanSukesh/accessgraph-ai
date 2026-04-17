@@ -1178,6 +1178,45 @@ async def get_user_graph(
         permission_source_ids.append(user.profile_id)
     permission_source_ids.extend(permission_set_ids)
 
+    # Get all field permissions first to group them under objects
+    from app.domain.models import FieldPermissionSnapshot
+    object_fields = {}  # Map object name to list of fields with permissions
+
+    if permission_source_ids:
+        field_perms_query = select(FieldPermissionSnapshot).where(
+            FieldPermissionSnapshot.organization_id == org_id,
+            FieldPermissionSnapshot.parent_id.in_(permission_source_ids)
+        )
+        field_perms_result = await db.execute(field_perms_query)
+        field_perms = field_perms_result.scalars().all()
+
+        # Group fields by object
+        for field_perm in field_perms:
+            if '.' in field_perm.field:
+                obj_name, field_name = field_perm.field.split('.', 1)
+            else:
+                obj_name = "Unknown"
+                field_name = field_perm.field
+
+            # Only include fields user has access to
+            if field_perm.permissions_read or field_perm.permissions_edit:
+                if obj_name not in object_fields:
+                    object_fields[obj_name] = []
+
+                # Check if this field is already in the list
+                existing_field = next((f for f in object_fields[obj_name] if f["name"] == field_name), None)
+                if not existing_field:
+                    object_fields[obj_name].append({
+                        "name": field_name,
+                        "fullName": field_perm.field,
+                        "canRead": field_perm.permissions_read,
+                        "canEdit": field_perm.permissions_edit,
+                    })
+                else:
+                    # Merge permissions if same field from multiple sources
+                    existing_field["canRead"] = existing_field["canRead"] or field_perm.permissions_read
+                    existing_field["canEdit"] = existing_field["canEdit"] or field_perm.permissions_edit
+
     # Get all object permissions from all sources
     if permission_source_ids:
         obj_perms_query = select(ObjectPermissionSnapshot).where(
@@ -1197,10 +1236,13 @@ async def get_user_graph(
                     "type": "object",
                     "label": obj_perm.sobject_type,
                     "properties": {
+                        "objectName": obj_perm.sobject_type,
                         "canRead": obj_perm.permissions_read,
                         "canCreate": obj_perm.permissions_create,
                         "canEdit": obj_perm.permissions_edit,
                         "canDelete": obj_perm.permissions_delete,
+                        # Include fields as part of object properties
+                        "fields": object_fields.get(obj_perm.sobject_type, [])
                     }
                 })
 
@@ -1230,60 +1272,37 @@ async def get_user_graph(
                     }
                 })
 
-    # Add field nodes (limited to avoid overwhelming the graph)
-    from app.domain.models import FieldPermissionSnapshot
-    if permission_source_ids:
-        field_perms_query = select(FieldPermissionSnapshot).where(
-            FieldPermissionSnapshot.organization_id == org_id,
-            FieldPermissionSnapshot.parent_id.in_(permission_source_ids)
-        ).limit(20)  # Limit fields to keep graph manageable
-        field_perms_result = await db.execute(field_perms_query)
-        field_perms = field_perms_result.scalars().all()
+    # Add object-to-object relationships (common Salesforce relationships)
+    # This makes the graph look like an ER diagram
+    object_relationships = {
+        "Account": ["Contact", "Opportunity", "Case"],
+        "Opportunity": ["OpportunityLineItem", "OpportunityContactRole"],
+        "Case": ["CaseComment"],
+        "Lead": ["LeadHistory"],
+        "Campaign": ["CampaignMember"],
+    }
 
-        for field_perm in field_perms:
-            field_id = f"field_{field_perm.field}"
-            # Check if field node already exists
-            if not any(n["id"] == field_id for n in nodes):
-                # Parse object.field format
-                if '.' in field_perm.field:
-                    obj_name, field_name = field_perm.field.split('.', 1)
-                else:
-                    obj_name = "Unknown"
-                    field_name = field_perm.field
-
-                nodes.append({
-                    "id": field_id,
-                    "type": "field",
-                    "label": field_name,
-                    "properties": {
-                        "fullName": field_perm.field,
-                        "objectName": obj_name,
-                        "canRead": field_perm.permissions_read,
-                        "canEdit": field_perm.permissions_edit,
-                    }
-                })
-
-            # Create edge from permission source to field
-            source_id = field_perm.parent_id
-            edge_id = f"ps_field_{source_id}_{field_perm.field}"
-            if not any(e["id"] == edge_id for e in edges):
-                # Build permission label
-                perms = []
-                if field_perm.permissions_read: perms.append("R")
-                if field_perm.permissions_edit: perms.append("E")
-                perm_label = ",".join(perms) if perms else "access"
-
-                edges.append({
-                    "id": edge_id,
-                    "source": source_id,
-                    "target": field_id,
-                    "type": "GRANTS_FIELD_ACCESS",
-                    "label": perm_label,
-                    "properties": {
-                        "read": field_perm.permissions_read,
-                        "edit": field_perm.permissions_edit,
-                    }
-                })
+    for parent_obj, child_objs in object_relationships.items():
+        parent_id = f"object_{parent_obj}"
+        # Check if parent object exists in the graph
+        if any(n["id"] == parent_id for n in nodes):
+            for child_obj in child_objs:
+                child_id = f"object_{child_obj}"
+                # Check if child object exists in the graph
+                if any(n["id"] == child_id for n in nodes):
+                    # Add relationship edge
+                    edge_id = f"rel_{parent_obj}_{child_obj}"
+                    if not any(e["id"] == edge_id for e in edges):
+                        edges.append({
+                            "id": edge_id,
+                            "source": parent_id,
+                            "target": child_id,
+                            "type": "OBJECT_RELATIONSHIP",
+                            "label": "related to",
+                            "properties": {
+                                "relationshipType": "parent-child"
+                            }
+                        })
 
     return {
         "nodes": nodes,

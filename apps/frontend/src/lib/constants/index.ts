@@ -99,6 +99,7 @@ export const EDGE_TYPES = {
   CAN_EDIT: { value: 'can_edit', label: 'Can Edit', color: '#a3e635' },
   CAN_DELETE: { value: 'can_delete', label: 'Can Delete', color: '#a3e635' },
   MEMBER_OF: { value: 'member_of', label: 'Member Of', color: '#ec4899' },
+  OBJECT_RELATIONSHIP: { value: 'OBJECT_RELATIONSHIP', label: 'Related To', color: '#f472b6' },
 } as const
 
 // ======================

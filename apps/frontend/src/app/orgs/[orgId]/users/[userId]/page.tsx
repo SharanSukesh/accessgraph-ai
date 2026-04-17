@@ -27,9 +27,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Ta
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { GraphVisualization } from '@/components/graph/GraphVisualization'
+import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
+import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
 import { GraphLegend } from '@/components/graph/GraphLegend'
-import { GraphControls } from '@/components/graph/GraphControls'
+import { GraphDetailPanel } from '@/components/graph/GraphDetailPanel'
 import { RecordAccessInfo } from '@/components/users/RecordAccessInfo'
 import {
   useUser,
@@ -47,6 +48,8 @@ export default function UserDetailPage() {
   const userId = params.userId as string
 
   const [activeTab, setActiveTab] = useState('overview')
+  const [selectedObjects, setSelectedObjects] = useState<string[]>([])
+  const [selectedGraphNode, setSelectedGraphNode] = useState<any>(null)
 
   // Fetch user data
   const { data: user, isLoading: userLoading, error: userError } = useUser(orgId, userId)
@@ -466,11 +469,9 @@ export default function UserDetailPage() {
 
         {/* Graph Tab */}
         <TabsContent value="graph">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1">
-              <GraphLegend compact />
-            </div>
-            <div className="lg:col-span-3">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Main Graph Area */}
+            <div className="lg:col-span-8">
               {graphLoading ? (
                 <Card variant="bordered">
                   <CardContent className="py-12 text-center">
@@ -483,9 +484,57 @@ export default function UserDetailPage() {
                   </CardContent>
                 </Card>
               ) : graph ? (
-                <GraphVisualization graph={graph} height="600px" />
+                <>
+                  <ERGraphVisualization
+                    graph={graph}
+                    selectedObjects={selectedObjects}
+                    onNodeSelect={(node) => setSelectedGraphNode(node)}
+                    height="800px"
+                  />
+                  <div className="mt-4">
+                    <GraphLegend compact />
+                  </div>
+                </>
               ) : (
                 <EmptyState title="No Graph Data" description="Unable to load graph" icon="network" />
+              )}
+            </div>
+
+            {/* Right Sidebar - Object Filter or Node Details */}
+            <div className="lg:col-span-4">
+              {selectedGraphNode ? (
+                <GraphDetailPanel
+                  node={selectedGraphNode}
+                  orgId={orgId}
+                  onClose={() => setSelectedGraphNode(null)}
+                />
+              ) : (
+                <ObjectFilterPanel
+                  availableObjects={
+                    graph?.nodes
+                      .filter((n) => n.type === 'object')
+                      .map((n) => ({
+                        id: n.id,
+                        name: n.properties.objectName || n.label,
+                        fieldCount: n.properties.fields?.length || 0,
+                      })) || []
+                  }
+                  selectedObjects={selectedObjects}
+                  onObjectToggle={(objectName) => {
+                    setSelectedObjects((prev) =>
+                      prev.includes(objectName)
+                        ? prev.filter((n) => n !== objectName)
+                        : [...prev, objectName]
+                    )
+                  }}
+                  onSelectAll={() => {
+                    const allObjects = graph?.nodes
+                      .filter((n) => n.type === 'object')
+                      .map((n) => n.properties.objectName || n.label) || []
+                    setSelectedObjects(allObjects)
+                  }}
+                  onDeselectAll={() => setSelectedObjects([])}
+                />
               )}
             </div>
           </div>
