@@ -147,22 +147,24 @@ export default function UserComparePage() {
 }
 
 function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string[] }) {
-  // Fetch access data for all selected users
-  const userAccessQueries = userIds.map((userId) =>
-    useQuery({
-      queryKey: ['user-access-comparison', orgId, userId],
-      queryFn: async () => {
-        const [objectAccess, fieldAccess] = await Promise.all([
-          apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/objects`),
-          apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/fields`),
-        ])
-        return { userId, objectAccess, fieldAccess }
-      },
-    })
-  )
+  // Fetch access data for all selected users in a single query
+  const { data: comparisonData, isLoading } = useQuery({
+    queryKey: ['user-access-comparison', orgId, userIds.sort().join(',')],
+    queryFn: async () => {
+      const results = await Promise.all(
+        userIds.map(async (userId) => {
+          const [objectAccess, fieldAccess] = await Promise.all([
+            apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/objects`),
+            apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/fields`),
+          ])
+          return { userId, objectAccess, fieldAccess }
+        })
+      )
+      return results
+    },
+  })
 
-  const isLoading = userAccessQueries.some((q) => q.isLoading)
-  const data = userAccessQueries.map((q) => q.data).filter(Boolean)
+  const data = comparisonData || []
 
   if (isLoading) {
     return (
