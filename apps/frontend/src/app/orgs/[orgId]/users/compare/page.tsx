@@ -146,9 +146,15 @@ export default function UserComparePage() {
   )
 }
 
+interface UserAccessData {
+  userId: string
+  objectAccess: any[]
+  fieldAccess: any[]
+}
+
 function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string[] }) {
   // Fetch access data for all selected users in a single query
-  const { data: comparisonData, isLoading } = useQuery({
+  const { data: comparisonData, isLoading } = useQuery<UserAccessData[]>({
     queryKey: ['user-access-comparison', orgId, userIds.sort().join(',')],
     queryFn: async () => {
       const results = await Promise.all(
@@ -164,7 +170,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
     },
   })
 
-  const data = comparisonData || []
+  const data: UserAccessData[] = comparisonData || []
 
   if (isLoading) {
     return (
