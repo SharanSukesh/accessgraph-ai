@@ -488,86 +488,26 @@ async def get_user_record_access(
     - Role hierarchy
     - Sharing rules (criteria-based and owner-based)
     - Manual shares
-    - Territory assignments
-
-    Note: This is a placeholder implementation. Full record-level access requires:
-    1. Querying Salesforce sharing tables (UserRecordAccess, Share tables)
-    2. Evaluating sharing rules and criteria
-    3. Processing role hierarchy
-    4. Checking territory rules
+    - Team access (Account Teams, Opportunity Teams)
     """
-    from app.domain.models import UserSnapshot, RoleSnapshot
+    from app.services.record_access import RecordAccessService
 
-    # Get user details
-    user_query = select(UserSnapshot).where(
-        UserSnapshot.organization_id == org_id,
-        UserSnapshot.salesforce_id == user_sf_id
-    )
-    user_result = await db.execute(user_query)
-    user = user_result.scalar_one_or_none()
+    # Create service instance
+    service = RecordAccessService(db)
 
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Get record access information
+    access_info = await service.get_user_record_access(org_id, user_sf_id)
 
-    # Get user's role for hierarchy information
-    role_name = None
-    if user.user_role_id:
-        role_query = select(RoleSnapshot).where(
-            RoleSnapshot.organization_id == org_id,
-            RoleSnapshot.salesforce_id == user.user_role_id
-        )
-        role_result = await db.execute(role_query)
-        role = role_result.scalar_one_or_none()
-        if role:
-            role_name = role.name
-
-    # Placeholder response explaining what would be shown
+    # Convert to camelCase for frontend
     return {
-        "userId": user_sf_id,
-        "userName": user.name,
-        "role": role_name,
-        "recordAccessSummary": {
-            "ownedRecords": {
-                "description": "Records directly owned by this user",
-                "note": "Requires querying Salesforce object tables with OwnerId filter",
-                "example": "SELECT Id, Name FROM Account WHERE OwnerId = '{user_sf_id}'"
-            },
-            "roleHierarchyAccess": {
-                "description": "Records accessible through role hierarchy",
-                "note": "Users can see records owned by users below them in the hierarchy",
-                "requiresData": ["Role hierarchy structure", "OwnerId mappings"]
-            },
-            "sharingRules": {
-                "description": "Records accessible through criteria-based or owner-based sharing rules",
-                "note": "Requires querying Share tables (AccountShare, OpportunityShare, etc.)",
-                "example": "SELECT UserOrGroupId, AccountId, AccountAccessLevel FROM AccountShare"
-            },
-            "manualShares": {
-                "description": "Records manually shared with this user",
-                "note": "Records with RowCause = 'Manual' in Share tables"
-            },
-            "teamAccess": {
-                "description": "Account teams, Opportunity teams, Case teams",
-                "note": "Requires querying AccountTeamMember, OpportunityTeamMember, etc."
-            },
-            "territoryAccess": {
-                "description": "Records accessible through territory assignments",
-                "note": "Requires Territory2 and ObjectTerritory2Association data"
-            }
-        },
-        "implementationNote": "Full implementation requires syncing additional Salesforce data:\n" +
-                              "1. Share tables (AccountShare, OpportunityShare, etc.)\n" +
-                              "2. Sharing rules metadata\n" +
-                              "3. Role hierarchy relationships\n" +
-                              "4. Team member tables\n" +
-                              "5. Territory assignments\n" +
-                              "6. Actual record ownership data",
-        "nextSteps": [
-            "Extend data sync to include Share tables",
-            "Add sharing rules evaluation logic",
-            "Build role hierarchy traversal",
-            "Query actual record counts per object"
-        ]
+        "userId": access_info["user_id"],
+        "userName": access_info.get("user_name", "Unknown"),
+        "ownedRecords": access_info["owned_records"],
+        "roleHierarchy": access_info["role_hierarchy"],
+        "manualShares": access_info["manual_shares"],
+        "teamAccess": access_info["team_access"],
+        "sharingRules": access_info["sharing_rules"],
+        "summary": access_info["summary"],
     }
 
 

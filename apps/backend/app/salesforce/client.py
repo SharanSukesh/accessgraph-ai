@@ -10,13 +10,19 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from app.salesforce.models import (
     QueryResponse,
+    SalesforceAccountShare,
+    SalesforceAccountTeamMember,
     SalesforceFieldPermission,
+    SalesforceGroup,
+    SalesforceGroupMember,
     SalesforceObjectPermission,
+    SalesforceOpportunityShare,
     SalesforcePermissionSet,
     SalesforcePermissionSetAssignment,
     SalesforcePermissionSetGroup,
     SalesforcePermissionSetGroupComponent,
     SalesforceProfile,
+    SalesforceSharingRule,
     SalesforceUser,
     SalesforceUserRole,
 )
@@ -290,6 +296,100 @@ class SalesforceAPIClient:
         logger.info(f"Extracted {len(permissions)} field permissions")
         return permissions
 
+    async def extract_groups(self) -> List[SalesforceGroup]:
+        """
+        Extract all groups (public groups, queues, roles, etc.)
+
+        Returns:
+            List of SalesforceGroup objects
+        """
+        soql = """
+            SELECT Id, Name, Type, DeveloperName, RelatedId
+            FROM Group
+        """
+
+        records = await self.query_all(soql)
+        groups = [SalesforceGroup(**rec) for rec in records]
+
+        logger.info(f"Extracted {len(groups)} groups")
+        return groups
+
+    async def extract_group_members(self) -> List[SalesforceGroupMember]:
+        """
+        Extract all group members
+
+        Returns:
+            List of SalesforceGroupMember objects
+        """
+        soql = """
+            SELECT Id, GroupId, UserOrGroupId
+            FROM GroupMember
+        """
+
+        records = await self.query_all(soql)
+        members = [SalesforceGroupMember(**rec) for rec in records]
+
+        logger.info(f"Extracted {len(members)} group members")
+        return members
+
+    async def extract_account_shares(self) -> List[SalesforceAccountShare]:
+        """
+        Extract all account shares
+
+        Returns:
+            List of SalesforceAccountShare objects
+        """
+        soql = """
+            SELECT Id, AccountId, UserOrGroupId, AccountAccessLevel,
+                   OpportunityAccessLevel, CaseAccessLevel, RowCause
+            FROM AccountShare
+            WHERE RowCause != 'Owner'
+        """
+
+        records = await self.query_all(soql)
+        shares = [SalesforceAccountShare(**rec) for rec in records]
+
+        logger.info(f"Extracted {len(shares)} account shares")
+        return shares
+
+    async def extract_opportunity_shares(self) -> List[SalesforceOpportunityShare]:
+        """
+        Extract all opportunity shares
+
+        Returns:
+            List of SalesforceOpportunityShare objects
+        """
+        soql = """
+            SELECT Id, OpportunityId, UserOrGroupId, OpportunityAccessLevel, RowCause
+            FROM OpportunityShare
+            WHERE RowCause != 'Owner'
+        """
+
+        records = await self.query_all(soql)
+        shares = [SalesforceOpportunityShare(**rec) for rec in records]
+
+        logger.info(f"Extracted {len(shares)} opportunity shares")
+        return shares
+
+    async def extract_account_team_members(self) -> List[SalesforceAccountTeamMember]:
+        """
+        Extract all account team members
+
+        Returns:
+            List of SalesforceAccountTeamMember objects
+        """
+        soql = """
+            SELECT Id, AccountId, UserId, TeamMemberRole,
+                   AccountAccessLevel, OpportunityAccessLevel, CaseAccessLevel
+            FROM AccountTeamMember
+        """
+
+        records = await self.query_all(soql)
+        members = [SalesforceAccountTeamMember(**rec) for rec in records]
+
+        logger.info(f"Extracted {len(members)} account team members")
+        return members
+
     async def extract_all(self) -> Dict[str, List[Any]]:
         """
         Extract all data in one operation
@@ -310,6 +410,13 @@ class SalesforceAPIClient:
         object_permissions = await self.extract_object_permissions()
         field_permissions = await self.extract_field_permissions()
 
+        # Extract sharing data
+        groups = await self.extract_groups()
+        group_members = await self.extract_group_members()
+        account_shares = await self.extract_account_shares()
+        opportunity_shares = await self.extract_opportunity_shares()
+        account_team_members = await self.extract_account_team_members()
+
         # Convert Pydantic models to dicts
         data = {
             "users": [u.model_dump() for u in users],
@@ -321,6 +428,11 @@ class SalesforceAPIClient:
             "permission_set_group_components": [psgc.model_dump() for psgc in permission_set_group_components],
             "object_permissions": [op.model_dump() for op in object_permissions],
             "field_permissions": [fp.model_dump() for fp in field_permissions],
+            "groups": [g.model_dump() for g in groups],
+            "group_members": [gm.model_dump() for gm in group_members],
+            "account_shares": [ash.model_dump() for ash in account_shares],
+            "opportunity_shares": [osh.model_dump() for osh in opportunity_shares],
+            "account_team_members": [atm.model_dump() for atm in account_team_members],
         }
 
         logger.info("Extraction complete")

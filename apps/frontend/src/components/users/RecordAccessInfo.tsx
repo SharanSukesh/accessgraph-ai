@@ -7,7 +7,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
-import { AlertCircle, CheckCircle, Info } from 'lucide-react'
+import { AlertCircle, CheckCircle, Users, Share2, Shield, Building2, Database } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Badge } from '@/components/shared/Badge'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -17,11 +17,61 @@ interface RecordAccessInfoProps {
   orgId: string
 }
 
+interface RoleHierarchy {
+  has_role: boolean
+  role_id?: string
+  role_name?: string
+  subordinate_roles: Array<{ role_id: string; role_name: string }>
+  subordinate_count: number
+}
+
+interface ManualShare {
+  record_type: string
+  record_id: string
+  access_level: string
+  row_cause: string
+  shared_to: string
+}
+
+interface TeamAccess {
+  team_type: string
+  record_id: string
+  role?: string
+  account_access: string
+  opportunity_access: string
+  case_access: string
+}
+
+interface SharingRule {
+  record_type: string
+  record_id: string
+  access_level: string
+  row_cause: string
+  shared_to: string
+}
+
+interface RecordAccessData {
+  userId: string
+  userName: string
+  ownedRecords: Record<string, number>
+  roleHierarchy: RoleHierarchy
+  manualShares: ManualShare[]
+  teamAccess: TeamAccess[]
+  sharingRules: SharingRule[]
+  summary: {
+    total_owned_records: number
+    total_manual_shares: number
+    total_team_memberships: number
+    total_sharing_rule_grants: number
+    has_role_hierarchy_access: boolean
+  }
+}
+
 export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery<RecordAccessData>({
     queryKey: ['record-access', orgId, userId],
     queryFn: async () => {
-      return await apiClient.get<any>(`/orgs/${orgId}/users/${userId}/record-access`)
+      return await apiClient.get<RecordAccessData>(`/orgs/${orgId}/users/${userId}/record-access`)
     },
   })
 
@@ -42,183 +92,267 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
     return null
   }
 
-  const { recordAccessSummary, implementationNote, nextSteps } = data
+  const { ownedRecords, roleHierarchy, manualShares, teamAccess, sharingRules, summary } = data
 
   return (
     <div className="space-y-6">
-      {/* User Info */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-          <div>
-            <h3 className="font-semibold text-blue-900 dark:text-blue-100">
-              Record-Level Access for {data.userName}
-            </h3>
-            {data.role && (
-              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                Role: {data.role}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Access Methods */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Owned Records */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              Owned Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-              {recordAccessSummary.ownedRecords.description}
-            </p>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded p-3 mt-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                {recordAccessSummary.ownedRecords.example}
-              </p>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card variant="bordered" className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700 dark:text-green-300">Owned Records</p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{summary.total_owned_records}</p>
+              </div>
+              <Database className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              {recordAccessSummary.ownedRecords.note}
-            </p>
           </CardContent>
         </Card>
 
-        {/* Role Hierarchy Access */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-purple-600" />
-              Role Hierarchy
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-              {recordAccessSummary.roleHierarchyAccess.description}
-            </p>
-            <div className="mt-3 space-y-1">
-              {recordAccessSummary.roleHierarchyAccess.requiresData.map((req: string, idx: number) => (
-                <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                  <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-                  {req}
-                </div>
-              ))}
+        <Card variant="bordered" className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-purple-700 dark:text-purple-300">Role Hierarchy</p>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                  {summary.has_role_hierarchy_access ? roleHierarchy.subordinate_count : 0}
+                </p>
+              </div>
+              <Users className="h-8 w-8 text-purple-600 dark:text-purple-400" />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-              {recordAccessSummary.roleHierarchyAccess.note}
-            </p>
           </CardContent>
         </Card>
 
-        {/* Sharing Rules */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-blue-600" />
-              Sharing Rules
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-              {recordAccessSummary.sharingRules.description}
-            </p>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded p-3 mt-3">
-              <p className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                {recordAccessSummary.sharingRules.example}
-              </p>
+        <Card variant="bordered" className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 dark:text-blue-300">Manual Shares</p>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{summary.total_manual_shares}</p>
+              </div>
+              <Share2 className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              {recordAccessSummary.sharingRules.note}
-            </p>
           </CardContent>
         </Card>
 
-        {/* Manual Shares */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-cyan-600" />
-              Manual Shares
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-              {recordAccessSummary.manualShares.description}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              {recordAccessSummary.manualShares.note}
-            </p>
+        <Card variant="bordered" className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-amber-700 dark:text-amber-300">Team Access</p>
+                <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">{summary.total_team_memberships}</p>
+              </div>
+              <Building2 className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </div>
           </CardContent>
         </Card>
 
-        {/* Team Access */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-amber-600" />
-              Team Access
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-              {recordAccessSummary.teamAccess.description}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              {recordAccessSummary.teamAccess.note}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Territory Access */}
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
-              Territory Access
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-              {recordAccessSummary.territoryAccess.description}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              {recordAccessSummary.territoryAccess.note}
-            </p>
+        <Card variant="bordered" className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-cyan-700 dark:text-cyan-300">Sharing Rules</p>
+                <p className="text-2xl font-bold text-cyan-900 dark:text-cyan-100">{summary.total_sharing_rule_grants}</p>
+              </div>
+              <Shield className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Implementation Note */}
-      <Card variant="bordered" className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
+      {/* Owned Records */}
+      <Card variant="bordered">
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 text-amber-900 dark:text-amber-100">
-            <AlertCircle className="h-5 w-5" />
-            Implementation Required
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-5 w-5 text-green-600" />
+            Owned Records
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-amber-800 dark:text-amber-200 whitespace-pre-line mb-4">
-            {implementationNote}
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Records directly owned by this user. These are records where the OwnerId field matches the user's ID.
           </p>
-          <div className="mt-4">
-            <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">
-              Next Steps:
-            </h4>
-            <ul className="space-y-2">
-              {nextSteps.map((step: string, idx: number) => (
-                <li key={idx} className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
-                  <Badge variant="warning" size="sm" className="mt-0.5">
-                    {idx + 1}
-                  </Badge>
-                  <span>{step}</span>
-                </li>
+          {summary.total_owned_records === 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p className="text-sm">No owned record data available yet.</p>
+              <p className="text-xs mt-2">Record ownership data requires syncing actual Salesforce object records (Account, Opportunity, etc.)</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {Object.entries(ownedRecords).map(([objectType, count]) => (
+                <div key={objectType} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{objectType}</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{count}</p>
+                </div>
               ))}
-            </ul>
-          </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Role Hierarchy */}
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-purple-600" />
+            Role Hierarchy Access
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Access to records owned by users in subordinate roles. Users can see all records owned by anyone below them in the role hierarchy.
+          </p>
+          {roleHierarchy.has_role ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="info">Current Role</Badge>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{roleHierarchy.role_name}</span>
+              </div>
+              {roleHierarchy.subordinate_count > 0 ? (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Subordinate Roles ({roleHierarchy.subordinate_count})
+                  </p>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {roleHierarchy.subordinate_roles.map((role) => (
+                      <div key={role.role_id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 py-1 px-2 bg-gray-50 dark:bg-gray-800 rounded">
+                        <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                        {role.role_name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No subordinate roles</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">User does not have a role assigned</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Manual Shares */}
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-blue-600" />
+            Manual Shares
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Records explicitly shared with this user or groups they belong to.
+          </p>
+          {manualShares.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No manual shares found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record Type</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record ID</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Access Level</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Shared To</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {manualShares.map((share, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{share.record_type}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{share.record_id}</td>
+                      <td className="px-4 py-2">
+                        <Badge variant={share.access_level === 'Edit' ? 'success' : 'info'}>
+                          {share.access_level}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{share.shared_to}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Team Access */}
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-amber-600" />
+            Team Access
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Access granted through Account Team, Opportunity Team, or Case Team memberships.
+          </p>
+          {teamAccess.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No team memberships found</p>
+          ) : (
+            <div className="space-y-3">
+              {teamAccess.map((team, idx) => (
+                <div key={idx} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="warning">{team.team_type}</Badge>
+                    {team.role && <span className="text-sm text-gray-600 dark:text-gray-400">{team.role}</span>}
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Record: {team.record_id}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge size="sm" variant="info">Account: {team.account_access}</Badge>
+                    <Badge size="sm" variant="info">Opportunity: {team.opportunity_access}</Badge>
+                    <Badge size="sm" variant="info">Case: {team.case_access}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sharing Rules */}
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5 text-cyan-600" />
+            Sharing Rules
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Access granted through criteria-based or owner-based sharing rules.
+          </p>
+          {sharingRules.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No sharing rule grants found</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record Type</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record ID</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Access Level</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Row Cause</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {sharingRules.map((rule, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{rule.record_type}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{rule.record_id}</td>
+                      <td className="px-4 py-2">
+                        <Badge variant="success">{rule.access_level}</Badge>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{rule.row_cause}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

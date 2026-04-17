@@ -530,3 +530,188 @@ class AuditLog(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<AuditLog(action={self.action}, timestamp={self.timestamp})>"
+
+
+# ============================================================================
+# Record-Level Sharing Models
+# ============================================================================
+
+
+class SharingRuleSnapshot(Base, TimestampMixin):
+    """Salesforce Sharing Rules - defines how records are shared"""
+    __tablename__ = "sharing_rule_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)  # Sharing rule ID from Salesforce
+
+    # Rule identification
+    rule_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sobject_type: Mapped[str] = mapped_column(String(100), nullable=False)  # Account, Opportunity, etc.
+    rule_type: Mapped[str] = mapped_column(String(50), nullable=False)  # CriteriaBasedSharingRule, OwnerSharingRule
+
+    # Access configuration
+    access_level: Mapped[str] = mapped_column(String(50), nullable=False)  # Read, Edit
+
+    # Sharing criteria (for criteria-based rules)
+    criteria: Mapped[Optional[dict]] = mapped_column(JSON)  # Field conditions
+
+    # Shared to configuration
+    shared_to_type: Mapped[str] = mapped_column(String(100), nullable=False)  # Role, RoleAndSubordinates, Group, etc.
+    shared_to_id: Mapped[Optional[str]] = mapped_column(String(18))  # Role or Group ID
+
+    # Metadata
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_sharing_rule_org_sf_snapshot"),
+        Index("ix_sharing_rule_org", "organization_id"),
+        Index("ix_sharing_rule_object", "sobject_type"),
+        Index("ix_sharing_rule_type", "rule_type"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SharingRuleSnapshot(name={self.rule_name}, object={self.sobject_type}, type={self.rule_type})>"
+
+
+class AccountShareSnapshot(Base, TimestampMixin):
+    """Account manual shares and sharing rule results"""
+    __tablename__ = "account_share_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
+
+    # Share details
+    account_id: Mapped[str] = mapped_column(String(18), nullable=False)  # AccountId
+    user_or_group_id: Mapped[str] = mapped_column(String(18), nullable=False)  # UserOrGroupId
+
+    # Access levels
+    account_access_level: Mapped[str] = mapped_column(String(20), nullable=False)  # Read, Edit
+    opportunity_access_level: Mapped[str] = mapped_column(String(20), nullable=False)  # None, Read, Edit
+    case_access_level: Mapped[str] = mapped_column(String(20), nullable=False)  # None, Read, Edit
+
+    # Share source
+    row_cause: Mapped[str] = mapped_column(String(50), nullable=False)  # Manual, Rule, Team, Territory, Owner, ImplicitChild, etc.
+
+    # Metadata
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_account_share_org_sf_snapshot"),
+        Index("ix_account_share_org", "organization_id"),
+        Index("ix_account_share_account", "account_id"),
+        Index("ix_account_share_user", "user_or_group_id"),
+        Index("ix_account_share_cause", "row_cause"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AccountShareSnapshot(account={self.account_id}, user={self.user_or_group_id}, cause={self.row_cause})>"
+
+
+class OpportunityShareSnapshot(Base, TimestampMixin):
+    """Opportunity manual shares"""
+    __tablename__ = "opportunity_share_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
+
+    opportunity_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    user_or_group_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    opportunity_access_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    row_cause: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_opp_share_org_sf_snapshot"),
+        Index("ix_opp_share_org", "organization_id"),
+        Index("ix_opp_share_opp", "opportunity_id"),
+        Index("ix_opp_share_user", "user_or_group_id"),
+    )
+
+
+class AccountTeamMemberSnapshot(Base, TimestampMixin):
+    """Account Team Members"""
+    __tablename__ = "account_team_member_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
+
+    account_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    team_member_role: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Access levels granted by team membership
+    account_access_level: Mapped[Optional[str]] = mapped_column(String(20))
+    opportunity_access_level: Mapped[Optional[str]] = mapped_column(String(20))
+    case_access_level: Mapped[Optional[str]] = mapped_column(String(20))
+
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_account_team_org_sf_snapshot"),
+        Index("ix_account_team_org", "organization_id"),
+        Index("ix_account_team_account", "account_id"),
+        Index("ix_account_team_user", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AccountTeamMemberSnapshot(account={self.account_id}, user={self.user_id}, role={self.team_member_role})>"
+
+
+class GroupSnapshot(Base, TimestampMixin):
+    """Salesforce Groups and Queues"""
+    __tablename__ = "group_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    developer_name: Mapped[Optional[str]] = mapped_column(String(255))
+    group_type: Mapped[str] = mapped_column(String(50), nullable=False)  # Regular, Queue, Role, etc.
+
+    # Related entity (for RoleAndSubordinates, etc.)
+    related_id: Mapped[Optional[str]] = mapped_column(String(18))
+
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_group_org_sf_snapshot"),
+        Index("ix_group_org", "organization_id"),
+        Index("ix_group_type", "group_type"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<GroupSnapshot(name={self.name}, type={self.group_type})>"
+
+
+class GroupMemberSnapshot(Base, TimestampMixin):
+    """Group membership records"""
+    __tablename__ = "group_member_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
+
+    group_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    user_or_group_id: Mapped[str] = mapped_column(String(18), nullable=False)  # Can be User or another Group (nested)
+
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_group_member_org_sf_snapshot"),
+        Index("ix_group_member_org", "organization_id"),
+        Index("ix_group_member_group", "group_id"),
+        Index("ix_group_member_user", "user_or_group_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<GroupMemberSnapshot(group={self.group_id}, member={self.user_or_group_id})>"

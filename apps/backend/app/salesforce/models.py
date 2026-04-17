@@ -107,6 +107,69 @@ class SalesforceFieldPermission(BaseModel):
 
 
 # =============================================================================
+# Record-Level Sharing Models
+# =============================================================================
+
+
+class SalesforceSharingRule(BaseModel):
+    """Salesforce Sharing Rule (from metadata API or custom object)"""
+    Id: str
+    Name: str
+    SobjectType: str
+    RuleType: str  # OwnerSharingRule, CriteriaSharingRule, etc.
+    AccessLevel: str
+    SharedToType: str  # Group, Role, RoleAndSubordinates, etc.
+    SharedToId: Optional[str] = None
+
+
+class SalesforceAccountShare(BaseModel):
+    """Salesforce AccountShare object"""
+    Id: str
+    AccountId: str
+    UserOrGroupId: str
+    AccountAccessLevel: str
+    OpportunityAccessLevel: str
+    CaseAccessLevel: str
+    RowCause: str
+
+
+class SalesforceOpportunityShare(BaseModel):
+    """Salesforce OpportunityShare object"""
+    Id: str
+    OpportunityId: str
+    UserOrGroupId: str
+    OpportunityAccessLevel: str
+    RowCause: str
+
+
+class SalesforceGroup(BaseModel):
+    """Salesforce Group object"""
+    Id: str
+    Name: str
+    Type: str
+    DeveloperName: Optional[str] = None
+    RelatedId: Optional[str] = None
+
+
+class SalesforceGroupMember(BaseModel):
+    """Salesforce GroupMember object"""
+    Id: str
+    GroupId: str
+    UserOrGroupId: str
+
+
+class SalesforceAccountTeamMember(BaseModel):
+    """Salesforce AccountTeamMember object"""
+    Id: str
+    AccountId: str
+    UserId: str
+    TeamMemberRole: Optional[str] = None
+    AccountAccessLevel: str
+    OpportunityAccessLevel: str
+    CaseAccessLevel: str
+
+
+# =============================================================================
 # Query Response
 # =============================================================================
 

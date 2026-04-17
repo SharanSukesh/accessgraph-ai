@@ -10,8 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
+    AccountShareSnapshot,
+    AccountTeamMemberSnapshot,
     FieldPermissionSnapshot,
+    GroupMemberSnapshot,
+    GroupSnapshot,
     ObjectPermissionSnapshot,
+    OpportunityShareSnapshot,
     PermissionSetAssignmentSnapshot,
     PermissionSetGroupComponentSnapshot,
     PermissionSetGroupSnapshot,
@@ -430,6 +435,225 @@ class SnapshotPersister:
         logger.info(f"Persisted {count} field permissions")
         return count
 
+    async def persist_groups(
+        self,
+        org_id: str,
+        groups: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist group snapshots"""
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for group_data in groups:
+            result = await self.db.execute(
+                select(GroupSnapshot).where(
+                    GroupSnapshot.organization_id == org_id,
+                    GroupSnapshot.salesforce_id == group_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.name = group_data["Name"]
+                existing.group_type = group_data["Type"]
+                existing.developer_name = group_data.get("DeveloperName")
+                existing.related_id = group_data.get("RelatedId")
+                existing.snapshot_date = snapshot_date
+            else:
+                group = GroupSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=group_data["Id"],
+                    name=group_data["Name"],
+                    group_type=group_data["Type"],
+                    developer_name=group_data.get("DeveloperName"),
+                    related_id=group_data.get("RelatedId"),
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(group)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} groups")
+        return count
+
+    async def persist_group_members(
+        self,
+        org_id: str,
+        members: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist group member snapshots"""
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for member_data in members:
+            result = await self.db.execute(
+                select(GroupMemberSnapshot).where(
+                    GroupMemberSnapshot.organization_id == org_id,
+                    GroupMemberSnapshot.salesforce_id == member_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.group_id = member_data["GroupId"]
+                existing.user_or_group_id = member_data["UserOrGroupId"]
+                existing.snapshot_date = snapshot_date
+            else:
+                member = GroupMemberSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=member_data["Id"],
+                    group_id=member_data["GroupId"],
+                    user_or_group_id=member_data["UserOrGroupId"],
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(member)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} group members")
+        return count
+
+    async def persist_account_shares(
+        self,
+        org_id: str,
+        shares: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist account share snapshots"""
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for share_data in shares:
+            result = await self.db.execute(
+                select(AccountShareSnapshot).where(
+                    AccountShareSnapshot.organization_id == org_id,
+                    AccountShareSnapshot.salesforce_id == share_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.account_id = share_data["AccountId"]
+                existing.user_or_group_id = share_data["UserOrGroupId"]
+                existing.account_access_level = share_data["AccountAccessLevel"]
+                existing.opportunity_access_level = share_data["OpportunityAccessLevel"]
+                existing.case_access_level = share_data["CaseAccessLevel"]
+                existing.row_cause = share_data["RowCause"]
+                existing.snapshot_date = snapshot_date
+            else:
+                share = AccountShareSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=share_data["Id"],
+                    account_id=share_data["AccountId"],
+                    user_or_group_id=share_data["UserOrGroupId"],
+                    account_access_level=share_data["AccountAccessLevel"],
+                    opportunity_access_level=share_data["OpportunityAccessLevel"],
+                    case_access_level=share_data["CaseAccessLevel"],
+                    row_cause=share_data["RowCause"],
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(share)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} account shares")
+        return count
+
+    async def persist_opportunity_shares(
+        self,
+        org_id: str,
+        shares: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist opportunity share snapshots"""
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for share_data in shares:
+            result = await self.db.execute(
+                select(OpportunityShareSnapshot).where(
+                    OpportunityShareSnapshot.organization_id == org_id,
+                    OpportunityShareSnapshot.salesforce_id == share_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.opportunity_id = share_data["OpportunityId"]
+                existing.user_or_group_id = share_data["UserOrGroupId"]
+                existing.opportunity_access_level = share_data["OpportunityAccessLevel"]
+                existing.row_cause = share_data["RowCause"]
+                existing.snapshot_date = snapshot_date
+            else:
+                share = OpportunityShareSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=share_data["Id"],
+                    opportunity_id=share_data["OpportunityId"],
+                    user_or_group_id=share_data["UserOrGroupId"],
+                    opportunity_access_level=share_data["OpportunityAccessLevel"],
+                    row_cause=share_data["RowCause"],
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(share)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} opportunity shares")
+        return count
+
+    async def persist_account_team_members(
+        self,
+        org_id: str,
+        members: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist account team member snapshots"""
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for member_data in members:
+            result = await self.db.execute(
+                select(AccountTeamMemberSnapshot).where(
+                    AccountTeamMemberSnapshot.organization_id == org_id,
+                    AccountTeamMemberSnapshot.salesforce_id == member_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.account_id = member_data["AccountId"]
+                existing.user_id = member_data["UserId"]
+                existing.team_member_role = member_data.get("TeamMemberRole")
+                existing.account_access_level = member_data["AccountAccessLevel"]
+                existing.opportunity_access_level = member_data["OpportunityAccessLevel"]
+                existing.case_access_level = member_data["CaseAccessLevel"]
+                existing.snapshot_date = snapshot_date
+            else:
+                member = AccountTeamMemberSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=member_data["Id"],
+                    account_id=member_data["AccountId"],
+                    user_id=member_data["UserId"],
+                    team_member_role=member_data.get("TeamMemberRole"),
+                    account_access_level=member_data["AccountAccessLevel"],
+                    opportunity_access_level=member_data["OpportunityAccessLevel"],
+                    case_access_level=member_data["CaseAccessLevel"],
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(member)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} account team members")
+        return count
+
     async def persist_all(
         self,
         org_id: str,
@@ -464,6 +688,23 @@ class SnapshotPersister:
         )
         counts["field_permissions"] = await self.persist_field_permissions(
             org_id, data.get("field_permissions", []), sync_job_id
+        )
+
+        # Persist sharing data
+        counts["groups"] = await self.persist_groups(
+            org_id, data.get("groups", []), sync_job_id
+        )
+        counts["group_members"] = await self.persist_group_members(
+            org_id, data.get("group_members", []), sync_job_id
+        )
+        counts["account_shares"] = await self.persist_account_shares(
+            org_id, data.get("account_shares", []), sync_job_id
+        )
+        counts["opportunity_shares"] = await self.persist_opportunity_shares(
+            org_id, data.get("opportunity_shares", []), sync_job_id
+        )
+        counts["account_team_members"] = await self.persist_account_team_members(
+            org_id, data.get("account_team_members", []), sync_job_id
         )
 
         await self.db.commit()
