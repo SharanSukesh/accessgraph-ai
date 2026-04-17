@@ -156,14 +156,18 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
   // Fetch access data for all selected users in a single query
   const { data: comparisonData, isLoading } = useQuery<UserAccessData[]>({
     queryKey: ['user-access-comparison', orgId, userIds.sort().join(',')],
-    queryFn: async () => {
+    queryFn: async (): Promise<UserAccessData[]> => {
       const results = await Promise.all(
-        userIds.map(async (userId) => {
+        userIds.map(async (userId): Promise<UserAccessData> => {
           const [objectAccess, fieldAccess] = await Promise.all([
             apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/objects`),
             apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/fields`),
           ])
-          return { userId, objectAccess, fieldAccess }
+          return {
+            userId,
+            objectAccess: objectAccess as any[],
+            fieldAccess: fieldAccess as any[]
+          }
         })
       )
       return results
