@@ -157,13 +157,14 @@ function NodeDetailPanel({
   // Fetch detailed breakdown for permission sets and profiles
   const shouldFetchDetails = node.type === NODE_TYPES.PERMISSION_SET.value || node.type === NODE_TYPES.PROFILE.value
 
-  const { data: nodeDetails, isLoading: detailsLoading } = useQuery<NodeDetailsResponse>({
+  const { data: nodeDetails, isLoading: detailsLoading, error: detailsError } = useQuery<NodeDetailsResponse>({
     queryKey: ['node-details', orgId, node.id],
     queryFn: async (): Promise<NodeDetailsResponse> => {
       const response = await apiClient.get(`/orgs/${orgId}/graph/node/${node.id}/details`)
       return response as NodeDetailsResponse
     },
     enabled: shouldFetchDetails,
+    retry: 1,
   })
 
   return (
@@ -434,6 +435,20 @@ function NodeDetailPanel({
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
             <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
               Loading detailed access information...
+            </div>
+          </div>
+        )}
+
+        {/* Error state for details */}
+        {shouldFetchDetails && detailsError && (
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-red-900 dark:text-red-100">
+                  Failed to load detailed access information. {detailsError instanceof Error ? detailsError.message : 'Please try again.'}
+                </div>
+              </div>
             </div>
           </div>
         )}
