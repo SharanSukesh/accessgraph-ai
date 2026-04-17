@@ -504,7 +504,7 @@ export default function UserDetailPage() {
             <div className="lg:col-span-4">
               {selectedGraphNode ? (
                 <GraphDetailPanel
-                  node={selectedGraphNode}
+                  selectedNode={selectedGraphNode}
                   orgId={orgId}
                   onClose={() => setSelectedGraphNode(null)}
                 />
