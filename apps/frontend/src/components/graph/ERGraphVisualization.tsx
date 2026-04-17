@@ -64,89 +64,6 @@ export function ERGraphVisualization({
   >(new Map())
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
 
-  // Filter nodes based on selected objects and default filter
-  const filterElements = useCallback((elements: ElementDefinition[]) => {
-    // Default: show user, profiles, permission sets, roles
-    // Only show objects if they're in selectedObjects
-    const filteredNodes = elements.filter((el) => {
-      if (el.group === 'edges') return true // Handle edges later
-
-      const nodeType = el.data.type
-      const objectName = el.data.properties?.objectName
-
-      // Always show these node types
-      if (['user', 'profile', 'permission_set', 'role'].includes(nodeType)) {
-        return true
-      }
-
-      // For objects, only show if selected
-      if (nodeType === 'object') {
-        return selectedObjects.includes(objectName)
-      }
-
-      // Hide field nodes (we'll render them in ER cards)
-      if (nodeType === 'field') {
-        return false
-      }
-
-      return true
-    })
-
-    // Get node IDs for filtering edges
-    const nodeIds = new Set(
-      filteredNodes
-        .filter((el) => el.group === 'nodes')
-        .map((el) => el.data.id)
-    )
-
-    // Filter edges: only keep if both source and target are in nodeIds
-    return filteredNodes.filter((el) => {
-      if (el.group === 'nodes') return true
-      return nodeIds.has(el.data.source) && nodeIds.has(el.data.target)
-    })
-  }, [selectedObjects])
-
-  // Transform graph data to Cytoscape format
-  const transformGraph = useCallback((): ElementDefinition[] => {
-    const elements: ElementDefinition[] = []
-
-    // Transform nodes
-    graph.nodes.forEach((node) => {
-      elements.push({
-        group: 'nodes',
-        data: {
-          id: node.id,
-          label: node.label,
-          type: node.type,
-          ...node.properties,
-          isCenter: node.id === graph.metadata.centerNodeId,
-        },
-        classes: [
-          node.type,
-          node.id === graph.metadata.centerNodeId ? 'center' : '',
-        ].filter(Boolean),
-      })
-    })
-
-    // Transform edges
-    graph.edges.forEach((edge) => {
-      elements.push({
-        group: 'edges',
-        data: {
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          label: edge.label || edge.type,
-          type: edge.type,
-          ...edge.properties,
-        },
-        classes: [edge.type],
-      })
-    })
-
-    return elements
-  }, [graph])
-
   // Get stylesheet for non-object nodes
   const getStylesheet = () => {
     return [
@@ -330,18 +247,60 @@ export function ERGraphVisualization({
     setObjectCardPositions(positions)
   }, [])
 
-  // Initialize Cytoscape
+  // Initialize Cytoscape once with base nodes
   useEffect(() => {
     if (!containerRef.current || !graph) return
 
     setIsLoading(true)
 
-    const elements = transformGraph()
-    const filtered = filterElements(elements)
+    // Initial elements: only non-object nodes
+    const initialElements: ElementDefinition[] = []
+
+    // Add non-object nodes
+    graph.nodes.forEach((node) => {
+      if (node.type !== 'object' && node.type !== 'field') {
+        initialElements.push({
+          group: 'nodes',
+          data: {
+            id: node.id,
+            label: node.label,
+            type: node.type,
+            ...node.properties,
+            isCenter: node.id === graph.metadata.centerNodeId,
+          },
+          classes: [
+            node.type,
+            node.id === graph.metadata.centerNodeId ? 'center' : '',
+          ].filter(Boolean),
+        })
+      }
+    })
+
+    // Add edges between non-object nodes
+    graph.edges.forEach((edge) => {
+      const sourceNode = graph.nodes.find(n => n.id === edge.source)
+      const targetNode = graph.nodes.find(n => n.id === edge.target)
+
+      // Only add edge if both nodes are non-objects OR will be added later
+      if (sourceNode?.type !== 'field' && targetNode?.type !== 'field') {
+        initialElements.push({
+          group: 'edges',
+          data: {
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            label: edge.label || edge.type,
+            type: edge.type,
+            ...edge.properties,
+          },
+          classes: [edge.type],
+        })
+      }
+    })
 
     const cy = cytoscape({
       container: containerRef.current,
-      elements: filtered,
+      elements: initialElements,
       style: getStylesheet() as any,
       layout: getLayoutOptions('cose-bilkent'),
       minZoom: 0.1,
@@ -384,7 +343,94 @@ export function ERGraphVisualization({
       cy.destroy()
       cyRef.current = null
     }
-  }, [graph, selectedObjects, transformGraph, filterElements, onNodeSelect, updateObjectCardPositions])
+  }, [graph, onNodeSelect, updateObjectCardPositions])
+
+  // Update graph when selectedObjects changes
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy || !graph) return
+
+    // Get all object nodes from graph data
+    const objectNodes = graph.nodes.filter(n => n.type === 'object')
+
+    // Remove objects that are no longer selected
+    cy.nodes('[type="object"]').forEach((node: NodeSingular) => {
+      const objectName = node.data('objectName')
+      if (!selectedObjects.includes(objectName)) {
+        // Remove connected edges first
+        node.connectedEdges().remove()
+        // Remove the node
+        node.remove()
+      }
+    })
+
+    // Add newly selected objects
+    selectedObjects.forEach((objectName) => {
+      const objectNode = objectNodes.find(n =>
+        n.properties.objectName === objectName || n.label === objectName
+      )
+
+      if (!objectNode) return
+
+      const nodeId = objectNode.id
+
+      // Check if node already exists
+      if (cy.getElementById(nodeId).length > 0) return
+
+      // Add the object node
+      cy.add({
+        group: 'nodes',
+        data: {
+          id: nodeId,
+          label: objectNode.label,
+          type: objectNode.type,
+          ...objectNode.properties,
+        },
+        classes: [objectNode.type],
+      })
+
+      // Add edges connected to this object
+      graph.edges.forEach((edge) => {
+        if (edge.source === nodeId || edge.target === nodeId) {
+          // Check if edge already exists
+          if (cy.getElementById(edge.id).length > 0) return
+
+          // Check if both endpoints exist
+          const sourceExists = cy.getElementById(edge.source).length > 0
+          const targetExists = cy.getElementById(edge.target).length > 0
+
+          if (sourceExists && targetExists) {
+            cy.add({
+              group: 'edges',
+              data: {
+                id: edge.id,
+                source: edge.source,
+                target: edge.target,
+                label: edge.label || edge.type,
+                type: edge.type,
+                ...edge.properties,
+              },
+              classes: [edge.type],
+            })
+          }
+        }
+      })
+    })
+
+    // Re-run layout if we added or removed nodes
+    if (selectedObjects.length > 0 || cy.nodes('[type="object"]').length > 0) {
+      const layout = cy.layout(getLayoutOptions('cose-bilkent'))
+      layout.run()
+
+      // Update card positions after layout completes
+      layout.one('layoutstop', () => {
+        updateObjectCardPositions()
+      })
+    } else {
+      // Just update positions if no layout change
+      updateObjectCardPositions()
+    }
+  }, [selectedObjects, graph, updateObjectCardPositions])
 
   return (
     <div className={`relative ${className}`} style={{ height }}>
