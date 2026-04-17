@@ -130,15 +130,16 @@ export function ERGraphVisualization({
           shape: 'diamond',
         },
       },
-      // Object nodes - Invisible (rendered as HTML overlays)
+      // Object nodes - Invisible but interactive (rendered as HTML overlays)
       {
         selector: 'node[type="object"]',
         style: {
-          'background-opacity': 0,
+          'background-opacity': 0.01, // Nearly invisible but still grabbable
           'border-opacity': 0,
           label: '',
           width: 300,
           height: 200,
+          cursor: 'move', // Show move cursor on hover
         },
       },
       // Center node
@@ -342,6 +343,10 @@ export function ERGraphVisualization({
 
     // Update positions on pan/zoom
     cy.on('pan zoom', updateObjectCardPositions)
+
+    // Update positions when nodes are dragged
+    cy.on('drag', 'node[type="object"]', updateObjectCardPositions)
+    cy.on('dragfree', 'node[type="object"]', updateObjectCardPositions)
 
     return () => {
       cy.destroy()
