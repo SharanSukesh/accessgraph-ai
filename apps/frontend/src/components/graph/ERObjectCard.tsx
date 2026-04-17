@@ -45,6 +45,7 @@ export function ERObjectCard({
     <div
       onClick={onClick}
       className={`
+        er-card-content
         bg-white dark:bg-gray-800
         rounded-lg shadow-lg
         border-2 transition-all cursor-pointer

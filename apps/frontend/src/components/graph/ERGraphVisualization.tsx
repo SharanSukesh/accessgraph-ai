@@ -63,6 +63,7 @@ export function ERGraphVisualization({
     Map<string, { x: number; y: number; node: any }>
   >(new Map())
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
 
   // Get stylesheet for non-object nodes
   const getStylesheet = () => {
@@ -225,6 +226,9 @@ export function ERGraphVisualization({
     if (!cy) return
 
     const positions = new Map()
+    const zoom = cy.zoom()
+    setZoomLevel(zoom)
+
     cy.nodes('[type="object"]').forEach((node: NodeSingular) => {
       const position = node.renderedPosition()
       const nodeData = {
@@ -463,23 +467,36 @@ export function ERGraphVisualization({
         {Array.from(objectCardPositions.entries()).map(([id, data]) => (
           <div
             key={id}
-            className="absolute pointer-events-auto"
+            className="absolute"
             style={{
               left: `${data.x}px`,
               top: `${data.y}px`,
-              transform: 'translate(-50%, -50%)',
+              transform: `translate(-50%, -50%) scale(${zoomLevel})`,
+              transformOrigin: 'center center',
+              pointerEvents: 'none', // Allow clicks to pass through to Cytoscape for dragging
             }}
           >
-            <ERObjectCard
-              objectName={data.node.objectName}
-              fields={data.node.fields}
-              permissions={data.node.permissions}
-              isSelected={selectedNode === id}
-              onClick={() => {
-                setSelectedNode(id)
-                onNodeSelect?.(data.node)
+            <div
+              style={{ pointerEvents: 'auto' }} // Only the card itself captures clicks
+              onClick={(e) => {
+                // Only handle clicks on the card, not dragging
+                if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.er-card-content')) {
+                  setSelectedNode(id)
+                  onNodeSelect?.(data.node)
+                }
               }}
-            />
+            >
+              <ERObjectCard
+                objectName={data.node.objectName}
+                fields={data.node.fields}
+                permissions={data.node.permissions}
+                isSelected={selectedNode === id}
+                onClick={() => {
+                  setSelectedNode(id)
+                  onNodeSelect?.(data.node)
+                }}
+              />
+            </div>
           </div>
         ))}
       </div>
