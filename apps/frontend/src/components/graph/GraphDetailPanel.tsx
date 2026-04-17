@@ -21,6 +21,51 @@ interface NodeData {
   [key: string]: any
 }
 
+interface NodeDetailsResponse {
+  node: {
+    id: string
+    type: string
+    name: string
+    label?: string
+    description?: string
+  }
+  objectsGranted: Array<{
+    objectName: string
+    permissions: string[]
+    canRead: boolean
+    canCreate: boolean
+    canEdit: boolean
+    canDelete: boolean
+    viewAll: boolean
+    modifyAll: boolean
+  }>
+  fieldsGranted: Array<{
+    fieldName: string
+    objectName: string
+    displayName: string
+    permissions: string[]
+    canRead: boolean
+    canEdit: boolean
+  }>
+  recordsInfo: {
+    note: string
+    potentialSources: string[]
+    implementationRequired: boolean
+  }
+  otherAccess: {
+    systemPermissions: any[]
+    customPermissions: any[]
+    tabVisibility: any[]
+    apexClasses: any[]
+  }
+  summary: {
+    totalObjects: number
+    totalFields: number
+    objectsWithFullAccess: number
+    objectsWithModifyAll: number
+  }
+}
+
 interface EdgeData {
   id: string
   source: string
@@ -112,11 +157,11 @@ function NodeDetailPanel({
   // Fetch detailed breakdown for permission sets and profiles
   const shouldFetchDetails = node.type === NODE_TYPES.PERMISSION_SET.value || node.type === NODE_TYPES.PROFILE.value
 
-  const { data: nodeDetails, isLoading: detailsLoading } = useQuery({
+  const { data: nodeDetails, isLoading: detailsLoading } = useQuery<NodeDetailsResponse>({
     queryKey: ['node-details', orgId, node.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<NodeDetailsResponse> => {
       const response = await apiClient.get(`/orgs/${orgId}/graph/node/${node.id}/details`)
-      return response
+      return response as NodeDetailsResponse
     },
     enabled: shouldFetchDetails,
   })
