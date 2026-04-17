@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Search, Filter } from 'lucide-react'
+import { Search, Filter, GitCompare } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { RiskBadge, Badge } from '@/components/shared/Badge'
@@ -48,6 +48,13 @@ export default function UsersPage() {
             Browse and investigate user access
           </p>
         </div>
+        <Button
+          variant="primary"
+          onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
+        >
+          <GitCompare className="h-4 w-4 mr-2" />
+          Compare Users
+        </Button>
       </div>
 
       {/* Filters */}
