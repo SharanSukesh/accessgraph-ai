@@ -148,11 +148,14 @@ export default function UserComparePage() {
 
 interface UserAccessData {
   userId: string
+  userName: string
   objectAccess: any[]
   fieldAccess: any[]
 }
 
 function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string[] }) {
+  const { data: users } = useUsers(orgId)
+
   // Fetch access data for all selected users in a single query
   const { data: comparisonData, isLoading } = useQuery<UserAccessData[]>({
     queryKey: ['user-access-comparison', orgId, userIds.sort().join(',')],
@@ -163,8 +166,13 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
             apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/objects`),
             apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/fields`),
           ])
+
+          // Get user name from users list
+          const user = users?.find(u => u.salesforceUserId === userId)
+
           return {
             userId,
+            userName: user?.name || userId.slice(0, 8) + '...',
             objectAccess: objectAccess as any[],
             fieldAccess: fieldAccess as any[]
           }
@@ -172,6 +180,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
       )
       return results
     },
+    enabled: !!users, // Only run when users data is available
   })
 
   const data: UserAccessData[] = comparisonData || []
@@ -215,7 +224,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
                       key={userId}
                       className="px-4 py-3 text-center font-medium text-gray-700 dark:text-gray-300"
                     >
-                      {data.find((d) => d?.userId === userId)?.userId.slice(0, 8)}...
+                      {data.find((d) => d?.userId === userId)?.userName || 'Loading...'}
                     </th>
                   ))}
                 </tr>
