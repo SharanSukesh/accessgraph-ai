@@ -281,6 +281,37 @@ async def get_user_field_access(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+# Alias endpoints for backwards compatibility with frontend
+@router.get("/orgs/{org_id}/users/{user_sf_id}/effective-access/objects")
+async def get_user_effective_object_access(
+    org_id: str,
+    user_sf_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get effective object access for user (alias for /access/objects)"""
+    service = EffectiveAccessService(db)
+    try:
+        access = await service.get_user_object_access(org_id, user_sf_id)
+        return access
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/orgs/{org_id}/users/{user_sf_id}/effective-access/fields")
+async def get_user_effective_field_access(
+    org_id: str,
+    user_sf_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get effective field access for user (alias for /access/fields)"""
+    service = EffectiveAccessService(db)
+    try:
+        access = await service.get_user_field_access(org_id, user_sf_id)
+        return access
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/orgs/{org_id}/users/{user_sf_id}/explain/object/{object_name}", response_model=ExplanationResponse)
 async def explain_object_access(
     org_id: str,
