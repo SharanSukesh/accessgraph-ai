@@ -1356,7 +1356,7 @@ async def get_node_details(
                 "type": "permission_set",
                 "name": ps.name,
                 "label": ps.label,
-                "description": ps.description,
+                "description": getattr(ps, 'description', None),
             }
         else:
             # Try as a profile
@@ -1372,7 +1372,7 @@ async def get_node_details(
                     "id": profile.salesforce_id,
                     "type": "profile",
                     "name": profile.name,
-                    "description": profile.description,
+                    "description": getattr(profile, 'description', None),
                 }
             else:
                 raise HTTPException(status_code=404, detail="Node not found")
