@@ -1331,143 +1331,151 @@ async def get_node_details(
     db: AsyncSession = Depends(get_database),
 ):
     """Get detailed breakdown of what a specific node (permission set, profile) grants access to"""
-    from app.domain.models import (
-        PermissionSetSnapshot,
-        ProfileSnapshot,
-        ObjectPermissionSnapshot,
-        FieldPermissionSnapshot,
-    )
-
-    # Determine node type and get basic info
-    node_info = {}
-
-    # Try to find it as a permission set
-    ps_query = select(PermissionSetSnapshot).where(
-        PermissionSetSnapshot.organization_id == org_id,
-        PermissionSetSnapshot.salesforce_id == node_id
-    )
-    ps_result = await db.execute(ps_query)
-    ps = ps_result.scalar_one_or_none()
-
-    if ps:
-        node_info = {
-            "id": ps.salesforce_id,
-            "type": "permission_set",
-            "name": ps.name,
-            "label": ps.label,
-            "description": ps.description,
-        }
-    else:
-        # Try as a profile
-        profile_query = select(ProfileSnapshot).where(
-            ProfileSnapshot.organization_id == org_id,
-            ProfileSnapshot.salesforce_id == node_id
+    try:
+        from app.domain.models import (
+            PermissionSetSnapshot,
+            ProfileSnapshot,
+            ObjectPermissionSnapshot,
+            FieldPermissionSnapshot,
         )
-        profile_result = await db.execute(profile_query)
-        profile = profile_result.scalar_one_or_none()
 
-        if profile:
+        # Determine node type and get basic info
+        node_info = {}
+
+        # Try to find it as a permission set
+        ps_query = select(PermissionSetSnapshot).where(
+            PermissionSetSnapshot.organization_id == org_id,
+            PermissionSetSnapshot.salesforce_id == node_id
+        )
+        ps_result = await db.execute(ps_query)
+        ps = ps_result.scalar_one_or_none()
+
+        if ps:
             node_info = {
-                "id": profile.salesforce_id,
-                "type": "profile",
-                "name": profile.name,
-                "description": profile.description,
+                "id": ps.salesforce_id,
+                "type": "permission_set",
+                "name": ps.name,
+                "label": ps.label,
+                "description": ps.description,
             }
         else:
-            raise HTTPException(status_code=404, detail="Node not found")
+            # Try as a profile
+            profile_query = select(ProfileSnapshot).where(
+                ProfileSnapshot.organization_id == org_id,
+                ProfileSnapshot.salesforce_id == node_id
+            )
+            profile_result = await db.execute(profile_query)
+            profile = profile_result.scalar_one_or_none()
 
-    # Get object permissions
-    obj_perms_query = select(ObjectPermissionSnapshot).where(
-        ObjectPermissionSnapshot.organization_id == org_id,
-        ObjectPermissionSnapshot.parent_id == node_id
-    )
-    obj_perms_result = await db.execute(obj_perms_query)
-    obj_perms = obj_perms_result.scalars().all()
+            if profile:
+                node_info = {
+                    "id": profile.salesforce_id,
+                    "type": "profile",
+                    "name": profile.name,
+                    "description": profile.description,
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Node not found")
 
-    objects_granted = []
-    for obj_perm in obj_perms:
-        permissions = []
-        if obj_perm.permissions_read: permissions.append("Read")
-        if obj_perm.permissions_create: permissions.append("Create")
-        if obj_perm.permissions_edit: permissions.append("Edit")
-        if obj_perm.permissions_delete: permissions.append("Delete")
-        if obj_perm.permissions_view_all_records: permissions.append("View All")
-        if obj_perm.permissions_modify_all_records: permissions.append("Modify All")
+        # Get object permissions
+        obj_perms_query = select(ObjectPermissionSnapshot).where(
+            ObjectPermissionSnapshot.organization_id == org_id,
+            ObjectPermissionSnapshot.parent_id == node_id
+        )
+        obj_perms_result = await db.execute(obj_perms_query)
+        obj_perms = obj_perms_result.scalars().all()
 
-        objects_granted.append({
-            "objectName": obj_perm.sobject_type,
-            "permissions": permissions,
-            "canRead": obj_perm.permissions_read,
-            "canCreate": obj_perm.permissions_create,
-            "canEdit": obj_perm.permissions_edit,
-            "canDelete": obj_perm.permissions_delete,
-            "viewAll": obj_perm.permissions_view_all_records,
-            "modifyAll": obj_perm.permissions_modify_all_records,
-        })
+        objects_granted = []
+        for obj_perm in obj_perms:
+            permissions = []
+            if obj_perm.permissions_read: permissions.append("Read")
+            if obj_perm.permissions_create: permissions.append("Create")
+            if obj_perm.permissions_edit: permissions.append("Edit")
+            if obj_perm.permissions_delete: permissions.append("Delete")
+            if obj_perm.permissions_view_all_records: permissions.append("View All")
+            if obj_perm.permissions_modify_all_records: permissions.append("Modify All")
 
-    # Get field permissions
-    field_perms_query = select(FieldPermissionSnapshot).where(
-        FieldPermissionSnapshot.organization_id == org_id,
-        FieldPermissionSnapshot.parent_id == node_id
-    )
-    field_perms_result = await db.execute(field_perms_query)
-    field_perms = field_perms_result.scalars().all()
+            objects_granted.append({
+                "objectName": obj_perm.sobject_type,
+                "permissions": permissions,
+                "canRead": obj_perm.permissions_read,
+                "canCreate": obj_perm.permissions_create,
+                "canEdit": obj_perm.permissions_edit,
+                "canDelete": obj_perm.permissions_delete,
+                "viewAll": obj_perm.permissions_view_all_records,
+                "modifyAll": obj_perm.permissions_modify_all_records,
+            })
 
-    fields_granted = []
-    for field_perm in field_perms:
-        # Parse object.field format
-        if '.' in field_perm.field:
-            obj_name, field_name = field_perm.field.split('.', 1)
-        else:
-            obj_name = "Unknown"
-            field_name = field_perm.field
+        # Get field permissions
+        field_perms_query = select(FieldPermissionSnapshot).where(
+            FieldPermissionSnapshot.organization_id == org_id,
+            FieldPermissionSnapshot.parent_id == node_id
+        )
+        field_perms_result = await db.execute(field_perms_query)
+        field_perms = field_perms_result.scalars().all()
 
-        permissions = []
-        if field_perm.permissions_read: permissions.append("Read")
-        if field_perm.permissions_edit: permissions.append("Edit")
+        fields_granted = []
+        for field_perm in field_perms:
+            # Parse object.field format
+            if '.' in field_perm.field:
+                obj_name, field_name = field_perm.field.split('.', 1)
+            else:
+                obj_name = "Unknown"
+                field_name = field_perm.field
 
-        fields_granted.append({
-            "fieldName": field_perm.field,
-            "objectName": obj_name,
-            "displayName": field_name,
-            "permissions": permissions,
-            "canRead": field_perm.permissions_read,
-            "canEdit": field_perm.permissions_edit,
-        })
+            permissions = []
+            if field_perm.permissions_read: permissions.append("Read")
+            if field_perm.permissions_edit: permissions.append("Edit")
 
-    # Record-level access is a placeholder for now
-    records_info = {
-        "note": "Record-level access analysis requires additional Salesforce data sync",
-        "potentialSources": [
-            "Sharing Rules (criteria-based and owner-based)",
-            "Manual Shares",
-            "Role Hierarchy access",
-            "Territory Rules",
-            "Account/Opportunity/Case Teams",
-        ],
-        "implementationRequired": True,
-    }
+            fields_granted.append({
+                "fieldName": field_perm.field,
+                "objectName": obj_name,
+                "displayName": field_name,
+                "permissions": permissions,
+                "canRead": field_perm.permissions_read,
+                "canEdit": field_perm.permissions_edit,
+            })
 
-    # Other access aspects
-    other_access = {
-        "systemPermissions": [],  # Would need SystemPermissionSnapshot
-        "customPermissions": [],  # Would need CustomPermissionSnapshot
-        "tabVisibility": [],      # Would need TabVisibilitySnapshot
-        "apexClasses": [],        # Would need SetupEntityAccessSnapshot
-    }
-
-    return {
-        "node": node_info,
-        "objectsGranted": objects_granted,
-        "fieldsGranted": fields_granted,
-        "recordsInfo": records_info,
-        "otherAccess": other_access,
-        "summary": {
-            "totalObjects": len(objects_granted),
-            "totalFields": len(fields_granted),
-            "objectsWithFullAccess": sum(1 for obj in objects_granted if
-                obj["canRead"] and obj["canCreate"] and obj["canEdit"] and obj["canDelete"]),
-            "objectsWithModifyAll": sum(1 for obj in objects_granted if obj["modifyAll"]),
+        # Record-level access is a placeholder for now
+        records_info = {
+            "note": "Record-level access analysis requires additional Salesforce data sync",
+            "potentialSources": [
+                "Sharing Rules (criteria-based and owner-based)",
+                "Manual Shares",
+                "Role Hierarchy access",
+                "Territory Rules",
+                "Account/Opportunity/Case Teams",
+            ],
+            "implementationRequired": True,
         }
-    }
+
+        # Other access aspects
+        other_access = {
+            "systemPermissions": [],  # Would need SystemPermissionSnapshot
+            "customPermissions": [],  # Would need CustomPermissionSnapshot
+            "tabVisibility": [],      # Would need TabVisibilitySnapshot
+            "apexClasses": [],        # Would need SetupEntityAccessSnapshot
+        }
+
+        return {
+            "node": node_info,
+            "objectsGranted": objects_granted,
+            "fieldsGranted": fields_granted,
+            "recordsInfo": records_info,
+            "otherAccess": other_access,
+            "summary": {
+                "totalObjects": len(objects_granted),
+                "totalFields": len(fields_granted),
+                "objectsWithFullAccess": sum(1 for obj in objects_granted if
+                    obj["canRead"] and obj["canCreate"] and obj["canEdit"] and obj["canDelete"]),
+                "objectsWithModifyAll": sum(1 for obj in objects_granted if obj["modifyAll"]),
+            }
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get node details: {str(e)}"
+        )
 
