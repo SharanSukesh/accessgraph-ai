@@ -135,12 +135,13 @@ export function ERGraphVisualization({
       {
         selector: 'node[type="object"]',
         style: {
-          'background-opacity': 0.01, // Nearly invisible but still grabbable
+          'background-opacity': 0, // Completely invisible
           'border-opacity': 0,
           label: '',
           width: 300,
           height: 200,
-          cursor: 'move', // Show move cursor on hover
+          shape: 'rectangle',
+          events: 'yes', // Ensure node can receive events
         },
       },
       // Center node
@@ -400,6 +401,8 @@ export function ERGraphVisualization({
           ...objectNode.properties,
         },
         classes: [objectNode.type],
+        grabbable: true, // Ensure node can be dragged
+        selectable: true, // Ensure node can be selected
       })
 
       // Add edges connected to this object
@@ -464,24 +467,63 @@ export function ERGraphVisualization({
 
       {/* ER Object Cards as HTML overlays */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {Array.from(objectCardPositions.entries()).map(([id, data]) => (
-          <div
-            key={id}
-            className="absolute"
-            style={{
-              left: `${data.x}px`,
-              top: `${data.y}px`,
-              transform: `translate(-50%, -50%) scale(${zoomLevel})`,
-              transformOrigin: 'center center',
-              pointerEvents: 'none', // Cards don't capture events - let Cytoscape handle dragging
-            }}
-          >
-            {/* Clickable overlay for selection only */}
+        {Array.from(objectCardPositions.entries()).map(([id, data]) => {
+          const handleDragStart = (e: React.MouseEvent) => {
+            const cy = cyRef.current
+            if (!cy) return
+
+            const node = cy.getElementById(id)
+            if (node.length === 0) return
+
+            const startX = e.clientX
+            const startY = e.clientY
+            const startPos = node.position()
+            let hasMoved = false
+
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              const deltaX = moveEvent.clientX - startX
+              const deltaY = moveEvent.clientY - startY
+
+              // Check if actually dragging (moved more than 3px)
+              if (!hasMoved && (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3)) {
+                hasMoved = true
+              }
+
+              if (hasMoved) {
+                // Convert screen delta to model delta by dividing by zoom
+                const zoom = cy.zoom()
+                const pan = cy.pan()
+
+                // Update node position in model coordinates
+                node.position({
+                  x: startPos.x + deltaX / zoom,
+                  y: startPos.y + deltaY / zoom,
+                })
+
+                // Update HTML card position immediately
+                updateObjectCardPositions()
+              }
+            }
+
+            const handleMouseUp = () => {
+              document.removeEventListener('mousemove', handleMouseMove)
+              document.removeEventListener('mouseup', handleMouseUp)
+            }
+
+            document.addEventListener('mousemove', handleMouseMove)
+            document.addEventListener('mouseup', handleMouseUp)
+          }
+
+          return (
             <div
-              style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-              onClick={() => {
-                setSelectedNode(id)
-                onNodeSelect?.(data.node)
+              key={id}
+              className="absolute"
+              style={{
+                left: `${data.x}px`,
+                top: `${data.y}px`,
+                transform: `translate(-50%, -50%) scale(${zoomLevel})`,
+                transformOrigin: 'center center',
+                pointerEvents: 'none', // Wrapper doesn't capture events
               }}
             >
               <ERObjectCard
@@ -489,11 +531,15 @@ export function ERGraphVisualization({
                 fields={data.node.fields}
                 permissions={data.node.permissions}
                 isSelected={selectedNode === id}
-                onClick={() => {}}
+                onClick={() => {
+                  setSelectedNode(id)
+                  onNodeSelect?.(data.node)
+                }}
+                onDragStart={handleDragStart}
               />
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

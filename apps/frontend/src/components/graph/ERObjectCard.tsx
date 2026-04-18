@@ -5,7 +5,7 @@
  * Entity-Relationship diagram style card for displaying objects with fields
  */
 
-import { Database } from 'lucide-react'
+import { Database, GripVertical } from 'lucide-react'
 
 interface Field {
   name: string
@@ -25,6 +25,7 @@ interface ERObjectCardProps {
   }
   isSelected?: boolean
   onClick?: () => void
+  onDragStart?: (e: React.MouseEvent) => void
 }
 
 export function ERObjectCard({
@@ -33,6 +34,7 @@ export function ERObjectCard({
   permissions,
   isSelected = false,
   onClick,
+  onDragStart,
 }: ERObjectCardProps) {
   // Build object-level permission badges
   const objectPermissions = []
@@ -43,25 +45,34 @@ export function ERObjectCard({
 
   return (
     <div
-      onClick={onClick}
       className={`
         er-card-content
         bg-white dark:bg-gray-800
         rounded-lg shadow-lg
-        border-2 transition-all cursor-pointer
+        border-2 transition-all
         ${
           isSelected
             ? 'border-primary-500 shadow-primary-500/50'
             : 'border-emerald-400 dark:border-emerald-500 hover:border-emerald-500 dark:hover:border-emerald-400'
         }
       `}
-      style={{ minWidth: '280px', maxWidth: '320px' }}
+      style={{ minWidth: '280px', maxWidth: '320px', pointerEvents: 'auto', cursor: 'move' }}
+      onMouseDown={onDragStart}
     >
       {/* Header */}
       <div className="bg-emerald-500 dark:bg-emerald-600 text-white px-4 py-3 rounded-t-lg">
         <div className="flex items-center gap-2 mb-1">
+          <GripVertical className="h-4 w-4 flex-shrink-0" />
           <Database className="h-4 w-4" />
-          <h3 className="font-bold text-sm">{objectName}</h3>
+          <h3
+            className="font-bold text-sm flex-1 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation() // Prevent drag from firing
+              onClick?.()
+            }}
+          >
+            {objectName}
+          </h3>
         </div>
         {objectPermissions.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
