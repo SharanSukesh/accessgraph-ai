@@ -85,7 +85,7 @@ class SyncOrchestrator:
     async def _extract_live_data(self, org_id: str) -> Dict:
         """Extract data from live Salesforce org"""
         from sqlalchemy.orm import selectinload
-        from app.salesforce.oauth import SalesforceOAuth
+        from app.salesforce.oauth import SalesforceOAuthClient
 
         # Get Salesforce connection with eager loading
         stmt = select(Organization).where(Organization.id == org_id).options(
@@ -112,7 +112,7 @@ class SyncOrchestrator:
         if conn.refresh_token:
             try:
                 logger.info("Refreshing Salesforce access token")
-                oauth = SalesforceOAuth()
+                oauth = SalesforceOAuthClient()
                 token_response = await oauth.refresh_access_token(conn.refresh_token)
 
                 # Update connection with new access token
