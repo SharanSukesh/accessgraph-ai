@@ -85,6 +85,7 @@ class SyncOrchestrator:
     async def _extract_live_data(self, org_id: str) -> Dict:
         """Extract data from live Salesforce org"""
         from sqlalchemy.orm import selectinload
+        from app.salesforce.oauth import SalesforceOAuth
 
         # Get Salesforce connection with eager loading
         stmt = select(Organization).where(Organization.id == org_id).options(
@@ -97,8 +98,6 @@ class SyncOrchestrator:
             raise ValueError(f"Organization not found: {org_id}")
 
         # Get active connection
-        # In production, this would handle token refresh
-        # For now, simplified
         conn: Optional[SalesforceConnection] = None
         for c in org.salesforce_connections:
             if c.is_active:
@@ -108,10 +107,27 @@ class SyncOrchestrator:
         if not conn:
             raise ValueError(f"No active Salesforce connection for org: {org_id}")
 
+        # Refresh access token if we have a refresh token
+        access_token = conn.access_token or ""
+        if conn.refresh_token:
+            try:
+                logger.info("Refreshing Salesforce access token")
+                oauth = SalesforceOAuth()
+                token_response = await oauth.refresh_access_token(conn.refresh_token)
+
+                # Update connection with new access token
+                conn.access_token = token_response.access_token
+                await self.db.commit()
+                access_token = token_response.access_token
+                logger.info("Successfully refreshed access token")
+            except Exception as e:
+                logger.warning(f"Token refresh failed, using existing token: {e}")
+                # Continue with existing token - it might still work
+
         # Create API client
         client = SalesforceAPIClient(
             instance_url=conn.instance_url,
-            access_token=conn.access_token or "",
+            access_token=access_token,
         )
 
         # Extract all data
