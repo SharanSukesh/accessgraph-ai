@@ -357,12 +357,16 @@ export function ERGraphVisualization({
       cy.destroy()
       cyRef.current = null
     }
-  }, [graph, onNodeSelect, updateObjectCardPositions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph])
 
   // Update graph when selectedObjects changes
   useEffect(() => {
     const cy = cyRef.current
     if (!cy || !graph) return
+
+    // Track if we actually modified the graph
+    let graphModified = false
 
     // Get all object nodes from graph data
     const objectNodes = graph.nodes.filter(n => n.type === 'object')
@@ -375,6 +379,7 @@ export function ERGraphVisualization({
         node.connectedEdges().remove()
         // Remove the node
         node.remove()
+        graphModified = true
       }
     })
 
@@ -403,7 +408,9 @@ export function ERGraphVisualization({
         classes: [objectNode.type],
         grabbable: true, // Ensure node can be dragged
         selectable: true, // Ensure node can be selected
+        locked: false, // Allow position changes
       })
+      graphModified = true
 
       // Add edges connected to this object
       graph.edges.forEach((edge) => {
@@ -433,8 +440,8 @@ export function ERGraphVisualization({
       })
     })
 
-    // Re-run layout if we added or removed nodes
-    if (selectedObjects.length > 0 || cy.nodes('[type="object"]').length > 0) {
+    // Only re-run layout if we actually added or removed nodes
+    if (graphModified) {
       const layout = cy.layout(getLayoutOptions('cose-bilkent'))
       layout.run()
 
@@ -443,10 +450,11 @@ export function ERGraphVisualization({
         updateObjectCardPositions()
       })
     } else {
-      // Just update positions if no layout change
+      // Just update positions if no layout change needed
       updateObjectCardPositions()
     }
-  }, [selectedObjects, graph, updateObjectCardPositions])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedObjects, graph])
 
   return (
     <div className={`relative ${className}`} style={{ height }}>
