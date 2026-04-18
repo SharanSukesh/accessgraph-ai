@@ -21,7 +21,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
-import { useToast } from '@/hooks/use-toast'
 
 const navigationItems = [
   { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
@@ -37,7 +36,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-  const { toast } = useToast()
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   // Extract orgId from current path (e.g., /orgs/abc123/dashboard -> abc123)
   const orgIdMatch = pathname.match(/\/orgs\/([^/]+)/)
@@ -52,19 +51,15 @@ export function Sidebar() {
   // Handle sync button click
   const handleSync = async () => {
     setIsSyncing(true)
+    setSyncMessage(null)
     try {
       await apiClient.post(`/orgs/${orgId}/sync`)
-      toast({
-        title: 'Sync Started',
-        description: 'Syncing data from Salesforce. This may take a few minutes.',
-      })
+      setSyncMessage('Sync started successfully!')
+      setTimeout(() => setSyncMessage(null), 3000)
     } catch (error) {
       console.error('Sync failed:', error)
-      toast({
-        title: 'Sync Failed',
-        description: 'Failed to start sync. Please try again.',
-        variant: 'destructive',
-      })
+      setSyncMessage('Sync failed. Please try again.')
+      setTimeout(() => setSyncMessage(null), 3000)
     } finally {
       setIsSyncing(false)
     }
@@ -165,6 +160,15 @@ export function Sidebar() {
               )}
             </button>
           </div>
+
+          {/* Sync Message */}
+          {isExpanded && syncMessage && (
+            <div className="px-4 pb-2">
+              <p className="text-xs text-center whitespace-nowrap text-primary-600 dark:text-primary-400">
+                {syncMessage}
+              </p>
+            </div>
+          )}
 
           {/* Version */}
           {isExpanded && (
