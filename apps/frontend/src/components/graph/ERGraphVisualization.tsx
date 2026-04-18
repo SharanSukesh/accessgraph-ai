@@ -468,40 +468,44 @@ export function ERGraphVisualization({
           const handleMouseDown = (e: React.MouseEvent) => {
             e.stopPropagation()
             const cy = cyRef.current
-            if (!cy) return
+            if (!cy || !containerRef.current) return
 
             const node = cy.getElementById(id)
             if (node.length === 0) return
 
             let isDragging = false
-            const startX = e.clientX
-            const startY = e.clientY
-            const startNodePos = node.position()
+            const startScreenX = e.clientX
+            const startScreenY = e.clientY
+            const startModelPos = node.position() // Model coordinates
 
             const handleMouseMove = (moveEvent: MouseEvent) => {
               // If mouse moved more than 3px, consider it a drag
-              if (!isDragging && (Math.abs(moveEvent.clientX - startX) > 3 || Math.abs(moveEvent.clientY - startY) > 3)) {
+              if (!isDragging && (Math.abs(moveEvent.clientX - startScreenX) > 3 || Math.abs(moveEvent.clientY - startScreenY) > 3)) {
                 isDragging = true
               }
 
               if (!isDragging) return
 
-              // Calculate delta in screen pixels
-              const deltaX = moveEvent.clientX - startX
-              const deltaY = moveEvent.clientY - startY
-
-              // Convert screen delta to model coordinates
+              // Get current pan and zoom
+              const pan = cy.pan()
               const zoom = cy.zoom()
-              const modelDeltaX = deltaX / zoom
-              const modelDeltaY = deltaY / zoom
 
-              // Update node position
+              // Calculate screen delta
+              const screenDeltaX = moveEvent.clientX - startScreenX
+              const screenDeltaY = moveEvent.clientY - startScreenY
+
+              // Convert screen delta to model delta
+              // When you move 100px on screen at 2x zoom, the model moves 50px
+              const modelDeltaX = screenDeltaX / zoom
+              const modelDeltaY = screenDeltaY / zoom
+
+              // Update node model position
               node.position({
-                x: startNodePos.x + modelDeltaX,
-                y: startNodePos.y + modelDeltaY,
+                x: startModelPos.x + modelDeltaX,
+                y: startModelPos.y + modelDeltaY,
               })
 
-              // Update card position immediately
+              // Update card positions immediately
               updateObjectCardPositions()
             }
 
