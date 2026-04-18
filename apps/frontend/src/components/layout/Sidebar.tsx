@@ -17,8 +17,11 @@ import {
   CheckCircle,
   Network,
   Menu,
+  RefreshCw,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { apiClient } from '@/lib/api/client'
+import { useToast } from '@/hooks/use-toast'
 
 const navigationItems = [
   { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
@@ -33,6 +36,8 @@ const navigationItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const [isExpanded, setIsExpanded] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const { toast } = useToast()
 
   // Extract orgId from current path (e.g., /orgs/abc123/dashboard -> abc123)
   const orgIdMatch = pathname.match(/\/orgs\/([^/]+)/)
@@ -43,6 +48,27 @@ export function Sidebar() {
     ...item,
     href: `/orgs/${orgId}/${item.path}`
   }))
+
+  // Handle sync button click
+  const handleSync = async () => {
+    setIsSyncing(true)
+    try {
+      await apiClient.post(`/orgs/${orgId}/sync`)
+      toast({
+        title: 'Sync Started',
+        description: 'Syncing data from Salesforce. This may take a few minutes.',
+      })
+    } catch (error) {
+      console.error('Sync failed:', error)
+      toast({
+        title: 'Sync Failed',
+        description: 'Failed to start sync. Please try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   return (
     <aside
@@ -113,13 +139,42 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        {isExpanded && (
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
-              v0.1.0 • MVP
-            </p>
+        <div className="border-t border-gray-200 dark:border-gray-700">
+          {/* Sync Button */}
+          <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
+            <button
+              onClick={handleSync}
+              disabled={isSyncing}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group',
+                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center p-3',
+                isSyncing
+                  ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed'
+                  : 'text-gray-700 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-primary-900/20 dark:hover:text-primary-400'
+              )}
+              title={!isExpanded ? 'Sync from Salesforce' : undefined}
+            >
+              <RefreshCw className={cn("h-5 w-5 flex-shrink-0", isSyncing && "animate-spin")} />
+              {isExpanded && <span className="whitespace-nowrap">Sync from Salesforce</span>}
+
+              {/* Tooltip for collapsed state */}
+              {!isExpanded && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  Sync from Salesforce
+                </div>
+              )}
+            </button>
           </div>
-        )}
+
+          {/* Version */}
+          {isExpanded && (
+            <div className="px-4 pb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+                v0.1.0 • MVP
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   )
