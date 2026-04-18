@@ -145,7 +145,7 @@ class SalesforceOpportunityShare(BaseModel):
 class SalesforceGroup(BaseModel):
     """Salesforce Group object"""
     Id: str
-    Name: str
+    Name: Optional[str] = None  # Some groups may not have a name
     Type: str
     DeveloperName: Optional[str] = None
     RelatedId: Optional[str] = None
