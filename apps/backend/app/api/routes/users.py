@@ -1157,6 +1157,12 @@ async def get_user_graph(
         ps_result = await db.execute(ps_query)
         ps = ps_result.scalar_one_or_none()
         if ps:
+            # Skip profile-owned permission sets (they're redundant with the profile node)
+            # Profile-owned permission sets are automatically created by Salesforce
+            # and their permissions are already represented by the profile
+            if ps.is_owned_by_profile:
+                continue
+
             permission_set_ids.append(ps.salesforce_id)
             nodes.append({
                 "id": ps.salesforce_id,
