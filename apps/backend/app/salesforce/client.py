@@ -410,12 +410,18 @@ class SalesforceAPIClient:
         object_permissions = await self.extract_object_permissions()
         field_permissions = await self.extract_field_permissions()
 
-        # Extract sharing data
+        # Extract sharing data (some objects may not be available in all orgs)
         groups = await self.extract_groups()
         group_members = await self.extract_group_members()
         account_shares = await self.extract_account_shares()
         opportunity_shares = await self.extract_opportunity_shares()
-        account_team_members = await self.extract_account_team_members()
+
+        # AccountTeamMember is optional - may not be enabled in all orgs
+        account_team_members = []
+        try:
+            account_team_members = await self.extract_account_team_members()
+        except Exception as e:
+            logger.warning(f"Could not extract account team members (may not be enabled): {e}")
 
         # Convert Pydantic models to dicts
         data = {
