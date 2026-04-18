@@ -466,33 +466,54 @@ export function ERGraphVisualization({
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {Array.from(objectCardPositions.entries()).map(([id, data]) => {
           const handleMouseDown = (e: React.MouseEvent) => {
-            e.preventDefault()
+            e.stopPropagation()
             const cy = cyRef.current
             if (!cy) return
 
             const node = cy.getElementById(id)
             if (node.length === 0) return
 
+            let isDragging = false
             const startX = e.clientX
             const startY = e.clientY
-            const startPos = node.position()
-            const zoom = cy.zoom()
+            const startNodePos = node.position()
 
             const handleMouseMove = (moveEvent: MouseEvent) => {
-              const deltaX = (moveEvent.clientX - startX) / zoom
-              const deltaY = (moveEvent.clientY - startY) / zoom
+              // If mouse moved more than 3px, consider it a drag
+              if (!isDragging && (Math.abs(moveEvent.clientX - startX) > 3 || Math.abs(moveEvent.clientY - startY) > 3)) {
+                isDragging = true
+              }
 
+              if (!isDragging) return
+
+              // Calculate delta in screen pixels
+              const deltaX = moveEvent.clientX - startX
+              const deltaY = moveEvent.clientY - startY
+
+              // Convert screen delta to model coordinates
+              const zoom = cy.zoom()
+              const modelDeltaX = deltaX / zoom
+              const modelDeltaY = deltaY / zoom
+
+              // Update node position
               node.position({
-                x: startPos.x + deltaX,
-                y: startPos.y + deltaY,
+                x: startNodePos.x + modelDeltaX,
+                y: startNodePos.y + modelDeltaY,
               })
 
+              // Update card position immediately
               updateObjectCardPositions()
             }
 
             const handleMouseUp = () => {
               document.removeEventListener('mousemove', handleMouseMove)
               document.removeEventListener('mouseup', handleMouseUp)
+
+              // If wasn't dragging, treat as click
+              if (!isDragging) {
+                setSelectedNode(id)
+                onNodeSelect?.(data.node)
+              }
             }
 
             document.addEventListener('mousemove', handleMouseMove)
@@ -511,10 +532,6 @@ export function ERGraphVisualization({
                 pointerEvents: 'auto',
               }}
               onMouseDown={handleMouseDown}
-              onClick={() => {
-                setSelectedNode(id)
-                onNodeSelect?.(data.node)
-              }}
             >
               <ERObjectCard
                 objectName={data.node.objectName}
