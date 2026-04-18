@@ -1148,7 +1148,9 @@ async def get_user_graph(
     ps_assignments_result = await db.execute(ps_assignments_query)
     ps_assignments = ps_assignments_result.scalars().all()
 
-    permission_set_ids = []  # Collect permission set IDs for later use
+    permission_set_ids = []  # Collect non-profile permission set IDs
+    profile_owned_ps_id = None  # The profile-owned permission set ID
+
     for assignment in ps_assignments:
         ps_query = select(PermissionSetSnapshot).where(
             PermissionSetSnapshot.organization_id == org_id,
@@ -1157,12 +1159,14 @@ async def get_user_graph(
         ps_result = await db.execute(ps_query)
         ps = ps_result.scalar_one_or_none()
         if ps:
-            # Skip profile-owned permission sets (they're redundant with the profile node)
-            # Profile-owned permission sets are automatically created by Salesforce
-            # and their permissions are already represented by the profile
             if ps.is_owned_by_profile:
+                # This is the profile-owned permission set
+                # Store its ID to use for querying permissions, but don't create a node
+                # The permissions will be attributed to the profile node instead
+                profile_owned_ps_id = ps.salesforce_id
                 continue
 
+            # Regular permission set (not owned by profile)
             permission_set_ids.append(ps.salesforce_id)
             nodes.append({
                 "id": ps.salesforce_id,
@@ -1178,11 +1182,21 @@ async def get_user_graph(
                 "label": "assigned"
             })
 
-    # Add object and field nodes for all permission sources (profile + permission sets)
+    # Build permission source IDs for querying
+    # For profile: use the profile-owned permission set ID (where permissions are actually stored)
+    # For permission sets: use their IDs directly
     permission_source_ids = []
-    if user.profile_id:
-        permission_source_ids.append(user.profile_id)
-    permission_source_ids.extend(permission_set_ids)
+    permission_source_mapping = {}  # Maps permission set ID -> node ID to use for edges
+
+    if profile_owned_ps_id:
+        # Profile permissions are stored in the profile-owned permission set
+        # But we want edges to come from the profile node, not a separate PS node
+        permission_source_ids.append(profile_owned_ps_id)
+        permission_source_mapping[profile_owned_ps_id] = user.profile_id  # Map to profile node
+
+    for ps_id in permission_set_ids:
+        permission_source_ids.append(ps_id)
+        permission_source_mapping[ps_id] = ps_id  # Map to itself
 
     # Get all field permissions first to group them under objects
     from app.domain.models import FieldPermissionSnapshot
@@ -1253,8 +1267,12 @@ async def get_user_graph(
                 })
 
             # Create edge from permission source to object
-            source_id = obj_perm.parent_id
-            edge_id = f"ps_obj_{source_id}_{obj_perm.sobject_type}"
+            # obj_perm.parent_id is the actual permission set ID (could be profile-owned)
+            # We need to map it to the correct node ID (profile node if profile-owned)
+            actual_parent_id = obj_perm.parent_id
+            node_id_for_edge = permission_source_mapping.get(actual_parent_id, actual_parent_id)
+
+            edge_id = f"ps_obj_{node_id_for_edge}_{obj_perm.sobject_type}"
             if not any(e["id"] == edge_id for e in edges):
                 # Build permission label
                 perms = []
@@ -1266,7 +1284,7 @@ async def get_user_graph(
 
                 edges.append({
                     "id": edge_id,
-                    "source": source_id,
+                    "source": node_id_for_edge,  # Use mapped node ID (profile if profile-owned)
                     "target": object_id,
                     "type": "GRANTS_ACCESS",
                     "label": perm_label,
