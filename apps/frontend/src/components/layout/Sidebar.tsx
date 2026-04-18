@@ -18,6 +18,7 @@ import {
   Network,
   Menu,
   RefreshCw,
+  Link2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
@@ -63,6 +64,13 @@ export function Sidebar() {
     } finally {
       setIsSyncing(false)
     }
+  }
+
+  // Handle reconnect to Salesforce
+  const handleReconnect = () => {
+    // Redirect to backend OAuth authorization endpoint
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
+    window.location.href = `${backendUrl}/auth/salesforce/authorize`
   }
 
   return (
@@ -135,8 +143,31 @@ export function Sidebar() {
 
         {/* Footer */}
         <div className="border-t border-gray-200 dark:border-gray-700">
-          {/* Sync Button */}
+          {/* Reconnect Button */}
           <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
+            <button
+              onClick={handleReconnect}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group',
+                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center p-3',
+                'text-gray-700 hover:bg-amber-50 hover:text-amber-700 dark:text-gray-300 dark:hover:bg-amber-900/20 dark:hover:text-amber-400'
+              )}
+              title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
+            >
+              <Link2 className="h-5 w-5 flex-shrink-0" />
+              {isExpanded && <span className="whitespace-nowrap">Reconnect to Salesforce</span>}
+
+              {/* Tooltip for collapsed state */}
+              {!isExpanded && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  Reconnect to Salesforce
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* Sync Button */}
+          <div className={cn("p-2 pt-0", isExpanded ? "" : "flex justify-center")}>
             <button
               onClick={handleSync}
               disabled={isSyncing}
