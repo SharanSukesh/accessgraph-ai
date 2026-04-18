@@ -478,6 +478,7 @@ export function ERGraphVisualization({
             const startX = e.clientX
             const startY = e.clientY
             const startPos = node.position()
+            const currentZoom = cy.zoom()
             let hasMoved = false
 
             const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -490,14 +491,16 @@ export function ERGraphVisualization({
               }
 
               if (hasMoved) {
-                // Convert screen delta to model delta by dividing by zoom
-                const zoom = cy.zoom()
-                const pan = cy.pan()
+                // The card is scaled by zoomLevel (CSS transform: scale(${zoomLevel}))
+                // AND Cytoscape uses zoom for positioning
+                // We need to divide by zoom to convert screen pixels to model coordinates
+                // Then divide by the card scale (which is also zoom) to account for the CSS scale
+                // This gives us: deltaX / (zoom * zoom) = deltaX / (zoom^2)
 
                 // Update node position in model coordinates
                 node.position({
-                  x: startPos.x + deltaX / zoom,
-                  y: startPos.y + deltaY / zoom,
+                  x: startPos.x + deltaX / (currentZoom * currentZoom),
+                  y: startPos.y + deltaY / (currentZoom * currentZoom),
                 })
 
                 // Update HTML card position immediately
