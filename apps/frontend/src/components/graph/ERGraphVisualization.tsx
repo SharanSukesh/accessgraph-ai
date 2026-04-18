@@ -475,32 +475,55 @@ export function ERGraphVisualization({
             const node = cy.getElementById(id)
             if (node.length === 0) return
 
-            const startX = e.clientX
-            const startY = e.clientY
-            const startPos = node.position()
-            const currentZoom = cy.zoom()
+            // Get the container's bounding rect for coordinate conversion
+            const container = containerRef.current
+            if (!container) return
+
+            const containerRect = container.getBoundingClientRect()
+
+            // Calculate offset between mouse and card center at drag start
+            const startMouseX = e.clientX
+            const startMouseY = e.clientY
+            const startCardX = data.x + containerRect.left
+            const startCardY = data.y + containerRect.top
+            const offsetX = startMouseX - startCardX
+            const offsetY = startMouseY - startCardY
+
             let hasMoved = false
 
             const handleMouseMove = (moveEvent: MouseEvent) => {
-              const deltaX = moveEvent.clientX - startX
-              const deltaY = moveEvent.clientY - startY
-
               // Check if actually dragging (moved more than 3px)
+              const deltaX = moveEvent.clientX - startMouseX
+              const deltaY = moveEvent.clientY - startMouseY
+
               if (!hasMoved && (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3)) {
                 hasMoved = true
               }
 
               if (hasMoved) {
-                // The card is scaled by zoomLevel (CSS transform: scale(${zoomLevel}))
-                // AND Cytoscape uses zoom for positioning
-                // We need to divide by zoom to convert screen pixels to model coordinates
-                // Then divide by the card scale (which is also zoom) to account for the CSS scale
-                // This gives us: deltaX / (zoom * zoom) = deltaX / (zoom^2)
+                // Get current container position (in case it moved)
+                const currentRect = container.getBoundingClientRect()
+
+                // Calculate where the card center should be (cursor position minus offset)
+                const newCardCenterX = moveEvent.clientX - offsetX
+                const newCardCenterY = moveEvent.clientY - offsetY
+
+                // Convert to container-relative coordinates
+                const relativeX = newCardCenterX - currentRect.left
+                const relativeY = newCardCenterY - currentRect.top
+
+                // Convert screen position to Cytoscape model position
+                // We need to account for pan and zoom
+                const pan = cy.pan()
+                const zoom = cy.zoom()
+
+                const modelX = (relativeX - pan.x) / zoom
+                const modelY = (relativeY - pan.y) / zoom
 
                 // Update node position in model coordinates
                 node.position({
-                  x: startPos.x + deltaX / (currentZoom * currentZoom),
-                  y: startPos.y + deltaY / (currentZoom * currentZoom),
+                  x: modelX,
+                  y: modelY,
                 })
 
                 // Update HTML card position immediately
