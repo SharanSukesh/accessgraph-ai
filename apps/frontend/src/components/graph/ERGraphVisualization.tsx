@@ -464,78 +464,25 @@ export function ERGraphVisualization({
 
       {/* ER Object Cards as HTML overlays */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {Array.from(objectCardPositions.entries()).map(([id, data]) => {
-          const handleMouseDown = (e: React.MouseEvent) => {
-            e.stopPropagation()
-            const cy = cyRef.current
-            if (!cy || !containerRef.current) return
-
-            const node = cy.getElementById(id)
-            if (node.length === 0) return
-
-            let isDragging = false
-            const startScreenX = e.clientX
-            const startScreenY = e.clientY
-            const startModelPos = node.position() // Model coordinates
-
-            const handleMouseMove = (moveEvent: MouseEvent) => {
-              // If mouse moved more than 3px, consider it a drag
-              if (!isDragging && (Math.abs(moveEvent.clientX - startScreenX) > 3 || Math.abs(moveEvent.clientY - startScreenY) > 3)) {
-                isDragging = true
-              }
-
-              if (!isDragging) return
-
-              // Get current pan and zoom
-              const pan = cy.pan()
-              const zoom = cy.zoom()
-
-              // Calculate screen delta
-              const screenDeltaX = moveEvent.clientX - startScreenX
-              const screenDeltaY = moveEvent.clientY - startScreenY
-
-              // Convert screen delta to model delta
-              // When you move 100px on screen at 2x zoom, the model moves 50px
-              const modelDeltaX = screenDeltaX / zoom
-              const modelDeltaY = screenDeltaY / zoom
-
-              // Update node model position
-              node.position({
-                x: startModelPos.x + modelDeltaX,
-                y: startModelPos.y + modelDeltaY,
-              })
-
-              // Update card positions immediately
-              updateObjectCardPositions()
-            }
-
-            const handleMouseUp = () => {
-              document.removeEventListener('mousemove', handleMouseMove)
-              document.removeEventListener('mouseup', handleMouseUp)
-
-              // If wasn't dragging, treat as click
-              if (!isDragging) {
+        {Array.from(objectCardPositions.entries()).map(([id, data]) => (
+          <div
+            key={id}
+            className="absolute"
+            style={{
+              left: `${data.x}px`,
+              top: `${data.y}px`,
+              transform: `translate(-50%, -50%) scale(${zoomLevel})`,
+              transformOrigin: 'center center',
+              pointerEvents: 'none', // Cards don't capture events - let Cytoscape handle dragging
+            }}
+          >
+            {/* Clickable overlay for selection only */}
+            <div
+              style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+              onClick={() => {
                 setSelectedNode(id)
                 onNodeSelect?.(data.node)
-              }
-            }
-
-            document.addEventListener('mousemove', handleMouseMove)
-            document.addEventListener('mouseup', handleMouseUp)
-          }
-
-          return (
-            <div
-              key={id}
-              className="absolute cursor-move"
-              style={{
-                left: `${data.x}px`,
-                top: `${data.y}px`,
-                transform: `translate(-50%, -50%) scale(${zoomLevel})`,
-                transformOrigin: 'center center',
-                pointerEvents: 'auto',
               }}
-              onMouseDown={handleMouseDown}
             >
               <ERObjectCard
                 objectName={data.node.objectName}
@@ -545,8 +492,8 @@ export function ERGraphVisualization({
                 onClick={() => {}}
               />
             </div>
-          )
-        })}
+          </div>
+        ))}
       </div>
     </div>
   )
