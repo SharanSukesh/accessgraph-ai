@@ -1255,6 +1255,15 @@ async def get_user_graph(
             object_id = f"object_{obj_perm.sobject_type}"
             # Check if object node already exists
             if not any(n["id"] == object_id for n in nodes):
+                fields_list = object_fields.get(obj_perm.sobject_type, [])
+
+                # Determine if fields are implicitly accessible
+                # When no explicit field permissions exist but object has Read permission,
+                # all fields are implicitly accessible based on object-level permissions
+                has_implicit_field_access = (
+                    obj_perm.permissions_read and len(fields_list) == 0
+                )
+
                 nodes.append({
                     "id": object_id,
                     "type": "object",
@@ -1265,8 +1274,10 @@ async def get_user_graph(
                         "canCreate": obj_perm.permissions_create,
                         "canEdit": obj_perm.permissions_edit,
                         "canDelete": obj_perm.permissions_delete,
-                        # Include fields as part of object properties
-                        "fields": object_fields.get(obj_perm.sobject_type, [])
+                        # Include explicit fields from FieldPermissions
+                        "fields": fields_list,
+                        # Indicate if all fields are implicitly accessible
+                        "hasImplicitFieldAccess": has_implicit_field_access
                     }
                 })
 

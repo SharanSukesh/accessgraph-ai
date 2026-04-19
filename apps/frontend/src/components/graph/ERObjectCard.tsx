@@ -23,6 +23,7 @@ interface ERObjectCardProps {
     canEdit: boolean
     canDelete: boolean
   }
+  hasImplicitFieldAccess?: boolean
   isSelected?: boolean
   onClick?: () => void
   onDragStart?: (e: React.MouseEvent) => void
@@ -32,6 +33,7 @@ export function ERObjectCard({
   objectName,
   fields,
   permissions,
+  hasImplicitFieldAccess = false,
   isSelected = false,
   onClick,
   onDragStart,
@@ -91,8 +93,21 @@ export function ERObjectCard({
       {/* Fields */}
       <div className="max-h-64 overflow-y-auto">
         {fields.length === 0 ? (
-          <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 italic">
-            No accessible fields
+          <div className="px-4 py-3 text-sm">
+            {hasImplicitFieldAccess ? (
+              <div className="space-y-2">
+                <p className="text-emerald-600 dark:text-emerald-400 font-medium">
+                  All fields accessible
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  No field-level security configured. All fields are implicitly accessible based on object-level Read permission.
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 italic">
+                No accessible fields
+              </p>
+            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">

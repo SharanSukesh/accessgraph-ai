@@ -564,6 +564,7 @@ export function ERGraphVisualization({
                 objectName={data.node.objectName}
                 fields={data.node.fields}
                 permissions={data.node.permissions}
+                hasImplicitFieldAccess={data.node.hasImplicitFieldAccess}
                 isSelected={selectedNode === id}
                 onClick={() => {
                   setSelectedNode(id)
