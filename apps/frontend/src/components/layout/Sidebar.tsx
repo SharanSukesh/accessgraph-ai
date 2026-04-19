@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
+import { Logo } from '@/components/shared/Logo'
 
 const navigationItems = [
   { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
@@ -83,25 +84,14 @@ export function Sidebar() {
       onMouseLeave={() => setIsExpanded(false)}
     >
       <div className="flex flex-col h-full">
-        {/* Logo / Hamburger */}
+        {/* Logo */}
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <Link href="/" className="flex items-center space-x-3 group">
-            <div className={cn(
-              "bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all flex-shrink-0",
-              isExpanded ? "w-10 h-10" : "w-8 h-8"
-            )}>
-              {isExpanded ? (
-                <Network className="h-6 w-6 text-white" />
-              ) : (
-                <Menu className="h-5 w-5 text-white" />
-              )}
-            </div>
-            {isExpanded && (
-              <div className="overflow-hidden">
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                  AccessGraph
-                </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">AI Platform</p>
+          <Link href="/" className="flex items-center group">
+            {isExpanded ? (
+              <Logo variant="full" size="md" className="transition-all" />
+            ) : (
+              <div className="flex items-center justify-center w-full">
+                <Logo variant="icon" size="sm" className="transition-all" />
               </div>
             )}
           </Link>
