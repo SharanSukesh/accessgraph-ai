@@ -1582,3 +1582,60 @@ async def debug_field_permissions(
         ]
     }
 
+
+@router.get("/orgs/{org_id}/debug/query-salesforce")
+async def debug_query_salesforce(
+    org_id: str,
+    parent_id: str = Query(..., description="Permission Set ID (ParentId)"),
+    db: AsyncSession = Depends(get_database),
+):
+    """Debug endpoint to query Salesforce directly for field permissions"""
+    from app.domain.models import Organization, SalesforceConnection
+    from app.salesforce.client import SalesforceAPIClient
+
+    # Get org and connection
+    org_query = select(Organization).where(Organization.id == org_id)
+    org_result = await db.execute(org_query)
+    org = org_result.scalar_one_or_none()
+
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    conn_query = select(SalesforceConnection).where(
+        SalesforceConnection.organization_id == org_id
+    )
+    conn_result = await db.execute(conn_query)
+    conn = conn_result.scalar_one_or_none()
+
+    if not conn:
+        raise HTTPException(status_code=404, detail="No Salesforce connection found")
+
+    # Query Salesforce directly
+    client = SalesforceAPIClient(
+        instance_url=conn.instance_url,
+        access_token=conn.access_token or "",
+    )
+
+    # Query for Account field permissions for this permission set
+    soql = f"""
+        SELECT Id, ParentId, SobjectType, Field, PermissionsRead, PermissionsEdit
+        FROM FieldPermissions
+        WHERE ParentId = '{parent_id}' AND SobjectType = 'Account'
+        LIMIT 50
+    """
+
+    try:
+        records = await client.query_all(soql)
+        return {
+            "parent_id": parent_id,
+            "soql_query": soql,
+            "total_account_field_permissions": len(records),
+            "sample_field_permissions": records[:20]
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "parent_id": parent_id,
+            "soql_query": soql
+        }
+
