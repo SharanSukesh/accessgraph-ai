@@ -1326,6 +1326,64 @@ async def get_user_graph(
                     }
                 })
 
+    # Handle objects that have field-level permissions but NO object-level permissions
+    # This is common for Standard Profiles that only define field permissions in Profile metadata
+    # For example: Analytics Cloud Integration User may have field permissions on Account
+    # but no explicit object-level permissions
+    for obj_name, fields in object_fields.items():
+        object_id = f"object_{obj_name}"
+        # Check if this object node was already created above
+        if not any(n["id"] == object_id for n in nodes):
+            # This object has field permissions but no object permission
+            # Create the object node with field permissions + system fields
+            fields_list = fields.copy()
+
+            # Add system-required fields
+            # When you have field-level permissions, you implicitly have read access to system fields
+            for field_name, field_template in SYSTEM_REQUIRED_FIELDS.items():
+                # Check if this system field is already in the list
+                if not any(f.get("name") == field_name for f in fields_list):
+                    field_data = field_template.copy()
+                    field_data["fullName"] = field_template["fullName"].replace("{object}", obj_name)
+                    fields_list.append(field_data)
+
+            nodes.append({
+                "id": object_id,
+                "type": "object",
+                "label": obj_name,
+                "properties": {
+                    "objectName": obj_name,
+                    # No object-level permissions, only field-level
+                    "canRead": False,
+                    "canCreate": False,
+                    "canEdit": False,
+                    "canDelete": False,
+                    # But we have field permissions
+                    "fields": fields_list,
+                }
+            })
+
+            # Create edge from profile to this object
+            # Field permissions come from profile-owned permission set
+            if profile_owned_ps_id:
+                node_id_for_edge = permission_source_mapping.get(profile_owned_ps_id, profile_owned_ps_id)
+                edge_id = f"ps_obj_{node_id_for_edge}_{obj_name}"
+                if not any(e["id"] == edge_id for e in edges):
+                    edges.append({
+                        "id": edge_id,
+                        "source": node_id_for_edge,  # Usually the profile node
+                        "target": object_id,
+                        "type": "GRANTS_FIELD_ACCESS",
+                        "label": "field access",
+                        "properties": {
+                            "read": False,
+                            "create": False,
+                            "edit": False,
+                            "delete": False,
+                            "field_level_only": True,
+                        }
+                    })
+
     # Add object-to-object relationships (common Salesforce relationships)
     # This makes the graph look like an ER diagram
     object_relationships = {
