@@ -157,13 +157,14 @@ export interface UserAccessSummary {
 
 export interface SyncJob {
   id: string
-  organizationId: string
+  organization_id: string
   status: SyncJobStatus
-  startedAt?: string
-  completedAt?: string
-  errorMessage?: string
+  started_at?: string
+  completed_at?: string
+  error_message?: string
   summary?: SyncSummary
-  createdAt: string
+  metadata?: any
+  created_at: string
 }
 
 export enum SyncJobStatus {

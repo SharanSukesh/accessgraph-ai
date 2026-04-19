@@ -79,7 +79,7 @@ export default function DashboardPage() {
               <div className="flex items-center space-x-3">
                 <StatusBadge status={latestSync.status} />
                 <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Last sync: {new Date(latestSync.completedAt || latestSync.startedAt).toLocaleString()}
+                  Last sync: {new Date(latestSync.completed_at || latestSync.started_at).toLocaleString()}
                 </span>
               </div>
               {latestSync.summary && (
