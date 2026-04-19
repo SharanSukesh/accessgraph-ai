@@ -1270,13 +1270,16 @@ async def get_user_graph(
             if not any(n["id"] == object_id for n in nodes):
                 fields_list = object_fields.get(obj_perm.sobject_type, []).copy()
 
-                # Add system-required fields if object has Read permission but no explicit field permissions
+                # Add system-required fields if object has Read permission
                 # These are fields like Id, Name, OwnerId that are always accessible
-                if obj_perm.permissions_read and len(fields_list) == 0:
+                # Only add if not already present in the explicit fields list
+                if obj_perm.permissions_read:
                     for field_name, field_template in SYSTEM_REQUIRED_FIELDS.items():
-                        field_data = field_template.copy()
-                        field_data["fullName"] = field_template["fullName"].replace("{object}", obj_perm.sobject_type)
-                        fields_list.append(field_data)
+                        # Check if this system field is already in the list
+                        if not any(f.get("name") == field_name for f in fields_list):
+                            field_data = field_template.copy()
+                            field_data["fullName"] = field_template["fullName"].replace("{object}", obj_perm.sobject_type)
+                            fields_list.append(field_data)
 
                 nodes.append({
                     "id": object_id,
