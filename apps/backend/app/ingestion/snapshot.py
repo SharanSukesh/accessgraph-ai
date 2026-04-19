@@ -344,45 +344,35 @@ class SnapshotPersister:
         sync_job_id: Optional[str] = None,
     ) -> int:
         """Persist object permission snapshots"""
+        # Delete all existing object permissions for this org
+        # This ensures removed permissions are properly removed from the database
+        from sqlalchemy import delete
+
+        delete_stmt = delete(ObjectPermissionSnapshot).where(
+            ObjectPermissionSnapshot.organization_id == org_id
+        )
+        result = await self.db.execute(delete_stmt)
+        deleted_count = result.rowcount
+        logger.info(f"Deleted {deleted_count} existing object permissions for org {org_id}")
+
+        # Insert all fresh permissions from Salesforce
         count = 0
-
         for perm_data in permissions:
-            result = await self.db.execute(
-                select(ObjectPermissionSnapshot).where(
-                    ObjectPermissionSnapshot.organization_id == org_id,
-                    ObjectPermissionSnapshot.salesforce_id == perm_data["Id"],
-                )
+            perm = ObjectPermissionSnapshot(
+                organization_id=org_id,
+                sync_job_id=sync_job_id,
+                salesforce_id=perm_data["Id"],
+                parent_id=perm_data["ParentId"],
+                sobject_type=perm_data["SobjectType"],
+                permissions_read=perm_data.get("PermissionsRead", False),
+                permissions_create=perm_data.get("PermissionsCreate", False),
+                permissions_edit=perm_data.get("PermissionsEdit", False),
+                permissions_delete=perm_data.get("PermissionsDelete", False),
+                permissions_view_all_records=perm_data.get("PermissionsViewAllRecords", False),
+                permissions_modify_all_records=perm_data.get("PermissionsModifyAllRecords", False),
+                raw_data=perm_data,
             )
-            existing = result.scalar_one_or_none()
-
-            if existing:
-                existing.parent_id = perm_data["ParentId"]
-                existing.sobject_type = perm_data["SobjectType"]
-                existing.permissions_read = perm_data.get("PermissionsRead", False)
-                existing.permissions_create = perm_data.get("PermissionsCreate", False)
-                existing.permissions_edit = perm_data.get("PermissionsEdit", False)
-                existing.permissions_delete = perm_data.get("PermissionsDelete", False)
-                existing.permissions_view_all_records = perm_data.get("PermissionsViewAllRecords", False)
-                existing.permissions_modify_all_records = perm_data.get("PermissionsModifyAllRecords", False)
-                existing.raw_data = perm_data
-                existing.sync_job_id = sync_job_id
-            else:
-                perm = ObjectPermissionSnapshot(
-                    organization_id=org_id,
-                    sync_job_id=sync_job_id,
-                    salesforce_id=perm_data["Id"],
-                    parent_id=perm_data["ParentId"],
-                    sobject_type=perm_data["SobjectType"],
-                    permissions_read=perm_data.get("PermissionsRead", False),
-                    permissions_create=perm_data.get("PermissionsCreate", False),
-                    permissions_edit=perm_data.get("PermissionsEdit", False),
-                    permissions_delete=perm_data.get("PermissionsDelete", False),
-                    permissions_view_all_records=perm_data.get("PermissionsViewAllRecords", False),
-                    permissions_modify_all_records=perm_data.get("PermissionsModifyAllRecords", False),
-                    raw_data=perm_data,
-                )
-                self.db.add(perm)
-
+            self.db.add(perm)
             count += 1
 
         await self.db.flush()
@@ -396,39 +386,32 @@ class SnapshotPersister:
         sync_job_id: Optional[str] = None,
     ) -> int:
         """Persist field permission snapshots"""
+        # Delete all existing field permissions for this org
+        # This ensures removed permissions are properly removed from the database
+        from sqlalchemy import delete
+
+        delete_stmt = delete(FieldPermissionSnapshot).where(
+            FieldPermissionSnapshot.organization_id == org_id
+        )
+        result = await self.db.execute(delete_stmt)
+        deleted_count = result.rowcount
+        logger.info(f"Deleted {deleted_count} existing field permissions for org {org_id}")
+
+        # Insert all fresh permissions from Salesforce
         count = 0
-
         for perm_data in permissions:
-            result = await self.db.execute(
-                select(FieldPermissionSnapshot).where(
-                    FieldPermissionSnapshot.organization_id == org_id,
-                    FieldPermissionSnapshot.salesforce_id == perm_data["Id"],
-                )
+            perm = FieldPermissionSnapshot(
+                organization_id=org_id,
+                sync_job_id=sync_job_id,
+                salesforce_id=perm_data["Id"],
+                parent_id=perm_data["ParentId"],
+                sobject_type=perm_data["SobjectType"],
+                field=perm_data["Field"],
+                permissions_read=perm_data.get("PermissionsRead", False),
+                permissions_edit=perm_data.get("PermissionsEdit", False),
+                raw_data=perm_data,
             )
-            existing = result.scalar_one_or_none()
-
-            if existing:
-                existing.parent_id = perm_data["ParentId"]
-                existing.sobject_type = perm_data["SobjectType"]
-                existing.field = perm_data["Field"]
-                existing.permissions_read = perm_data.get("PermissionsRead", False)
-                existing.permissions_edit = perm_data.get("PermissionsEdit", False)
-                existing.raw_data = perm_data
-                existing.sync_job_id = sync_job_id
-            else:
-                perm = FieldPermissionSnapshot(
-                    organization_id=org_id,
-                    sync_job_id=sync_job_id,
-                    salesforce_id=perm_data["Id"],
-                    parent_id=perm_data["ParentId"],
-                    sobject_type=perm_data["SobjectType"],
-                    field=perm_data["Field"],
-                    permissions_read=perm_data.get("PermissionsRead", False),
-                    permissions_edit=perm_data.get("PermissionsEdit", False),
-                    raw_data=perm_data,
-                )
-                self.db.add(perm)
-
+            self.db.add(perm)
             count += 1
 
         await self.db.flush()
