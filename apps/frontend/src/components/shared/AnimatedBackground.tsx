@@ -34,7 +34,7 @@ export function AnimatedBackground() {
       radius: number
     }> = []
 
-    // Create nodes
+    // Create nodes - larger and more visible
     const nodeCount = 50
     for (let i = 0; i < nodeCount; i++) {
       nodes.push({
@@ -42,7 +42,7 @@ export function AnimatedBackground() {
         y: Math.random() * canvas.height,
         vx: (Math.random() - 0.5) * 0.3,
         vy: (Math.random() - 0.5) * 0.3,
-        radius: Math.random() * 2 + 1,
+        radius: Math.random() * 3 + 2, // Increased from 2+1 to 3+2 (2-5px)
       })
     }
 
@@ -61,14 +61,14 @@ export function AnimatedBackground() {
         if (node.x < 0 || node.x > canvas.width) node.vx *= -1
         if (node.y < 0 || node.y > canvas.height) node.vy *= -1
 
-        // Draw node - make more visible
+        // Draw node - larger, darker, more visible
         ctx.beginPath()
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(139, 92, 246, 0.7)'
+        ctx.fillStyle = 'rgba(124, 58, 237, 0.8)' // Darker purple (primary-600)
         ctx.fill()
       })
 
-      // Draw connections - make more visible
+      // Draw connections - thicker, darker, more visible
       nodes.forEach((node, i) => {
         nodes.slice(i + 1).forEach((otherNode) => {
           const dx = node.x - otherNode.x
@@ -79,9 +79,9 @@ export function AnimatedBackground() {
             ctx.beginPath()
             ctx.moveTo(node.x, node.y)
             ctx.lineTo(otherNode.x, otherNode.y)
-            const opacity = (1 - distance / 150) * 0.3
-            ctx.strokeStyle = `rgba(139, 92, 246, ${opacity})`
-            ctx.lineWidth = 1
+            const opacity = (1 - distance / 150) * 0.4 // Increased from 0.3
+            ctx.strokeStyle = `rgba(124, 58, 237, ${opacity})` // Darker purple
+            ctx.lineWidth = 2 // Increased from 1 to 2px
             ctx.stroke()
           }
         })
