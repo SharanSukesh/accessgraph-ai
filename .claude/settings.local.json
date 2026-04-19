@@ -21,7 +21,9 @@
       "Bash(npm run build)",
       "Bash(git push)",
       "Bash(git add -A)",
-      "Bash(git commit -m \"fix: Simplify animated background for production compatibility\n\nRemove complex CSS that wasn''t rendering in production:\n- Remove mix-blend-multiply (causing rendering issues)\n- Use solid Tailwind color classes instead of opacity variants\n- Increase orb sizes to 500px for better visibility\n- Use standard blur utilities\n- Simplify positioning\n\nThis version uses only standard Tailwind utilities that are\nguaranteed to work in production builds.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")"
+      "Bash(git commit -m \"fix: Simplify animated background for production compatibility\n\nRemove complex CSS that wasn''t rendering in production:\n- Remove mix-blend-multiply (causing rendering issues)\n- Use solid Tailwind color classes instead of opacity variants\n- Increase orb sizes to 500px for better visibility\n- Use standard blur utilities\n- Simplify positioning\n\nThis version uses only standard Tailwind utilities that are\nguaranteed to work in production builds.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\")",
+      "Bash(npm run start)",
+      "Bash(curl -s http://localhost:3000)"
     ],
     "deny": [],
     "ask": []

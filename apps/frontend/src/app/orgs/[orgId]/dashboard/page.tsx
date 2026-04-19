@@ -13,6 +13,7 @@ import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { RiskBadge, StatusBadge } from '@/components/shared/Badge'
+import { ScrollReveal } from '@/components/shared/ScrollReveal'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
@@ -94,36 +95,45 @@ export default function DashboardPage() {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="Total Users"
-          value={totalUsers}
-          icon={Users}
-          iconColor="text-blue-600"
-        />
-        <MetricCard
-          title="High-Risk Users"
-          value={highRiskUsers}
-          icon={Shield}
-          iconColor="text-red-600"
-        />
-        <MetricCard
-          title="Critical Anomalies"
-          value={criticalAnomalies}
-          icon={AlertTriangle}
-          iconColor="text-orange-600"
-        />
-        <MetricCard
-          title="Recommendations"
-          value={totalRecommendations}
-          icon={Database}
-          iconColor="text-green-600"
-        />
+        <ScrollReveal delay={0}>
+          <MetricCard
+            title="Total Users"
+            value={totalUsers}
+            icon={Users}
+            iconColor="text-blue-600"
+          />
+        </ScrollReveal>
+        <ScrollReveal delay={100}>
+          <MetricCard
+            title="High-Risk Users"
+            value={highRiskUsers}
+            icon={Shield}
+            iconColor="text-red-600"
+          />
+        </ScrollReveal>
+        <ScrollReveal delay={200}>
+          <MetricCard
+            title="Critical Anomalies"
+            value={criticalAnomalies}
+            icon={AlertTriangle}
+            iconColor="text-orange-600"
+          />
+        </ScrollReveal>
+        <ScrollReveal delay={300}>
+          <MetricCard
+            title="Recommendations"
+            value={totalRecommendations}
+            icon={Database}
+            iconColor="text-green-600"
+          />
+        </ScrollReveal>
       </div>
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Anomalous Users */}
-        <Card variant="bordered">
+        <ScrollReveal delay={400}>
+          <Card variant="bordered">
           <CardHeader>
             <CardTitle>Top Anomalous Users</CardTitle>
           </CardHeader>
@@ -170,10 +180,12 @@ export default function DashboardPage() {
               />
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </ScrollReveal>
 
         {/* Recent Recommendations */}
-        <Card variant="bordered">
+        <ScrollReveal delay={500}>
+          <Card variant="bordered">
           <CardHeader>
             <CardTitle>Recent Recommendations</CardTitle>
           </CardHeader>
@@ -207,7 +219,8 @@ export default function DashboardPage() {
               />
             )}
           </CardContent>
-        </Card>
+          </Card>
+        </ScrollReveal>
       </div>
     </div>
   )
