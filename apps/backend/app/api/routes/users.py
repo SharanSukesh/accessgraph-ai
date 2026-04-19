@@ -955,10 +955,23 @@ async def get_field_details(
             ps = ps_result.scalar_one_or_none()
 
             if ps:
+                # For profile-owned permission sets, use the profile name instead
+                display_name = ps.label or ps.name
+                if ps.is_owned_by_profile and ps.profile_id:
+                    # Get the profile name
+                    prof_query = select(ProfileSnapshot).where(
+                        ProfileSnapshot.organization_id == org_id,
+                        ProfileSnapshot.salesforce_id == ps.profile_id
+                    )
+                    prof_result = await db.execute(prof_query)
+                    prof = prof_result.scalar_one_or_none()
+                    if prof:
+                        display_name = f"{prof.name} (Profile)"
+
                 permission_sets_dict[ps.salesforce_id] = {
                     "id": ps.salesforce_id,
-                    "name": ps.name,
-                    "label": ps.label,
+                    "name": display_name,
+                    "label": display_name,
                     "read": perm.permissions_read,
                     "edit": perm.permissions_edit,
                 }
