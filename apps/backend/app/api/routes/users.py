@@ -1212,10 +1212,14 @@ async def get_user_graph(
 
         # Group fields by object
         for field_perm in field_perms:
+            # Use sobject_type directly instead of parsing from field name
+            obj_name = field_perm.sobject_type
+
+            # Extract field name from the Field value
+            # Field can be in format "Account.Name" or just "Name"
             if '.' in field_perm.field:
-                obj_name, field_name = field_perm.field.split('.', 1)
+                _, field_name = field_perm.field.split('.', 1)
             else:
-                obj_name = "Unknown"
                 field_name = field_perm.field
 
             # Only include fields user has access to
