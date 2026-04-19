@@ -67,6 +67,10 @@ class SyncOrchestrator:
             await self.db.commit()
 
             logger.info(f"Sync completed successfully: {counts}")
+
+            # Run AI analysis after successful sync
+            await self._run_ai_analysis(org_id, sync_job)
+
             return counts
 
         except Exception as e:
@@ -132,3 +136,75 @@ class SyncOrchestrator:
 
         # Extract all data
         return await client.extract_all()
+
+    async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:
+        """
+        Run AI analysis after successful sync
+
+        This includes:
+        - Anomaly detection (ML-based)
+        - Risk scoring
+        - Recommendations generation
+
+        Errors are logged but don't fail the sync.
+        """
+        analysis_results = {
+            "anomalies_detected": 0,
+            "users_scored": 0,
+            "recommendations_generated": 0,
+            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        try:
+            logger.info(f"Starting AI analysis for org {org_id}")
+
+            # Import services here to avoid circular dependencies
+            from app.services.anomaly_detection import AnomalyDetectionService
+            from app.services.risk_scoring import RiskScoringService
+            from app.services.recommendations import RecommendationEngine
+
+            # Run anomaly detection
+            try:
+                logger.info("Running anomaly detection...")
+                anomaly_service = AnomalyDetectionService(self.db)
+                anomalies = await anomaly_service.detect_anomalies(org_id)
+                analysis_results["anomalies_detected"] = len(anomalies)
+                logger.info(f"Detected {len(anomalies)} anomalies")
+            except Exception as e:
+                logger.error(f"Anomaly detection failed: {e}", exc_info=True)
+                analysis_results["anomaly_error"] = str(e)
+
+            # Run risk scoring
+            try:
+                logger.info("Running risk scoring...")
+                risk_service = RiskScoringService(self.db)
+                risk_scores = await risk_service.score_all_users(org_id)
+                analysis_results["users_scored"] = len(risk_scores)
+                logger.info(f"Scored {len(risk_scores)} users")
+            except Exception as e:
+                logger.error(f"Risk scoring failed: {e}", exc_info=True)
+                analysis_results["risk_error"] = str(e)
+
+            # Generate recommendations
+            try:
+                logger.info("Generating recommendations...")
+                rec_engine = RecommendationEngine(self.db)
+                recommendations = await rec_engine.generate_recommendations(org_id)
+                analysis_results["recommendations_generated"] = len(recommendations)
+                logger.info(f"Generated {len(recommendations)} recommendations")
+            except Exception as e:
+                logger.error(f"Recommendation generation failed: {e}", exc_info=True)
+                analysis_results["recommendation_error"] = str(e)
+
+            # Update sync job metadata with analysis results
+            if sync_job.sync_metadata:
+                sync_job.sync_metadata["ai_analysis"] = analysis_results
+            else:
+                sync_job.sync_metadata = {"ai_analysis": analysis_results}
+
+            await self.db.commit()
+            logger.info(f"AI analysis completed: {analysis_results}")
+
+        except Exception as e:
+            logger.error(f"AI analysis failed unexpectedly: {e}", exc_info=True)
+            # Don't raise - we don't want to fail the sync if AI analysis fails

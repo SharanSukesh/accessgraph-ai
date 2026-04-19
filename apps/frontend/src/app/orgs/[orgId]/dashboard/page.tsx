@@ -5,33 +5,39 @@
  * Executive overview of access health
  */
 
-import { Users, AlertTriangle, Shield, Database } from 'lucide-react'
+import { useState } from 'react'
+import { Users, AlertTriangle, Shield, Database, Sparkles, Info } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { MetricCard } from '@/components/shared/MetricCard'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
+import { Button } from '@/components/shared/Button'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { RiskBadge, StatusBadge } from '@/components/shared/Badge'
+import { RiskBadge, StatusBadge, Badge } from '@/components/shared/Badge'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
-import { useSyncJobs } from '@/lib/api/hooks/useOrgs'
+import { useSyncJobs, useAnalyzeOrg } from '@/lib/api/hooks/useOrgs'
 
 export default function DashboardPage() {
   const params = useParams()
   const orgId = params.orgId as string
+  const [showAnalysisInfo, setShowAnalysisInfo] = useState(false)
 
   // Fetch data
   const { data: users, isLoading: usersLoading, error: usersError } = useUsers(orgId)
-  const { data: anomalies, isLoading: anomaliesLoading } = useAnomalies(orgId, {
+  const { data: anomalies, isLoading: anomaliesLoading, refetch: refetchAnomalies } = useAnomalies(orgId, {
     severity: 'critical',
   })
-  const { data: topAnomalies, isLoading: topAnomaliesLoading } =
+  const { data: topAnomalies, isLoading: topAnomaliesLoading, refetch: refetchTopAnomalies } =
     useTopAnomalousUsers(orgId, 5)
-  const { data: recommendations, isLoading: recommendationsLoading } =
+  const { data: recommendations, isLoading: recommendationsLoading, refetch: refetchRecommendations } =
     useRecommendations(orgId)
   const { data: syncJobs } = useSyncJobs(orgId)
+
+  // Analysis mutation
+  const analyzeOrg = useAnalyzeOrg(orgId)
 
   const isLoading =
     usersLoading || anomaliesLoading || topAnomaliesLoading || recommendationsLoading
@@ -58,17 +64,44 @@ export default function DashboardPage() {
   const totalRecommendations = recommendations?.length || 0
 
   const latestSync = syncJobs?.[0]
+  const aiAnalysis = latestSync?.metadata?.ai_analysis
+
+  // Handle manual analysis trigger
+  const handleAnalyze = async () => {
+    try {
+      await analyzeOrg.mutateAsync()
+      // Refetch all AI-related data
+      refetchAnomalies()
+      refetchTopAnomalies()
+      refetchRecommendations()
+    } catch (error) {
+      console.error('Analysis failed:', error)
+    }
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Dashboard
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Access health overview for your organization
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Dashboard
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Access health overview for your organization
+          </p>
+        </div>
+        {/* Analyze Access Button */}
+        {(!anomalies?.length && !recommendations?.length) && (
+          <Button
+            variant="primary"
+            onClick={handleAnalyze}
+            disabled={analyzeOrg.isPending}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            {analyzeOrg.isPending ? 'Analyzing...' : 'Analyze Access'}
+          </Button>
+        )}
       </div>
 
       {/* Sync Status Banner */}
@@ -81,6 +114,19 @@ export default function DashboardPage() {
                 <span className="text-sm text-gray-700 dark:text-gray-300">
                   Last sync: {new Date(latestSync.completed_at || latestSync.started_at).toLocaleString()}
                 </span>
+                {aiAnalysis && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <button
+                      onClick={() => setShowAnalysisInfo(!showAnalysisInfo)}
+                      className="text-sm text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI analyzed
+                      <Info className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
               </div>
               {latestSync.summary && (
                 <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -88,6 +134,34 @@ export default function DashboardPage() {
                 </span>
               )}
             </div>
+
+            {/* AI Analysis Details */}
+            {showAnalysisInfo && aiAnalysis && (
+              <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="info" size="sm">
+                      {aiAnalysis.anomalies_detected || 0} anomalies
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="success" size="sm">
+                      {aiAnalysis.users_scored || 0} users scored
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="warning" size="sm">
+                      {aiAnalysis.recommendations_generated || 0} recommendations
+                    </Badge>
+                  </div>
+                  {aiAnalysis.analysis_timestamp && (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(aiAnalysis.analysis_timestamp).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
