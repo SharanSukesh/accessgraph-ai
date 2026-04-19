@@ -172,7 +172,15 @@ class RiskScoringService:
     def _score_edit_delete(self, obj_access: Dict, field_access: Dict) -> float:
         """Score edit/delete power (0-1)"""
         count = self._count_edit_delete(obj_access)
-        field_edit = sum(1 for f in field_access.get("fields", []) if f["access"]["edit"])
+
+        # Count fields with edit access (handle both old and new format)
+        field_edit = 0
+        for f in field_access.get("fields", []):
+            if isinstance(f, dict):
+                if "access" in f and isinstance(f["access"], dict):
+                    field_edit += 1 if f["access"].get("edit", False) else 0
+                elif "canEdit" in f:
+                    field_edit += 1 if f["canEdit"] else 0
 
         # Normalize
         obj_norm = min(count / 10, 1.0)

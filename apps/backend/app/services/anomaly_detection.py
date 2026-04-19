@@ -197,7 +197,7 @@ class AnomalyDetectionService:
 
         num_sensitive_fields = sum(
             1 for f in field_access.get("fields", [])
-            if f["field"] in self.sensitive_fields and f["access"]["read"]
+            if f"{f.get('objectName', '')}.{f.get('fieldName', '')}" in self.sensitive_fields and f.get("access", {}).get("read", False)
         )
 
         # Breadth score
