@@ -1639,3 +1639,61 @@ async def debug_query_salesforce(
             "soql_query": soql
         }
 
+
+
+
+@router.get("/orgs/{org_id}/debug/profile-metadata")
+async def debug_profile_metadata(
+    org_id: str,
+    profile_name: str = Query(..., description="Profile name"),
+    db: AsyncSession = Depends(get_database),
+):
+    """Debug endpoint to test reading Profile metadata via SOAP"""
+    from app.domain.models import Organization, SalesforceConnection
+    from app.salesforce.metadata_client import SalesforceMetadataClient
+
+    # Get org and connection
+    org_query = select(Organization).where(Organization.id == org_id)
+    org_result = await db.execute(org_query)
+    org = org_result.scalar_one_or_none()
+
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    conn_query = select(SalesforceConnection).where(
+        SalesforceConnection.organization_id == org_id
+    )
+    conn_result = await db.execute(conn_query)
+    conn = conn_result.scalar_one_or_none()
+
+    if not conn:
+        raise HTTPException(status_code=404, detail="No Salesforce connection found")
+
+    # Create metadata client
+    metadata_client = SalesforceMetadataClient(
+        instance_url=conn.instance_url,
+        access_token=conn.access_token or "",
+    )
+
+    # Try to read profile metadata
+    profile_info = await metadata_client.read_profile_metadata(profile_name)
+
+    if not profile_info:
+        return {"error": f"Profile not found: {profile_name}"}
+
+    # Try SOAP API to get field permissions
+    full_name = profile_info.get("fullName", profile_name)
+    field_permissions = await metadata_client.get_profile_field_permissions_soap(full_name)
+
+    return {
+        "profile_name": profile_name,
+        "profile_info": profile_info,
+        "total_field_permissions": len(field_permissions),
+        "account_field_permissions": [
+            fp for fp in field_permissions if fp.get("SobjectType") == "Account"
+        ][:20],
+        "sample_other_permissions": [
+            fp for fp in field_permissions if fp.get("SobjectType") != "Account"
+        ][:10]
+    }
+
