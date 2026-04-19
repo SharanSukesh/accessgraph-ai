@@ -1702,3 +1702,46 @@ async def debug_profile_metadata(
         ][:10]
     }
 
+
+
+@router.get("/orgs/{org_id}/debug/system-fields")
+async def debug_system_fields(
+    org_id: str,
+    object_name: str = Query(default="Account", description="Object name"),
+    db: AsyncSession = Depends(get_database),
+):
+    """Debug endpoint to get system-required fields for an object"""
+    from app.domain.models import Organization, SalesforceConnection
+    from app.salesforce.client import SalesforceAPIClient
+
+    # Get org and connection
+    org_query = select(Organization).where(Organization.id == org_id)
+    org_result = await db.execute(org_query)
+    org = org_result.scalar_one_or_none()
+
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    conn_query = select(SalesforceConnection).where(
+        SalesforceConnection.organization_id == org_id
+    )
+    conn_result = await db.execute(conn_query)
+    conn = conn_result.scalar_one_or_none()
+
+    if not conn:
+        raise HTTPException(status_code=404, detail="No Salesforce connection found")
+
+    # Create API client
+    client = SalesforceAPIClient(
+        instance_url=conn.instance_url,
+        access_token=conn.access_token or "",
+    )
+
+    # Get system-required fields
+    system_fields = await client.get_system_required_fields(object_name)
+
+    return {
+        "object_name": object_name,
+        "total_system_fields": len(system_fields),
+        "system_fields": system_fields
+    }

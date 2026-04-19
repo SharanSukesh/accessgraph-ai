@@ -443,3 +443,75 @@ class SalesforceAPIClient:
 
         logger.info("Extraction complete")
         return data
+
+    async def describe_object(self, object_name: str) -> Dict[str, Any]:
+        """
+        Describe a Salesforce object to get field metadata
+
+        Args:
+            object_name: API name of the object (e.g., "Account", "Contact")
+
+        Returns:
+            Dictionary containing object metadata including fields
+        """
+        url = f"{self.base_url}/sobjects/{object_name}/describe"
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._get_headers())
+            response.raise_for_status()
+            return response.json()
+
+    async def get_system_required_fields(self, object_name: str) -> List[Dict[str, Any]]:
+        """
+        Get system-required/mandatory fields for an object
+
+        System-required fields are those that:
+        1. Are always accessible (cannot be hidden via FLS)
+        2. Include: Id, OwnerId, CreatedById, CreatedDate, LastModifiedById, LastModifiedDate
+        3. For objects with Name field: Name (required for most operations)
+
+        Args:
+            object_name: API name of the object
+
+        Returns:
+            List of field dictionaries with name, type, and accessibility info
+        """
+        describe_result = await self.describe_object(object_name)
+        system_required_fields = []
+
+        # List of field names that are always system-required
+        always_required = {
+            'Id', 'OwnerId', 'CreatedById', 'CreatedDate',
+            'LastModifiedById', 'LastModifiedDate', 'SystemModstamp'
+        }
+
+        for field in describe_result.get("fields", []):
+            field_name = field.get("name")
+
+            # Include if it's in the always-required list
+            if field_name in always_required:
+                system_required_fields.append({
+                    "name": field_name,
+                    "type": field.get("type"),
+                    "label": field.get("label"),
+                    "nillable": field.get("nillable", True),
+                    "createable": field.get("createable", False),
+                    "updateable": field.get("updateable", False),
+                    "reason": "System field"
+                })
+            # Include Name field if it exists (required for most standard objects)
+            elif field_name == "Name" or (
+                field_name.endswith("Name") and field.get("nameField", False)
+            ):
+                system_required_fields.append({
+                    "name": field_name,
+                    "type": field.get("type"),
+                    "label": field.get("label"),
+                    "nillable": field.get("nillable", True),
+                    "createable": field.get("createable", False),
+                    "updateable": field.get("updateable", False),
+                    "reason": "Name field"
+                })
+
+        logger.info(f"Found {len(system_required_fields)} system-required fields for {object_name}")
+        return system_required_fields
