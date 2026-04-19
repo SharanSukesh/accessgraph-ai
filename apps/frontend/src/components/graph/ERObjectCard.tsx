@@ -12,6 +12,7 @@ interface Field {
   fullName: string
   canRead: boolean
   canEdit: boolean
+  isSystem?: boolean
 }
 
 interface ERObjectCardProps {
@@ -122,9 +123,16 @@ export function ERObjectCard({
                   className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-gray-900 dark:text-white font-medium truncate flex-1">
-                      {field.name}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className="text-sm text-gray-900 dark:text-white font-medium truncate">
+                        {field.name}
+                      </span>
+                      {field.isSystem && (
+                        <span className="text-xs px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0">
+                          System
+                        </span>
+                      )}
+                    </div>
                     <div className="flex gap-1 flex-shrink-0">
                       {fieldPerms.map((perm) => (
                         <span

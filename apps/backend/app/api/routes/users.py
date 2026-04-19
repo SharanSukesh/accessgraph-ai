@@ -1250,19 +1250,33 @@ async def get_user_graph(
         obj_perms_result = await db.execute(obj_perms_query)
         obj_perms = obj_perms_result.scalars().all()
 
+        # System-required fields that are always accessible
+        # These are the same across all Salesforce orgs
+        SYSTEM_REQUIRED_FIELDS = {
+            "Id": {"name": "Id", "fullName": "{object}.Id", "canRead": True, "canEdit": False, "isSystem": True},
+            "Name": {"name": "Name", "fullName": "{object}.Name", "canRead": True, "canEdit": True, "isSystem": True},
+            "OwnerId": {"name": "OwnerId", "fullName": "{object}.OwnerId", "canRead": True, "canEdit": True, "isSystem": True},
+            "CreatedById": {"name": "CreatedById", "fullName": "{object}.CreatedById", "canRead": True, "canEdit": False, "isSystem": True},
+            "CreatedDate": {"name": "CreatedDate", "fullName": "{object}.CreatedDate", "canRead": True, "canEdit": False, "isSystem": True},
+            "LastModifiedById": {"name": "LastModifiedById", "fullName": "{object}.LastModifiedById", "canRead": True, "canEdit": False, "isSystem": True},
+            "LastModifiedDate": {"name": "LastModifiedDate", "fullName": "{object}.LastModifiedDate", "canRead": True, "canEdit": False, "isSystem": True},
+            "SystemModstamp": {"name": "SystemModstamp", "fullName": "{object}.SystemModstamp", "canRead": True, "canEdit": False, "isSystem": True},
+        }
+
         # Group by object and source
         for obj_perm in obj_perms:
             object_id = f"object_{obj_perm.sobject_type}"
             # Check if object node already exists
             if not any(n["id"] == object_id for n in nodes):
-                fields_list = object_fields.get(obj_perm.sobject_type, [])
+                fields_list = object_fields.get(obj_perm.sobject_type, []).copy()
 
-                # Determine if fields are implicitly accessible
-                # When no explicit field permissions exist but object has Read permission,
-                # all fields are implicitly accessible based on object-level permissions
-                has_implicit_field_access = (
-                    obj_perm.permissions_read and len(fields_list) == 0
-                )
+                # Add system-required fields if object has Read permission but no explicit field permissions
+                # These are fields like Id, Name, OwnerId that are always accessible
+                if obj_perm.permissions_read and len(fields_list) == 0:
+                    for field_name, field_template in SYSTEM_REQUIRED_FIELDS.items():
+                        field_data = field_template.copy()
+                        field_data["fullName"] = field_template["fullName"].replace("{object}", obj_perm.sobject_type)
+                        fields_list.append(field_data)
 
                 nodes.append({
                     "id": object_id,
@@ -1274,10 +1288,8 @@ async def get_user_graph(
                         "canCreate": obj_perm.permissions_create,
                         "canEdit": obj_perm.permissions_edit,
                         "canDelete": obj_perm.permissions_delete,
-                        # Include explicit fields from FieldPermissions
+                        # Include explicit fields + system fields
                         "fields": fields_list,
-                        # Indicate if all fields are implicitly accessible
-                        "hasImplicitFieldAccess": has_implicit_field_access
                     }
                 })
 
