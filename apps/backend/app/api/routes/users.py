@@ -1499,3 +1499,55 @@ async def get_node_details(
             detail=f"Failed to get node details: {str(e)}"
         )
 
+
+@router.get("/orgs/{org_id}/debug/field-permissions")
+async def debug_field_permissions(
+    org_id: str,
+    profile_id: str = Query(..., description="Profile ID to check"),
+    db: AsyncSession = Depends(get_database),
+):
+    """Debug endpoint to check field permissions in database"""
+    from app.domain.models import FieldPermissionSnapshot, PermissionSetSnapshot
+
+    # Find profile-owned permission set
+    ps_query = select(PermissionSetSnapshot).where(
+        PermissionSetSnapshot.organization_id == org_id,
+        PermissionSetSnapshot.profile_id == profile_id,
+        PermissionSetSnapshot.is_owned_by_profile == True
+    )
+    ps_result = await db.execute(ps_query)
+    ps = ps_result.scalar_one_or_none()
+
+    if not ps:
+        return {
+            "error": "No profile-owned permission set found",
+            "profile_id": profile_id
+        }
+
+    # Get field permissions for this permission set
+    field_perms_query = select(FieldPermissionSnapshot).where(
+        FieldPermissionSnapshot.organization_id == org_id,
+        FieldPermissionSnapshot.parent_id == ps.salesforce_id,
+        FieldPermissionSnapshot.sobject_type == "Account"
+    ).limit(20)
+    field_perms_result = await db.execute(field_perms_query)
+    field_perms = field_perms_result.scalars().all()
+
+    return {
+        "profile_id": profile_id,
+        "profile_owned_ps_id": ps.salesforce_id,
+        "profile_owned_ps_name": ps.name,
+        "total_account_field_permissions": len(field_perms),
+        "sample_field_permissions": [
+            {
+                "id": fp.salesforce_id,
+                "parent_id": fp.parent_id,
+                "sobject_type": fp.sobject_type,
+                "field": fp.field,
+                "permissions_read": fp.permissions_read,
+                "permissions_edit": fp.permissions_edit,
+            }
+            for fp in field_perms
+        ]
+    }
+
