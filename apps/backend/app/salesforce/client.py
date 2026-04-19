@@ -410,6 +410,20 @@ class SalesforceAPIClient:
         object_permissions = await self.extract_object_permissions()
         field_permissions = await self.extract_field_permissions()
 
+        # Extract field permissions from Profile metadata (for Standard Profiles)
+        # Standard Profiles store field permissions in Profile XML, not in FieldPermissions object
+        profile_field_permissions = await self.extract_profile_field_permissions(profiles)
+        logger.info(f"Extracted {len(profile_field_permissions)} field permissions from Profile metadata")
+
+        # Combine FieldPermissions from database + Profile metadata
+        # Convert profile field permissions to same format as FieldPermissions
+        all_field_permissions = field_permissions.copy()
+        for pfp in profile_field_permissions:
+            # Profile field permissions are already in dict format
+            all_field_permissions.append(pfp)
+
+        logger.info(f"Total field permissions (FieldPermissions + Profile metadata): {len(all_field_permissions)}")
+
         # Extract sharing data (some objects may not be available in all orgs)
         groups = await self.extract_groups()
         group_members = await self.extract_group_members()
@@ -433,7 +447,8 @@ class SalesforceAPIClient:
             "permission_set_groups": [psg.model_dump() for psg in permission_set_groups],
             "permission_set_group_components": [psgc.model_dump() for psgc in permission_set_group_components],
             "object_permissions": [op.model_dump() for op in object_permissions],
-            "field_permissions": [fp.model_dump() for fp in field_permissions],
+            # Use combined field permissions (FieldPermissions + Profile metadata)
+            "field_permissions": all_field_permissions,
             "groups": [g.model_dump() for g in groups],
             "group_members": [gm.model_dump() for gm in group_members],
             "account_shares": [ash.model_dump() for ash in account_shares],
@@ -515,3 +530,76 @@ class SalesforceAPIClient:
 
         logger.info(f"Found {len(system_required_fields)} system-required fields for {object_name}")
         return system_required_fields
+
+    async def extract_profile_field_permissions(
+        self, profiles: List[SalesforceProfile]
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract field permissions from Profile metadata for all profiles
+
+        This is needed because Standard Profiles store field permissions in Profile XML,
+        not in the FieldPermissions object.
+
+        Args:
+            profiles: List of SalesforceProfile objects
+
+        Returns:
+            List of field permission dictionaries compatible with FieldPermissions format
+        """
+        from app.salesforce.metadata_client import SalesforceMetadataClient
+
+        metadata_client = SalesforceMetadataClient(
+            instance_url=self.instance_url,
+            access_token=self.access_token,
+            api_version=self.api_version
+        )
+
+        all_profile_field_permissions = []
+
+        # Get permission set mapping (profile ID -> profile-owned permission set ID)
+        # We need to assign these field permissions to the profile-owned permission set
+        permission_sets_query = """
+            SELECT Id, ProfileId, IsOwnedByProfile
+            FROM PermissionSet
+            WHERE IsOwnedByProfile = true
+        """
+        ps_records = await self.query_all(permission_sets_query)
+        profile_to_ps_map = {ps["ProfileId"]: ps["Id"] for ps in ps_records if ps.get("ProfileId")}
+
+        for profile in profiles:
+            try:
+                # Get field permissions from Profile metadata via SOAP
+                profile_name = profile.Name
+                field_perms = await metadata_client.get_profile_field_permissions_soap(profile_name)
+
+                # Convert to FieldPermissions format
+                # Assign ParentId as the profile-owned permission set ID
+                parent_id = profile_to_ps_map.get(profile.Id)
+
+                if not parent_id:
+                    logger.warning(f"No profile-owned permission set found for profile {profile_name}")
+                    continue
+
+                for fp in field_perms:
+                    # Only include permissions that are actually granted (Read or Edit = True)
+                    if fp.get("PermissionsRead") or fp.get("PermissionsEdit"):
+                        # Generate a unique ID for this permission
+                        # Format: profile_{profileId}_{sobjectType}_{fieldName}
+                        field_id = f"profile_{profile.Id}_{fp['SobjectType']}_{fp['Field'].replace('.', '_')}"
+
+                        all_profile_field_permissions.append({
+                            "Id": field_id,
+                            "ParentId": parent_id,
+                            "SobjectType": fp["SobjectType"],
+                            "Field": fp["Field"],
+                            "PermissionsRead": fp["PermissionsRead"],
+                            "PermissionsEdit": fp["PermissionsEdit"],
+                        })
+
+                logger.info(f"Extracted {len([fp for fp in field_perms if fp.get('PermissionsRead') or fp.get('PermissionsEdit')])} field permissions from Profile: {profile_name}")
+
+            except Exception as e:
+                logger.warning(f"Failed to extract field permissions for profile {profile.Name}: {e}")
+                continue
+
+        return all_profile_field_permissions
