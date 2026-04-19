@@ -1685,13 +1685,18 @@ async def debug_profile_metadata(
     full_name = profile_info.get("fullName", profile_name)
     field_permissions = await metadata_client.get_profile_field_permissions_soap(full_name)
 
+    # Filter Account permissions
+    account_perms = [fp for fp in field_permissions if fp.get("SobjectType") == "Account"]
+    account_readable = [fp for fp in account_perms if fp.get("PermissionsRead")]
+
     return {
         "profile_name": profile_name,
         "profile_info": profile_info,
         "total_field_permissions": len(field_permissions),
-        "account_field_permissions": [
-            fp for fp in field_permissions if fp.get("SobjectType") == "Account"
-        ][:20],
+        "total_account_field_permissions": len(account_perms),
+        "account_readable_count": len(account_readable),
+        "account_readable_fields": account_readable,
+        "sample_account_all": account_perms[:20],
         "sample_other_permissions": [
             fp for fp in field_permissions if fp.get("SobjectType") != "Account"
         ][:10]
