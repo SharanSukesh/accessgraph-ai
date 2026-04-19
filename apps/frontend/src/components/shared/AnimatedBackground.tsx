@@ -17,6 +17,9 @@ export function AnimatedBackground() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Detect dark mode
+    const isDarkMode = () => document.documentElement.classList.contains('dark')
+
     // Set canvas size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth
@@ -34,7 +37,7 @@ export function AnimatedBackground() {
       radius: number
     }> = []
 
-    // Create nodes - larger and more visible
+    // Create nodes - larger for better visibility
     const nodeCount = 50
     for (let i = 0; i < nodeCount; i++) {
       nodes.push({
@@ -42,7 +45,7 @@ export function AnimatedBackground() {
         y: Math.random() * canvas.height,
         vx: (Math.random() - 0.5) * 0.3,
         vy: (Math.random() - 0.5) * 0.3,
-        radius: Math.random() * 3 + 2, // Increased from 2+1 to 3+2 (2-5px)
+        radius: Math.random() * 3 + 3, // Increased to 3-6px for better visibility
       })
     }
 
@@ -50,6 +53,19 @@ export function AnimatedBackground() {
     let animationId: number
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      // Check current theme
+      const darkMode = isDarkMode()
+
+      // Adjust colors based on theme
+      // Light mode: darker, more opaque for visibility on white background
+      // Dark mode: lighter, less opaque for subtlety on dark background
+      const nodeColor = darkMode
+        ? 'rgba(124, 58, 237, 0.7)' // Dark mode: lighter opacity
+        : 'rgba(109, 40, 217, 0.9)'  // Light mode: darker purple (primary-700), higher opacity
+
+      const edgeBaseOpacity = darkMode ? 0.3 : 0.5 // Higher in light mode
+      const edgeWidth = darkMode ? 2 : 2.5 // Slightly thicker in light mode
 
       // Update and draw nodes
       nodes.forEach((node) => {
@@ -61,14 +77,14 @@ export function AnimatedBackground() {
         if (node.x < 0 || node.x > canvas.width) node.vx *= -1
         if (node.y < 0 || node.y > canvas.height) node.vy *= -1
 
-        // Draw node - larger, darker, more visible
+        // Draw node - adapt to theme
         ctx.beginPath()
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(124, 58, 237, 0.8)' // Darker purple (primary-600)
+        ctx.fillStyle = nodeColor
         ctx.fill()
       })
 
-      // Draw connections - thicker, darker, more visible
+      // Draw connections - adapt to theme
       nodes.forEach((node, i) => {
         nodes.slice(i + 1).forEach((otherNode) => {
           const dx = node.x - otherNode.x
@@ -79,9 +95,12 @@ export function AnimatedBackground() {
             ctx.beginPath()
             ctx.moveTo(node.x, node.y)
             ctx.lineTo(otherNode.x, otherNode.y)
-            const opacity = (1 - distance / 150) * 0.4 // Increased from 0.3
-            ctx.strokeStyle = `rgba(124, 58, 237, ${opacity})` // Darker purple
-            ctx.lineWidth = 2 // Increased from 1 to 2px
+            const opacity = (1 - distance / 150) * edgeBaseOpacity
+            const edgeColor = darkMode
+              ? `rgba(124, 58, 237, ${opacity})` // Dark mode
+              : `rgba(109, 40, 217, ${opacity})`  // Light mode: darker
+            ctx.strokeStyle = edgeColor
+            ctx.lineWidth = edgeWidth
             ctx.stroke()
           }
         })
