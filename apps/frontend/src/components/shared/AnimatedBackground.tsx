@@ -61,14 +61,14 @@ export function AnimatedBackground() {
         if (node.x < 0 || node.x > canvas.width) node.vx *= -1
         if (node.y < 0 || node.y > canvas.height) node.vy *= -1
 
-        // Draw node
+        // Draw node - make more visible
         ctx.beginPath()
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(139, 92, 246, 0.3)'
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.7)'
         ctx.fill()
       })
 
-      // Draw connections
+      // Draw connections - make more visible
       nodes.forEach((node, i) => {
         nodes.slice(i + 1).forEach((otherNode) => {
           const dx = node.x - otherNode.x
@@ -79,9 +79,9 @@ export function AnimatedBackground() {
             ctx.beginPath()
             ctx.moveTo(node.x, node.y)
             ctx.lineTo(otherNode.x, otherNode.y)
-            const opacity = (1 - distance / 150) * 0.15
+            const opacity = (1 - distance / 150) * 0.3
             ctx.strokeStyle = `rgba(139, 92, 246, ${opacity})`
-            ctx.lineWidth = 0.5
+            ctx.lineWidth = 1
             ctx.stroke()
           }
         })
