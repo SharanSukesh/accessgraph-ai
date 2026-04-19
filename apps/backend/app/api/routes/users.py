@@ -1524,21 +1524,30 @@ async def debug_field_permissions(
             "profile_id": profile_id
         }
 
-    # Get field permissions for this permission set
-    field_perms_query = select(FieldPermissionSnapshot).where(
+    # Get ALL field permissions for this permission set (no object filter)
+    field_perms_all_query = select(FieldPermissionSnapshot).where(
+        FieldPermissionSnapshot.organization_id == org_id,
+        FieldPermissionSnapshot.parent_id == ps.salesforce_id
+    ).limit(50)
+    field_perms_all_result = await db.execute(field_perms_all_query)
+    field_perms_all = field_perms_all_result.scalars().all()
+
+    # Get Account field permissions specifically
+    field_perms_account_query = select(FieldPermissionSnapshot).where(
         FieldPermissionSnapshot.organization_id == org_id,
         FieldPermissionSnapshot.parent_id == ps.salesforce_id,
         FieldPermissionSnapshot.sobject_type == "Account"
     ).limit(20)
-    field_perms_result = await db.execute(field_perms_query)
-    field_perms = field_perms_result.scalars().all()
+    field_perms_account_result = await db.execute(field_perms_account_query)
+    field_perms_account = field_perms_account_result.scalars().all()
 
     return {
         "profile_id": profile_id,
         "profile_owned_ps_id": ps.salesforce_id,
         "profile_owned_ps_name": ps.name,
-        "total_account_field_permissions": len(field_perms),
-        "sample_field_permissions": [
+        "total_field_permissions_all_objects": len(field_perms_all),
+        "total_account_field_permissions": len(field_perms_account),
+        "sample_field_permissions_all": [
             {
                 "id": fp.salesforce_id,
                 "parent_id": fp.parent_id,
@@ -1547,7 +1556,18 @@ async def debug_field_permissions(
                 "permissions_read": fp.permissions_read,
                 "permissions_edit": fp.permissions_edit,
             }
-            for fp in field_perms
+            for fp in field_perms_all
+        ],
+        "sample_account_field_permissions": [
+            {
+                "id": fp.salesforce_id,
+                "parent_id": fp.parent_id,
+                "sobject_type": fp.sobject_type,
+                "field": fp.field,
+                "permissions_read": fp.permissions_read,
+                "permissions_edit": fp.permissions_edit,
+            }
+            for fp in field_perms_account
         ]
     }
 
