@@ -416,10 +416,15 @@ class SalesforceAPIClient:
         logger.info(f"Extracted {len(profile_field_permissions)} field permissions from Profile metadata")
 
         # Combine FieldPermissions from database + Profile metadata
-        # Convert profile field permissions to same format as FieldPermissions
-        all_field_permissions = field_permissions.copy()
+        # Both need to be in dict format for persistence
+        all_field_permissions = []
+
+        # Convert Pydantic FieldPermissions to dicts
+        for fp in field_permissions:
+            all_field_permissions.append(fp.model_dump())
+
+        # Add Profile field permissions (already in dict format)
         for pfp in profile_field_permissions:
-            # Profile field permissions are already in dict format
             all_field_permissions.append(pfp)
 
         logger.info(f"Total field permissions (FieldPermissions + Profile metadata): {len(all_field_permissions)}")
