@@ -4,6 +4,7 @@ import './globals.css'
 import { Providers } from './providers'
 import { Navbar } from '@/components/layout/Navbar'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { AnimatedBackground } from '@/components/shared/AnimatedBackground'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,7 +22,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>
-          <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+          <AnimatedBackground />
+          <div className="flex h-screen overflow-hidden bg-gray-50/80 dark:bg-gray-900/80">
             {/* Sidebar */}
             <Sidebar />
 
