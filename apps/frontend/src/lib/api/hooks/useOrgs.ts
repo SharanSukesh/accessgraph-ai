@@ -132,14 +132,20 @@ export function useAnalyzeOrg(orgId: string) {
   return useMutation({
     mutationFn: async () => {
       const data = await apiClient.post<{
-        anomalies: number
-        riskScores: number
-        recommendations: number
+        status: string
+        results: {
+          anomalies_detected: number
+          users_scored: number
+          recommendations_generated: number
+        }
       }>(endpoints.analyze(orgId))
       return data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orgKeys.detail(orgId) })
+      // Also invalidate anomalies and recommendations
+      queryClient.invalidateQueries({ queryKey: ['anomalies', orgId] })
+      queryClient.invalidateQueries({ queryKey: ['recommendations', orgId] })
     },
   })
 }

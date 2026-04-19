@@ -84,8 +84,15 @@ class EffectiveAccessService:
         objects_list = []
         for obj_name, perms in access.items():
             objects_list.append({
+                "object": obj_name,
                 "objectName": obj_name,
                 "objectLabel": obj_name,  # We don't have label metadata, use name
+                "access": {
+                    "read": perms["read"],
+                    "create": perms["create"],
+                    "edit": perms["edit"],
+                    "delete": perms["delete"],
+                },
                 "permissions": {
                     "canRead": perms["read"],
                     "canCreate": perms["create"],
@@ -96,7 +103,7 @@ class EffectiveAccessService:
                 "grantedByCount": len(grants_by_object[obj_name]),
             })
 
-        return objects_list
+        return {"objects": objects_list}
 
     async def get_user_field_access(self, org_id: str, user_sf_id: str) -> Dict:
         """Get effective field access for user"""
@@ -152,13 +159,17 @@ class EffectiveAccessService:
                 "objectName": object_name,
                 "fieldName": field_api_name,
                 "fieldLabel": field_api_name,  # We don't have label metadata
+                "access": {
+                    "read": perms["read"],
+                    "edit": perms["edit"],
+                },
                 "canRead": perms["read"],
                 "canEdit": perms["edit"],
                 "isSensitive": False,  # Would need metadata to determine
                 "grantedByCount": len(grants_by_field[field_name]),
             })
 
-        return fields_list
+        return {"fields": fields_list}
 
     async def explain_user_object_access(
         self, org_id: str, user_sf_id: str, object_name: str
