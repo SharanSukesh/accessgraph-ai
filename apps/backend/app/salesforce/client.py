@@ -2,6 +2,7 @@
 Salesforce REST API Client
 Handles data extraction from Salesforce
 """
+import hashlib
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -588,9 +589,12 @@ class SalesforceAPIClient:
                 for fp in field_perms:
                     # Only include permissions that are actually granted (Read or Edit = True)
                     if fp.get("PermissionsRead") or fp.get("PermissionsEdit"):
-                        # Generate a unique ID for this permission
-                        # Format: profile_{profileId}_{sobjectType}_{fieldName}
-                        field_id = f"profile_{profile.Id}_{fp['SobjectType']}_{fp['Field'].replace('.', '_')}"
+                        # Generate a unique 18-character ID for this permission
+                        # Use hashlib to create a hash and take first 15 chars (Salesforce custom IDs are 15-18 chars)
+                        unique_str = f"{profile.Id}_{fp['SobjectType']}_{fp['Field']}"
+                        hash_obj = hashlib.sha256(unique_str.encode())
+                        # Take first 15 chars of hex digest and prefix with FPM (Field Permission Metadata)
+                        field_id = "FPM" + hash_obj.hexdigest()[:15]
 
                         all_profile_field_permissions.append({
                             "Id": field_id,
