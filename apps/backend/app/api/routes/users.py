@@ -58,6 +58,7 @@ class ExplanationResponse(BaseModel):
 class AnomalyResponse(BaseModel):
     id: str
     user_id: str
+    user_name: str
     anomaly_score: float
     severity: str
     reasons: List[str]
@@ -437,7 +438,15 @@ async def list_anomalies(
     db: AsyncSession = Depends(get_database),
 ):
     """List anomalies for organization"""
-    query = select(AccessAnomaly).where(AccessAnomaly.organization_id == org_id)
+    # Join with UserSnapshot to get user names
+    query = (
+        select(AccessAnomaly, UserSnapshot.name)
+        .join(UserSnapshot, AccessAnomaly.user_id == UserSnapshot.salesforce_id)
+        .where(
+            AccessAnomaly.organization_id == org_id,
+            UserSnapshot.organization_id == org_id,
+        )
+    )
 
     if severity:
         query = query.where(AccessAnomaly.severity == severity)
@@ -445,18 +454,19 @@ async def list_anomalies(
     query = query.order_by(AccessAnomaly.anomaly_score.desc()).limit(limit)
 
     result = await db.execute(query)
-    anomalies = result.scalars().all()
+    anomaly_user_pairs = result.all()
 
     return [
         {
             "id": a.id,
             "user_id": a.user_id,
+            "user_name": user_name,
             "anomaly_score": a.anomaly_score,
             "severity": a.severity.value,
             "reasons": a.reasons,
             "detected_at": a.detected_at.isoformat(),
         }
-        for a in anomalies
+        for a, user_name in anomaly_user_pairs
     ]
 
 
