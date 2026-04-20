@@ -141,7 +141,7 @@ class AnomalyDetectionService:
 
             # Skip if this is the ONLY user with this profile (e.g., sole System Admin)
             if peer_stats.get("peer_count", 0) == 0:
-                logger.info(f"Skipping {user.name} - no peers found (likely sole {user.profile})")
+                logger.info(f"Skipping {user.name} - no peers found (profile_id: {user.profile_id})")
                 continue
 
             # Only flag if anomaly score is significant OR flagged by ML
