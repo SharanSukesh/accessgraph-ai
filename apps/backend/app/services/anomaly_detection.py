@@ -134,14 +134,24 @@ class AnomalyDetectionService:
             score = float(anomaly_scores_norm[idx])
             is_anomaly = scores[idx] == -1
 
-            if score > 0.5 or is_anomaly:  # Consider if score high or flagged
-                # Compute peer stats
-                peer_stats = await self._compute_peer_stats(
-                    org_id, user, df, feature_cols, idx
-                )
+            # Compute peer stats for context
+            peer_stats = await self._compute_peer_stats(
+                org_id, user, df, feature_cols, idx
+            )
 
-                # Generate reasons
+            # Skip if this is the ONLY user with this profile (e.g., sole System Admin)
+            if peer_stats.get("peer_count", 0) == 0:
+                logger.info(f"Skipping {user.name} - no peers found (likely sole {user.profile})")
+                continue
+
+            # Only flag if anomaly score is significant OR flagged by ML
+            if score > 0.5 or is_anomaly:
+                # Generate context-aware reasons with peer comparison details
                 reasons = self._generate_reasons(feature_data[idx], peer_stats)
+
+                # Skip if no significant deviations found
+                if not reasons or len(reasons) == 0:
+                    continue
 
                 # Determine severity
                 severity = self._determine_severity(score, len(reasons))
@@ -272,49 +282,57 @@ class AnomalyDetectionService:
         }
 
     def _generate_reasons(self, features: Dict, peer_stats: Dict) -> List[str]:
-        """Generate human-readable anomaly reasons"""
+        """Generate context-aware anomaly reasons with peer comparison details"""
         reasons = []
 
         if peer_stats.get("peer_count", 0) == 0:
-            return ["User has unique access pattern with no comparable peers"]
+            return []  # Return empty - will be skipped by caller
+
+        # Build peer context string
+        peer_count = peer_stats.get("peer_count", 0)
+        peer_type = peer_stats.get("peer_type", "organization")
+        peer_context = f"Compared to {peer_count} peers with the same {peer_type}"
 
         deviations = peer_stats.get("deviations", {})
         medians = peer_stats.get("peer_medians", {})
 
-        # Check significant deviations
+        # Check significant deviations with context
+        if deviations.get("num_permission_sets", 0) > 2.0:
+            user_val = features["num_permission_sets"]
+            peer_val = medians.get("num_permission_sets", 0)
+            reasons.append(
+                f"Has {user_val} permission sets vs peer median of {int(peer_val)}. {peer_context}, this user has {int((user_val/max(peer_val, 1) - 1) * 100)}% more permission sets than typical."
+            )
+
         if deviations.get("num_objects_edit", 0) > 1.5:
             user_val = features["num_objects_edit"]
             peer_val = medians.get("num_objects_edit", 0)
             reasons.append(
-                f"User has {user_val} object edit permissions vs peer median {int(peer_val)}"
+                f"Can edit {user_val} objects vs peer median of {int(peer_val)}. {peer_context}, this is {int((user_val/max(peer_val, 1) - 1) * 100)}% more edit access."
             )
 
         if deviations.get("num_objects_delete", 0) > 1.0 and features["num_objects_delete"] > 0:
             user_val = features["num_objects_delete"]
             peer_val = medians.get("num_objects_delete", 0)
             reasons.append(
-                f"User has {user_val} object delete permissions vs peer median {int(peer_val)}"
+                f"Can delete from {user_val} objects vs peer median of {int(peer_val)}. {peer_context}, this elevated delete access is unusual."
             )
 
-        if features["num_sensitive_fields"] > medians.get("num_sensitive_fields", 0):
+        if features["num_sensitive_fields"] > medians.get("num_sensitive_fields", 0) and features["num_sensitive_fields"] > 0:
+            user_val = features["num_sensitive_fields"]
+            peer_val = medians.get("num_sensitive_fields", 0)
             reasons.append(
-                f"User has access to {features['num_sensitive_fields']} sensitive fields vs peer median {int(medians.get('num_sensitive_fields', 0))}"
+                f"Accesses {user_val} sensitive fields vs peer median of {int(peer_val)}. {peer_context}, this sensitive data access requires review."
             )
 
-        if features["num_sensitive_objects"] > medians.get("num_sensitive_objects", 0):
+        if features["num_sensitive_objects"] > medians.get("num_sensitive_objects", 0) and features["num_sensitive_objects"] > 0:
+            user_val = features["num_sensitive_objects"]
+            peer_val = medians.get("num_sensitive_objects", 0)
             reasons.append(
-                f"User has access to {features['num_sensitive_objects']} sensitive objects vs peer median {int(medians.get('num_sensitive_objects', 0))}"
+                f"Accesses {user_val} sensitive objects vs peer median of {int(peer_val)}. {peer_context}, unusual sensitive object access detected."
             )
 
-        if deviations.get("num_permission_sets", 0) > 2.0:
-            reasons.append(
-                f"User has {features['num_permission_sets']} permission sets which is significantly higher than peers"
-            )
-
-        if not reasons:
-            reasons.append("Access pattern deviates from peer baseline")
-
-        return reasons[:5]  # Top 5 reasons
+        return reasons[:5]  # Top 5 most significant reasons
 
     def _determine_severity(self, score: float, num_reasons: int) -> AnomalySeverity:
         """Determine severity level"""
