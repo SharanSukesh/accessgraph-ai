@@ -124,6 +124,16 @@ class RiskScoringService:
 
     async def score_all_users(self, org_id: str) -> List[RiskScore]:
         """Score all users in org"""
+        # Delete old risk scores for this org to prevent duplicates
+        from sqlalchemy import delete
+        await self.db.execute(
+            delete(RiskScore).where(
+                RiskScore.organization_id == org_id,
+                RiskScore.entity_type == "user"
+            )
+        )
+        await self.db.commit()
+
         result = await self.db.execute(
             select(UserSnapshot).where(
                 UserSnapshot.organization_id == org_id,

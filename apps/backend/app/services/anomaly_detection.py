@@ -69,6 +69,13 @@ class AnomalyDetectionService:
 
         logger.info(f"Running anomaly detection for org: {org_id}")
 
+        # Delete old anomalies for this org to prevent duplicates
+        from sqlalchemy import delete
+        await self.db.execute(
+            delete(AccessAnomaly).where(AccessAnomaly.organization_id == org_id)
+        )
+        await self.db.commit()
+
         # Load users
         result = await self.db.execute(
             select(UserSnapshot).where(

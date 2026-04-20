@@ -38,6 +38,13 @@ class RecommendationEngine:
         """
         logger.info(f"Generating recommendations for org: {org_id}")
 
+        # Delete old recommendations for this org to prevent duplicates
+        from sqlalchemy import delete
+        await self.db.execute(
+            delete(Recommendation).where(Recommendation.organization_id == org_id)
+        )
+        await self.db.commit()
+
         recommendations = []
 
         # Get anomalies
