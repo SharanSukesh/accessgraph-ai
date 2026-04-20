@@ -47,13 +47,13 @@ interface RiskScore {
   score: number
   level: string
   factors: Array<{
-    name: string
+    factor: string
     score: number
     weight: number
     description: string
   }>
   explanation: string
-  assessedAt: string
+  calculatedAt: string | null
 }
 
 interface Recommendation {
