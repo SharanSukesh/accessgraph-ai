@@ -227,6 +227,65 @@ async def run_analysis(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{org_id}/diagnostic")
+async def diagnostic_permissions(
+    org_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Diagnostic endpoint to check if permissions are in database"""
+    from app.domain.models import (
+        UserSnapshot,
+        PermissionSetSnapshot,
+        ObjectPermissionSnapshot,
+        FieldPermissionSnapshot,
+        PermissionSetAssignmentSnapshot,
+    )
+
+    # Count snapshots
+    users_count = await db.execute(
+        select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
+    )
+    users = users_count.scalars().all()
+
+    ps_count = await db.execute(
+        select(PermissionSetSnapshot).where(PermissionSetSnapshot.organization_id == org_id)
+    )
+    permission_sets = ps_count.scalars().all()
+
+    obj_perm_count = await db.execute(
+        select(ObjectPermissionSnapshot).where(ObjectPermissionSnapshot.organization_id == org_id)
+    )
+    object_permissions = obj_perm_count.scalars().all()
+
+    field_perm_count = await db.execute(
+        select(FieldPermissionSnapshot).where(FieldPermissionSnapshot.organization_id == org_id)
+    )
+    field_permissions = field_perm_count.scalars().all()
+
+    psa_count = await db.execute(
+        select(PermissionSetAssignmentSnapshot).where(PermissionSetAssignmentSnapshot.organization_id == org_id)
+    )
+    ps_assignments = psa_count.scalars().all()
+
+    return {
+        "organization_id": org_id,
+        "snapshots": {
+            "users": len(users),
+            "permission_sets": len(permission_sets),
+            "permission_set_assignments": len(ps_assignments),
+            "object_permissions": len(object_permissions),
+            "field_permissions": len(field_permissions),
+        },
+        "diagnosis": {
+            "has_users": len(users) > 0,
+            "has_permission_sets": len(permission_sets) > 0,
+            "has_object_permissions": len(object_permissions) > 0,
+            "has_field_permissions": len(field_permissions) > 0,
+            "issue": "NO_PERMISSIONS_SYNCED" if len(object_permissions) == 0 else "OK",
+        }
+    }
+
+
 @router.get("/{org_id}/sync-jobs", response_model=List[SyncJobResponse])
 async def list_sync_jobs(
     org_id: str,
