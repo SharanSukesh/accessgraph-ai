@@ -37,6 +37,7 @@ import {
   useUserObjectAccess,
   useUserFieldAccess,
   useUserRisk,
+  useUserAnomalies,
   useUserRecommendations,
 } from '@/lib/api/hooks/useUsers'
 import { useUserGraph } from '@/lib/api/hooks/useGraph'
@@ -56,6 +57,7 @@ export default function UserDetailPage() {
   const { data: objectAccess, isLoading: objectsLoading } = useUserObjectAccess(orgId, userId)
   const { data: fieldAccess, isLoading: fieldsLoading } = useUserFieldAccess(orgId, userId)
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
+  const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
   const { data: recommendations, isLoading: recommendationsLoading } = useUserRecommendations(orgId, userId)
   const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId)
 
@@ -188,8 +190,12 @@ export default function UserDetailPage() {
             <Network className="h-4 w-4 mr-2" />
             Graph
           </TabsTrigger>
-          <TabsTrigger value="recommendations">
+          <TabsTrigger value="anomalies">
             <AlertTriangle className="h-4 w-4 mr-2" />
+            Anomalies
+          </TabsTrigger>
+          <TabsTrigger value="recommendations">
+            <FileCheck className="h-4 w-4 mr-2" />
             Recommendations
           </TabsTrigger>
         </TabsList>
@@ -223,23 +229,55 @@ export default function UserDetailPage() {
                         </div>
                         <RiskBadge level={risk.level as "low" | "medium" | "high" | "critical"} />
                       </div>
+                      {risk.calculatedAt && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Calculated {new Date(risk.calculatedAt).toLocaleString()}
+                        </div>
+                      )}
                     </div>
                     {risk.factors && risk.factors.length > 0 && (
                       <div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                          Risk Factors
+                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                          Risk Factor Breakdown
                         </div>
-                        <ul className="space-y-2">
+                        <div className="space-y-3">
                           {risk.factors.map((factor: any, idx: number) => (
-                            <li
+                            <div
                               key={idx}
-                              className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2"
+                              className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
                             >
-                              <span className="text-red-500 mt-1">•</span>
-                              <span>{factor}</span>
-                            </li>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                  {factor.factor?.replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                                  {(factor.score * factor.weight * 100).toFixed(1)} pts
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                {factor.description}
+                              </div>
+                              <div className="flex items-center gap-2 text-xs">
+                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                  <div
+                                    className="bg-primary-600 h-1.5 rounded-full transition-all"
+                                    style={{ width: `${factor.score * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-gray-500 dark:text-gray-400 min-w-[3rem] text-right">
+                                  {(factor.score * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
+                      </div>
+                    )}
+                    {risk.explanation && (
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-line">
+                          {risk.explanation}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -540,6 +578,75 @@ export default function UserDetailPage() {
           </div>
         </TabsContent>
 
+        {/* Anomalies Tab */}
+        <TabsContent value="anomalies">
+          <Card variant="bordered">
+            <CardHeader>
+              <CardTitle>Access Anomalies</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {anomaliesLoading ? (
+                <TableSkeleton rows={5} />
+              ) : anomalies && anomalies.length > 0 ? (
+                <div className="space-y-4">
+                  {anomalies.map((anomaly: any) => (
+                    <div
+                      key={anomaly.id}
+                      className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <SeverityBadge severity={anomaly.severity} />
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              Anomaly Score: {anomaly.anomaly_score}
+                            </span>
+                          </div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                            Anomalous Access Pattern Detected
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Detected {new Date(anomaly.detected_at).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      {anomaly.reasons && anomaly.reasons.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Why This Was Flagged
+                          </div>
+                          <ul className="space-y-2">
+                            {anomaly.reasons.map((reason: string, idx: number) => (
+                              <li
+                                key={idx}
+                                className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2"
+                              >
+                                <AlertTriangle className="h-4 w-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                                <span>{reason}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <strong>How anomaly scores work:</strong> This user's access patterns were compared
+                          to their peers (same role, profile, or department). The score represents how much
+                          their permissions deviate from the norm. Higher scores (0-1 scale) indicate greater
+                          deviation. This analysis uses machine learning (IsolationForest algorithm) to identify
+                          unusual combinations of permissions that may indicate security risks.
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="No Anomalies" description="No access anomalies detected for this user" icon="default" />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Recommendations Tab */}
         <TabsContent value="recommendations">
           <Card variant="bordered">
@@ -557,7 +664,13 @@ export default function UserDetailPage() {
                       className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
                       <div className="flex items-start justify-between mb-3">
-                        <div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <SeverityBadge severity={rec.severity} />
+                            <Badge variant="info" size="sm">
+                              {rec.rec_type?.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
                           <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
                             {rec.title}
                           </div>
@@ -565,23 +678,30 @@ export default function UserDetailPage() {
                             {rec.description}
                           </div>
                         </div>
-                        <SeverityBadge severity={rec.severity} />
                       </div>
                       {rec.action && (
                         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Recommended Action
                           </div>
-                          <div className="text-sm text-gray-700 dark:text-gray-300">
+                          <div className="text-sm text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                             {rec.action}
                           </div>
                         </div>
                       )}
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <strong>How recommendations work:</strong> This recommendation was generated based on
+                          detected anomalies and security best practices. Recommendations are categorized by type
+                          (PSG Migration, Access Review, Permission Removal) and prioritized by severity. They help
+                          you proactively address potential security issues before they become problems.
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <EmptyState title="No Recommendations" description="No recommendations available" icon="default" />
+                <EmptyState title="No Recommendations" description="No recommendations available for this user" icon="default" />
               )}
             </CardContent>
           </Card>
