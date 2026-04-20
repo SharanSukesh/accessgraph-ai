@@ -63,7 +63,13 @@ class SyncOrchestrator:
             # Update job
             sync_job.status = SyncStatus.COMPLETED
             sync_job.completed_at = datetime.now(timezone.utc)
-            sync_job.sync_metadata = {"counts": counts}
+
+            # Initialize metadata if it doesn't exist
+            if not sync_job.sync_metadata:
+                sync_job.sync_metadata = {}
+
+            # Merge counts into existing metadata
+            sync_job.sync_metadata["counts"] = counts
             await self.db.commit()
 
             logger.info(f"Sync completed successfully: {counts}")
@@ -196,11 +202,14 @@ class SyncOrchestrator:
                 logger.error(f"Recommendation generation failed: {e}", exc_info=True)
                 analysis_results["recommendation_error"] = str(e)
 
+            # Refresh sync_job to get latest state and update metadata
+            await self.db.refresh(sync_job)
+
             # Update sync job metadata with analysis results
-            if sync_job.sync_metadata:
-                sync_job.sync_metadata["ai_analysis"] = analysis_results
-            else:
-                sync_job.sync_metadata = {"ai_analysis": analysis_results}
+            if not sync_job.sync_metadata:
+                sync_job.sync_metadata = {}
+
+            sync_job.sync_metadata["ai_analysis"] = analysis_results
 
             await self.db.commit()
             logger.info(f"AI analysis completed: {analysis_results}")
