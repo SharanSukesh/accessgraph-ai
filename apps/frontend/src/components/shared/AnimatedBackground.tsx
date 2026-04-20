@@ -38,14 +38,14 @@ export function AnimatedBackground() {
     }> = []
 
     // Create nodes - larger for better visibility
-    const nodeCount = 50
+    const nodeCount = 65 // Increased from 50 to 65 for more density
     for (let i = 0; i < nodeCount; i++) {
       nodes.push({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
         vx: (Math.random() - 0.5) * 0.3,
         vy: (Math.random() - 0.5) * 0.3,
-        radius: Math.random() * 3 + 3, // Increased to 3-6px for better visibility
+        radius: Math.random() * 3 + 3, // 3-6px for better visibility
       })
     }
 
@@ -64,8 +64,8 @@ export function AnimatedBackground() {
         ? 'rgba(124, 58, 237, 0.7)' // Dark mode: lighter opacity
         : 'rgba(109, 40, 217, 0.9)'  // Light mode: darker purple (primary-700), higher opacity
 
-      const edgeBaseOpacity = darkMode ? 0.3 : 0.5 // Higher in light mode
-      const edgeWidth = darkMode ? 2 : 2.5 // Slightly thicker in light mode
+      const edgeBaseOpacity = darkMode ? 0.35 : 0.55 // Higher in light mode
+      const edgeWidth = darkMode ? 3 : 3.5 // Increased thickness for better visibility
 
       // Update and draw nodes
       nodes.forEach((node) => {
