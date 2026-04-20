@@ -72,7 +72,13 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string into list"""
         if not self.BACKEND_CORS_ORIGINS or self.BACKEND_CORS_ORIGINS.strip() == "":
-            return ["http://localhost:3000", "http://localhost:3001"]
+            # Default origins - includes localhost and Railway domains
+            return [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "https://gentle-love-production-1eba.up.railway.app",
+                "https://accessgraph-ai-production.up.railway.app"
+            ]
         return [origin.strip() for origin in self.BACKEND_CORS_ORIGINS.split(",") if origin.strip()]
 
     @property
