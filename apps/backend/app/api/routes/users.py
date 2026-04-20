@@ -57,15 +57,20 @@ class ExplanationResponse(BaseModel):
 
 class AnomalyResponse(BaseModel):
     id: str
-    user_id: str
-    user_name: str
-    anomaly_score: float
+    userId: Optional[str] = None
+    user_id: Optional[str] = None
+    userName: Optional[str] = None
+    user_name: Optional[str] = None
+    score: Optional[float] = None
+    anomaly_score: Optional[float] = None
     severity: str
     reasons: List[str]
-    detected_at: str
+    detectedAt: Optional[str] = None
+    detected_at: Optional[str] = None
 
     class Config:
         from_attributes = True
+        extra = "allow"  # Allow extra fields
 
 
 class RiskScoreResponse(BaseModel):
@@ -459,12 +464,16 @@ async def list_anomalies(
     return [
         {
             "id": a.id,
-            "user_id": a.user_id,
-            "user_name": user_name,
-            "anomaly_score": a.anomaly_score,
+            "userId": a.user_id,  # Frontend expects camelCase
+            "user_id": a.user_id,  # Keep for backwards compatibility
+            "userName": user_name,  # Frontend expects camelCase
+            "user_name": user_name,  # Keep for backwards compatibility
+            "score": a.anomaly_score,  # Frontend expects 'score'
+            "anomaly_score": a.anomaly_score,  # Keep for backwards compatibility
             "severity": a.severity.value,
             "reasons": a.reasons,
-            "detected_at": a.detected_at.isoformat(),
+            "detectedAt": a.detected_at.isoformat(),  # Frontend expects camelCase
+            "detected_at": a.detected_at.isoformat(),  # Keep for backwards compatibility
         }
         for a, user_name in anomaly_user_pairs
     ]
