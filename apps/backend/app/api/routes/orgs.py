@@ -267,6 +267,10 @@ async def diagnostic_permissions(
     )
     ps_assignments = psa_count.scalars().all()
 
+    # Check for profile_id issues
+    users_without_profile_id = [u for u in users if not u.profile_id]
+    profile_backed_ps = [ps for ps in permission_sets if ps.is_owned_by_profile and ps.profile_id]
+
     return {
         "organization_id": org_id,
         "snapshots": {
@@ -281,8 +285,15 @@ async def diagnostic_permissions(
             "has_permission_sets": len(permission_sets) > 0,
             "has_object_permissions": len(object_permissions) > 0,
             "has_field_permissions": len(field_permissions) > 0,
+            "users_without_profile_id": len(users_without_profile_id),
+            "profile_backed_permission_sets": len(profile_backed_ps),
             "issue": "NO_PERMISSIONS_SYNCED" if len(object_permissions) == 0 else "OK",
-        }
+        },
+        "sample_user": {
+            "name": users[0].name if users else None,
+            "profile_id": users[0].profile_id if users else None,
+            "has_profile_id": bool(users[0].profile_id) if users else False,
+        } if users else None,
     }
 
 
