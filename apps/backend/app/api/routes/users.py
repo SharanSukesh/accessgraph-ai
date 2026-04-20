@@ -348,7 +348,14 @@ async def get_user_risk(
     risk = result.scalar_one_or_none()
 
     if not risk:
-        raise HTTPException(status_code=404, detail="Risk score not found")
+        return {
+            "userId": user_sf_id,
+            "score": 0,
+            "level": "low",
+            "factors": [],
+            "explanation": "No risk assessment available yet. Run AI analysis to generate risk scores.",
+            "calculatedAt": None,
+        }
 
     return {
         "id": risk.id,

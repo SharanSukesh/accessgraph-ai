@@ -217,10 +217,19 @@ export function useUserRisk(orgId: string, userId: string) {
   return useQuery({
     queryKey: userKeys.risk(orgId, userId),
     queryFn: async () => {
-      const data = await apiClient.get<RiskScore>(endpoints.userRisk(orgId, userId))
-      return data
+      try {
+        const data = await apiClient.get<RiskScore>(endpoints.userRisk(orgId, userId))
+        return data
+      } catch (error: any) {
+        // Return null if not found instead of throwing
+        if (error?.response?.status === 404) {
+          return null
+        }
+        throw error
+      }
     },
     enabled: !!orgId && !!userId,
+    retry: false,
   })
 }
 
@@ -231,10 +240,19 @@ export function useUserAnomalies(orgId: string, userId: string) {
   return useQuery({
     queryKey: [...userKeys.detail(orgId, userId), 'anomalies'],
     queryFn: async () => {
-      const data = await apiClient.get<any[]>(endpoints.userAnomalies(orgId, userId))
-      return data
+      try {
+        const data = await apiClient.get<any[]>(endpoints.userAnomalies(orgId, userId))
+        return data
+      } catch (error: any) {
+        // Return empty array if not found
+        if (error?.response?.status === 404) {
+          return []
+        }
+        throw error
+      }
     },
     enabled: !!orgId && !!userId,
+    retry: false,
   })
 }
 
@@ -245,11 +263,20 @@ export function useUserRecommendations(orgId: string, userId: string) {
   return useQuery({
     queryKey: userKeys.recommendations(orgId, userId),
     queryFn: async () => {
-      const data = await apiClient.get<Recommendation[]>(
-        endpoints.userRecommendations(orgId, userId)
-      )
-      return data
+      try {
+        const data = await apiClient.get<Recommendation[]>(
+          endpoints.userRecommendations(orgId, userId)
+        )
+        return data
+      } catch (error: any) {
+        // Return empty array if not found
+        if (error?.response?.status === 404) {
+          return []
+        }
+        throw error
+      }
     },
     enabled: !!orgId && !!userId,
+    retry: false,
   })
 }
