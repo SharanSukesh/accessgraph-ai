@@ -217,7 +217,7 @@ export default function UserDetailPage() {
                     <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
                     <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
                   </div>
-                ) : risk ? (
+                ) : risk && risk.score > 0 ? (
                   <div className="space-y-4">
                     <div>
                       <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -280,6 +280,12 @@ export default function UserDetailPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                ) : risk && risk.score === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      {risk.explanation || "No risk assessment available yet. The next sync will generate risk scores."}
+                    </div>
                   </div>
                 ) : (
                   <EmptyState title="No Risk Data" description="Risk assessment not available" icon="default" />
@@ -612,29 +618,58 @@ export default function UserDetailPage() {
                       </div>
                       {anomaly.reasons && anomaly.reasons.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            Why This Was Flagged
+                          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            🔍 Specific Anomalies Detected
                           </div>
-                          <ul className="space-y-2">
+                          <div className="space-y-3">
                             {anomaly.reasons.map((reason: string, idx: number) => (
-                              <li
+                              <div
                                 key={idx}
-                                className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2"
+                                className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800"
                               >
-                                <AlertTriangle className="h-4 w-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                                <span>{reason}</span>
-                              </li>
+                                <div className="flex items-start gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                                  <div className="flex-1">
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                                      {reason}
+                                    </div>
+                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                      This value is significantly different from peers with the same role, profile, or department.
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         </div>
                       )}
                       <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          <strong>How anomaly scores work:</strong> This user's access patterns were compared
-                          to their peers (same role, profile, or department). The score represents how much
-                          their permissions deviate from the norm. Higher scores (0-1 scale) indicate greater
-                          deviation. This analysis uses machine learning (IsolationForest algorithm) to identify
-                          unusual combinations of permissions that may indicate security risks.
+                        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-2">
+                          <div>
+                            <strong className="text-gray-700 dark:text-gray-300">How This Was Detected:</strong>
+                          </div>
+                          <div>
+                            <strong>1. Peer Comparison:</strong> We identified users similar to this user by matching:
+                            <ul className="list-disc list-inside ml-4 mt-1">
+                              <li>Same Role (if available)</li>
+                              <li>Same Profile (e.g., System Administrator)</li>
+                              <li>Same Department (fallback)</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>2. Feature Analysis:</strong> We analyzed 10 key metrics including number of permission sets,
+                            object access levels, field permissions, and sensitive data access patterns.
+                          </div>
+                          <div>
+                            <strong>3. ML Detection:</strong> Using IsolationForest algorithm, we flagged this user because their
+                            access pattern combination is statistically unusual compared to peers. Anomaly score of <strong>{anomaly.anomaly_score}</strong>
+                            indicates deviation level (0=normal, 1=highly unusual).
+                          </div>
+                          <div>
+                            <strong>4. Why System Admins Get Flagged:</strong> If this user is the only System Administrator, or has
+                            significantly more/fewer permissions than other System Admins, they'll be flagged. This doesn't mean there's
+                            a security issue—it means their access pattern is unique and should be reviewed to ensure it's intentional.
+                          </div>
                         </div>
                       </div>
                     </div>
