@@ -352,11 +352,45 @@ async def get_user_risk(
 
     return {
         "id": risk.id,
+        "userId": risk.entity_id,
         "entity_id": risk.entity_id,
-        "risk_score": risk.risk_score,
+        "score": round(risk.risk_score, 2),
+        "risk_score": round(risk.risk_score, 2),
+        "level": risk.risk_level.value,
         "risk_level": risk.risk_level.value,
+        "factors": risk.factors or [],
+        "explanation": risk.reason_text,
         "reason_text": risk.reason_text,
+        "calculatedAt": risk.calculated_at.isoformat() if risk.calculated_at else None,
     }
+
+
+@router.get("/orgs/{org_id}/users/{user_sf_id}/anomalies", response_model=List[AnomalyResponse])
+async def get_user_anomalies(
+    org_id: str,
+    user_sf_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Get anomalies for user"""
+    result = await db.execute(
+        select(AccessAnomaly).where(
+            AccessAnomaly.organization_id == org_id,
+            AccessAnomaly.user_id == user_sf_id,
+        ).order_by(AccessAnomaly.anomaly_score.desc())
+    )
+    anomalies = result.scalars().all()
+
+    return [
+        {
+            "id": a.id,
+            "user_id": a.user_id,
+            "anomaly_score": round(a.anomaly_score, 2),
+            "severity": a.severity.value,
+            "reasons": a.reasons,
+            "detected_at": a.detected_at.isoformat(),
+        }
+        for a in anomalies
+    ]
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}/recommendations", response_model=List[RecommendationResponse])

@@ -225,6 +225,20 @@ export function useUserRisk(orgId: string, userId: string) {
 }
 
 /**
+ * Get user's anomalies
+ */
+export function useUserAnomalies(orgId: string, userId: string) {
+  return useQuery({
+    queryKey: [...userKeys.detail(orgId, userId), 'anomalies'],
+    queryFn: async () => {
+      const data = await apiClient.get<any[]>(endpoints.userAnomalies(orgId, userId))
+      return data
+    },
+    enabled: !!orgId && !!userId,
+  })
+}
+
+/**
  * Get user's recommendations
  */
 export function useUserRecommendations(orgId: string, userId: string) {
