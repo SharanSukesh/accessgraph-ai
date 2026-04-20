@@ -70,6 +70,11 @@ class SyncOrchestrator:
 
             # Merge counts into existing metadata
             sync_job.sync_metadata["counts"] = counts
+
+            # Mark as modified so SQLAlchemy knows to update the JSON column
+            from sqlalchemy.orm import attributes
+            attributes.flag_modified(sync_job, 'sync_metadata')
+
             await self.db.commit()
 
             logger.info(f"Sync completed successfully: {counts}")
@@ -210,6 +215,10 @@ class SyncOrchestrator:
                 sync_job.sync_metadata = {}
 
             sync_job.sync_metadata["ai_analysis"] = analysis_results
+
+            # Mark as modified so SQLAlchemy knows to update the JSON column
+            from sqlalchemy.orm import attributes
+            attributes.flag_modified(sync_job, 'sync_metadata')
 
             await self.db.commit()
             logger.info(f"AI analysis completed: {analysis_results}")
