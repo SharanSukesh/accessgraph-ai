@@ -5,6 +5,11 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Debug: Log API URL on client side
+if (typeof window !== 'undefined') {
+  console.log('API_BASE_URL:', API_BASE_URL)
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
