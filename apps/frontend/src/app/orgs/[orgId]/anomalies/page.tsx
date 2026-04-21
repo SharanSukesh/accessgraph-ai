@@ -38,6 +38,15 @@ export default function AnomaliesPage() {
 
   const { data: topUsers } = useTopAnomalousUsers(orgId, 10)
 
+  // Debug logging
+  console.log('Anomalies Debug:', {
+    anomalies,
+    isLoading,
+    error,
+    length: anomalies?.length,
+    filters: { search, severityFilter, typeFilter }
+  })
+
   if (error) {
     return (
       <ErrorState
