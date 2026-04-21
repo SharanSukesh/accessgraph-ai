@@ -24,6 +24,9 @@ interface Anomaly {
   score: number
   severity: string
   reasons: string[]
+  type?: string  // Added for frontend display
+  title?: string  // Added for frontend display
+  description?: string  // Added for frontend display
   peerComparison?: {
     peerGroup: string
     peerMedian: number
