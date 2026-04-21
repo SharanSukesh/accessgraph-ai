@@ -56,6 +56,11 @@ class ApiClient {
       ...fetchConfig.headers,
     }
 
+    // Debug logging
+    if (typeof window !== 'undefined' && endpoint.includes('anomalies')) {
+      console.log('API Request:', { url, params, method: fetchConfig.method || 'GET' })
+    }
+
     try {
       const response = await fetch(url, {
         ...fetchConfig,
@@ -71,6 +76,8 @@ class ApiClient {
           errorData = { message: response.statusText }
         }
 
+        console.error('API Error:', { url, status: response.status, errorData })
+
         throw new ApiError(
           errorData.detail || errorData.message || 'Request failed',
           response.status,
@@ -80,6 +87,12 @@ class ApiClient {
 
       // Parse JSON response
       const data = await response.json()
+
+      // Debug logging for anomalies endpoint
+      if (typeof window !== 'undefined' && endpoint.includes('anomalies')) {
+        console.log('API Response:', { url, data, dataLength: Array.isArray(data) ? data.length : 'not an array' })
+      }
+
       return data as T
     } catch (error) {
       if (error instanceof ApiError) {
