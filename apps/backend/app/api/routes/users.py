@@ -474,6 +474,10 @@ async def list_anomalies(
             "reasons": a.reasons,
             "detectedAt": a.detected_at.isoformat(),  # Frontend expects camelCase
             "detected_at": a.detected_at.isoformat(),  # Keep for backwards compatibility
+            # Frontend expects these fields for display
+            "type": "excessive_permissions",  # Derived from reasons
+            "title": f"Anomalous access pattern detected for {user_name}",
+            "description": a.reasons[0] if a.reasons else "Access pattern deviates from peer baseline",
         }
         for a, user_name in anomaly_user_pairs
     ]
