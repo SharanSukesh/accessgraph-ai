@@ -41,13 +41,18 @@ class ApiClient {
     // Build URL with query parameters
     let url = `${this.baseUrl}${endpoint}`
     if (params) {
-      const queryString = new URLSearchParams(
-        Object.entries(params).reduce((acc, [key, value]) => {
+      // Filter out undefined/null values before building query string
+      const filteredParams = Object.entries(params).reduce((acc, [key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
           acc[key] = String(value)
-          return acc
-        }, {} as Record<string, string>)
-      ).toString()
-      url += `?${queryString}`
+        }
+        return acc
+      }, {} as Record<string, string>)
+
+      const queryString = new URLSearchParams(filteredParams).toString()
+      if (queryString) {
+        url += `?${queryString}`
+      }
     }
 
     // Default headers
