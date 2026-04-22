@@ -305,11 +305,19 @@ export function GraphVisualization({
         </div>
       )}
 
-      {/* Cytoscape container */}
+      {/* Cytoscape container with subtle grid background */}
       <div
         ref={containerRef}
         data-graph-container
-        className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+        className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 relative overflow-hidden"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px)
+          `,
+          backgroundSize: '20px 20px',
+          backgroundPosition: 'center center',
+        }}
       />
 
       {/* Add interaction styles */}

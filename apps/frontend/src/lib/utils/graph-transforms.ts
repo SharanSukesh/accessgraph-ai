@@ -111,48 +111,81 @@ export function getCytoscapeStylesheet() {
       },
     },
 
-    // User nodes - Modern gradient blue
+    // User nodes - Modern purple gradient with glow (matching app theme)
     {
       selector: `node[type="${NODE_TYPES.USER.value}"]`,
       style: {
-        'background-color': '#60a5fa', // blue-400
+        'background-color': '#8b5cf6', // purple-500 (brand color)
         'background-opacity': 1,
-        'border-color': '#3b82f6', // blue-500
+        'border-color': '#a78bfa', // purple-400
         'border-width': 4,
+        'border-style': 'double',
         shape: 'ellipse',
-        'shadow-blur': 16,
-        'shadow-color': '#3b82f6',
-        'shadow-opacity': 0.3,
+        width: 85,
+        height: 85,
+        'font-size': '14px',
+        // Enhanced shadow with glow
+        'shadow-blur': 24,
+        'shadow-color': '#8b5cf6',
+        'shadow-opacity': 0.5,
+        'shadow-offset-x': 0,
+        'shadow-offset-y': 3,
+        // Add outer glow effect
+        'underlay-color': '#c4b5fd', // purple-300
+        'underlay-opacity': 0.3,
+        'underlay-padding': 8,
       },
     },
 
-    // Profile nodes - Elegant violet
+    // Profile nodes - Elegant indigo gradient with shimmer
     {
       selector: `node[type="${NODE_TYPES.PROFILE.value}"]`,
       style: {
-        'background-color': '#a78bfa', // violet-400
+        'background-color': '#6366f1', // indigo-500
         'background-opacity': 1,
-        'border-color': '#8b5cf6', // violet-500
+        'border-color': '#818cf8', // indigo-400
         'border-width': 4,
+        'border-style': 'double',
         shape: 'round-rectangle',
-        'shadow-blur': 16,
-        'shadow-color': '#8b5cf6',
-        'shadow-opacity': 0.3,
+        width: 80,
+        height: 80,
+        'font-size': '13px',
+        // Enhanced shadow with glow
+        'shadow-blur': 22,
+        'shadow-color': '#6366f1',
+        'shadow-opacity': 0.45,
+        'shadow-offset-x': 0,
+        'shadow-offset-y': 3,
+        // Add outer glow effect
+        'underlay-color': '#a5b4fc', // indigo-300
+        'underlay-opacity': 0.25,
+        'underlay-padding': 7,
       },
     },
 
-    // Permission set nodes - Vibrant cyan
+    // Permission set nodes - Vibrant cyan gradient with glow
     {
       selector: `node[type="${NODE_TYPES.PERMISSION_SET.value}"]`,
       style: {
-        'background-color': '#22d3ee', // cyan-400
+        'background-color': '#0891b2', // cyan-600
         'background-opacity': 1,
-        'border-color': '#06b6d4', // cyan-500
+        'border-color': '#22d3ee', // cyan-400
         'border-width': 4,
+        'border-style': 'double',
         shape: 'round-rectangle',
-        'shadow-blur': 16,
+        width: 80,
+        height: 80,
+        'font-size': '13px',
+        // Enhanced shadow with glow
+        'shadow-blur': 22,
         'shadow-color': '#06b6d4',
-        'shadow-opacity': 0.3,
+        'shadow-opacity': 0.45,
+        'shadow-offset-x': 0,
+        'shadow-offset-y': 3,
+        // Add outer glow effect
+        'underlay-color': '#67e8f9', // cyan-300
+        'underlay-opacity': 0.25,
+        'underlay-padding': 7,
       },
     },
 
@@ -397,25 +430,34 @@ export function getCytoscapeStylesheet() {
       },
     },
 
-    // Hovered node - Subtle glow
+    // Hovered node - Enhanced glow with purple theme
     {
       selector: 'node:active',
       style: {
-        'overlay-color': '#60a5fa', // blue-400
-        'overlay-opacity': 0.25,
-        'overlay-padding': 8,
+        'overlay-color': '#8b5cf6', // purple-500 (brand)
+        'overlay-opacity': 0.3,
+        'overlay-padding': 10,
         'border-width': 5,
+        'shadow-blur': 30,
+        'shadow-opacity': 0.6,
+        // Make transition smooth
+        'transition-property': 'border-width, shadow-blur, overlay-opacity',
+        'transition-duration': '0.2s',
       },
     },
 
-    // Hovered edge - Enhanced visibility
+    // Hovered edge - Enhanced visibility with purple tint
     {
       selector: 'edge:active',
       style: {
-        width: 4,
+        width: 4.5,
         'line-opacity': 1,
-        'overlay-color': '#60a5fa', // blue-400
-        'overlay-opacity': 0.25,
+        'overlay-color': '#8b5cf6', // purple-500
+        'overlay-opacity': 0.3,
+        'line-color': '#a78bfa', // purple-400
+        // Make transition smooth
+        'transition-property': 'width, line-opacity, line-color',
+        'transition-duration': '0.2s',
       },
     },
   ]
