@@ -60,13 +60,13 @@ export const RECOMMENDATION_TYPES = {
 // ======================
 
 export const NODE_TYPES = {
-  USER: { value: 'user', label: 'User', color: '#3b82f6', icon: 'User' },
+  USER: { value: 'user', label: 'User', color: '#8b5cf6', icon: 'User' }, // purple-500 (brand)
   ROLE: { value: 'role', label: 'Role', color: '#f59e0b', icon: 'Shield' },
-  PROFILE: { value: 'profile', label: 'Profile', color: '#8b5cf6', icon: 'UserCircle' },
+  PROFILE: { value: 'profile', label: 'Profile', color: '#6366f1', icon: 'UserCircle' }, // indigo-500
   PERMISSION_SET: {
     value: 'permission_set',
     label: 'Permission Set',
-    color: '#06b6d4',
+    color: '#0891b2', // cyan-600
     icon: 'Key',
   },
   PERMISSION_SET_GROUP: {

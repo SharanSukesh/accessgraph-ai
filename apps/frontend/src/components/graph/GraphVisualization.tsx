@@ -325,14 +325,14 @@ export function GraphVisualization({
         .cy-element.dimmed {
           opacity: 0.2;
         }
-        /* Hover effects */
+        /* Hover effects - purple theme */
         node.hovered {
           border-width: 5px !important;
-          border-color: #3b82f6 !important;
+          border-color: #8b5cf6 !important;
         }
         edge.hovered {
           width: 4px !important;
-          line-color: #3b82f6 !important;
+          line-color: #8b5cf6 !important;
         }
         edge.highlighted {
           width: 3px !important;
