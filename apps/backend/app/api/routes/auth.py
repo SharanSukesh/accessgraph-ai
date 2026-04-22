@@ -201,13 +201,18 @@ async def callback(
 
         # Create redirect response with JWT cookie
         response = RedirectResponse(url=redirect_url)
+
+        # Detect if we're in production (Railway uses HTTPS)
+        is_production = "railway.app" in redirect_url or redirect_url.startswith("https://")
+
         response.set_cookie(
             key="access_token",
             value=jwt_token,
             httponly=True,
-            secure=True,  # HTTPS only in production
+            secure=is_production,  # HTTPS only in production
             samesite="lax",
             max_age=604800,  # 7 days
+            domain=None,  # Let browser handle domain
         )
 
         return response
