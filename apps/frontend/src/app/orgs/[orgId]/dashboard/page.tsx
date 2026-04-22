@@ -5,9 +5,9 @@
  * Executive overview of access health
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Users, AlertTriangle, Shield, Database, Sparkles, Info } from 'lucide-react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { MetricCard } from '@/components/shared/MetricCard'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -22,8 +22,13 @@ import { useSyncJobs, useAnalyzeOrg } from '@/lib/api/hooks/useOrgs'
 
 export default function DashboardPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const orgId = params.orgId as string
   const [showAnalysisInfo, setShowAnalysisInfo] = useState(false)
+  const [initialSyncTriggered, setInitialSyncTriggered] = useState(false)
+
+  // Check for initial_sync flag
+  const shouldInitialSync = searchParams.get('initial_sync') === 'true'
 
   // Fetch data
   const { data: users, isLoading: usersLoading, error: usersError } = useUsers(orgId)
@@ -38,6 +43,24 @@ export default function DashboardPage() {
 
   // Analysis mutation
   const analyzeOrg = useAnalyzeOrg(orgId)
+
+  // Trigger initial sync if needed
+  useEffect(() => {
+    if (shouldInitialSync && !initialSyncTriggered && orgId) {
+      setInitialSyncTriggered(true)
+      // Trigger sync via API
+      const triggerSync = async () => {
+        try {
+          const { apiClient } = await import('@/lib/api/client')
+          await apiClient.post(`/orgs/${orgId}/sync`)
+          console.log('Initial sync triggered successfully')
+        } catch (error) {
+          console.error('Failed to trigger initial sync:', error)
+        }
+      }
+      triggerSync()
+    }
+  }, [shouldInitialSync, initialSyncTriggered, orgId])
 
   const isLoading =
     usersLoading || anomaliesLoading || topAnomaliesLoading || recommendationsLoading
