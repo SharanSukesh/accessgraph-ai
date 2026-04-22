@@ -116,24 +116,24 @@ export function getCytoscapeStylesheet() {
       selector: `node[type="${NODE_TYPES.USER.value}"]`,
       style: {
         'background-color': '#8b5cf6', // purple-500 (brand color)
-        'background-opacity': 1,
         'border-color': '#a78bfa', // purple-400
-        'border-width': 4,
-        'border-style': 'double',
+        'border-width': 5,
         shape: 'ellipse',
         width: 85,
         height: 85,
         'font-size': '14px',
+        color: '#ffffff',
         // Enhanced shadow with glow
-        'shadow-blur': 24,
+        'shadow-blur': 30,
         'shadow-color': '#8b5cf6',
-        'shadow-opacity': 0.5,
+        'shadow-opacity': 0.6,
         'shadow-offset-x': 0,
-        'shadow-offset-y': 3,
-        // Add outer glow effect
-        'underlay-color': '#c4b5fd', // purple-300
-        'underlay-opacity': 0.3,
-        'underlay-padding': 8,
+        'shadow-offset-y': 4,
+        // Outer glow using underlay
+        'underlay-color': '#c4b5fd',
+        'underlay-opacity': 0.4,
+        'underlay-padding': 10,
+        'underlay-shape': 'ellipse',
       },
     },
 
@@ -142,24 +142,24 @@ export function getCytoscapeStylesheet() {
       selector: `node[type="${NODE_TYPES.PROFILE.value}"]`,
       style: {
         'background-color': '#6366f1', // indigo-500
-        'background-opacity': 1,
         'border-color': '#818cf8', // indigo-400
-        'border-width': 4,
-        'border-style': 'double',
+        'border-width': 5,
         shape: 'round-rectangle',
         width: 80,
         height: 80,
         'font-size': '13px',
+        color: '#ffffff',
         // Enhanced shadow with glow
-        'shadow-blur': 22,
+        'shadow-blur': 28,
         'shadow-color': '#6366f1',
-        'shadow-opacity': 0.45,
+        'shadow-opacity': 0.5,
         'shadow-offset-x': 0,
-        'shadow-offset-y': 3,
-        // Add outer glow effect
-        'underlay-color': '#a5b4fc', // indigo-300
-        'underlay-opacity': 0.25,
-        'underlay-padding': 7,
+        'shadow-offset-y': 4,
+        // Outer glow using underlay
+        'underlay-color': '#a5b4fc',
+        'underlay-opacity': 0.35,
+        'underlay-padding': 9,
+        'underlay-shape': 'round-rectangle',
       },
     },
 
@@ -168,24 +168,24 @@ export function getCytoscapeStylesheet() {
       selector: `node[type="${NODE_TYPES.PERMISSION_SET.value}"]`,
       style: {
         'background-color': '#0891b2', // cyan-600
-        'background-opacity': 1,
         'border-color': '#22d3ee', // cyan-400
-        'border-width': 4,
-        'border-style': 'double',
+        'border-width': 5,
         shape: 'round-rectangle',
         width: 80,
         height: 80,
         'font-size': '13px',
+        color: '#ffffff',
         // Enhanced shadow with glow
-        'shadow-blur': 22,
+        'shadow-blur': 28,
         'shadow-color': '#06b6d4',
-        'shadow-opacity': 0.45,
+        'shadow-opacity': 0.5,
         'shadow-offset-x': 0,
-        'shadow-offset-y': 3,
-        // Add outer glow effect
-        'underlay-color': '#67e8f9', // cyan-300
-        'underlay-opacity': 0.25,
-        'underlay-padding': 7,
+        'shadow-offset-y': 4,
+        // Outer glow using underlay
+        'underlay-color': '#67e8f9',
+        'underlay-opacity': 0.35,
+        'underlay-padding': 9,
+        'underlay-shape': 'round-rectangle',
       },
     },
 
