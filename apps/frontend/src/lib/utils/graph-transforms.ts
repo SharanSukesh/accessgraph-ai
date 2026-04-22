@@ -1,6 +1,7 @@
 /**
  * Graph Data Transformations
  * Converts API graph data to Cytoscape.js format
+ * Updated: 2026-04-22 - Purple theme colors applied
  */
 
 import type { ElementDefinition } from 'cytoscape'
@@ -78,6 +79,9 @@ export function transformGraphToCytoscape(graph: Graph): ElementDefinition[] {
  * Get Cytoscape stylesheet - Enhanced professional design
  */
 export function getCytoscapeStylesheet() {
+  console.log('[Graph Stylesheet] NODE_TYPES.USER.value =', NODE_TYPES.USER.value)
+  console.log('[Graph Stylesheet] USER node selector will be:', `node[type="${NODE_TYPES.USER.value}"]`)
+
   return [
     // Default node style - Modern and sleek
     {
