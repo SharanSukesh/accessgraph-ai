@@ -145,10 +145,11 @@ export function useUserObjectAccess(orgId: string, userId: string) {
   return useQuery({
     queryKey: userKeys.objectAccess(orgId, userId),
     queryFn: async () => {
-      const data = await apiClient.get<ObjectAccess[]>(
+      const data = await apiClient.get<{ objects: ObjectAccess[] }>(
         endpoints.userObjectAccess(orgId, userId)
       )
-      return data
+      // API returns {objects: [...]} but we want just the array
+      return data.objects || []
     },
     enabled: !!orgId && !!userId,
   })
@@ -161,10 +162,11 @@ export function useUserFieldAccess(orgId: string, userId: string) {
   return useQuery({
     queryKey: userKeys.fieldAccess(orgId, userId),
     queryFn: async () => {
-      const data = await apiClient.get<FieldAccess[]>(
+      const data = await apiClient.get<{ fields: FieldAccess[] }>(
         endpoints.userFieldAccess(orgId, userId)
       )
-      return data
+      // API returns {fields: [...]} but we want just the array
+      return data.fields || []
     },
     enabled: !!orgId && !!userId,
   })
