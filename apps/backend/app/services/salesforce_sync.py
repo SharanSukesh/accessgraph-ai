@@ -29,6 +29,7 @@ from app.domain.models import (
     OpportunityShareSnapshot,
     AccountTeamMemberSnapshot,
     OrganizationWideDefaultSnapshot,
+    SharingRuleSnapshot,
 )
 from app.salesforce.client import SalesforceAPIClient
 
@@ -143,6 +144,7 @@ class SalesforceSyncService:
             stats["opportunity_shares"] = await self._sync_opportunity_shares(sf_data["opportunity_shares"])
             stats["account_team_members"] = await self._sync_account_team_members(sf_data["account_team_members"])
             stats["organization_wide_defaults"] = await self._sync_organization_wide_defaults(sf_data["organization_wide_defaults"])
+            stats["sharing_rules"] = await self._sync_sharing_rules(sf_data["sharing_rules"])
 
             await self.complete_sync(sync_job, stats)
             logger.info(f"Sync completed successfully: {stats}")
@@ -426,3 +428,27 @@ class SalesforceSyncService:
         await self.db.commit()
         logger.info(f"Synced {len(owds)} organization-wide defaults")
         return len(owds)
+
+    async def _sync_sharing_rules(self, sharing_rules: List) -> int:
+        """Sync sharing rules to database"""
+        snapshot_date = datetime.now(datetime.timezone.utc)
+
+        for sf_rule in sharing_rules:
+            rule = SharingRuleSnapshot(
+                organization_id=self.org_id,
+                salesforce_id=sf_rule["Id"],
+                rule_name=sf_rule["Name"],
+                sobject_type=sf_rule["SobjectType"],
+                rule_type=sf_rule["RuleType"],
+                access_level=sf_rule["AccessLevel"],
+                shared_to_type=sf_rule["SharedToType"],
+                shared_to_id=sf_rule.get("SharedToId"),
+                criteria=None,  # Would need additional data to populate
+                is_active=True,
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(rule)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(sharing_rules)} sharing rules")
+        return len(sharing_rules)

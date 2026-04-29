@@ -391,6 +391,68 @@ class SalesforceAPIClient:
         logger.info(f"Extracted {len(members)} account team members")
         return members
 
+    async def extract_sharing_rules(self) -> List[SalesforceSharingRule]:
+        """
+        Extract all sharing rules using Tooling API
+
+        Note: Sharing rules are queried from multiple objects in the Tooling API:
+        - AccountSharingRule, OpportunitySharingRule, CaseSharingRule, etc.
+
+        Returns:
+            List of SalesforceSharingRule objects
+        """
+        sharing_rule_objects = [
+            ('AccountSharingRule', 'Account'),
+            ('OpportunitySharingRule', 'Opportunity'),
+            ('CaseSharingRule', 'Case'),
+            ('LeadSharingRule', 'Lead'),
+            ('ContactSharingRule', 'Contact'),
+            ('CampaignSharingRule', 'Campaign'),
+        ]
+
+        all_rules = []
+
+        for rule_object_name, sobject_type in sharing_rule_objects:
+            try:
+                # Query using Tooling API
+                soql = f"""
+                    SELECT Id, Name, AccessLevel, SharedTo.Type
+                    FROM {rule_object_name}
+                """
+
+                # Use tooling API endpoint
+                url = f"{self.base_url.replace('/services/data/', '/services/data/')}/tooling/query"
+                params = {"q": soql.strip()}
+
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(url, headers=self._get_headers(), params=params)
+                    response.raise_for_status()
+                    result = response.json()
+
+                records = result.get('records', [])
+
+                for rec in records:
+                    # Parse the sharing rule data
+                    rule = SalesforceSharingRule(
+                        Id=rec['Id'],
+                        Name=rec['Name'],
+                        SobjectType=sobject_type,
+                        RuleType=rule_object_name.replace('SharingRule', ''),
+                        AccessLevel=rec.get('AccessLevel', 'Read'),
+                        SharedToType=rec.get('SharedTo', {}).get('Type', 'Unknown') if rec.get('SharedTo') else 'Unknown',
+                        SharedToId=None,  # Would need additional query to get the ID
+                    )
+                    all_rules.append(rule)
+
+                logger.info(f"Extracted {len(records)} {rule_object_name} sharing rules")
+
+            except Exception as e:
+                # Some objects may not be available or have no sharing rules
+                logger.warning(f"Could not extract {rule_object_name}: {e}")
+
+        logger.info(f"Extracted total of {len(all_rules)} sharing rules")
+        return all_rules
+
     async def extract_all(self) -> Dict[str, List[Any]]:
         """
         Extract all data in one operation
@@ -446,6 +508,9 @@ class SalesforceAPIClient:
         except Exception as e:
             logger.warning(f"Could not extract account team members (may not be enabled): {e}")
 
+        # Extract sharing rules
+        sharing_rules = await self.extract_sharing_rules()
+
         # Convert Pydantic models to dicts
         data = {
             "users": [u.model_dump() for u in users],
@@ -464,6 +529,7 @@ class SalesforceAPIClient:
             "opportunity_shares": [osh.model_dump() for osh in opportunity_shares],
             "account_team_members": [atm.model_dump() for atm in account_team_members],
             "organization_wide_defaults": [owd.model_dump() for owd in organization_wide_defaults],
+            "sharing_rules": [sr.model_dump() for sr in sharing_rules],
         }
 
         logger.info("Extraction complete")
