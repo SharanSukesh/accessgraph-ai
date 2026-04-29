@@ -436,6 +436,9 @@ class SalesforceAPIClient:
         account_shares = await self.extract_account_shares()
         opportunity_shares = await self.extract_opportunity_shares()
 
+        # Extract Organization-Wide Defaults
+        organization_wide_defaults = await self.extract_organization_wide_defaults()
+
         # AccountTeamMember is optional - may not be enabled in all orgs
         account_team_members = []
         try:
@@ -460,6 +463,7 @@ class SalesforceAPIClient:
             "account_shares": [ash.model_dump() for ash in account_shares],
             "opportunity_shares": [osh.model_dump() for osh in opportunity_shares],
             "account_team_members": [atm.model_dump() for atm in account_team_members],
+            "organization_wide_defaults": [owd.model_dump() for owd in organization_wide_defaults],
         }
 
         logger.info("Extraction complete")
@@ -536,6 +540,61 @@ class SalesforceAPIClient:
 
         logger.info(f"Found {len(system_required_fields)} system-required fields for {object_name}")
         return system_required_fields
+
+    async def extract_organization_wide_defaults(self) -> List["SalesforceOrganizationWideDefault"]:
+        """
+        Extract Organization-Wide Default (OWD) sharing settings for all objects
+
+        OWD defines the baseline access level for each object:
+        - Private: Only owner can access
+        - Read: All users can read
+        - ReadWrite: All users can read/write
+        - ControlledByParent: Inherited from parent (e.g., Contact OWD from Account)
+        - FullAccess: All users have full access (rare)
+
+        Returns:
+            List of SalesforceOrganizationWideDefault objects
+        """
+        from app.salesforce.models import SalesforceOrganizationWideDefault
+
+        owds = []
+
+        # Standard objects to extract OWD for
+        standard_objects = [
+            "Account",
+            "Contact",
+            "Opportunity",
+            "Lead",
+            "Case",
+            "Campaign",
+            "Contract",
+            "Order"
+        ]
+
+        for sobject_type in standard_objects:
+            try:
+                describe_result = await self.describe_object(sobject_type)
+
+                # Extract OWD settings from describe response
+                # Note: Some orgs may not have all these fields depending on configuration
+                default_sharing = describe_result.get("defaultSharingModel")  # Internal users
+                external_sharing = describe_result.get("externalSharingModel")  # External users
+
+                if default_sharing:
+                    owd = SalesforceOrganizationWideDefault(
+                        sobject_type=sobject_type,
+                        sobject_label=describe_result.get("label"),
+                        internal_sharing_model=default_sharing,
+                        external_sharing_model=external_sharing
+                    )
+                    owds.append(owd)
+                    logger.info(f"Extracted OWD for {sobject_type}: {default_sharing}")
+            except Exception as e:
+                logger.warning(f"Could not extract OWD for {sobject_type}: {e}")
+                continue
+
+        logger.info(f"Extracted {len(owds)} OWD settings")
+        return owds
 
     async def extract_profile_field_permissions(
         self, profiles: List[SalesforceProfile]

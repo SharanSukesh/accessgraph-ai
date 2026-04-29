@@ -715,3 +715,37 @@ class GroupMemberSnapshot(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<GroupMemberSnapshot(group={self.group_id}, member={self.user_or_group_id})>"
+
+
+class OrganizationWideDefaultSnapshot(Base, TimestampMixin):
+    """Organization-Wide Default (OWD) sharing settings for each object"""
+    __tablename__ = "organization_wide_default_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    # Object identification
+    sobject_type: Mapped[str] = mapped_column(String(100), nullable=False)  # Account, Opportunity, Case, etc.
+    sobject_label: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # Sharing settings
+    internal_sharing_model: Mapped[str] = mapped_column(String(50), nullable=False)
+    # Values: Private, Read, ReadWrite, ControlledByParent, FullAccess
+
+    external_sharing_model: Mapped[Optional[str]] = mapped_column(String(50))
+    # For objects with external sharing (Partner/Customer users)
+
+    # Additional OWD settings
+    is_default_owner_is_creator: Mapped[bool] = mapped_column(Boolean, default=False)
+    # If true, record owner is set to creator by default
+
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "sobject_type", "snapshot_date", name="uq_owd_org_sobject_snapshot"),
+        Index("ix_owd_org", "organization_id"),
+        Index("ix_owd_sobject", "sobject_type"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<OrganizationWideDefaultSnapshot(object={self.sobject_type}, internal={self.internal_sharing_model})>"

@@ -169,6 +169,17 @@ class SalesforceAccountTeamMember(BaseModel):
     CaseAccessLevel: str
 
 
+class SalesforceOrganizationWideDefault(BaseModel):
+    """
+    Organization-Wide Default sharing settings
+    Note: This is extracted from DescribeSObjectResult, not a direct sObject query
+    """
+    sobject_type: str  # The API name (e.g., 'Account', 'Opportunity')
+    sobject_label: Optional[str] = None  # The display label
+    internal_sharing_model: str  # Private, Read, ReadWrite, ControlledByParent, FullAccess
+    external_sharing_model: Optional[str] = None  # For Partner/Customer users
+
+
 # =============================================================================
 # Query Response
 # =============================================================================

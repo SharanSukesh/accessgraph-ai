@@ -50,6 +50,13 @@ interface SharingRule {
   shared_to: string
 }
 
+interface OrganizationWideDefault {
+  sobject_type: string
+  sobject_label: string | null
+  internal_sharing_model: string
+  external_sharing_model: string | null
+}
+
 interface RecordAccessData {
   userId: string
   userName: string
@@ -58,6 +65,7 @@ interface RecordAccessData {
   manualShares: ManualShare[]
   teamAccess: TeamAccess[]
   sharingRules: SharingRule[]
+  organizationWideDefaults: OrganizationWideDefault[]
   summary: {
     total_owned_records: number
     total_manual_shares: number
@@ -92,7 +100,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
     return null
   }
 
-  const { ownedRecords, roleHierarchy, manualShares, teamAccess, sharingRules, summary } = data
+  const { ownedRecords, roleHierarchy, manualShares, teamAccess, sharingRules, organizationWideDefaults, summary } = data
 
   return (
     <div className="space-y-6">
@@ -352,6 +360,84 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                 </tbody>
               </table>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Organization-Wide Defaults */}
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-blue-600" />
+            Organization-Wide Defaults (OWD)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Baseline sharing model that defines default access levels for each object type across the organization.
+          </p>
+          {organizationWideDefaults && organizationWideDefaults.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Object</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Internal Sharing</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">External Sharing</th>
+                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {organizationWideDefaults.map((owd, idx) => {
+                    const getSharingModelBadge = (model: string) => {
+                      if (model === 'Private') return <Badge variant="error">Private</Badge>
+                      if (model === 'Read') return <Badge variant="warning">Read Only</Badge>
+                      if (model === 'ReadWrite') return <Badge variant="success">Read/Write</Badge>
+                      if (model === 'ControlledByParent') return <Badge variant="info">Controlled By Parent</Badge>
+                      return <Badge>{model}</Badge>
+                    }
+
+                    const getDescription = (model: string) => {
+                      if (model === 'Private') return 'Only owner can access'
+                      if (model === 'Read') return 'All users can view'
+                      if (model === 'ReadWrite') return 'All users can edit'
+                      if (model === 'ControlledByParent') return 'Inherited from parent'
+                      return 'Custom access'
+                    }
+
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                        <td className="px-4 py-2">
+                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                            {owd.sobject_label || owd.sobject_type}
+                          </div>
+                          {owd.sobject_label && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                              {owd.sobject_type}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-2">
+                          {getSharingModelBadge(owd.internal_sharing_model)}
+                        </td>
+                        <td className="px-4 py-2">
+                          {owd.external_sharing_model ? (
+                            getSharingModelBadge(owd.external_sharing_model)
+                          ) : (
+                            <span className="text-gray-400 text-xs">N/A</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                          {getDescription(owd.internal_sharing_model)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No OWD settings available</p>
           )}
         </CardContent>
       </Card>

@@ -4,7 +4,7 @@ Analyzes how users can access records in Salesforce
 """
 import logging
 from typing import Any, Dict, List, Optional
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -13,6 +13,7 @@ from app.domain.models import (
     GroupMemberSnapshot,
     GroupSnapshot,
     OpportunityShareSnapshot,
+    OrganizationWideDefaultSnapshot,
     RoleSnapshot,
     UserSnapshot,
 )
@@ -77,8 +78,11 @@ class RecordAccessService:
         # 4. Team Access - account/opportunity teams
         team_access = await self._get_team_access(org_id, user_sf_id)
 
-        # 5. Sharing Rules - criteria-based and owner-based (placeholder for now)
+        # 5. Sharing Rules - criteria-based and owner-based
         sharing_rules = await self._get_sharing_rules_access(org_id, user_sf_id)
+
+        # 6. Organization-Wide Defaults - baseline sharing model
+        organization_wide_defaults = await self._get_organization_wide_defaults(org_id)
 
         # Calculate summary
         summary = {
@@ -97,6 +101,7 @@ class RecordAccessService:
             "manual_shares": manual_shares,
             "team_access": team_access,
             "sharing_rules": sharing_rules,
+            "organization_wide_defaults": organization_wide_defaults,
             "summary": summary,
         }
 
@@ -107,18 +112,41 @@ class RecordAccessService:
     ) -> Dict[str, int]:
         """
         Get count of records owned by this user
-        Note: This requires querying actual record data (Account, Opportunity, etc.)
-        For now, we return a placeholder structure
+
+        Uses a lightweight approach:
+        1. Count share records where RowCause='Owner' (no record storage needed!)
+        2. This works because Salesforce creates Owner share records when OWD is not Public Read/Write
+
+        Note: If OWD = Public Read/Write, owner shares may not exist.
+        In that case, counts will be 0 (but user still owns records via permissions).
         """
-        # TODO: Query actual sObject records when we sync them
-        # For now, return placeholder
-        return {
-            "Account": 0,
-            "Opportunity": 0,
-            "Case": 0,
-            "Contact": 0,
-            "Lead": 0,
-        }
+        counts = {}
+
+        # Count Account ownership from AccountShare
+        account_count_query = select(func.count(AccountShareSnapshot.id)).where(
+            AccountShareSnapshot.organization_id == org_id,
+            AccountShareSnapshot.user_or_group_id == user_sf_id,
+            AccountShareSnapshot.row_cause == 'Owner'
+        )
+        account_count_result = await self.db.execute(account_count_query)
+        counts['Account'] = account_count_result.scalar() or 0
+
+        # Count Opportunity ownership from OpportunityShare
+        opp_count_query = select(func.count(OpportunityShareSnapshot.id)).where(
+            OpportunityShareSnapshot.organization_id == org_id,
+            OpportunityShareSnapshot.user_or_group_id == user_sf_id,
+            OpportunityShareSnapshot.row_cause == 'Owner'
+        )
+        opp_count_result = await self.db.execute(opp_count_query)
+        counts['Opportunity'] = opp_count_result.scalar() or 0
+
+        # TODO: Add Case, Contact, Lead when we sync those share objects
+        counts['Case'] = 0
+        counts['Contact'] = 0
+        counts['Lead'] = 0
+
+        logger.info(f"Owned records for user {user_sf_id}: {counts}")
+        return counts
 
     async def _get_role_hierarchy_access(
         self,
@@ -376,3 +404,46 @@ class RecordAccessService:
             })
 
         return shares
+
+    async def _get_organization_wide_defaults(
+        self,
+        org_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get Organization-Wide Default sharing settings for all objects
+
+        OWD defines the baseline access level for each object in Salesforce:
+        - Private: Only record owner (and those above in role hierarchy) can access
+        - Read: All internal users can read
+        - ReadWrite: All internal users can read and edit
+        - ControlledByParent: Access inherited from parent record
+        - FullAccess: All users have full access (rare)
+
+        Returns:
+            List of OWD settings with object type and sharing models
+        """
+        owds = []
+
+        # Get the latest OWD settings for this org
+        owd_query = select(OrganizationWideDefaultSnapshot).where(
+            OrganizationWideDefaultSnapshot.organization_id == org_id
+        ).order_by(
+            OrganizationWideDefaultSnapshot.snapshot_date.desc()
+        )
+        owd_result = await self.db.execute(owd_query)
+        owd_snapshots = owd_result.scalars().all()
+
+        # Group by sobject_type and get the latest for each
+        seen_objects = set()
+        for owd in owd_snapshots:
+            if owd.sobject_type not in seen_objects:
+                seen_objects.add(owd.sobject_type)
+                owds.append({
+                    "sobject_type": owd.sobject_type,
+                    "sobject_label": owd.sobject_label,
+                    "internal_sharing_model": owd.internal_sharing_model,
+                    "external_sharing_model": owd.external_sharing_model,
+                })
+
+        logger.info(f"Retrieved {len(owds)} OWD settings for org {org_id}")
+        return owds

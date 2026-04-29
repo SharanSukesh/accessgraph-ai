@@ -3,7 +3,7 @@ Salesforce Data Sync Service
 Orchestrates extraction and storage of Salesforce data
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 from uuid import uuid4
 
@@ -23,6 +23,12 @@ from app.domain.models import (
     PermissionSetGroupComponentSnapshot,
     ObjectPermissionSnapshot,
     FieldPermissionSnapshot,
+    GroupSnapshot,
+    GroupMemberSnapshot,
+    AccountShareSnapshot,
+    OpportunityShareSnapshot,
+    AccountTeamMemberSnapshot,
+    OrganizationWideDefaultSnapshot,
 )
 from app.salesforce.client import SalesforceAPIClient
 
@@ -129,6 +135,14 @@ class SalesforceSyncService:
             stats["field_permissions"] = await self._sync_field_permissions(
                 sf_data["field_permissions"]
             )
+
+            # Sync sharing data
+            stats["groups"] = await self._sync_groups(sf_data["groups"])
+            stats["group_members"] = await self._sync_group_members(sf_data["group_members"])
+            stats["account_shares"] = await self._sync_account_shares(sf_data["account_shares"])
+            stats["opportunity_shares"] = await self._sync_opportunity_shares(sf_data["opportunity_shares"])
+            stats["account_team_members"] = await self._sync_account_team_members(sf_data["account_team_members"])
+            stats["organization_wide_defaults"] = await self._sync_organization_wide_defaults(sf_data["organization_wide_defaults"])
 
             await self.complete_sync(sync_job, stats)
             logger.info(f"Sync completed successfully: {stats}")
@@ -291,3 +305,124 @@ class SalesforceSyncService:
         await self.db.commit()
         logger.info(f"Synced {len(permissions)} field permissions")
         return len(permissions)
+
+    async def _sync_groups(self, groups: List) -> int:
+        """Sync groups to database"""
+        snapshot_date = datetime.now(timezone.utc)
+
+        for sf_group in groups:
+            group = GroupSnapshot(
+                organization_id=self.org_id,
+                salesforce_id=sf_group["Id"],
+                name=sf_group.get("Name"),
+                group_type=sf_group["Type"],
+                related_id=sf_group.get("RelatedId"),
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(group)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(groups)} groups")
+        return len(groups)
+
+    async def _sync_group_members(self, group_members: List) -> int:
+        """Sync group members to database"""
+        snapshot_date = datetime.now(datetime.timezone.utc)
+
+        for sf_member in group_members:
+            member = GroupMemberSnapshot(
+                organization_id=self.org_id,
+                salesforce_id=sf_member["Id"],
+                group_id=sf_member["GroupId"],
+                user_or_group_id=sf_member["UserOrGroupId"],
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(member)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(group_members)} group members")
+        return len(group_members)
+
+    async def _sync_account_shares(self, account_shares: List) -> int:
+        """Sync account shares to database"""
+        snapshot_date = datetime.now(datetime.timezone.utc)
+
+        for sf_share in account_shares:
+            share = AccountShareSnapshot(
+                organization_id=self.org_id,
+                salesforce_id=sf_share["Id"],
+                account_id=sf_share["AccountId"],
+                user_or_group_id=sf_share["UserOrGroupId"],
+                account_access_level=sf_share["AccountAccessLevel"],
+                opportunity_access_level=sf_share["OpportunityAccessLevel"],
+                case_access_level=sf_share["CaseAccessLevel"],
+                row_cause=sf_share["RowCause"],
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(share)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(account_shares)} account shares")
+        return len(account_shares)
+
+    async def _sync_opportunity_shares(self, opportunity_shares: List) -> int:
+        """Sync opportunity shares to database"""
+        snapshot_date = datetime.now(datetime.timezone.utc)
+
+        for sf_share in opportunity_shares:
+            share = OpportunityShareSnapshot(
+                organization_id=self.org_id,
+                salesforce_id=sf_share["Id"],
+                opportunity_id=sf_share["OpportunityId"],
+                user_or_group_id=sf_share["UserOrGroupId"],
+                opportunity_access_level=sf_share["OpportunityAccessLevel"],
+                row_cause=sf_share["RowCause"],
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(share)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(opportunity_shares)} opportunity shares")
+        return len(opportunity_shares)
+
+    async def _sync_account_team_members(self, account_team_members: List) -> int:
+        """Sync account team members to database"""
+        snapshot_date = datetime.now(datetime.timezone.utc)
+
+        for sf_member in account_team_members:
+            member = AccountTeamMemberSnapshot(
+                organization_id=self.org_id,
+                salesforce_id=sf_member["Id"],
+                account_id=sf_member["AccountId"],
+                user_id=sf_member["UserId"],
+                team_member_role=sf_member.get("TeamMemberRole"),
+                account_access_level=sf_member["AccountAccessLevel"],
+                opportunity_access_level=sf_member["OpportunityAccessLevel"],
+                case_access_level=sf_member["CaseAccessLevel"],
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(member)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(account_team_members)} account team members")
+        return len(account_team_members)
+
+    async def _sync_organization_wide_defaults(self, owds: List) -> int:
+        """Sync organization-wide defaults to database"""
+        snapshot_date = datetime.now(datetime.timezone.utc)
+
+        for sf_owd in owds:
+            owd = OrganizationWideDefaultSnapshot(
+                organization_id=self.org_id,
+                sobject_type=sf_owd["sobject_type"],
+                sobject_label=sf_owd.get("sobject_label"),
+                internal_sharing_model=sf_owd["internal_sharing_model"],
+                external_sharing_model=sf_owd.get("external_sharing_model"),
+                is_default_owner_is_creator=False,  # This would need to be extracted separately if needed
+                snapshot_date=snapshot_date,
+            )
+            self.db.add(owd)
+
+        await self.db.commit()
+        logger.info(f"Synced {len(owds)} organization-wide defaults")
+        return len(owds)

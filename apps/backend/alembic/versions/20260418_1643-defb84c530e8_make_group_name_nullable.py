@@ -19,14 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Make name column nullable in group_snapshots table
-    op.alter_column('group_snapshots', 'name',
+    # SQLite doesn't support ALTER COLUMN directly, so we need to use batch mode
+    with op.batch_alter_table('group_snapshots', schema=None) as batch_op:
+        batch_op.alter_column('name',
                     existing_type=sa.String(length=255),
                     nullable=True)
 
 
 def downgrade() -> None:
     # Revert: make name column non-nullable
-    op.alter_column('group_snapshots', 'name',
+    with op.batch_alter_table('group_snapshots', schema=None) as batch_op:
+        batch_op.alter_column('name',
                     existing_type=sa.String(length=255),
                     nullable=False)
