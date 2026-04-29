@@ -390,7 +390,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {organizationWideDefaults.map((owd, idx) => {
                     const getSharingModelBadge = (model: string) => {
-                      if (model === 'Private') return <Badge variant="error">Private</Badge>
+                      if (model === 'Private') return <Badge variant="danger">Private</Badge>
                       if (model === 'Read') return <Badge variant="warning">Read Only</Badge>
                       if (model === 'ReadWrite') return <Badge variant="success">Read/Write</Badge>
                       if (model === 'ControlledByParent') return <Badge variant="info">Controlled By Parent</Badge>
