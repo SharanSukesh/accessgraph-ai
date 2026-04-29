@@ -364,57 +364,78 @@ class RecordAccessService:
         user_sf_id: str,
     ) -> List[Dict[str, Any]]:
         """
-        Get access granted via sharing rules
-        This is complex - sharing rules can grant access based on:
-        - Owner-based rules
-        - Criteria-based rules
-        - Both can share to roles, public groups, territories
+        Get sharing rules that may grant access to this user
 
-        For now, we'll analyze share records with RowCause indicating rules
+        Sharing rules can grant access based on:
+        - User's role (and subordinates)
+        - User's public groups
+        - User's territories
+
+        Returns list of sharing rules with descriptions
         """
-        shares = []
+        from app.domain.models import SharingRuleSnapshot, RoleSnapshot
 
-        # Get user's group memberships to check if any sharing rules target them
+        rules_summary = []
+
+        # Get user's role to check role-based sharing rules
+        user_query = select(UserSnapshot).where(
+            UserSnapshot.organization_id == org_id,
+            UserSnapshot.salesforce_id == user_sf_id,
+        )
+        user_result = await self.db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return []
+
+        user_role_id = user.user_role_id
+
+        # Get all sharing rules for this org
+        rules_query = select(SharingRuleSnapshot).where(
+            SharingRuleSnapshot.organization_id == org_id,
+            SharingRuleSnapshot.is_active == True,
+        )
+        rules_result = await self.db.execute(rules_query)
+        all_rules = rules_result.scalars().all()
+
+        # Get user's groups
         user_groups = await self._get_user_groups(org_id, user_sf_id)
-        user_and_group_ids = [user_sf_id] + [g["group_id"] for g in user_groups]
+        user_group_ids = [g["group_id"] for g in user_groups]
 
-        # Get Account shares from sharing rules
-        account_share_query = select(AccountShareSnapshot).where(
-            AccountShareSnapshot.organization_id == org_id,
-            AccountShareSnapshot.user_or_group_id.in_(user_and_group_ids),
-            AccountShareSnapshot.row_cause.notin_(["Owner", "Manual", "Team"]),
-        )
-        account_share_result = await self.db.execute(account_share_query)
-        account_shares = account_share_result.scalars().all()
+        # Filter rules that apply to this user
+        for rule in all_rules:
+            applies_to_user = False
+            description_parts = []
 
-        for share in account_shares:
-            shares.append({
-                "record_type": "Account",
-                "record_id": share.account_id,
-                "access_level": share.account_access_level,
-                "row_cause": share.row_cause,
-                "shared_to": share.user_or_group_id,
-            })
+            # Check if rule targets user's role
+            if rule.shared_to_type in ["Role", "RoleAndSubordinates"]:
+                if rule.shared_to_id == user_role_id:
+                    applies_to_user = True
+                    description_parts.append(f"shared to {rule.shared_to_type}")
 
-        # Get Opportunity shares from sharing rules
-        opp_share_query = select(OpportunityShareSnapshot).where(
-            OpportunityShareSnapshot.organization_id == org_id,
-            OpportunityShareSnapshot.user_or_group_id.in_(user_and_group_ids),
-            OpportunityShareSnapshot.row_cause.notin_(["Owner", "Manual", "Team"]),
-        )
-        opp_share_result = await self.db.execute(opp_share_query)
-        opp_shares = opp_share_result.scalars().all()
+            # Check if rule targets user's groups
+            if rule.shared_to_type in ["Group", "AllInternalUsers"]:
+                if rule.shared_to_type == "AllInternalUsers" or rule.shared_to_id in user_group_ids:
+                    applies_to_user = True
+                    description_parts.append(f"shared to {rule.shared_to_type}")
 
-        for share in opp_shares:
-            shares.append({
-                "record_type": "Opportunity",
-                "record_id": share.opportunity_id,
-                "access_level": share.opportunity_access_level,
-                "row_cause": share.row_cause,
-                "shared_to": share.user_or_group_id,
-            })
+            if applies_to_user:
+                # Build description
+                description = f"{rule.rule_name} - {rule.sobject_type} {rule.rule_type} rule"
+                if description_parts:
+                    description += f" ({', '.join(description_parts)})"
 
-        return shares
+                rules_summary.append({
+                    "record_type": rule.sobject_type,
+                    "record_id": rule.salesforce_id,
+                    "access_level": rule.access_level,
+                    "rule_name": rule.rule_name,
+                    "rule_type": rule.rule_type,
+                    "description": description,
+                })
+
+        logger.info(f"Found {len(rules_summary)} sharing rules for user {user_sf_id}")
+        return rules_summary
 
     async def _get_organization_wide_defaults(
         self,
