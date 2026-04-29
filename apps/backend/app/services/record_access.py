@@ -145,7 +145,18 @@ class RecordAccessService:
         counts['Contact'] = 0
         counts['Lead'] = 0
 
-        logger.info(f"Owned records for user {user_sf_id}: {counts}")
+        # Enhanced logging for debugging
+        total_shares = counts['Account'] + counts['Opportunity']
+        if total_shares == 0:
+            logger.warning(
+                f"No owned record shares found for user {user_sf_id}. "
+                f"This could mean: (1) User doesn't own any records, "
+                f"(2) OWD is Public Read/Write (shares pruned), or "
+                f"(3) Share data hasn't been synced yet."
+            )
+        else:
+            logger.info(f"Owned records for user {user_sf_id}: {counts}")
+
         return counts
 
     async def _get_role_hierarchy_access(

@@ -163,8 +163,8 @@ class SalesforceSyncService:
                 username=sf_user.Username,
                 name=sf_user.Name,
                 email=sf_user.Email,
-                profile_id_sf=sf_user.ProfileId,
-                role_id_sf=sf_user.UserRoleId,
+                profile_id=sf_user.ProfileId,
+                user_role_id=sf_user.UserRoleId,
                 is_active=sf_user.IsActive,
                 user_type=sf_user.UserType,
                 department=sf_user.Department,
@@ -183,7 +183,7 @@ class SalesforceSyncService:
                 organization_id=self.org_id,
                 salesforce_id=sf_role.Id,
                 name=sf_role.Name,
-                parent_role_id_sf=sf_role.ParentRoleId,
+                parent_role_id=sf_role.ParentRoleId,
             )
             self.db.add(role)
 
@@ -214,7 +214,7 @@ class SalesforceSyncService:
                 name=sf_ps.Name,
                 label=sf_ps.Label,
                 is_owned_by_profile=sf_ps.IsOwnedByProfile,
-                profile_id_sf=sf_ps.ProfileId,
+                profile_id=sf_ps.ProfileId,
             )
             self.db.add(ps)
 
@@ -228,8 +228,8 @@ class SalesforceSyncService:
             assign = PermissionSetAssignmentSnapshot(
                 organization_id=self.org_id,
                 salesforce_id=sf_assign.Id,
-                assignee_id_sf=sf_assign.AssigneeId,
-                permission_set_id_sf=sf_assign.PermissionSetId,
+                assignee_id=sf_assign.AssigneeId,
+                permission_set_id=sf_assign.PermissionSetId,
             )
             self.db.add(assign)
 
@@ -273,14 +273,14 @@ class SalesforceSyncService:
             perm = ObjectPermissionSnapshot(
                 organization_id=self.org_id,
                 salesforce_id=sf_perm.Id,
-                parent_id_sf=sf_perm.ParentId,
+                parent_id=sf_perm.ParentId,
                 sobject_type=sf_perm.SobjectType,
                 permissions_read=sf_perm.PermissionsRead,
                 permissions_create=sf_perm.PermissionsCreate,
                 permissions_edit=sf_perm.PermissionsEdit,
                 permissions_delete=sf_perm.PermissionsDelete,
-                permissions_view_all=sf_perm.PermissionsViewAllRecords,
-                permissions_modify_all=sf_perm.PermissionsModifyAllRecords,
+                permissions_view_all_records=sf_perm.PermissionsViewAllRecords,
+                permissions_modify_all_records=sf_perm.PermissionsModifyAllRecords,
             )
             self.db.add(perm)
 
@@ -294,7 +294,7 @@ class SalesforceSyncService:
             perm = FieldPermissionSnapshot(
                 organization_id=self.org_id,
                 salesforce_id=sf_perm.Id,
-                parent_id_sf=sf_perm.ParentId,
+                parent_id=sf_perm.ParentId,
                 sobject_type=sf_perm.SobjectType,
                 field=sf_perm.Field,
                 permissions_read=sf_perm.PermissionsRead,

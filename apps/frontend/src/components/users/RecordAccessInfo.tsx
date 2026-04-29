@@ -183,8 +183,13 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           </p>
           {summary.total_owned_records === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p className="text-sm">No owned record data available yet.</p>
-              <p className="text-xs mt-2">Record ownership data requires syncing actual Salesforce object records (Account, Opportunity, etc.)</p>
+              <p className="text-sm font-medium">No owned records found</p>
+              <p className="text-xs mt-2">This could mean:</p>
+              <ul className="text-xs mt-1 space-y-1 text-left max-w-md mx-auto">
+                <li>• User doesn't own any records</li>
+                <li>• OWD is Public Read/Write (ownership tracking disabled)</li>
+                <li>• Share data hasn't been synced yet - try running a sync</li>
+              </ul>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
