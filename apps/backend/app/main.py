@@ -5,8 +5,9 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import health
@@ -76,6 +77,56 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+
+# Trusted Host Middleware (restrict allowed hostnames)
+allowed_hosts = settings.allowed_hosts_list
+if allowed_hosts and allowed_hosts != ["*"]:
+    logger.info(f"Trusted hosts configured: {allowed_hosts}")
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses"""
+    response = await call_next(request)
+
+    # HSTS (HTTP Strict Transport Security) - enforce HTTPS
+    if settings.ENFORCE_HTTPS:
+        response.headers["Strict-Transport-Security"] = (
+            f"max-age={settings.HSTS_MAX_AGE}; includeSubDomains; preload"
+        )
+
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+
+    # XSS protection (legacy, but some browsers still use it)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Referrer policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Content Security Policy (basic policy)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self' https:; "
+        "frame-ancestors 'self'"
+    )
+
+    # Permissions policy (restrict browser features)
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), microphone=(), camera=()"
+    )
+
+    return response
+
 
 # Include routers
 from app.api.routes import auth, orgs, users

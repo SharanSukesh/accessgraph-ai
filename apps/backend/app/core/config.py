@@ -68,6 +68,30 @@ class Settings(BaseSettings):
         description="Salesforce login URL"
     )
 
+    # Encryption
+    DATABASE_ENCRYPTION_KEY: str = Field(
+        default="",
+        description="AES-256 encryption key for sensitive fields (base64 encoded, 32 bytes)"
+    )
+    ENABLE_FIELD_ENCRYPTION: bool = Field(
+        default=True,
+        description="Encrypt sensitive database fields (OAuth tokens, PII)"
+    )
+
+    # Security
+    ENFORCE_HTTPS: bool = Field(
+        default=False,
+        description="Enforce HTTPS and add HSTS headers (enable in production)"
+    )
+    HSTS_MAX_AGE: int = Field(
+        default=31536000,
+        description="HSTS max age in seconds (default: 1 year)"
+    )
+    ALLOWED_HOSTS: str = Field(
+        default="*",
+        description="Allowed hostnames (comma-separated, '*' allows all)"
+    )
+
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string into list"""
@@ -88,6 +112,22 @@ class Settings(BaseSettings):
             return self.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
         # SQLite already has async driver specified
         return self.DATABASE_URL
+
+    @property
+    def allowed_hosts_list(self) -> List[str]:
+        """Parse allowed hosts string into list"""
+        if not self.ALLOWED_HOSTS or self.ALLOWED_HOSTS.strip() == "*":
+            return ["*"]
+        return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
+
+    def validate_encryption_key(self) -> bool:
+        """Validate that encryption key is set if encryption is enabled"""
+        if self.ENABLE_FIELD_ENCRYPTION and not self.DATABASE_ENCRYPTION_KEY:
+            raise ValueError(
+                "DATABASE_ENCRYPTION_KEY must be set when ENABLE_FIELD_ENCRYPTION=True. "
+                "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+            )
+        return True
 
 
 # Global settings instance

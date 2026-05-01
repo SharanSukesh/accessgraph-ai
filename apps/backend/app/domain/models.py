@@ -21,8 +21,11 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy_utils import EncryptedType
+from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 
 from app.db.base import Base, TimestampMixin
+from app.core.config import settings
 
 
 def generate_uuid() -> str:
@@ -116,8 +119,21 @@ class SalesforceConnection(Base, TimestampMixin):
 
     instance_url: Mapped[str] = mapped_column(String(255), nullable=False)
     organization_id_sf: Mapped[Optional[str]] = mapped_column(String(18))  # Salesforce org ID
-    access_token: Mapped[Optional[str]] = mapped_column(Text)  # TODO: Encrypt in production
-    refresh_token: Mapped[Optional[str]] = mapped_column(Text)  # TODO: Encrypt in production
+
+    # Encrypted OAuth tokens (AES-256 encryption)
+    access_token: Mapped[Optional[str]] = mapped_column(
+        EncryptedType(Text, settings.DATABASE_ENCRYPTION_KEY, AesEngine, 'pkcs5')
+        if settings.ENABLE_FIELD_ENCRYPTION and settings.DATABASE_ENCRYPTION_KEY
+        else Text,
+        nullable=True
+    )
+    refresh_token: Mapped[Optional[str]] = mapped_column(
+        EncryptedType(Text, settings.DATABASE_ENCRYPTION_KEY, AesEngine, 'pkcs5')
+        if settings.ENABLE_FIELD_ENCRYPTION and settings.DATABASE_ENCRYPTION_KEY
+        else Text,
+        nullable=True
+    )
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
