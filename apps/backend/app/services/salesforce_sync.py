@@ -313,10 +313,17 @@ class SalesforceSyncService:
         snapshot_date = datetime.now(timezone.utc)
 
         for sf_group in groups:
+            # Handle NULL group names - use type + id as fallback
+            group_name = sf_group.get("Name")
+            if not group_name:
+                group_type = sf_group.get("Type", "Unknown")
+                group_id = sf_group.get("Id", "")[:8]  # First 8 chars of ID
+                group_name = f"{group_type} Group ({group_id})"
+
             group = GroupSnapshot(
                 organization_id=self.org_id,
                 salesforce_id=sf_group["Id"],
-                name=sf_group.get("Name"),
+                name=group_name,
                 group_type=sf_group["Type"],
                 related_id=sf_group.get("RelatedId"),
                 snapshot_date=snapshot_date,
