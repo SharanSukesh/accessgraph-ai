@@ -429,6 +429,13 @@ class SnapshotPersister:
         snapshot_date = datetime.now(timezone.utc)
 
         for group_data in groups:
+            # Handle NULL group names - use type + id as fallback
+            group_name = group_data.get("Name")
+            if not group_name:
+                group_type = group_data.get("Type", "Unknown")
+                group_id = group_data.get("Id", "")[:8]  # First 8 chars of ID
+                group_name = f"{group_type} Group ({group_id})"
+
             result = await self.db.execute(
                 select(GroupSnapshot).where(
                     GroupSnapshot.organization_id == org_id,
@@ -438,7 +445,7 @@ class SnapshotPersister:
             existing = result.scalar_one_or_none()
 
             if existing:
-                existing.name = group_data["Name"]
+                existing.name = group_name
                 existing.group_type = group_data["Type"]
                 existing.developer_name = group_data.get("DeveloperName")
                 existing.related_id = group_data.get("RelatedId")
@@ -447,7 +454,7 @@ class SnapshotPersister:
                 group = GroupSnapshot(
                     organization_id=org_id,
                     salesforce_id=group_data["Id"],
-                    name=group_data["Name"],
+                    name=group_name,
                     group_type=group_data["Type"],
                     developer_name=group_data.get("DeveloperName"),
                     related_id=group_data.get("RelatedId"),
