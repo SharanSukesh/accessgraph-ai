@@ -310,6 +310,8 @@ class SalesforceSyncService:
 
     async def _sync_groups(self, groups: List) -> int:
         """Sync groups to database"""
+        from sqlalchemy import select
+
         snapshot_date = datetime.now(timezone.utc)
 
         for sf_group in groups:
@@ -320,15 +322,32 @@ class SalesforceSyncService:
                 group_id = sf_group.get("Id", "")[:8]  # First 8 chars of ID
                 group_name = f"{group_type} Group ({group_id})"
 
-            group = GroupSnapshot(
-                organization_id=self.org_id,
-                salesforce_id=sf_group["Id"],
-                name=group_name,
-                group_type=sf_group["Type"],
-                related_id=sf_group.get("RelatedId"),
-                snapshot_date=snapshot_date,
+            # Check if record already exists (upsert logic)
+            stmt = select(GroupSnapshot).where(
+                GroupSnapshot.organization_id == self.org_id,
+                GroupSnapshot.salesforce_id == sf_group["Id"],
+                GroupSnapshot.snapshot_date == snapshot_date
             )
-            self.db.add(group)
+            result = await self.db.execute(stmt)
+            existing_group = result.scalar_one_or_none()
+
+            if existing_group:
+                # Update existing record
+                existing_group.name = group_name
+                existing_group.group_type = sf_group["Type"]
+                existing_group.related_id = sf_group.get("RelatedId")
+                existing_group.snapshot_date = snapshot_date
+            else:
+                # Create new record
+                group = GroupSnapshot(
+                    organization_id=self.org_id,
+                    salesforce_id=sf_group["Id"],
+                    name=group_name,
+                    group_type=sf_group["Type"],
+                    related_id=sf_group.get("RelatedId"),
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(group)
 
         await self.db.commit()
         logger.info(f"Synced {len(groups)} groups")
