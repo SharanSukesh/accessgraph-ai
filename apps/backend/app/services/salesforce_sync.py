@@ -47,16 +47,8 @@ class SalesforceSyncService:
         self.db = db
         self.org_id = org_id
 
-    async def _get_salesforce_client(self, refresh_if_needed: bool = True) -> SalesforceAPIClient:
-        """
-        Get authenticated Salesforce client for this org
-
-        Args:
-            refresh_if_needed: If True, refresh token if it's expired
-
-        Returns:
-            Authenticated SalesforceAPIClient
-        """
+    async def _get_salesforce_client(self) -> SalesforceAPIClient:
+        """Get authenticated Salesforce client for this org"""
         # Get organization's Salesforce connection
         stmt = select(SalesforceConnection).where(
             SalesforceConnection.organization_id == self.org_id,
@@ -68,50 +60,48 @@ class SalesforceSyncService:
         if not sf_connection or not sf_connection.access_token:
             raise ValueError(f"No active Salesforce connection for org {self.org_id}")
 
-        # Try to create client with current token
-        client = SalesforceAPIClient(
+        return SalesforceAPIClient(
             instance_url=sf_connection.instance_url,
             access_token=sf_connection.access_token
         )
 
-        # If refresh is enabled, verify token and refresh if needed
-        if refresh_if_needed and sf_connection.refresh_token:
-            try:
-                # Test the token with a simple query
-                await client.query("SELECT Id FROM User LIMIT 1")
-                logger.info("Access token is valid")
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 401:
-                    logger.warning("Access token expired, refreshing...")
-                    # Token expired - refresh it
-                    oauth_client = SalesforceOAuthClient()
-                    try:
-                        token_response = await oauth_client.refresh_access_token(
-                            sf_connection.refresh_token
-                        )
+    async def _refresh_access_token(self) -> SalesforceAPIClient:
+        """
+        Refresh the access token and return a new client
 
-                        # Update connection with new token
-                        sf_connection.access_token = token_response.access_token
-                        sf_connection.instance_url = token_response.instance_url
-                        await self.db.commit()
+        Returns:
+            New SalesforceAPIClient with refreshed token
+        """
+        # Get organization's Salesforce connection
+        stmt = select(SalesforceConnection).where(
+            SalesforceConnection.organization_id == self.org_id,
+            SalesforceConnection.is_active == True
+        )
+        result = await self.db.execute(stmt)
+        sf_connection = result.scalar_one_or_none()
 
-                        logger.info("Access token refreshed successfully")
+        if not sf_connection or not sf_connection.refresh_token:
+            raise ValueError(f"No refresh token available for org {self.org_id}")
 
-                        # Return new client with refreshed token
-                        return SalesforceAPIClient(
-                            instance_url=token_response.instance_url,
-                            access_token=token_response.access_token
-                        )
-                    except Exception as refresh_error:
-                        logger.error(f"Token refresh failed: {refresh_error}", exc_info=True)
-                        raise ValueError(
-                            f"Access token expired and refresh failed. Please re-authenticate."
-                        ) from refresh_error
-                else:
-                    # Some other HTTP error - re-raise
-                    raise
+        logger.warning("Access token expired, refreshing...")
 
-        return client
+        oauth_client = SalesforceOAuthClient()
+        token_response = await oauth_client.refresh_access_token(
+            sf_connection.refresh_token
+        )
+
+        # Update connection with new token
+        sf_connection.access_token = token_response.access_token
+        sf_connection.instance_url = token_response.instance_url
+        await self.db.commit()
+
+        logger.info("Access token refreshed successfully")
+
+        # Return new client with refreshed token
+        return SalesforceAPIClient(
+            instance_url=token_response.instance_url,
+            access_token=token_response.access_token
+        )
 
     async def start_sync(self) -> SyncJob:
         """
@@ -164,7 +154,18 @@ class SalesforceSyncService:
 
             # Extract all data from Salesforce
             logger.info("Extracting data from Salesforce...")
-            sf_data = await client.extract_all()
+
+            # Try to extract data, retry once with refreshed token if 401
+            try:
+                sf_data = await client.extract_all()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 401:
+                    logger.warning("Got 401 during extract_all, refreshing token and retrying...")
+                    # Token expired during extraction - refresh and retry
+                    client = await self._refresh_access_token()
+                    sf_data = await client.extract_all()
+                else:
+                    raise
 
             # Sync each data type
             stats["users"] = await self._sync_users(sf_data["users"])
