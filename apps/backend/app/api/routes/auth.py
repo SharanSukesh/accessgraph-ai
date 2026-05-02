@@ -467,12 +467,14 @@ async def verify_session(access_token: Optional[str] = Cookie(None)):
 @router.get("/me")
 async def get_current_user(
     access_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_database),
 ):
     """
     Get current user information
 
     This endpoint returns information about the currently authenticated user.
+    Supports both cookie-based and header-based authentication.
 
     Returns:
         User and organization information
@@ -482,14 +484,21 @@ async def get_current_user(
     """
     from app.auth.jwt import get_org_id_from_token
 
-    if not access_token:
+    # Try to get token from Authorization header first (for cross-domain)
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "")
+    elif access_token:
+        token = access_token
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
 
     # Get org ID from token
-    org_id = get_org_id_from_token(access_token)
+    org_id = get_org_id_from_token(token)
 
     # Get organization details
     stmt = select(Organization).where(Organization.id == org_id)
