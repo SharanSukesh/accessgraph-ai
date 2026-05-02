@@ -18,7 +18,7 @@ public with sharing class AccessGraphConnector {
      * Get API endpoint from custom settings or use default
      */
     private static String getApiEndpoint() {
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
         if (settings != null && String.isNotBlank(settings.API_Endpoint__c)) {
             return settings.API_Endpoint__c;
         }
@@ -29,7 +29,7 @@ public with sharing class AccessGraphConnector {
      * Get organization ID from custom settings
      */
     public static String getOrganizationId() {
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
         if (settings != null && String.isNotBlank(settings.Organization_ID__c)) {
             return settings.Organization_ID__c;
         }
@@ -140,15 +140,19 @@ public with sharing class AccessGraphConnector {
 
     /**
      * Update sync status in custom settings
+     * Truncates status to 50 chars to fit field limit
      */
     private static void updateSyncStatus(String status) {
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
-        if (settings == null) {
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
+        if (settings == null || settings.Id == null) {
             settings = new AccessGraph_Settings__c();
             settings.SetupOwnerId = UserInfo.getOrganizationId();
         }
 
-        settings.Sync_Status__c = status;
+        // Truncate to fit Sync_Status__c field length (50 chars)
+        settings.Sync_Status__c = status != null && status.length() > 50
+            ? status.substring(0, 50)
+            : status;
         settings.Last_Sync_Date__c = DateTime.now();
 
         upsert settings;
@@ -159,8 +163,8 @@ public with sharing class AccessGraphConnector {
      * Called by post-install script
      */
     public static void initializeSettings() {
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
-        if (settings == null) {
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
+        if (settings == null || settings.Id == null) {
             settings = new AccessGraph_Settings__c();
             settings.SetupOwnerId = UserInfo.getOrganizationId();
             settings.API_Endpoint__c = DEFAULT_API_ENDPOINT;

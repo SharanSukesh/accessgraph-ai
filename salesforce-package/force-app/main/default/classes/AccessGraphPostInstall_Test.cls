@@ -22,7 +22,7 @@ private class AccessGraphPostInstall_Test {
         Test.stopTest();
 
         // Verify settings initialized
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
         System.assertNotEquals(null, settings, 'Settings should be initialized');
         System.assertEquals(UserInfo.getOrganizationId(), settings.Organization_ID__c, 'Org ID should be set');
         System.assertEquals(true, settings.Auto_Sync_Enabled__c, 'Auto sync should be enabled');
@@ -54,7 +54,7 @@ private class AccessGraphPostInstall_Test {
         Test.stopTest();
 
         // Verify settings still exist (not overwritten)
-        settings = AccessGraph_Settings__c.getInstance();
+        settings = AccessGraph_Settings__c.getOrgDefaults();
         System.assertNotEquals(null, settings, 'Settings should still exist');
     }
 

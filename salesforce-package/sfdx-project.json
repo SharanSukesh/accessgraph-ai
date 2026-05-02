@@ -9,7 +9,7 @@
     }
   ],
   "name": "AccessGraph AI",
-  "namespace": "accessgraph",
+  "namespace": "",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "60.0",
   "packageAliases": {

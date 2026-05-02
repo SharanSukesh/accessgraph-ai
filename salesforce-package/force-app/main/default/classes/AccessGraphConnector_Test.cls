@@ -37,7 +37,7 @@ private class AccessGraphConnector_Test {
         System.assert(result.containsKey('success'), 'Should contain success field');
 
         // Verify settings updated
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
         System.assertEquals('Success', settings.Sync_Status__c, 'Sync status should be Success');
         System.assertNotEquals(null, settings.Last_Sync_Date__c, 'Last sync date should be set');
     }
@@ -58,26 +58,29 @@ private class AccessGraphConnector_Test {
         System.assertEquals(500, result.get('statusCode'), 'Should return 500 status code');
 
         // Verify settings updated with failure
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
         System.assertEquals('Failed', settings.Sync_Status__c, 'Sync status should be Failed');
     }
 
     /**
      * Test triggerSync() - Exception handling
+     * Note: AuraHandledException.getMessage() returns generic message for security
      */
     @isTest
     static void testTriggerSync_Exception() {
-        // No mock setup - will cause exception
-        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(0, null));
+        // Mock that returns invalid response to trigger exception
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(500, 'invalid json'));
 
         Test.startTest();
+        Boolean exceptionThrown = false;
         try {
             AccessGraphConnector.triggerSync();
-            System.assert(false, 'Should have thrown exception');
         } catch (AuraHandledException e) {
-            System.assert(e.getMessage().contains('Failed to trigger sync'), 'Should contain error message');
+            exceptionThrown = true;
         }
         Test.stopTest();
+
+        System.assertEquals(true, exceptionThrown, 'AuraHandledException should be thrown for invalid response');
     }
 
     /**
@@ -154,7 +157,7 @@ private class AccessGraphConnector_Test {
         Test.stopTest();
 
         // Verify settings created
-        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getInstance();
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
         System.assertNotEquals(null, settings, 'Settings should be created');
         System.assertEquals(UserInfo.getOrganizationId(), settings.Organization_ID__c, 'Org ID should be set');
         System.assertEquals(true, settings.Auto_Sync_Enabled__c, 'Auto sync should be enabled');

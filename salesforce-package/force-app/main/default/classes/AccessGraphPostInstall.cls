@@ -9,11 +9,16 @@ global class AccessGraphPostInstall implements InstallHandler {
             // Initialize custom settings
             AccessGraphConnector.initializeSettings();
 
-            // Notify backend about new installation
-            notifyInstallation(context);
+            // Extract primitive values from InstallContext for @future method
+            Boolean isUpgrade = context.isUpgrade();
+            String previousVersion = context.previousVersion()?.toString();
+            Id installerId = context.installerID();
+
+            // Notify backend about new installation (primitive params for @future)
+            notifyInstallation(isUpgrade, previousVersion, installerId);
 
             // Send welcome email to installer
-            sendWelcomeEmail(context.installerID());
+            sendWelcomeEmail(installerId);
 
         } catch (Exception e) {
             System.debug('Post-install error: ' + e.getMessage());
@@ -23,22 +28,30 @@ global class AccessGraphPostInstall implements InstallHandler {
 
     /**
      * Notify AccessGraph AI backend about new installation
+     * Uses primitive parameters since @future methods don't support InstallContext
      */
     @future(callout=true)
-    private static void notifyInstallation(InstallContext context) {
+    private static void notifyInstallation(Boolean isUpgrade, String previousVersion, Id installerId) {
         try {
             String orgId = UserInfo.getOrganizationId();
             String orgName = UserInfo.getOrganizationName();
 
             String endpoint = 'https://accessgraph-ai-production.up.railway.app/package/install';
 
+            String installerEmail = '';
+            try {
+                installerEmail = [SELECT Email FROM User WHERE Id = :installerId LIMIT 1].Email;
+            } catch (Exception e) {
+                System.debug('Could not fetch installer email: ' + e.getMessage());
+            }
+
             Map<String, Object> payload = new Map<String, Object>{
                 'organizationId' => orgId,
                 'organizationName' => orgName,
-                'installationType' => context.isUpgrade() ? 'upgrade' : 'new',
-                'previousVersion' => context.previousVersion()?.toString(),
+                'installationType' => isUpgrade ? 'upgrade' : 'new',
+                'previousVersion' => previousVersion,
                 'installDate' => DateTime.now().format('yyyy-MM-dd\'T\'HH:mm:ss\'Z\''),
-                'installerEmail' => [SELECT Email FROM User WHERE Id = :context.installerID()].Email
+                'installerEmail' => installerEmail
             };
 
             HttpRequest req = new HttpRequest();

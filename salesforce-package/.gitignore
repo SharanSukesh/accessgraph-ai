@@ -1,0 +1,10 @@
+# Salesforce CLI cache and metadata
+.sf/
+.sfdx/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
