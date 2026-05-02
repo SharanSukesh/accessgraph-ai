@@ -113,6 +113,14 @@ class AuditAction(str, PyEnum):
     DISCONNECT_SALESFORCE = "disconnect_salesforce"
 
 
+class OrgUserRole(str, PyEnum):
+    """Organization user roles for RBAC"""
+    ORG_ADMIN = "org_admin"        # Full access - can manage users, settings, export data
+    ANALYST = "analyst"             # Can view and analyze data, create recommendations
+    VIEWER = "viewer"               # Read-only access to dashboard
+    AUDITOR = "auditor"             # Can view audit logs and compliance data
+
+
 # ============================================================================
 # Core Organization Models
 # ============================================================================
@@ -828,3 +836,72 @@ class AuditLog(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<AuditLog(action={self.action}, user={self.user_email}, resource={self.resource_type})>"
+
+
+class OrgUser(Base, TimestampMixin):
+    """Users who can access the AccessGraph dashboard (RBAC)"""
+    __tablename__ = "org_users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    # User identification
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # Authentication (future: could integrate with Auth0, Okta, etc.)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255))
+    # For now, users will authenticate via Salesforce OAuth
+
+    # Role and permissions
+    role: Mapped[OrgUserRole] = mapped_column(
+        Enum(OrgUserRole, native_enum=False, length=20),
+        default=OrgUserRole.VIEWER,
+        nullable=False
+    )
+
+    # Granular permissions (override role defaults)
+    can_export_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_manage_users: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_sync_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_delete_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_view_audit_logs: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Status
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Invitation tracking
+    invited_by: Mapped[Optional[str]] = mapped_column(String(36))  # FK to another OrgUser
+    invited_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Relationships
+    organization = relationship("Organization")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "email", name="uq_org_user_email"),
+        Index("ix_org_user_org", "organization_id"),
+        Index("ix_org_user_email", "email"),
+        Index("ix_org_user_role", "role"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<OrgUser(email={self.email}, role={self.role}, org={self.organization_id})>"
+
+    def has_permission(self, permission: str) -> bool:
+        """Check if user has a specific permission based on role and overrides"""
+        # Org admins have all permissions
+        if self.role == OrgUserRole.ORG_ADMIN:
+            return True
+
+        # Check specific permissions
+        permission_map = {
+            "export_data": self.can_export_data,
+            "manage_users": self.can_manage_users,
+            "sync_data": self.can_sync_data,
+            "delete_data": self.can_delete_data,
+            "view_audit_logs": self.can_view_audit_logs or self.role == OrgUserRole.AUDITOR,
+        }
+
+        return permission_map.get(permission, False)

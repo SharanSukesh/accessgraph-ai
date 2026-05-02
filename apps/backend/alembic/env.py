@@ -34,6 +34,7 @@ from app.domain.models import (  # noqa: F401
     RiskScore,
     Recommendation,
     AuditLog,
+    OrgUser,
 )
 
 # Fix for Windows psycopg3 compatibility
