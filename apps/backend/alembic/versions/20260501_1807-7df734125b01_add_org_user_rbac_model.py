@@ -53,7 +53,11 @@ def upgrade() -> None:
                existing_type=sa.VARCHAR(length=100),
                type_=sa.Enum('LOGIN', 'LOGOUT', 'VIEW_USERS', 'VIEW_USER_DETAILS', 'VIEW_PERMISSIONS', 'VIEW_ACCESS_GRAPH', 'VIEW_ANOMALIES', 'VIEW_RECOMMENDATIONS', 'SYNC_DATA', 'DELETE_DATA', 'EXPORT_DATA', 'UPDATE_SETTINGS', 'INVITE_USER', 'REMOVE_USER', 'UPDATE_USER_ROLE', 'CONNECT_SALESFORCE', 'DISCONNECT_SALESFORCE', name='auditaction', native_enum=False, length=50),
                existing_nullable=False)
-    op.drop_index(op.f('ix_audit_timestamp'), table_name='audit_logs')
+    # Drop index only if it exists (may not exist in production DB)
+    try:
+        op.drop_index(op.f('ix_audit_timestamp'), table_name='audit_logs')
+    except Exception:
+        pass  # Index doesn't exist, continue
     op.create_index('ix_audit_created', 'audit_logs', ['created_at'], unique=False)
     op.create_index('ix_audit_resource', 'audit_logs', ['resource_type', 'resource_id'], unique=False)
     op.create_index('ix_audit_user', 'audit_logs', ['user_email'], unique=False)
