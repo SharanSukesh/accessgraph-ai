@@ -3,7 +3,7 @@ Privacy & Data Management API Routes
 Handles GDPR compliance, data retention, and privacy requests.
 """
 import logging
-from typing import Dict
+from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orgs/{org_id}/privacy", tags=["privacy"])
 
 
-@router.get("/inventory", response_model=Dict[str, any])
+@router.get("/inventory", response_model=Dict[str, Any])
 async def get_data_inventory(
     org_id: str,
     db: AsyncSession = Depends(get_db)
