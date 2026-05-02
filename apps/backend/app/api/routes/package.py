@@ -3,7 +3,7 @@ Salesforce Package API Routes
 Handles package installation notifications and sync triggers from Salesforce
 """
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -34,7 +34,7 @@ class SyncTriggerRequest(BaseModel):
     organizationId: str
 
 
-@router.post("/install", response_model=Dict[str, any])
+@router.post("/install", response_model=Dict[str, Any])
 async def handle_package_installation(
     payload: PackageInstallRequest,
     request: Request,
@@ -132,7 +132,7 @@ async def handle_package_installation(
         )
 
 
-@router.post("/sync-trigger", response_model=Dict[str, any])
+@router.post("/sync-trigger", response_model=Dict[str, Any])
 async def handle_sync_trigger(
     payload: SyncTriggerRequest,
     request: Request,
@@ -228,7 +228,7 @@ async def handle_sync_trigger(
         )
 
 
-@router.get("/status/{salesforce_org_id}", response_model=Dict[str, any])
+@router.get("/status/{salesforce_org_id}", response_model=Dict[str, Any])
 async def get_package_status(
     salesforce_org_id: str,
     db: AsyncSession = Depends(get_db)
