@@ -1,11 +1,12 @@
 {
   "packageDirectories": [
     {
+      "versionName": "ver 0.1",
+      "versionNumber": "0.1.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "AccessGraph AI",
-      "versionName": "Spring 2026",
-      "versionNumber": "1.0.0.NEXT"
+      "versionDescription": "Salesforce permission analytics and security insights"
     }
   ],
   "name": "AccessGraph AI",
@@ -13,6 +14,7 @@
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "60.0",
   "packageAliases": {
-    "AccessGraph AI": "0Ho..."
+    "AccessGraph AI": "0HodL0000003ZMDSA2",
+    "AccessGraph AI@0.1.0-1": "04tdL000000Ye7tQAC"
   }
 }

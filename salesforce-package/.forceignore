@@ -1,0 +1,12 @@
+# Salesforce CLI ignore patterns
+# Exclude connectedApps from package version creation (requires special permissions in scratch orgs)
+# This will be added back during production managed package creation
+**/connectedApps/**
+
+# Exclude CLI cache
+.sf/
+.sfdx/
+
+# OS files
+.DS_Store
+Thumbs.db
