@@ -52,7 +52,7 @@ async def get_data_inventory(
         raise HTTPException(status_code=500, detail=f"Failed to get data inventory: {str(e)}")
 
 
-@router.delete("/snapshots", response_model=Dict[str, any])
+@router.delete("/snapshots", response_model=Dict[str, Any])
 async def delete_old_snapshots(
     org_id: str,
     retention_days: int = DataRetentionService.DEFAULT_SNAPSHOT_RETENTION_DAYS,
@@ -85,7 +85,7 @@ async def delete_old_snapshots(
         raise HTTPException(status_code=500, detail=f"Failed to delete snapshots: {str(e)}")
 
 
-@router.delete("/cleanup", response_model=Dict[str, any])
+@router.delete("/cleanup", response_model=Dict[str, Any])
 async def cleanup_all_old_data(
     org_id: str,
     db: AsyncSession = Depends(get_db)
@@ -124,7 +124,7 @@ async def cleanup_all_old_data(
         raise HTTPException(status_code=500, detail=f"Failed to cleanup data: {str(e)}")
 
 
-@router.delete("/all-data", response_model=Dict[str, any])
+@router.delete("/all-data", response_model=Dict[str, Any])
 async def delete_all_organization_data(
     org_id: str,
     confirm: str = None,
