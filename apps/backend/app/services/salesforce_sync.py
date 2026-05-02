@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from uuid import uuid4
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +33,7 @@ from app.domain.models import (
     SharingRuleSnapshot,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.salesforce.oauth import SalesforceOAuthClient
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +47,16 @@ class SalesforceSyncService:
         self.db = db
         self.org_id = org_id
 
-    async def _get_salesforce_client(self) -> SalesforceAPIClient:
-        """Get authenticated Salesforce client for this org"""
+    async def _get_salesforce_client(self, refresh_if_needed: bool = True) -> SalesforceAPIClient:
+        """
+        Get authenticated Salesforce client for this org
+
+        Args:
+            refresh_if_needed: If True, refresh token if it's expired
+
+        Returns:
+            Authenticated SalesforceAPIClient
+        """
         # Get organization's Salesforce connection
         stmt = select(SalesforceConnection).where(
             SalesforceConnection.organization_id == self.org_id,
@@ -58,10 +68,50 @@ class SalesforceSyncService:
         if not sf_connection or not sf_connection.access_token:
             raise ValueError(f"No active Salesforce connection for org {self.org_id}")
 
-        return SalesforceAPIClient(
+        # Try to create client with current token
+        client = SalesforceAPIClient(
             instance_url=sf_connection.instance_url,
             access_token=sf_connection.access_token
         )
+
+        # If refresh is enabled, verify token and refresh if needed
+        if refresh_if_needed and sf_connection.refresh_token:
+            try:
+                # Test the token with a simple query
+                await client.query("SELECT Id FROM User LIMIT 1")
+                logger.info("Access token is valid")
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 401:
+                    logger.warning("Access token expired, refreshing...")
+                    # Token expired - refresh it
+                    oauth_client = SalesforceOAuthClient()
+                    try:
+                        token_response = await oauth_client.refresh_access_token(
+                            sf_connection.refresh_token
+                        )
+
+                        # Update connection with new token
+                        sf_connection.access_token = token_response.access_token
+                        sf_connection.instance_url = token_response.instance_url
+                        await self.db.commit()
+
+                        logger.info("Access token refreshed successfully")
+
+                        # Return new client with refreshed token
+                        return SalesforceAPIClient(
+                            instance_url=token_response.instance_url,
+                            access_token=token_response.access_token
+                        )
+                    except Exception as refresh_error:
+                        logger.error(f"Token refresh failed: {refresh_error}", exc_info=True)
+                        raise ValueError(
+                            f"Access token expired and refresh failed. Please re-authenticate."
+                        ) from refresh_error
+                else:
+                    # Some other HTTP error - re-raise
+                    raise
+
+        return client
 
     async def start_sync(self) -> SyncJob:
         """
