@@ -159,13 +159,26 @@ class SalesforceSyncService:
             try:
                 sf_data = await client.extract_all()
             except httpx.HTTPStatusError as e:
+                logger.error(f"HTTP error during extract_all: {e.response.status_code} - {e}", exc_info=True)
                 if e.response.status_code == 401:
-                    logger.warning("Got 401 during extract_all, refreshing token and retrying...")
-                    # Token expired during extraction - refresh and retry
-                    client = await self._refresh_access_token()
-                    sf_data = await client.extract_all()
+                    logger.warning("Got 401 during extract_all, attempting token refresh...")
+                    try:
+                        # Token expired during extraction - refresh and retry
+                        client = await self._refresh_access_token()
+                        logger.info("Token refreshed, retrying extraction...")
+                        sf_data = await client.extract_all()
+                        logger.info("Extraction succeeded after token refresh")
+                    except Exception as refresh_error:
+                        logger.error(f"Token refresh or retry failed: {refresh_error}", exc_info=True)
+                        raise ValueError(
+                            f"Access token expired and refresh failed: {refresh_error}. "
+                            "Please re-authenticate with Salesforce."
+                        ) from refresh_error
                 else:
                     raise
+            except Exception as e:
+                logger.error(f"Unexpected error during extract_all: {type(e).__name__} - {e}", exc_info=True)
+                raise
 
             # Sync each data type
             stats["users"] = await self._sync_users(sf_data["users"])
