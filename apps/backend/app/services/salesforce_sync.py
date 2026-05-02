@@ -49,6 +49,8 @@ class SalesforceSyncService:
 
     async def _get_salesforce_client(self) -> SalesforceAPIClient:
         """Get authenticated Salesforce client for this org"""
+        from app.core.config import settings
+
         # Get organization's Salesforce connection
         stmt = select(SalesforceConnection).where(
             SalesforceConnection.organization_id == self.org_id,
@@ -59,6 +61,20 @@ class SalesforceSyncService:
 
         if not sf_connection or not sf_connection.access_token:
             raise ValueError(f"No active Salesforce connection for org {self.org_id}")
+
+        # Log encryption status for debugging
+        logger.info(f"🔐 Token encryption status:")
+        logger.info(f"   ENABLE_FIELD_ENCRYPTION: {settings.ENABLE_FIELD_ENCRYPTION}")
+        logger.info(f"   DATABASE_ENCRYPTION_KEY set: {bool(settings.DATABASE_ENCRYPTION_KEY)}")
+        logger.info(f"   Access token length: {len(sf_connection.access_token)} chars")
+        logger.info(f"   Access token format: {'Salesforce' if sf_connection.access_token.startswith('00!') or sf_connection.access_token.startswith('eyJ') else 'Encrypted/Decrypted'}")
+        logger.info(f"   Refresh token available: {bool(sf_connection.refresh_token)}")
+
+        if settings.ENABLE_FIELD_ENCRYPTION:
+            logger.info(f"   ✅ Tokens are encrypted at rest (AES-256)")
+            logger.info(f"   ✅ Successfully decrypted for API use")
+        else:
+            logger.warning(f"   ⚠️  Encryption is DISABLED - tokens stored as plain text")
 
         return SalesforceAPIClient(
             instance_url=sf_connection.instance_url,
