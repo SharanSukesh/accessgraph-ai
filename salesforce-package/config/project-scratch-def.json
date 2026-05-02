@@ -1,0 +1,15 @@
+{
+  "orgName": "AccessGraph AI Test Org",
+  "edition": "Developer",
+  "features": ["Communities", "API"],
+  "settings": {
+    "lightningExperienceSettings": {
+      "enableS1DesktopEnabled": true
+    },
+    "securitySettings": {
+      "sessionSettings": {
+        "forceRelogin": false
+      }
+    }
+  }
+}
