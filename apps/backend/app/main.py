@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging
 from app.db.session import engine, test_connection
 from app.db.neo4j_client import Neo4jClient
+from app.middleware.audit import AuditMiddleware
 
 # Setup logging
 setup_logging()
@@ -83,6 +84,10 @@ allowed_hosts = settings.allowed_hosts_list
 if allowed_hosts and allowed_hosts != ["*"]:
     logger.info(f"Trusted hosts configured: {allowed_hosts}")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+# Audit Logging Middleware (track sensitive data access)
+app.add_middleware(AuditMiddleware)
+logger.info("Audit logging middleware enabled")
 
 
 # Security Headers Middleware
