@@ -194,3 +194,114 @@ async def get_retention_policy(org_id: str):
         },
         "note": "Future versions will support custom retention periods per organization"
     }
+
+
+@router.post("/migrate-encrypt-tokens", response_model=Dict[str, Any])
+async def migrate_encrypt_tokens(
+    confirm: str = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    One-time migration to encrypt existing plain-text OAuth tokens.
+
+    ⚠️ WARNING: This should only be run ONCE during the encryption migration.
+
+    This endpoint:
+    1. Reads plain-text tokens from the database
+    2. Re-saves them via ORM to trigger encryption
+    3. Requires ENABLE_FIELD_ENCRYPTION=true to work
+
+    Query params:
+    - confirm: Must be "MIGRATE_TOKENS" to proceed
+
+    After running this:
+    1. Verify ENABLE_FIELD_ENCRYPTION=true in environment
+    2. Test Salesforce sync
+    3. Remove or disable this endpoint
+    """
+    # Safety check - require explicit confirmation
+    if confirm != "MIGRATE_TOKENS":
+        raise HTTPException(
+            status_code=400,
+            detail='Must provide confirm="MIGRATE_TOKENS" query parameter to proceed'
+        )
+
+    try:
+        from app.core.config import settings
+        from app.domain.models import SalesforceConnection
+        from sqlalchemy import select, text
+
+        # Check encryption is enabled
+        if not settings.ENABLE_FIELD_ENCRYPTION:
+            raise HTTPException(
+                status_code=400,
+                detail="ENABLE_FIELD_ENCRYPTION must be true to run migration. "
+                       "Please enable it in environment variables first."
+            )
+
+        if not settings.DATABASE_ENCRYPTION_KEY:
+            raise HTTPException(
+                status_code=400,
+                detail="DATABASE_ENCRYPTION_KEY must be set to run migration."
+            )
+
+        # Query all connections with tokens
+        stmt = select(SalesforceConnection).where(
+            (SalesforceConnection.access_token.isnot(None)) |
+            (SalesforceConnection.refresh_token.isnot(None))
+        )
+        result = await db.execute(stmt)
+        connections = result.scalars().all()
+
+        if not connections:
+            logger.info("No connections found with tokens to migrate")
+            return {
+                "status": "success",
+                "message": "No tokens to migrate",
+                "migrated_count": 0
+            }
+
+        migrated_count = 0
+        for conn in connections:
+            # Re-assign the token values
+            # When encryption is enabled, setting these values will encrypt them
+            if conn.access_token:
+                # Force re-encryption by setting the value
+                original_access = conn.access_token
+                conn.access_token = original_access
+                logger.info(f"Re-encrypted access token for connection {conn.id}")
+
+            if conn.refresh_token:
+                original_refresh = conn.refresh_token
+                conn.refresh_token = original_refresh
+                logger.info(f"Re-encrypted refresh token for connection {conn.id}")
+
+            migrated_count += 1
+
+        # Commit all changes
+        await db.commit()
+
+        logger.info(
+            f"TOKEN MIGRATION COMPLETE: {migrated_count} connection(s) migrated. "
+            f"Tokens are now encrypted with AES-256."
+        )
+
+        return {
+            "status": "success",
+            "message": f"Successfully migrated {migrated_count} connection(s)",
+            "migrated_count": migrated_count,
+            "next_steps": [
+                "Verify ENABLE_FIELD_ENCRYPTION=true in environment",
+                "Test Salesforce sync to ensure it works",
+                "Tokens are now encrypted with AES-256"
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to migrate tokens: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to migrate tokens: {str(e)}"
+        )
