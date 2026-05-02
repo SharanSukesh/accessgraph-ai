@@ -83,6 +83,36 @@ class RecommendationStatus(str, PyEnum):
     DEFERRED = "deferred"
 
 
+class AuditAction(str, PyEnum):
+    """Audit log action types"""
+    # Authentication
+    LOGIN = "login"
+    LOGOUT = "logout"
+
+    # Data Access
+    VIEW_USERS = "view_users"
+    VIEW_USER_DETAILS = "view_user_details"
+    VIEW_PERMISSIONS = "view_permissions"
+    VIEW_ACCESS_GRAPH = "view_access_graph"
+    VIEW_ANOMALIES = "view_anomalies"
+    VIEW_RECOMMENDATIONS = "view_recommendations"
+
+    # Data Modification
+    SYNC_DATA = "sync_data"
+    DELETE_DATA = "delete_data"
+    EXPORT_DATA = "export_data"
+
+    # Configuration
+    UPDATE_SETTINGS = "update_settings"
+    INVITE_USER = "invite_user"
+    REMOVE_USER = "remove_user"
+    UPDATE_USER_ROLE = "update_user_role"
+
+    # Salesforce
+    CONNECT_SALESFORCE = "connect_salesforce"
+    DISCONNECT_SALESFORCE = "disconnect_salesforce"
+
+
 # ============================================================================
 # Core Organization Models
 # ============================================================================
@@ -525,29 +555,6 @@ class Recommendation(Base, TimestampMixin):
         return f"<Recommendation(type={self.rec_type}, target={self.target_entity_type}:{self.target_entity_id}, severity={self.severity})>"
 
 
-class AuditLog(Base, TimestampMixin):
-    """Audit log for key operations"""
-    __tablename__ = "audit_logs"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    organization_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"))
-
-    action: Mapped[str] = mapped_column(String(100), nullable=False)  # sync_started, analysis_run, etc.
-    actor: Mapped[Optional[str]] = mapped_column(String(100))  # user or system
-    details: Mapped[dict] = mapped_column(JSON, default=dict)
-
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-    __table_args__ = (
-        Index("ix_audit_org", "organization_id"),
-        Index("ix_audit_action", "action"),
-        Index("ix_audit_timestamp", "timestamp"),
-    )
-
-    def __repr__(self) -> str:
-        return f"<AuditLog(action={self.action}, timestamp={self.timestamp})>"
-
-
 # ============================================================================
 # Record-Level Sharing Models
 # ============================================================================
@@ -765,3 +772,59 @@ class OrganizationWideDefaultSnapshot(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<OrganizationWideDefaultSnapshot(object={self.sobject_type}, internal={self.internal_sharing_model})>"
+
+
+# ============================================================================
+# Audit & Compliance Models
+# ============================================================================
+
+
+class AuditLog(Base, TimestampMixin):
+    """Audit trail of all sensitive data access and actions"""
+    __tablename__ = "audit_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+
+    # Who performed the action
+    user_email: Mapped[Optional[str]] = mapped_column(String(255))
+    user_id: Mapped[Optional[str]] = mapped_column(String(36))  # Future: FK to OrgUser
+
+    # What action was performed
+    action: Mapped[AuditAction] = mapped_column(
+        Enum(AuditAction, native_enum=False, length=50),
+        nullable=False
+    )
+    resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    # e.g., "user", "permission", "organization", "sync_job"
+
+    resource_id: Mapped[Optional[str]] = mapped_column(String(255))
+    # ID of the specific resource accessed (if applicable)
+
+    # Request details
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45))  # IPv4 or IPv6
+    user_agent: Mapped[Optional[str]] = mapped_column(String(500))
+    request_path: Mapped[Optional[str]] = mapped_column(String(500))
+    request_method: Mapped[Optional[str]] = mapped_column(String(10))  # GET, POST, etc.
+
+    # Result
+    success: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Additional context
+    context_data: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Store additional context like: query params, response size, duration, etc.
+
+    # Relationships
+    organization = relationship("Organization")
+
+    __table_args__ = (
+        Index("ix_audit_org", "organization_id"),
+        Index("ix_audit_action", "action"),
+        Index("ix_audit_user", "user_email"),
+        Index("ix_audit_created", "created_at"),
+        Index("ix_audit_resource", "resource_type", "resource_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AuditLog(action={self.action}, user={self.user_email}, resource={self.resource_type})>"
