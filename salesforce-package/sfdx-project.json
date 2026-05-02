@@ -1,0 +1,18 @@
+{
+  "packageDirectories": [
+    {
+      "path": "force-app",
+      "default": true,
+      "package": "AccessGraph AI",
+      "versionName": "Spring 2026",
+      "versionNumber": "1.0.0.NEXT"
+    }
+  ],
+  "name": "AccessGraph AI",
+  "namespace": "accessgraph",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "60.0",
+  "packageAliases": {
+    "AccessGraph AI": "0Ho..."
+  }
+}
