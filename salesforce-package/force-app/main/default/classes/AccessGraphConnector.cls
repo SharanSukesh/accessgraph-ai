@@ -38,39 +38,67 @@ public with sharing class AccessGraphConnector {
     }
 
     /**
-     * Trigger a permission sync to AccessGraph AI
+     * Trigger a permission sync to AccessGraph AI.
+     *
+     * Uses the /package/sync-trigger endpoint which accepts the Salesforce Org ID
+     * (rather than the internal AccessGraph UUID), making this work for any
+     * customer org without requiring them to know their internal UUID.
+     *
+     * Backend response codes:
+     *  - 200/202: sync started successfully
+     *  - 404: org not registered (install handler hasn't run, or never installed)
+     *  - 403: OAuth not yet completed; user needs to visit the dashboard first
+     *
      * Can be called from:
-     * - Setup page button
-     * - Scheduled job
-     * - Flow/Process Builder
+     * - The AccessGraph Home Lightning Page ("Sync Now" button)
+     * - Scheduled jobs
+     * - Flows / Process Builder
      */
     @AuraEnabled
     public static Map<String, Object> triggerSync() {
         try {
-            String orgId = getOrganizationId();
-            String endpoint = getApiEndpoint() + '/orgs/' + orgId + '/sync';
+            String salesforceOrgId = UserInfo.getOrganizationId();
+            String endpoint = getApiEndpoint() + '/package/sync-trigger';
 
-            // Make callout
             HttpRequest req = new HttpRequest();
             req.setEndpoint(endpoint);
             req.setMethod('POST');
             req.setHeader('Content-Type', 'application/json');
+            req.setBody(JSON.serialize(new Map<String, Object>{
+                'organizationId' => salesforceOrgId
+            }));
             req.setTimeout(120000); // 2 minutes
 
             Http http = new Http();
             HttpResponse res = http.send(req);
+            Integer status = res.getStatusCode();
 
-            // Update settings
-            updateSyncStatus(res.getStatusCode() == 200 ? 'Success' : 'Failed');
+            // Friendly status label for the custom-setting field
+            String statusLabel;
+            if (status == 200 || status == 202) {
+                statusLabel = 'Success';
+            } else if (status == 403) {
+                statusLabel = 'OAuth Required';
+            } else if (status == 404) {
+                statusLabel = 'Not Registered';
+            } else {
+                statusLabel = 'Failed';
+            }
+            updateSyncStatus(statusLabel);
 
-            // Parse response
-            Map<String, Object> result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-            result.put('statusCode', res.getStatusCode());
+            // Parse response - graceful if body isn't valid JSON
+            Map<String, Object> result;
+            try {
+                result = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+            } catch (Exception parseError) {
+                result = new Map<String, Object>{ 'rawBody' => res.getBody() };
+            }
+            result.put('statusCode', status);
 
             return result;
 
         } catch (Exception e) {
-            updateSyncStatus('Error: ' + e.getMessage());
+            updateSyncStatus('Error');
             throw new AuraHandledException('Failed to trigger sync: ' + e.getMessage());
         }
     }

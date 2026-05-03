@@ -63,24 +63,60 @@ private class AccessGraphConnector_Test {
     }
 
     /**
-     * Test triggerSync() - Exception handling
-     * Note: AuraHandledException.getMessage() returns generic message for security
+     * Test triggerSync() - graceful handling of non-JSON response body.
+     * The new triggerSync no longer throws on invalid JSON; instead it returns
+     * a result map with rawBody and the HTTP statusCode so the caller can decide.
      */
     @isTest
-    static void testTriggerSync_Exception() {
-        // Mock that returns invalid response to trigger exception
-        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(500, 'invalid json'));
+    static void testTriggerSync_InvalidJsonBody() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(500, 'not valid json'));
 
         Test.startTest();
-        Boolean exceptionThrown = false;
-        try {
-            AccessGraphConnector.triggerSync();
-        } catch (AuraHandledException e) {
-            exceptionThrown = true;
-        }
+        Map<String, Object> result = AccessGraphConnector.triggerSync();
         Test.stopTest();
 
-        System.assertEquals(true, exceptionThrown, 'AuraHandledException should be thrown for invalid response');
+        System.assertEquals(500, result.get('statusCode'), 'Should propagate the 500 status');
+        System.assertEquals('not valid json', result.get('rawBody'), 'Should expose raw body when JSON parse fails');
+    }
+
+    /**
+     * Test triggerSync() - 403 Forbidden (OAuth not yet completed)
+     */
+    @isTest
+    static void testTriggerSync_OAuthRequired() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(
+            403,
+            '{"detail":"OAuth connection required."}'
+        ));
+
+        Test.startTest();
+        Map<String, Object> result = AccessGraphConnector.triggerSync();
+        Test.stopTest();
+
+        System.assertEquals(403, result.get('statusCode'), 'Should return 403');
+
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
+        System.assertEquals('OAuth Required', settings.Sync_Status__c, 'Sync status should be OAuth Required');
+    }
+
+    /**
+     * Test triggerSync() - 404 Not Found (org not registered)
+     */
+    @isTest
+    static void testTriggerSync_NotRegistered() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(
+            404,
+            '{"detail":"Organization not found."}'
+        ));
+
+        Test.startTest();
+        Map<String, Object> result = AccessGraphConnector.triggerSync();
+        Test.stopTest();
+
+        System.assertEquals(404, result.get('statusCode'), 'Should return 404');
+
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
+        System.assertEquals('Not Registered', settings.Sync_Status__c, 'Sync status should be Not Registered');
     }
 
     /**

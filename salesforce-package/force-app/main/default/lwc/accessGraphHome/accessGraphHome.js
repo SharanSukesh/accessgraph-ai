@@ -82,6 +82,8 @@ export default class AccessGraphHome extends LightningElement {
         triggerSync()
             .then((result) => {
                 const statusCode = result && result.statusCode;
+                const detail = (result && result.detail) || '';
+
                 if (statusCode === 200 || statusCode === 202) {
                     this.dispatchEvent(
                         new ShowToastEvent({
@@ -90,11 +92,31 @@ export default class AccessGraphHome extends LightningElement {
                             variant: 'success'
                         })
                     );
+                } else if (statusCode === 403) {
+                    // OAuth not completed yet - guide user to the dashboard
+                    this.dispatchEvent(
+                        new ShowToastEvent({
+                            title: 'OAuth Setup Required',
+                            message: 'Click "Open Full Dashboard" to authorize AccessGraph AI for your org. After you sign in once, "Sync Now" will work from here.',
+                            variant: 'warning',
+                            mode: 'sticky'
+                        })
+                    );
+                } else if (statusCode === 404) {
+                    // Org not yet registered with the backend
+                    this.dispatchEvent(
+                        new ShowToastEvent({
+                            title: 'Org Not Registered',
+                            message: 'This Salesforce org is not yet registered with AccessGraph AI. Click "Open Full Dashboard" to complete setup.',
+                            variant: 'warning',
+                            mode: 'sticky'
+                        })
+                    );
                 } else {
                     this.dispatchEvent(
                         new ShowToastEvent({
                             title: 'Sync Issue',
-                            message: 'The sync request returned status ' + statusCode + '. Check the full dashboard for details.',
+                            message: 'The sync request returned status ' + statusCode + (detail ? ': ' + detail : '. Check the full dashboard for details.'),
                             variant: 'warning'
                         })
                     );
