@@ -46,37 +46,49 @@ async def handle_package_installation(
     This endpoint is called by the AccessGraphPostInstall Apex class
     after the package is installed in a Salesforce org.
 
+    The Salesforce Org ID lives on SalesforceConnection.organization_id_sf
+    (not on Organization), so we look up the existing org via the
+    connection. If no connection exists yet (OAuth not completed), we
+    create a placeholder Organization that will be linked when OAuth
+    runs in auth.py (which also queries by SalesforceConnection.organization_id_sf).
+
     Actions:
     1. Create or update Organization record
     2. Log installation event
-    3. Send welcome email (TODO: integrate with email service)
-    4. Return organization ID and next steps
+    3. Return organization ID and next steps (e.g., complete OAuth)
     """
     try:
-        # Check if organization already exists
-        stmt = select(Organization).where(
-            Organization.salesforce_org_id == payload.organizationId
+        # Look for an existing SalesforceConnection with this SF org ID
+        stmt = select(SalesforceConnection).where(
+            SalesforceConnection.organization_id_sf == payload.organizationId
         )
         result = await db.execute(stmt)
-        org = result.scalar_one_or_none()
+        existing_connection = result.scalar_one_or_none()
 
-        if org:
-            # Existing org - this is a reinstall or upgrade
-            logger.info(
-                f"Package {payload.installationType} for existing org: {org.id}"
-            )
+        if existing_connection:
+            # OAuth already happened previously - reuse the existing Organization
+            org = await db.get(Organization, existing_connection.organization_id)
             org.name = payload.organizationName  # Update name if changed
-            installation_type = "upgrade" if payload.installationType == "upgrade" else "reinstall"
+            installation_type = (
+                "upgrade" if payload.installationType == "upgrade" else "reinstall"
+            )
+            logger.info(
+                f"Package {installation_type} for existing org: {org.id} "
+                f"(SF Org: {payload.organizationId})"
+            )
         else:
-            # New organization - create record
+            # No prior OAuth - create a placeholder Organization. The
+            # SalesforceConnection record (with tokens) will be created
+            # when the user completes OAuth in the web app.
             org = Organization(
-                salesforce_org_id=payload.organizationId,
                 name=payload.organizationName,
-                status="active"
             )
             db.add(org)
-            await db.flush()  # Get org.id
-            logger.info(f"New organization created via package install: {org.id}")
+            await db.flush()  # populate org.id
+            logger.info(
+                f"New organization placeholder created via package install: {org.id} "
+                f"(SF Org: {payload.organizationId}). Awaiting OAuth completion."
+            )
             installation_type = "new_install"
 
         await db.commit()
@@ -147,33 +159,30 @@ async def handle_sync_trigger(
     This is a lightweight endpoint that delegates to the main sync endpoint.
     """
     try:
-        # Find organization by Salesforce Org ID
-        stmt = select(Organization).where(
-            Organization.salesforce_org_id == payload.organizationId
-        )
-        result = await db.execute(stmt)
-        org = result.scalar_one_or_none()
-
-        if not org:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Organization not found: {payload.organizationId}. "
-                       "Please complete OAuth setup first."
-            )
-
-        # Check if org has OAuth connection
+        # Find SalesforceConnection (and via it, the Organization) by Salesforce Org ID.
+        # The SF Org ID lives on SalesforceConnection.organization_id_sf, not Organization.
         stmt = select(SalesforceConnection).where(
-            SalesforceConnection.organization_id == org.id
+            SalesforceConnection.organization_id_sf == payload.organizationId
         )
         result = await db.execute(stmt)
         connection = result.scalar_one_or_none()
 
-        if not connection or not connection.access_token:
+        if not connection:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Organization not found: {payload.organizationId}. "
+                       "Please complete OAuth setup first at "
+                       "https://accessgraph-ai-production.up.railway.app"
+            )
+
+        if not connection.access_token:
             raise HTTPException(
                 status_code=403,
                 detail="OAuth connection required. Please authorize at "
                        "https://accessgraph-ai-production.up.railway.app"
             )
+
+        org = await db.get(Organization, connection.organization_id)
 
         # Log sync trigger
         audit_log = AuditLog(
@@ -243,27 +252,22 @@ async def get_package_status(
     - Configuration completeness
     """
     try:
-        # Find organization
-        stmt = select(Organization).where(
-            Organization.salesforce_org_id == salesforce_org_id
+        # Find SalesforceConnection by SF Org ID (which is stored on the connection,
+        # not on Organization). The Organization is reachable via connection.organization_id.
+        stmt = select(SalesforceConnection).where(
+            SalesforceConnection.organization_id_sf == salesforce_org_id
         )
         result = await db.execute(stmt)
-        org = result.scalar_one_or_none()
+        connection = result.scalar_one_or_none()
 
-        if not org:
+        if not connection:
             return {
                 "installed": False,
                 "message": "Package not installed or organization not found"
             }
 
-        # Check OAuth connection
-        stmt = select(SalesforceConnection).where(
-            SalesforceConnection.organization_id == org.id
-        )
-        result = await db.execute(stmt)
-        connection = result.scalar_one_or_none()
-
-        oauth_connected = bool(connection and connection.access_token)
+        org = await db.get(Organization, connection.organization_id)
+        oauth_connected = bool(connection.access_token)
 
         # Get latest sync job
         from app.domain.models import SyncJob
