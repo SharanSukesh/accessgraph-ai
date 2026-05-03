@@ -331,6 +331,15 @@ private class AccessGraphConnector_Test {
             String url = req.getEndpoint();
             if (url.contains('/health')) {
                 res.setBody('{"status":"ok","service":"accessgraph-backend"}');
+            } else if (url.contains('/package/status/')) {
+                // Returns the internal AccessGraph UUID that the
+                // org-scoped endpoints below need
+                res.setBody(
+                    '{"installed":true,' +
+                    '"organization_id":"e211d2d2-61c1-4d34-8ff8-9ed29aa525e5",' +
+                    '"salesforce_org_id":"00DC2000003TTxlMAG",' +
+                    '"oauth_connected":true}'
+                );
             } else if (url.contains('/sync-jobs')) {
                 // Includes metadata.counts so we can verify per-entity sync
                 // counts are extracted into the OrgSummary DTO.

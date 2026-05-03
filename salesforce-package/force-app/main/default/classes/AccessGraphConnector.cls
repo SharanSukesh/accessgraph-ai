@@ -215,7 +215,7 @@ public with sharing class AccessGraphConnector {
             + '&utm_source=salesforce_app';
 
         String baseUrl = getApiEndpoint();
-        String orgId = getOrganizationId();
+        String salesforceOrgId = UserInfo.getOrganizationId();
 
         // Health check
         try {
@@ -225,25 +225,48 @@ public with sharing class AccessGraphConnector {
             System.debug('getOrgSummary health check failed: ' + e.getMessage());
         }
 
-        // Last sync job - also extract per-entity counts from sync metadata
+        // Step 1: Resolve Salesforce Org ID -> internal AccessGraph UUID via
+        // /package/status. The /orgs/{id}/* endpoints below all expect the
+        // internal UUID; we don't store that in the package, only the SF Org ID.
+        String internalOrgId = null;
         try {
-            HttpResponse syncRes = sendGet(baseUrl + '/orgs/' + orgId + '/sync-jobs?limit=1', 15000);
+            HttpResponse statusRes = sendGet(
+                baseUrl + '/package/status/' + salesforceOrgId, 10000
+            );
+            if (statusRes.getStatusCode() == 200) {
+                Map<String, Object> statusBody = (Map<String, Object>)
+                    JSON.deserializeUntyped(statusRes.getBody());
+                if (statusBody.get('installed') == true) {
+                    internalOrgId = (String) statusBody.get('organization_id');
+                }
+            }
+        } catch (Exception e) {
+            System.debug('getOrgSummary status lookup failed: ' + e.getMessage());
+        }
+
+        // If we don't have the internal UUID, we can't query the org-scoped
+        // endpoints below - return what we have (backend health + dashboard URL)
+        if (String.isBlank(internalOrgId)) {
+            return summary;
+        }
+
+        // Step 2: Last sync job + per-entity counts from sync metadata
+        try {
+            HttpResponse syncRes = sendGet(
+                baseUrl + '/orgs/' + internalOrgId + '/sync-jobs?limit=1', 15000
+            );
             if (syncRes.getStatusCode() == 200) {
                 List<Object> jobs = (List<Object>) JSON.deserializeUntyped(syncRes.getBody());
                 if (!jobs.isEmpty()) {
                     Map<String, Object> latestJob = (Map<String, Object>) jobs[0];
 
-                    // Pass raw ISO strings - lightning-formatted-date-time on the
-                    // LWC side parses these natively. Avoids fragile Apex DateTime
-                    // parsing that was returning null and leaving the LWC blank.
+                    // Raw ISO strings - lightning-formatted-date-time parses natively
                     summary.lastSyncDate = (String) latestJob.get('completed_at');
                     if (String.isBlank(summary.lastSyncDate)) {
                         summary.lastSyncDate = (String) latestJob.get('started_at');
                     }
                     summary.lastSyncStatus = (String) latestJob.get('status');
 
-                    // Extract per-entity sync counts from metadata.counts so the
-                    // LWC can show what was actually synced.
                     Map<String, Object> metadata = (Map<String, Object>) latestJob.get('metadata');
                     if (metadata != null) {
                         Map<String, Object> counts = (Map<String, Object>) metadata.get('counts');
@@ -261,9 +284,11 @@ public with sharing class AccessGraphConnector {
             System.debug('getOrgSummary sync-jobs fetch failed: ' + e.getMessage());
         }
 
-        // Anomaly count - fetch all and count (backend doesn't return totals)
+        // Step 3: Anomaly count
         try {
-            HttpResponse anomRes = sendGet(baseUrl + '/orgs/' + orgId + '/anomalies?limit=1000', 15000);
+            HttpResponse anomRes = sendGet(
+                baseUrl + '/orgs/' + internalOrgId + '/anomalies?limit=1000', 15000
+            );
             if (anomRes.getStatusCode() == 200) {
                 List<Object> anomalies = (List<Object>) JSON.deserializeUntyped(anomRes.getBody());
                 summary.anomalyCount = anomalies.size();
@@ -272,9 +297,11 @@ public with sharing class AccessGraphConnector {
             System.debug('getOrgSummary anomalies fetch failed: ' + e.getMessage());
         }
 
-        // Recommendation count
+        // Step 4: Recommendation count
         try {
-            HttpResponse recRes = sendGet(baseUrl + '/orgs/' + orgId + '/recommendations?limit=1000', 15000);
+            HttpResponse recRes = sendGet(
+                baseUrl + '/orgs/' + internalOrgId + '/recommendations?limit=1000', 15000
+            );
             if (recRes.getStatusCode() == 200) {
                 List<Object> recs = (List<Object>) JSON.deserializeUntyped(recRes.getBody());
                 summary.recommendationCount = recs.size();
