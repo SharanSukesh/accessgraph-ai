@@ -15,6 +15,7 @@ from app.domain.models import (
     Organization,
     SalesforceConnection,
     SyncJob,
+    SyncStatus,
     UserSnapshot,
     RoleSnapshot,
     ProfileSnapshot,
@@ -128,7 +129,7 @@ class SalesforceSyncService:
         """
         sync_job = SyncJob(
             organization_id=self.org_id,
-            status="in_progress",
+            status=SyncStatus.RUNNING,
             started_at=datetime.utcnow(),
         )
         self.db.add(sync_job)
@@ -148,7 +149,7 @@ class SalesforceSyncService:
             error: Error message if sync failed
         """
         sync_job.completed_at = datetime.utcnow()
-        sync_job.status = "failed" if error else "completed"
+        sync_job.status = SyncStatus.FAILED if error else SyncStatus.COMPLETED
         sync_job.error_message = error
         sync_job.records_synced = stats
 
