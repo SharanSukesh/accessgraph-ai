@@ -208,20 +208,33 @@ async def handle_sync_trigger(
             f"(SF Org: {payload.organizationId})"
         )
 
-        # Trigger sync using the same orchestrator that the regular
-        # /orgs/{org_id}/sync route uses. This ensures the package's
-        # 'Sync Now' button does exactly the same thing as the web app's
-        # sync button - same code path, same retry behavior, same output.
-        from app.services.salesforce_sync import SalesforceSyncService
+        # Use the same SyncOrchestrator that /orgs/{org_id}/sync uses, so
+        # the package's "Sync Now" button takes the exact same proven code
+        # path as the web app's sync button. SalesforceSyncService is a
+        # legacy parallel implementation that works on Pydantic objects
+        # while extract_all() returns dicts - SyncOrchestrator handles dicts
+        # correctly and is the path used by the working web-app sync.
+        from app.domain.models import SyncJob, SyncStatus
+        from app.ingestion.orchestrator import SyncOrchestrator
 
-        sync_service = SalesforceSyncService(db, org.id)
-        sync_job = await sync_service.sync_all()
+        sync_job = SyncJob(
+            organization_id=org.id,
+            status=SyncStatus.PENDING,
+        )
+        db.add(sync_job)
+        await db.commit()
+        await db.refresh(sync_job)
+
+        orchestrator = SyncOrchestrator(db)
+        await orchestrator.run_sync(org.id, sync_job.id)
+
+        await db.refresh(sync_job)
 
         return {
             "success": True,
             "organization_id": org.id,
             "sync_job_id": sync_job.id,
-            "status": sync_job.status,
+            "status": sync_job.status.value if hasattr(sync_job.status, "value") else sync_job.status,
             "message": "Permission sync initiated successfully",
             "started_at": (
                 sync_job.started_at.isoformat() if sync_job.started_at else None
