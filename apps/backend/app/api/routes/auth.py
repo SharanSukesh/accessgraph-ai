@@ -49,7 +49,11 @@ class RefreshTokenRequest(BaseModel):
 
 @salesforce_router.get("/authorize")
 async def authorize(
-    return_url: Optional[str] = Query(None, description="URL to redirect after auth")
+    return_url: Optional[str] = Query(None, description="URL to redirect after auth"),
+    env: Optional[str] = Query(
+        None,
+        description="Salesforce environment: 'sandbox' (test.salesforce.com) or 'production' (login.salesforce.com). Defaults to production."
+    ),
 ):
     """
     Initiate Salesforce OAuth flow
@@ -59,6 +63,8 @@ async def authorize(
 
     Query Parameters:
         return_url: Optional URL to redirect to after successful authentication
+        env: 'sandbox' to use test.salesforce.com (for sandbox orgs and scratch orgs)
+             'production' or omitted to use login.salesforce.com (for production orgs).
 
     Returns:
         Redirect to Salesforce authorization page
@@ -69,17 +75,21 @@ async def authorize(
             detail="Salesforce OAuth not configured. Please set SALESFORCE_CLIENT_ID and SALESFORCE_CLIENT_SECRET in environment variables."
         )
 
-    # Generate CSRF token for state parameter
-    state = secrets.token_urlsafe(32)
+    # Resolve login URL based on env parameter.
+    # Sandbox/scratch orgs require test.salesforce.com; production uses login.salesforce.com.
+    is_sandbox = (env or "").lower() in ("sandbox", "scratch", "test")
+    login_url = "https://test.salesforce.com" if is_sandbox else None
 
-    # Store return_url in state if provided (in production, use Redis/session)
-    # For now, we'll just use the state token
+    # Generate CSRF token. Prefix with env marker so the callback knows which
+    # login URL to use for the token exchange (must match the authorize URL).
+    state_token = secrets.token_urlsafe(32)
+    state = f"sb_{state_token}" if is_sandbox else state_token
 
     # Create OAuth client and get authorization URL
-    oauth_client = SalesforceOAuthClient()
+    oauth_client = SalesforceOAuthClient(login_url=login_url)
     auth_url = oauth_client.get_authorization_url(state=state)
 
-    logger.info("Initiating OAuth flow", extra={"state": state})
+    logger.info("Initiating OAuth flow", extra={"state": state, "env": env or "production"})
 
     return RedirectResponse(url=auth_url)
 
@@ -109,8 +119,14 @@ async def callback(
         if not state:
             logger.warning("OAuth callback received without state parameter")
 
+        # If the state was minted with the sandbox env marker, exchange the code
+        # against test.salesforce.com instead of login.salesforce.com. The token
+        # endpoint must match the authorize endpoint or token exchange returns 400.
+        is_sandbox = state and state.startswith("sb_")
+        login_url = "https://test.salesforce.com" if is_sandbox else None
+
         # Exchange code for tokens (with state for PKCE)
-        oauth_client = SalesforceOAuthClient()
+        oauth_client = SalesforceOAuthClient(login_url=login_url)
         token_response = await oauth_client.exchange_code_for_token(code, state)
 
         logger.info(
