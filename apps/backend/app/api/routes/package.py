@@ -309,6 +309,59 @@ async def get_package_status(
         )
 
 
+@router.post("/reset-tokens/{salesforce_org_id}", response_model=Dict[str, Any])
+async def reset_connection_tokens(
+    salesforce_org_id: str,
+    confirm: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Clear the access_token and refresh_token for a connection so a fresh
+    re-OAuth populates them cleanly. Use this when stored tokens are
+    corrupted (e.g., bytea-hex from an older sqlalchemy_utils version,
+    or plain text that was never properly encrypted).
+
+    This does NOT delete the SalesforceConnection or Organization records -
+    it just nulls out the token fields. The user then re-OAuths via the
+    web app, and auth.py's UPDATE path fills in fresh, properly-encrypted
+    tokens.
+
+    Requires confirm=RESET.
+    """
+    if confirm != "RESET":
+        raise HTTPException(
+            status_code=400,
+            detail="Pass ?confirm=RESET to clear the tokens"
+        )
+
+    from sqlalchemy import text as sa_text
+
+    # Use raw UPDATE so we bypass any ORM read-then-decrypt step that
+    # might fail on corrupted existing data
+    result = await db.execute(sa_text(
+        """
+        UPDATE salesforce_connections
+        SET access_token = NULL,
+            refresh_token = NULL,
+            is_active = false
+        WHERE organization_id_sf = :sf_org_id
+        RETURNING id
+        """
+    ), {"sf_org_id": salesforce_org_id})
+    rows = result.fetchall()
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Cleared tokens for {len(rows)} connection(s)",
+        "connection_ids": [r[0] for r in rows],
+        "next_step": (
+            "Re-authenticate at https://gentle-love-production-1eba.up.railway.app "
+            "to populate fresh, properly-encrypted tokens."
+        ),
+    }
+
+
 @router.get("/diagnose-encryption", response_model=Dict[str, Any])
 async def diagnose_encryption(
     confirm: Optional[str] = None,
