@@ -102,7 +102,23 @@ class SalesforceSyncService:
 
         logger.warning("Access token expired, refreshing...")
 
-        oauth_client = SalesforceOAuthClient()
+        # Sandbox/scratch orgs must refresh against test.salesforce.com,
+        # production orgs use login.salesforce.com. Detect from the stored
+        # instance_url - .sandbox.my.salesforce.com / .scratch.my.salesforce.com
+        # are the modern naming for non-production. Older sandboxes use
+        # cs<num>.salesforce.com but those are increasingly rare.
+        instance_url = sf_connection.instance_url or ""
+        is_sandbox = (
+            ".sandbox." in instance_url
+            or ".scratch." in instance_url
+            or instance_url.startswith("https://cs")
+        )
+        login_url = "https://test.salesforce.com" if is_sandbox else None
+        logger.info(
+            f"Refresh routing: instance_url={instance_url}, is_sandbox={is_sandbox}"
+        )
+
+        oauth_client = SalesforceOAuthClient(login_url=login_url)
         token_response = await oauth_client.refresh_access_token(
             sf_connection.refresh_token
         )
