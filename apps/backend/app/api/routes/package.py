@@ -480,6 +480,38 @@ async def diagnose_encryption(
     except Exception as e:
         diagnostic["round_trip_error"] = f"{type(e).__name__}: {e}"
 
+    # 4b. Test the EXACT EncryptedType code path the ORM uses on save
+    try:
+        from sqlalchemy_utils.types.encrypted.encrypted_type import StringEncryptedType, AesEngine
+        from sqlalchemy import Text
+
+        # Recreate the exact EncryptedType used in models.py
+        et = StringEncryptedType(Text, cfg.DATABASE_ENCRYPTION_KEY, AesEngine, "pkcs5")
+
+        plaintext = "00D9H000002jioXUAQ!AQEAQTokenValuetest12345"
+        # process_bind_param is what SQLAlchemy calls when saving via ORM
+        bind_result = et.process_bind_param(plaintext, None)
+
+        diagnostic["encrypted_type_bind_param"] = {
+            "input": plaintext,
+            "output_type": type(bind_result).__name__,
+            "output_length": len(bind_result) if hasattr(bind_result, "__len__") else None,
+            "output_first_30_repr": repr(bind_result)[:60] if bind_result else None,
+            "is_bytes": isinstance(bind_result, bytes),
+            "is_str": isinstance(bind_result, str),
+        }
+
+        # Test round-trip through process_result_value
+        result_value = et.process_result_value(bind_result, None)
+        diagnostic["encrypted_type_result_value"] = {
+            "decrypted_type": type(result_value).__name__,
+            "decrypted_value": result_value if isinstance(result_value, str) else repr(result_value),
+            "matches_input": result_value == plaintext,
+        }
+    except Exception as e:
+        import traceback
+        diagnostic["encrypted_type_error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc()[:500]}"
+
     # 5. Per-connection scan: classify every stored token
     try:
         from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
