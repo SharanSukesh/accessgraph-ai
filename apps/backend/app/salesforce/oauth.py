@@ -72,6 +72,12 @@ class SalesforceOAuthClient:
             "redirect_uri": self.redirect_uri,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
+            # Explicitly request 'refresh_token' so we get a long-lived refresh
+            # token alongside the access token. Without this, Salesforce returns
+            # only an access token (which expires in ~2 hours), so the user
+            # would need to re-OAuth every couple hours.
+            # 'api' grants permission to call REST API; 'web' grants web access.
+            "scope": "api refresh_token",
         }
 
         if state:
