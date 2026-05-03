@@ -396,92 +396,103 @@ async def diagnose_encryption(
     except Exception as e:
         diagnostic["raw_storage_error"] = str(e)
 
-    # 4. Manual encrypt -> decrypt round-trip with AesEngine
+    # 4. Manual encrypt -> decrypt round-trip with AesEngine - properly initialized
     try:
         from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
         engine = AesEngine()
+        engine._set_padding_mechanism("pkcs5")
         engine._update_key(cfg.DATABASE_ENCRYPTION_KEY)
 
-        plaintext = "test_token_" + "x" * 100  # ~110 chars to mimic SF token
+        plaintext = "00D9H000002jioXUAQ!AQEAQTokenValuetest12345"  # SF-token-shaped
         encrypted = engine.encrypt(plaintext)
         decrypted = engine.decrypt(encrypted)
 
         diagnostic["round_trip"] = {
+            "plaintext": plaintext,
             "plaintext_length": len(plaintext),
             "encrypted_type": type(encrypted).__name__,
             "encrypted_length": len(encrypted) if hasattr(encrypted, "__len__") else None,
-            "encrypted_first_20": (
+            "encrypted_first_30": (
                 encrypted.decode() if isinstance(encrypted, bytes) else str(encrypted)
-            )[:20],
+            )[:30],
             "decrypted_type": type(decrypted).__name__,
-            "decrypted_matches_plaintext": (
-                decrypted == plaintext or decrypted == plaintext.encode()
+            "decrypted": decrypted if isinstance(decrypted, str) else (
+                decrypted.decode("utf-8", errors="replace") if isinstance(decrypted, bytes) else str(decrypted)
+            ),
+            "decrypted_matches": (
+                decrypted == plaintext or
+                (isinstance(decrypted, bytes) and decrypted.decode() == plaintext)
             ),
         }
     except Exception as e:
         diagnostic["round_trip_error"] = f"{type(e).__name__}: {e}"
 
-    # 5. Try decrypting the actual stored access_token directly with AesEngine
+    # 5. Per-connection scan: classify every stored token
     try:
         from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
         engine = AesEngine()
+        engine._set_padding_mechanism("pkcs5")
         engine._update_key(cfg.DATABASE_ENCRYPTION_KEY)
 
         result = await db.execute(sa_text(
-            "SELECT access_token::text FROM salesforce_connections WHERE access_token IS NOT NULL LIMIT 1"
+            """
+            SELECT id, organization_id, organization_id_sf,
+                   length(access_token) as at_len,
+                   substring(access_token from 1 for 30) as at_first_30,
+                   length(refresh_token) as rt_len,
+                   substring(refresh_token from 1 for 30) as rt_first_30,
+                   is_active
+            FROM salesforce_connections
+            ORDER BY created_at DESC
+            """
         ))
-        raw_value = result.scalar_one_or_none()
-        if raw_value:
-            attempt_results = []
+        rows = result.fetchall()
+        connections_info = []
+        for r in rows:
+            (cid, org_id, sf_org_id, at_len, at_first, rt_len, rt_first, is_active) = r
 
-            # Attempt A: pass raw value as-is
-            try:
-                decrypted = engine.decrypt(raw_value)
-                attempt_results.append({
-                    "method": "raw_string",
-                    "ok": True,
-                    "looks_like_sf_token": (
-                        isinstance(decrypted, str) and (
-                            decrypted.startswith("00D") or decrypted.startswith("eyJ")
-                        )
-                    ),
-                    "decrypted_preview": (
-                        decrypted[:20] if isinstance(decrypted, str) else str(decrypted)[:20]
-                    ),
-                })
-            except Exception as e:
-                attempt_results.append({"method": "raw_string", "ok": False, "error": str(e)})
-
-            # Attempt B: if value starts with \x, decode hex first
-            if raw_value.startswith("\\x"):
+            def classify(value: Optional[str]) -> str:
+                if not value:
+                    return "null"
+                if value.startswith("00D") or value.startswith("eyJ"):
+                    return "plain_sf_token"
+                if value.startswith("\\x"):
+                    return "bytea_hex_string"
+                # Try to decrypt - if it works, it's a properly-stored encrypted token
                 try:
-                    hex_str = raw_value[2:]  # strip leading \x
-                    decoded_bytes = bytes.fromhex(hex_str)
-                    # decoded_bytes should be the base64-encoded ciphertext
-                    base64_str = decoded_bytes.decode("ascii", errors="replace")
-                    decrypted = engine.decrypt(base64_str)
-                    attempt_results.append({
-                        "method": "hex_decode_then_decrypt",
-                        "ok": True,
-                        "looks_like_sf_token": (
-                            isinstance(decrypted, str) and (
-                                decrypted.startswith("00D") or decrypted.startswith("eyJ")
-                            )
-                        ),
-                        "decrypted_preview": (
-                            decrypted[:20] if isinstance(decrypted, str) else str(decrypted)[:20]
-                        ),
-                    })
-                except Exception as e:
-                    attempt_results.append({
-                        "method": "hex_decode_then_decrypt",
-                        "ok": False,
-                        "error": str(e),
-                    })
+                    engine.decrypt(value)
+                    return "properly_encrypted_base64"
+                except Exception:
+                    return "unknown_format"
 
-            diagnostic["manual_decrypt_attempts"] = attempt_results
+            # Get full token value for accurate classification
+            full_q = await db.execute(sa_text(
+                "SELECT access_token, refresh_token FROM salesforce_connections WHERE id = :id"
+            ), {"id": cid})
+            full = full_q.fetchone()
+            full_at, full_rt = (full[0], full[1]) if full else (None, None)
+
+            connections_info.append({
+                "connection_id": cid,
+                "org_id": org_id,
+                "sf_org_id": sf_org_id,
+                "is_active": is_active,
+                "access_token": {
+                    "length": at_len or 0,
+                    "first_30": at_first,
+                    "classification": classify(full_at),
+                },
+                "refresh_token": {
+                    "length": rt_len or 0,
+                    "first_30": rt_first,
+                    "classification": classify(full_rt),
+                },
+            })
+
+        diagnostic["connections"] = connections_info
     except Exception as e:
-        diagnostic["manual_decrypt_error"] = f"{type(e).__name__}: {e}"
+        import traceback
+        diagnostic["connections_error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
 
     return diagnostic
 
