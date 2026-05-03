@@ -24,6 +24,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy_utils import EncryptedType
 from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 
+from app.db.types import EncryptedString
+
 from app.db.base import Base, TimestampMixin
 from app.core.config import settings
 
@@ -158,15 +160,19 @@ class SalesforceConnection(Base, TimestampMixin):
     instance_url: Mapped[str] = mapped_column(String(255), nullable=False)
     organization_id_sf: Mapped[Optional[str]] = mapped_column(String(18))  # Salesforce org ID
 
-    # Encrypted OAuth tokens (AES-256 encryption)
+    # Encrypted OAuth tokens (AES-256 encryption via custom EncryptedString
+    # TypeDecorator - sqlalchemy_utils.EncryptedType has a class-level impl
+    # that conflicts with SQLAlchemy 2.0 type caching, causing asyncpg to
+    # store the encrypted base64 string as bytea-hex instead of text. Our
+    # EncryptedString fixes this with explicit impl=Text.)
     access_token: Mapped[Optional[str]] = mapped_column(
-        EncryptedType(Text, settings.DATABASE_ENCRYPTION_KEY, AesEngine, 'pkcs5')
+        EncryptedString(settings.DATABASE_ENCRYPTION_KEY)
         if settings.ENABLE_FIELD_ENCRYPTION and settings.DATABASE_ENCRYPTION_KEY
         else Text,
         nullable=True
     )
     refresh_token: Mapped[Optional[str]] = mapped_column(
-        EncryptedType(Text, settings.DATABASE_ENCRYPTION_KEY, AesEngine, 'pkcs5')
+        EncryptedString(settings.DATABASE_ENCRYPTION_KEY)
         if settings.ENABLE_FIELD_ENCRYPTION and settings.DATABASE_ENCRYPTION_KEY
         else Text,
         nullable=True
