@@ -480,6 +480,86 @@ async def diagnose_encryption(
     except Exception as e:
         diagnostic["round_trip_error"] = f"{type(e).__name__}: {e}"
 
+    # 4a. Verify actual PostgreSQL column type via pg_attribute (not info schema)
+    try:
+        result = await db.execute(sa_text(
+            """
+            SELECT a.attname, t.typname, a.atttypmod
+            FROM pg_attribute a
+            JOIN pg_type t ON a.atttypid = t.oid
+            JOIN pg_class c ON a.attrelid = c.oid
+            WHERE c.relname = 'salesforce_connections'
+              AND a.attname IN ('access_token', 'refresh_token')
+            """
+        ))
+        rows = result.fetchall()
+        diagnostic["pg_attribute"] = [
+            {"column": r[0], "type": r[1], "typmod": r[2]} for r in rows
+        ]
+    except Exception as e:
+        diagnostic["pg_attribute_error"] = str(e)
+
+    # 4c. End-to-end DB test: write through ORM, read raw, then read through ORM
+    try:
+        from sqlalchemy_utils.types.encrypted.encrypted_type import StringEncryptedType, AesEngine
+        from sqlalchemy import Text, Column, String, MetaData, Table
+
+        # Create a temporary table just for this test
+        await db.execute(sa_text(
+            """
+            CREATE TABLE IF NOT EXISTS _enc_test (
+                id INTEGER PRIMARY KEY,
+                value TEXT
+            )
+            """
+        ))
+        await db.execute(sa_text("DELETE FROM _enc_test WHERE id = 1"))
+
+        # Encrypt manually using same EncryptedType used in models
+        et = StringEncryptedType(Text, cfg.DATABASE_ENCRYPTION_KEY, AesEngine, "pkcs5")
+        plaintext = "00D9H000002jioXUAQ!AQEAQTokenValuetest12345"
+        encrypted_str = et.process_bind_param(plaintext, None)
+
+        # Insert as raw param (this is what SQLAlchemy ORM does internally)
+        await db.execute(
+            sa_text("INSERT INTO _enc_test (id, value) VALUES (1, :val)"),
+            {"val": encrypted_str},
+        )
+        await db.commit()
+
+        # Read back the RAW stored content
+        raw_q = await db.execute(sa_text(
+            "SELECT length(value), substring(value from 1 for 30), octet_length(value::bytea) FROM _enc_test WHERE id = 1"
+        ))
+        raw_row = raw_q.fetchone()
+
+        # Now read through EncryptedType
+        readback_q = await db.execute(sa_text("SELECT value FROM _enc_test WHERE id = 1"))
+        raw_value = readback_q.scalar_one()
+        decrypted = et.process_result_value(raw_value, None)
+
+        diagnostic["e2e_db_test"] = {
+            "input": plaintext,
+            "encrypted_str_passed_to_db": encrypted_str,
+            "encrypted_str_type": type(encrypted_str).__name__,
+            "encrypted_str_length": len(encrypted_str),
+            "stored_text_length": raw_row[0],
+            "stored_first_30": raw_row[1],
+            "stored_byte_length": raw_row[2],
+            "looks_like_bytea_hex": raw_row[1].startswith("\\x") if raw_row[1] else False,
+            "raw_value_from_db_type": type(raw_value).__name__,
+            "raw_value_first_30": raw_value[:30] if raw_value else None,
+            "decrypted": decrypted,
+            "round_trip_matches": decrypted == plaintext,
+        }
+
+        # Cleanup
+        await db.execute(sa_text("DROP TABLE _enc_test"))
+        await db.commit()
+    except Exception as e:
+        import traceback
+        diagnostic["e2e_db_test_error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc()[:600]}"
+
     # 4b. Test the EXACT EncryptedType code path the ORM uses on save
     try:
         from sqlalchemy_utils.types.encrypted.encrypted_type import StringEncryptedType, AesEngine
