@@ -208,12 +208,14 @@ async def handle_sync_trigger(
             f"(SF Org: {payload.organizationId})"
         )
 
-        # Import sync service here to avoid circular imports
+        # Trigger sync using the same orchestrator that the regular
+        # /orgs/{org_id}/sync route uses. This ensures the package's
+        # 'Sync Now' button does exactly the same thing as the web app's
+        # sync button - same code path, same retry behavior, same output.
         from app.services.salesforce_sync import SalesforceSyncService
 
-        # Trigger sync
-        sync_service = SalesforceSyncService(db)
-        sync_job = await sync_service.trigger_sync(org.id)
+        sync_service = SalesforceSyncService(db, org.id)
+        sync_job = await sync_service.sync_all()
 
         return {
             "success": True,
@@ -221,7 +223,9 @@ async def handle_sync_trigger(
             "sync_job_id": sync_job.id,
             "status": sync_job.status,
             "message": "Permission sync initiated successfully",
-            "started_at": sync_job.started_at.isoformat() if sync_job.started_at else None
+            "started_at": (
+                sync_job.started_at.isoformat() if sync_job.started_at else None
+            ),
         }
 
     except HTTPException:
