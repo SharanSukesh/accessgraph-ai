@@ -1,0 +1,17 @@
+.ag-tile {
+    background-color: #f3f3f3;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s ease;
+    min-height: 5rem;
+}
+
+.ag-tile-number {
+    font-weight: 700;
+    color: #0b5394;
+    margin-top: 0.25rem;
+}
+
+.ag-tile-status {
+    font-weight: 500;
+    margin-top: 0.5rem;
+}

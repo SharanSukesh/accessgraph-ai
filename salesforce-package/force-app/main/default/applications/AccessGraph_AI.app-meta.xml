@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <defaultLandingTab>AccessGraph_Home</defaultLandingTab>
+    <description>Enterprise access intelligence and security insights for Salesforce</description>
+    <formFactors>Large</formFactors>
+    <isNavAutoTempTabsDisabled>false</isNavAutoTempTabsDisabled>
+    <isNavPersonalizationDisabled>false</isNavPersonalizationDisabled>
+    <label>AccessGraph AI</label>
+    <navType>Standard</navType>
+    <tabs>AccessGraph_Home</tabs>
+    <uiType>Lightning</uiType>
+</CustomApplication>

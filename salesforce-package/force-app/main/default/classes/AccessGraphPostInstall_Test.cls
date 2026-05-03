@@ -81,7 +81,9 @@ private class AccessGraphPostInstall_Test {
     }
 
     /**
-     * Test that welcome email is sent (can't actually verify email sent in test context)
+     * Test that welcome email is sent (Salesforce tracks email invocations in test context).
+     * The post-install handler attempts to send email even if Apex test context blocks
+     * actual delivery - we verify the invocation count to confirm the code path executes.
      */
     @isTest
     static void testWelcomeEmail() {
@@ -92,13 +94,87 @@ private class AccessGraphPostInstall_Test {
         Test.startTest();
         AccessGraphPostInstall postInstall = new AccessGraphPostInstall();
         postInstall.onInstall(context);
-
-        // Get email invocations (Salesforce tracks email sends in test context)
         Integer emailsSent = Limits.getEmailInvocations();
         Test.stopTest();
 
-        // Note: Email sending may not work in test context, so we just verify no exception thrown
-        System.assert(true, 'Post-install completed without errors');
+        // Assert that at least one email invocation occurred during the post-install
+        System.assert(
+            emailsSent >= 1,
+            'Expected at least one email invocation in post-install, got: ' + emailsSent
+        );
+    }
+
+    /**
+     * Test that installer is auto-assigned the AccessGraph_Admin permission set.
+     * Note: requires the PermissionSet to be deployed to the test org. Skipped via
+     * try/catch if PS not present (e.g., during initial bootstrap deploys).
+     */
+    @isTest
+    static void testPermissionSetAssignment() {
+        // Skip cleanly if permission set not deployed yet (bootstrap protection)
+        List<PermissionSet> psList = [
+            SELECT Id FROM PermissionSet WHERE Name = 'AccessGraph_Admin' LIMIT 1
+        ];
+        if (psList.isEmpty()) {
+            System.debug('Skipping testPermissionSetAssignment: PS not yet deployed');
+            return;
+        }
+
+        Test.setMock(HttpCalloutMock.class, new PostInstallHttpMock(200, '{"success": true}'));
+        TestInstallContext context = new TestInstallContext(false, null);
+
+        Test.startTest();
+        AccessGraphPostInstall postInstall = new AccessGraphPostInstall();
+        postInstall.onInstall(context);
+        Test.stopTest();
+
+        // Verify the installer (current test user) was assigned the PS
+        Id installerId = UserInfo.getUserId();
+        Integer assignmentCount = [
+            SELECT COUNT()
+            FROM PermissionSetAssignment
+            WHERE PermissionSetId = :psList[0].Id AND AssigneeId = :installerId
+        ];
+        System.assertEquals(
+            1, assignmentCount,
+            'Expected installer to have AccessGraph_Admin assigned exactly once'
+        );
+    }
+
+    /**
+     * Test that re-running onInstall on an upgrade does NOT create a duplicate
+     * PermissionSetAssignment. Idempotency is required because customers may upgrade
+     * the package multiple times.
+     */
+    @isTest
+    static void testPermissionSetAssignment_Idempotent() {
+        List<PermissionSet> psList = [
+            SELECT Id FROM PermissionSet WHERE Name = 'AccessGraph_Admin' LIMIT 1
+        ];
+        if (psList.isEmpty()) {
+            System.debug('Skipping testPermissionSetAssignment_Idempotent: PS not yet deployed');
+            return;
+        }
+
+        Test.setMock(HttpCalloutMock.class, new PostInstallHttpMock(200, '{"success": true}'));
+
+        Test.startTest();
+        // Run install twice (simulating upgrade)
+        AccessGraphPostInstall postInstall = new AccessGraphPostInstall();
+        postInstall.onInstall(new TestInstallContext(false, null));
+        postInstall.onInstall(new TestInstallContext(true, new Version(1, 0, 0)));
+        Test.stopTest();
+
+        Id installerId = UserInfo.getUserId();
+        Integer assignmentCount = [
+            SELECT COUNT()
+            FROM PermissionSetAssignment
+            WHERE PermissionSetId = :psList[0].Id AND AssigneeId = :installerId
+        ];
+        System.assertEquals(
+            1, assignmentCount,
+            'Re-running onInstall must not create duplicate PermissionSetAssignments'
+        );
     }
 
     /**

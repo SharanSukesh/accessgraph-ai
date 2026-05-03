@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>AccessGraph AI Admin</label>
+    <description>Grants full access to AccessGraph AI features. Assign to admins responsible for managing access analysis and permission audits.</description>
+
+    <applicationVisibilities>
+        <application>AccessGraph_AI</application>
+        <visible>true</visible>
+    </applicationVisibilities>
+
+    <tabSettings>
+        <tab>AccessGraph_Home</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
+
+    <classAccesses>
+        <apexClass>AccessGraphConnector</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>AccessGraphPostInstall</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+
+    <objectPermissions>
+        <object>AccessGraph_Settings__c</object>
+        <allowCreate>true</allowCreate>
+        <allowDelete>true</allowDelete>
+        <allowEdit>true</allowEdit>
+        <allowRead>true</allowRead>
+        <modifyAllRecords>true</modifyAllRecords>
+        <viewAllRecords>true</viewAllRecords>
+    </objectPermissions>
+
+    <fieldPermissions>
+        <field>AccessGraph_Settings__c.API_Endpoint__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>AccessGraph_Settings__c.Auto_Sync_Enabled__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>AccessGraph_Settings__c.Last_Sync_Date__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>AccessGraph_Settings__c.Organization_ID__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <field>AccessGraph_Settings__c.Sync_Status__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+</PermissionSet>

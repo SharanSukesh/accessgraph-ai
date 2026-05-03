@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    SCRATCH ORG manifest - excludes Connected App.
+    Connected Apps cannot be deployed to scratch orgs without special permission.
+    For full package version creation, use package.xml (which includes ConnectedApp).
+
+    Usage:
+        sf project deploy start --manifest manifest/scratch-package.xml --target-org accessgraph-test
+-->
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>AccessGraphConnector</members>
+        <members>AccessGraphPostInstall</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>AccessGraph_AI</members>
+        <name>CustomApplication</name>
+    </types>
+    <types>
+        <members>AccessGraph_Settings__c</members>
+        <name>CustomObject</name>
+    </types>
+    <types>
+        <members>AccessGraph_Welcome</members>
+        <name>CustomNotificationType</name>
+    </types>
+    <types>
+        <members>AccessGraph_Home</members>
+        <name>CustomTab</name>
+    </types>
+    <types>
+        <members>AccessGraph_Home_Page</members>
+        <name>FlexiPage</name>
+    </types>
+    <types>
+        <members>accessGraphHome</members>
+        <name>LightningComponentBundle</name>
+    </types>
+    <types>
+        <members>AccessGraph_Admin</members>
+        <name>PermissionSet</name>
+    </types>
+    <types>
+        <members>AccessGraph_AI_API</members>
+        <name>RemoteSiteSetting</name>
+    </types>
+    <version>60.0</version>
+</Package>

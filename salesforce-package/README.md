@@ -1,187 +1,137 @@
-# AccessGraph AI - Salesforce Package
+# AccessGraph AI Salesforce Package
 
-This directory contains the Salesforce managed package for AccessGraph AI, enabling seamless integration with the AccessGraph AI platform.
+Salesforce package that integrates with [AccessGraph AI](https://accessgraph-ai-production.up.railway.app) for permission analysis and security insights.
 
 ## Package Contents
 
-### Connected App
-- **AccessGraph_AI.connectedApp**: OAuth configuration for secure Salesforce authentication
-  - OAuth scopes: API, Web, RefreshToken
-  - Callback URL: https://accessgraph-ai-production.up.railway.app/auth/salesforce/callback
+- **Lightning App** (`AccessGraph_AI`) — adds the AccessGraph AI app to App Launcher
+- **Custom Tab** (`AccessGraph_Home`) — entry point inside the app
+- **Lightning Web Component** (`accessGraphHome`) — status dashboard with sync trigger
+- **Apex Classes** — `AccessGraphConnector` (HTTP layer + LWC API), `AccessGraphPostInstall` (install handler)
+- **Custom Hierarchy Setting** (`AccessGraph_Settings__c`) — stores API endpoint, Org ID, sync state
+- **Connected App** — OAuth integration with the AccessGraph AI backend (full package only)
+- **Permission Set** (`AccessGraph_Admin`) — grants access to the app, tab, and Apex
+- **Custom Notification Type** (`AccessGraph_Welcome`) — bell-icon welcome on install
+- **Remote Site Setting** — whitelists the AccessGraph AI backend URL
 
-### Custom Settings
-- **AccessGraph_Settings__c**: Hierarchical custom setting for configuration
-  - `API_Endpoint__c`: Base URL for AccessGraph AI API
-  - `Organization_ID__c`: AccessGraph AI organization identifier
-  - `Auto_Sync_Enabled__c`: Enable automatic daily sync
-  - `Last_Sync_Date__c`: Timestamp of last successful sync
-  - `Sync_Status__c`: Status of last sync operation
+## What Customers See After Install
 
-### Apex Classes
-- **AccessGraphConnector**: Main connector class for API communication
-  - `triggerSync()`: Trigger manual permission sync
-  - `getSyncStatus()`: Get latest sync job status
-  - `checkConnection()`: Verify API connectivity
-  - `initializeSettings()`: Initialize default settings
+1. Bell-icon notification: "Welcome to AccessGraph AI"
+2. Welcome email with link to the web dashboard
+3. App Launcher → "AccessGraph AI" tab (auto-assigned via PermissionSet)
+4. Tab opens to a single page showing connection status, anomaly/recommendation counts, last sync info, "Sync Now" button, and "Open Full Dashboard" link out to the web app
 
-- **AccessGraphPostInstall**: Post-installation handler
-  - Auto-configures custom settings
-  - Notifies backend about installation
-  - Sends welcome email to installer
+The web app at `accessgraph-ai-production.up.railway.app` is where the deep work happens — this package is a launchpad inside Salesforce.
 
-## Installation
+---
 
-### For Developers (Unlocked Package)
+## Development Setup
 
-1. **Authenticate with Dev Hub:**
-   ```bash
-   sfdx auth:web:login --setdefaultdevhubusername --setalias DevHub
-   ```
+### Prerequisites
 
-2. **Create Scratch Org (Optional - for testing):**
-   ```bash
-   sfdx force:org:create -f config/project-scratch-def.json -a AccessGraphScratch -s
-   ```
+- Salesforce CLI (`sf`) v2+ installed
+- Authenticated Dev Hub: `sf org login web --set-default-dev-hub --alias devhub`
+- Dev Hub has "Unlocked Packages and Second-Generation Managed Packages" enabled
 
-3. **Deploy to Org:**
-   ```bash
-   sfdx force:source:deploy -p force-app -u YourOrgAlias
-   ```
+### Two-Manifest Approach (important!)
 
-### For Customers (AppExchange)
+This package uses **two manifest files** because the Connected App can't be deployed to scratch orgs without special permission:
 
-1. **Install from AppExchange:**
-   - Navigate to Salesforce AppExchange
-   - Search for "AccessGraph AI"
-   - Click "Get It Now" and follow installation wizard
-   - Install for "Admins Only" or "All Users" (recommended: Admins Only)
+| Manifest | Use For |
+|----------|---------|
+| `manifest/package.xml` | Full package version creation (`sf package version create`) — includes Connected App |
+| `manifest/scratch-package.xml` | Scratch org deploys — excludes Connected App |
 
-2. **Post-Installation Setup:**
-   - Custom settings are auto-configured by post-install script
-   - Navigate to https://accessgraph-ai-production.up.railway.app
-   - Click "Connect Salesforce" and authorize OAuth
-   - Initial sync will be triggered automatically
+### Deploy to Scratch Org
 
-## Package Configuration
+```bash
+# Create a scratch org
+sf org create scratch --definition-file config/project-scratch-def.json --alias accessgraph-test --duration-days 7 --no-track-source
 
-### Remote Site Settings
-Add the following Remote Site Settings (auto-added by package):
-- **Name**: AccessGraph_AI_API
-- **URL**: https://accessgraph-ai-production.up.railway.app
-- **Active**: ✓ Checked
+# Deploy using scratch manifest (excludes Connected App)
+sf project deploy start --manifest manifest/scratch-package.xml --target-org accessgraph-test
 
-### Named Credentials (Optional)
-For enhanced security, configure Named Credentials instead of storing API endpoint in custom settings.
+# Assign permission set so you can see the app
+sf org assign permset --name AccessGraph_Admin --target-org accessgraph-test
 
-## Usage
-
-### Trigger Manual Sync
-```apex
-// From Developer Console or Anonymous Apex
-Map<String, Object> result = AccessGraphConnector.triggerSync();
-System.debug('Sync Result: ' + result);
+# Open the org
+sf org open --target-org accessgraph-test
 ```
 
-### Check Sync Status
-```apex
-Map<String, Object> status = AccessGraphConnector.getSyncStatus();
-System.debug('Latest Sync: ' + status);
+Then in the open org: App Launcher → AccessGraph AI.
+
+### One-Time Manual Step: Email Deliverability
+
+Scratch orgs default to "system email only" deliverability, which prevents the welcome email from being sent. To enable email testing:
+
+1. In the scratch org: **Setup → Email → Deliverability**
+2. Set **Access level** to **All email**
+3. Click **Save**
+
+This is per-scratch-org and not something we can configure via package metadata.
+
+The bell-icon notification works regardless of email deliverability settings.
+
+### Run Apex Tests
+
+```bash
+sf apex run test --target-org accessgraph-test --code-coverage --result-format human --wait 10
 ```
 
-### Verify Connection
-```apex
-Map<String, Object> connection = AccessGraphConnector.checkConnection();
-System.debug('Connected: ' + connection.get('connected'));
+Expected: 20 tests pass, ≥75% org-wide coverage.
+
+### Manual Smoke Test
+
+After deploy, verify in the scratch org:
+
+1. Open App Launcher → "AccessGraph AI" tab loads
+2. Page renders: connection badge, last sync info, three count tiles, two buttons
+3. Click "Sync Now" → spinner → toast → counts refresh
+4. Click "Open Full Dashboard" → opens the web app in a new tab
+5. Set `AccessGraph_Settings__c.API_Endpoint__c` to an invalid URL → page shows "Backend not reachable" banner instead of crashing
+
+### Create Package Version
+
+```bash
+sf package version create --package "AccessGraph AI" --installation-key-bypass --code-coverage --wait 30 --target-dev-hub devhub
 ```
 
-### Access from Lightning Component (Future)
-```javascript
-// LWC example (if setup component is added)
-import { LightningElement, wire } from 'lwc';
-import triggerSync from '@salesforce/apex/AccessGraphConnector.triggerSync';
+This uses the full `package.xml` (via `sfdx-project.json`) which includes the Connected App.
 
-export default class AccessGraphSetup extends LightningElement {
-    handleSync() {
-        triggerSync()
-            .then(result => {
-                console.log('Sync triggered:', result);
-            })
-            .catch(error => {
-                console.error('Sync failed:', error);
-            });
-    }
-}
+The output gives you a Subscriber Package Version Id (`04t...`) and an installation URL.
+
+### Test the Created Package Version
+
+```bash
+# Fresh scratch org for clean install test
+sf org create scratch --definition-file config/project-scratch-def.json --alias accessgraph-fresh --duration-days 7 --no-track-source
+
+# Install the new package version
+sf package install --package <04t-id-from-above> --target-org accessgraph-fresh --no-prompt --wait 10
+
+# Verify Apex tests pass in the installed package
+sf apex run test --target-org accessgraph-fresh --code-coverage --result-format human --wait 10
 ```
 
-## Security Review Requirements
+After install, the post-install handler should:
+- Create the `AccessGraph_Settings__c` org default record
+- Auto-assign the `AccessGraph_Admin` permission set to the installer (queued via `@future`)
+- Send a bell-icon notification
+- Send a welcome email (if deliverability is enabled)
 
-### Completed:
-- [x] AES-256 encryption for OAuth tokens
-- [x] TLS 1.3 for all API communication
-- [x] Comprehensive audit logging
-- [x] RBAC for dashboard users
-- [x] GDPR compliance (Article 17 - Right to Erasure)
-- [x] Data retention policies
-- [x] Security headers (HSTS, CSP, etc.)
-- [x] Privacy policy and terms of service
-- [x] Data Processing Agreement
+---
 
-### Salesforce-Specific:
-- [x] Connected App with appropriate OAuth scopes
-- [x] No hardcoded credentials
-- [x] Proper error handling in Apex
-- [x] Governor limit compliance
-- [x] Post-install script for auto-configuration
-- [ ] Test coverage ≥75% (TODO: Add Apex tests)
-- [ ] Remote Site Settings documentation
-- [ ] Installation guide for customers
+## Migrating to Managed Package (for AppExchange)
 
-## Testing
+The current package is **Unlocked** (no namespace). For AppExchange distribution, it must become a **Managed Package** with a registered namespace.
 
-### Unit Tests (TODO)
-Create test classes:
-- `AccessGraphConnector_Test.cls`
-- `AccessGraphPostInstall_Test.cls`
+### Steps
 
-### Integration Tests
-1. Install package in sandbox org
-2. Verify custom settings initialization
-3. Test OAuth flow
-4. Trigger manual sync
-5. Verify API connectivity
+1. Create a separate Developer Edition org (NOT a Dev Hub) at https://developer.salesforce.com/signup
+2. In that new org: Setup → Package Manager → Namespace Settings → register your namespace
+3. Authorize the namespace org with the CLI: `sf org login web --alias namespace-org`
+4. Update `sfdx-project.json` with the registered namespace
+5. Create a managed package: `sf package create --name "AccessGraph AI" --description "..." --package-type Managed --path force-app --target-dev-hub devhub`
+6. Create a version: `sf package version create --package "AccessGraph AI" --installation-key-bypass --wait 30 --target-dev-hub devhub`
 
-## AppExchange Listing
-
-### Required Assets:
-- [ ] Logo (200x200px PNG)
-- [ ] Screenshots (5-10 images, 1280x800px)
-- [ ] Demo video (YouTube/Vimeo, 2-3 minutes)
-- [ ] Feature list (5-7 key features)
-- [ ] Customer testimonials (3-5)
-- [ ] Support email: support@accessgraph.ai
-- [ ] Documentation URL: https://accessgraph-ai-production.up.railway.app/docs
-
-### Listing Categories:
-- Security
-- Administration
-- Analytics
-
-### Pricing Model:
-- Free trial: 30 days
-- Starter: $99/month (up to 100 users)
-- Professional: $299/month (up to 500 users)
-- Enterprise: Custom pricing (500+ users)
-
-## Support
-
-- **Email**: support@accessgraph.ai
-- **Documentation**: https://accessgraph-ai-production.up.railway.app/docs
-- **Security Issues**: security@accessgraph.ai
-- **Privacy Questions**: privacy@accessgraph.ai
-
-## License
-
-Copyright © 2026 AccessGraph AI, Inc. All rights reserved.
-
-This package is proprietary software distributed via Salesforce AppExchange.
-See Terms of Service: https://accessgraph-ai-production.up.railway.app/legal/terms
+**No code or metadata changes needed** — the namespace is auto-applied by Salesforce when the package is created. LWC Apex imports (`@salesforce/apex/AccessGraphConnector.getOrgSummary`) work in both unlocked and managed packages.

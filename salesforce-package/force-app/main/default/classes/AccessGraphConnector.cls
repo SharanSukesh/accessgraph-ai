@@ -139,6 +139,115 @@ public with sharing class AccessGraphConnector {
     }
 
     /**
+     * Single call returning everything the home page LWC needs.
+     * Each callout is wrapped in try/catch so a partial backend failure
+     * still returns a populated DTO with backendReachable=false.
+     */
+    @AuraEnabled(cacheable=true)
+    public static OrgSummary getOrgSummary() {
+        OrgSummary summary = new OrgSummary();
+        summary.backendReachable = false;
+        summary.anomalyCount = 0;
+        summary.recommendationCount = 0;
+        summary.dashboardUrl = getApiEndpoint() + '/dashboard?org=' + getOrganizationId() + '&utm_source=salesforce_app';
+
+        String baseUrl = getApiEndpoint();
+        String orgId = getOrganizationId();
+
+        // Health check
+        try {
+            HttpResponse healthRes = sendGet(baseUrl + '/health', 10000);
+            summary.backendReachable = healthRes.getStatusCode() == 200;
+        } catch (Exception e) {
+            System.debug('getOrgSummary health check failed: ' + e.getMessage());
+        }
+
+        // Last sync job
+        try {
+            HttpResponse syncRes = sendGet(baseUrl + '/orgs/' + orgId + '/sync-jobs?limit=1', 15000);
+            if (syncRes.getStatusCode() == 200) {
+                List<Object> jobs = (List<Object>) JSON.deserializeUntyped(syncRes.getBody());
+                if (!jobs.isEmpty()) {
+                    Map<String, Object> latestJob = (Map<String, Object>) jobs[0];
+                    if (latestJob.get('completed_at') != null) {
+                        summary.lastSyncDate = parseIsoDateTime((String) latestJob.get('completed_at'));
+                    } else if (latestJob.get('started_at') != null) {
+                        summary.lastSyncDate = parseIsoDateTime((String) latestJob.get('started_at'));
+                    }
+                    summary.lastSyncStatus = (String) latestJob.get('status');
+                }
+            }
+        } catch (Exception e) {
+            System.debug('getOrgSummary sync-jobs fetch failed: ' + e.getMessage());
+        }
+
+        // Anomaly count - fetch all and count (backend doesn't return totals)
+        try {
+            HttpResponse anomRes = sendGet(baseUrl + '/orgs/' + orgId + '/anomalies?limit=1000', 15000);
+            if (anomRes.getStatusCode() == 200) {
+                List<Object> anomalies = (List<Object>) JSON.deserializeUntyped(anomRes.getBody());
+                summary.anomalyCount = anomalies.size();
+            }
+        } catch (Exception e) {
+            System.debug('getOrgSummary anomalies fetch failed: ' + e.getMessage());
+        }
+
+        // Recommendation count
+        try {
+            HttpResponse recRes = sendGet(baseUrl + '/orgs/' + orgId + '/recommendations?limit=1000', 15000);
+            if (recRes.getStatusCode() == 200) {
+                List<Object> recs = (List<Object>) JSON.deserializeUntyped(recRes.getBody());
+                summary.recommendationCount = recs.size();
+            }
+        } catch (Exception e) {
+            System.debug('getOrgSummary recommendations fetch failed: ' + e.getMessage());
+        }
+
+        return summary;
+    }
+
+    /**
+     * DTO returned by getOrgSummary() - strongly typed for LWC consumption
+     */
+    public class OrgSummary {
+        @AuraEnabled public Boolean backendReachable;
+        @AuraEnabled public DateTime lastSyncDate;
+        @AuraEnabled public String lastSyncStatus;
+        @AuraEnabled public Integer anomalyCount;
+        @AuraEnabled public Integer recommendationCount;
+        @AuraEnabled public String dashboardUrl;
+    }
+
+    /**
+     * Helper: GET request with shared headers and timeout
+     */
+    private static HttpResponse sendGet(String endpoint, Integer timeoutMs) {
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint(endpoint);
+        req.setMethod('GET');
+        req.setHeader('Content-Type', 'application/json');
+        req.setTimeout(timeoutMs);
+        return new Http().send(req);
+    }
+
+    /**
+     * Helper: Parse ISO 8601 datetime string from backend.
+     * Backend returns format like "2026-05-02T08:07:16.425224Z"
+     */
+    private static DateTime parseIsoDateTime(String iso) {
+        if (String.isBlank(iso)) {
+            return null;
+        }
+        try {
+            // Strip fractional seconds and Z suffix; Apex JSON parses standard ISO
+            String cleaned = iso.replaceAll('\\.[0-9]+', '').replace('Z', '+0000');
+            return (DateTime) JSON.deserialize('"' + cleaned + '"', DateTime.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Update sync status in custom settings
      * Truncates status to 50 chars to fit field limit
      */

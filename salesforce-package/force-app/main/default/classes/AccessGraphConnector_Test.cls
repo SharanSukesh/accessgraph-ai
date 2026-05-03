@@ -207,6 +207,43 @@ private class AccessGraphConnector_Test {
     }
 
     /**
+     * Test getOrgSummary() - all backend calls succeed
+     */
+    @isTest
+    static void testGetOrgSummary_Success() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphMultiRouteMock());
+
+        Test.startTest();
+        AccessGraphConnector.OrgSummary summary = AccessGraphConnector.getOrgSummary();
+        Test.stopTest();
+
+        System.assertEquals(true, summary.backendReachable, 'Backend should be reachable');
+        System.assertEquals('completed', summary.lastSyncStatus, 'Should return completed status from sync-jobs');
+        System.assertNotEquals(null, summary.lastSyncDate, 'Last sync date should be parsed');
+        System.assertEquals(2, summary.anomalyCount, 'Should count 2 anomalies from mock');
+        System.assertEquals(3, summary.recommendationCount, 'Should count 3 recommendations from mock');
+        System.assert(String.isNotBlank(summary.dashboardUrl), 'Dashboard URL should be computed');
+        System.assert(summary.dashboardUrl.contains('utm_source=salesforce_app'), 'Dashboard URL should include utm tracking');
+    }
+
+    /**
+     * Test getOrgSummary() - backend unreachable (all callouts fail)
+     */
+    @isTest
+    static void testGetOrgSummary_BackendDown() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphFailingMock());
+
+        Test.startTest();
+        AccessGraphConnector.OrgSummary summary = AccessGraphConnector.getOrgSummary();
+        Test.stopTest();
+
+        System.assertEquals(false, summary.backendReachable, 'Backend should not be reachable when all callouts fail');
+        System.assertEquals(0, summary.anomalyCount, 'Anomaly count should default to 0');
+        System.assertEquals(0, summary.recommendationCount, 'Recommendation count should default to 0');
+        System.assert(String.isNotBlank(summary.dashboardUrl), 'Dashboard URL should still be computed (no callout needed)');
+    }
+
+    /**
      * Mock HTTP callout class
      */
     private class AccessGraphHttpMock implements HttpCalloutMock {
@@ -224,6 +261,45 @@ private class AccessGraphConnector_Test {
             if (this.responseBody != null) {
                 res.setBody(this.responseBody);
             }
+            res.setHeader('Content-Type', 'application/json');
+            return res;
+        }
+    }
+
+    /**
+     * Multi-route mock for getOrgSummary() - returns different responses per endpoint
+     */
+    private class AccessGraphMultiRouteMock implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setStatusCode(200);
+
+            String url = req.getEndpoint();
+            if (url.contains('/health')) {
+                res.setBody('{"status":"ok","service":"accessgraph-backend"}');
+            } else if (url.contains('/sync-jobs')) {
+                res.setBody('[{"id":"job-1","status":"completed","started_at":"2026-05-02T08:06:02.467167Z","completed_at":"2026-05-02T08:07:16.425224Z"}]');
+            } else if (url.contains('/anomalies')) {
+                res.setBody('[{"id":"a1"},{"id":"a2"}]');
+            } else if (url.contains('/recommendations')) {
+                res.setBody('[{"id":"r1"},{"id":"r2"},{"id":"r3"}]');
+            } else {
+                res.setStatusCode(404);
+                res.setBody('{}');
+            }
+            return res;
+        }
+    }
+
+    /**
+     * Failing mock - all routes return 500 to simulate backend down
+     */
+    private class AccessGraphFailingMock implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setStatusCode(500);
+            res.setBody('{"error":"backend down"}');
             res.setHeader('Content-Type', 'application/json');
             return res;
         }
