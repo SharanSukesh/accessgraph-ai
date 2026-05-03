@@ -309,6 +309,183 @@ async def get_package_status(
         )
 
 
+@router.get("/diagnose-encryption", response_model=Dict[str, Any])
+async def diagnose_encryption(
+    confirm: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Diagnose the encryption pipeline. Reports:
+    - sqlalchemy-utils version installed
+    - The actual PostgreSQL column type for access_token
+    - The raw stored value (truncated, hex-decoded if bytea)
+    - Manual round-trip test of AesEngine encrypt -> decrypt
+    - Whether ORM-loaded value matches manually-decrypted value
+
+    Requires confirm=DIAGNOSE.
+    """
+    if confirm != "DIAGNOSE":
+        raise HTTPException(
+            status_code=400,
+            detail="Pass ?confirm=DIAGNOSE to run this diagnostic"
+        )
+
+    from app.core.config import settings as cfg
+    from sqlalchemy import text as sa_text
+
+    diagnostic: Dict[str, Any] = {
+        "encryption_settings": {
+            "ENABLE_FIELD_ENCRYPTION": cfg.ENABLE_FIELD_ENCRYPTION,
+            "DATABASE_ENCRYPTION_KEY_set": bool(cfg.DATABASE_ENCRYPTION_KEY),
+            "DATABASE_ENCRYPTION_KEY_length": (
+                len(cfg.DATABASE_ENCRYPTION_KEY) if cfg.DATABASE_ENCRYPTION_KEY else 0
+            ),
+        }
+    }
+
+    # 1. sqlalchemy_utils version
+    try:
+        import sqlalchemy_utils
+        diagnostic["sqlalchemy_utils_version"] = sqlalchemy_utils.__version__
+    except Exception as e:
+        diagnostic["sqlalchemy_utils_version"] = f"error: {e}"
+
+    # 2. Actual PostgreSQL column type
+    try:
+        result = await db.execute(sa_text(
+            """
+            SELECT column_name, data_type, udt_name, character_maximum_length
+            FROM information_schema.columns
+            WHERE table_name = 'salesforce_connections'
+              AND column_name IN ('access_token', 'refresh_token')
+            """
+        ))
+        rows = result.fetchall()
+        diagnostic["pg_columns"] = [
+            {
+                "column": r[0],
+                "data_type": r[1],
+                "udt_name": r[2],
+                "max_length": r[3],
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        diagnostic["pg_columns_error"] = str(e)
+
+    # 3. Raw stored value (bypass ORM/EncryptedType to see underlying bytes)
+    try:
+        result = await db.execute(sa_text(
+            """
+            SELECT id, length(access_token::text) as text_len,
+                   substring(access_token::text from 1 for 30) as raw_first_30,
+                   octet_length(access_token::bytea) as byte_len
+            FROM salesforce_connections
+            WHERE access_token IS NOT NULL
+            LIMIT 1
+            """
+        ))
+        row = result.fetchone()
+        if row:
+            diagnostic["raw_storage"] = {
+                "connection_id": row[0],
+                "text_length": row[1],
+                "raw_first_30_chars": row[2],
+                "byte_length": row[3],
+            }
+    except Exception as e:
+        diagnostic["raw_storage_error"] = str(e)
+
+    # 4. Manual encrypt -> decrypt round-trip with AesEngine
+    try:
+        from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
+        engine = AesEngine()
+        engine._update_key(cfg.DATABASE_ENCRYPTION_KEY)
+
+        plaintext = "test_token_" + "x" * 100  # ~110 chars to mimic SF token
+        encrypted = engine.encrypt(plaintext)
+        decrypted = engine.decrypt(encrypted)
+
+        diagnostic["round_trip"] = {
+            "plaintext_length": len(plaintext),
+            "encrypted_type": type(encrypted).__name__,
+            "encrypted_length": len(encrypted) if hasattr(encrypted, "__len__") else None,
+            "encrypted_first_20": (
+                encrypted.decode() if isinstance(encrypted, bytes) else str(encrypted)
+            )[:20],
+            "decrypted_type": type(decrypted).__name__,
+            "decrypted_matches_plaintext": (
+                decrypted == plaintext or decrypted == plaintext.encode()
+            ),
+        }
+    except Exception as e:
+        diagnostic["round_trip_error"] = f"{type(e).__name__}: {e}"
+
+    # 5. Try decrypting the actual stored access_token directly with AesEngine
+    try:
+        from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
+        engine = AesEngine()
+        engine._update_key(cfg.DATABASE_ENCRYPTION_KEY)
+
+        result = await db.execute(sa_text(
+            "SELECT access_token::text FROM salesforce_connections WHERE access_token IS NOT NULL LIMIT 1"
+        ))
+        raw_value = result.scalar_one_or_none()
+        if raw_value:
+            attempt_results = []
+
+            # Attempt A: pass raw value as-is
+            try:
+                decrypted = engine.decrypt(raw_value)
+                attempt_results.append({
+                    "method": "raw_string",
+                    "ok": True,
+                    "looks_like_sf_token": (
+                        isinstance(decrypted, str) and (
+                            decrypted.startswith("00D") or decrypted.startswith("eyJ")
+                        )
+                    ),
+                    "decrypted_preview": (
+                        decrypted[:20] if isinstance(decrypted, str) else str(decrypted)[:20]
+                    ),
+                })
+            except Exception as e:
+                attempt_results.append({"method": "raw_string", "ok": False, "error": str(e)})
+
+            # Attempt B: if value starts with \x, decode hex first
+            if raw_value.startswith("\\x"):
+                try:
+                    hex_str = raw_value[2:]  # strip leading \x
+                    decoded_bytes = bytes.fromhex(hex_str)
+                    # decoded_bytes should be the base64-encoded ciphertext
+                    base64_str = decoded_bytes.decode("ascii", errors="replace")
+                    decrypted = engine.decrypt(base64_str)
+                    attempt_results.append({
+                        "method": "hex_decode_then_decrypt",
+                        "ok": True,
+                        "looks_like_sf_token": (
+                            isinstance(decrypted, str) and (
+                                decrypted.startswith("00D") or decrypted.startswith("eyJ")
+                            )
+                        ),
+                        "decrypted_preview": (
+                            decrypted[:20] if isinstance(decrypted, str) else str(decrypted)[:20]
+                        ),
+                    })
+                except Exception as e:
+                    attempt_results.append({
+                        "method": "hex_decode_then_decrypt",
+                        "ok": False,
+                        "error": str(e),
+                    })
+
+            diagnostic["manual_decrypt_attempts"] = attempt_results
+    except Exception as e:
+        diagnostic["manual_decrypt_error"] = f"{type(e).__name__}: {e}"
+
+    return diagnostic
+
+
 @router.get("/diagnose/{salesforce_org_id}", response_model=Dict[str, Any])
 async def diagnose_oauth_state(
     salesforce_org_id: str,
