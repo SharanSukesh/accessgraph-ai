@@ -499,6 +499,63 @@ async def diagnose_encryption(
     except Exception as e:
         diagnostic["pg_attribute_error"] = str(e)
 
+    # 4d. ORM round-trip test - exactly mimics auth.py's OAuth save flow
+    try:
+        from app.domain.models import SalesforceConnection, Organization
+        from sqlalchemy import select as sa_select
+        import uuid
+
+        # Create a test Organization
+        test_org = Organization(name="ENCRYPTION_TEST_ORG_DELETE_ME")
+        db.add(test_org)
+        await db.flush()
+
+        # Create a SalesforceConnection via ORM (exactly what auth.py does)
+        test_conn = SalesforceConnection(
+            organization_id=test_org.id,
+            instance_url="https://test.example.com",
+            organization_id_sf="00DTEST_DELETE_ME",
+            access_token="00D9H000002jioXUAQ!AQEAQTokenValuetest12345",
+            refresh_token="REFRESHTOKEN_TEST_VALUE_12345",
+            is_active=True,
+        )
+        db.add(test_conn)
+        await db.commit()
+
+        # Read raw stored value
+        raw_q = await db.execute(sa_text(
+            "SELECT length(access_token), substring(access_token from 1 for 30) "
+            "FROM salesforce_connections WHERE id = :id"
+        ), {"id": test_conn.id})
+        raw_row = raw_q.fetchone()
+
+        # Read via ORM (triggers EncryptedType.process_result_value)
+        await db.refresh(test_conn)
+
+        diagnostic["orm_roundtrip_test"] = {
+            "test_connection_id": test_conn.id,
+            "input_access_token": "00D9H000002jioXUAQ!AQEAQTokenValuetest12345",
+            "raw_stored_length": raw_row[0],
+            "raw_stored_first_30": raw_row[1],
+            "raw_stored_starts_with_backslash_x": raw_row[1].startswith("\\x") if raw_row[1] else False,
+            "orm_decrypted_value": test_conn.access_token,
+            "orm_round_trip_matches": (
+                test_conn.access_token == "00D9H000002jioXUAQ!AQEAQTokenValuetest12345"
+            ),
+        }
+
+        # Cleanup
+        await db.delete(test_conn)
+        await db.delete(test_org)
+        await db.commit()
+    except Exception as e:
+        import traceback
+        diagnostic["orm_roundtrip_test_error"] = f"{type(e).__name__}: {e}\n{traceback.format_exc()[:600]}"
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
     # 4c. End-to-end DB test: write through ORM, read raw, then read through ORM
     try:
         from sqlalchemy_utils.types.encrypted.encrypted_type import StringEncryptedType, AesEngine
