@@ -41,16 +41,16 @@
                 </div>
             </template>
 
-            <!-- Three count tiles -->
+            <!-- Insights tiles: anomalies, recommendations, sync status -->
             <div class="slds-grid slds-gutters slds-p-horizontal_medium slds-wrap">
                 <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-p-bottom_small">
-                    <div class="ag-tile slds-box slds-box_small slds-text-align_center">
+                    <div class="ag-tile ag-tile-warn slds-box slds-box_small slds-text-align_center">
                         <p class="slds-text-heading_label slds-text-color_weak">Anomalies</p>
                         <p class="ag-tile-number slds-text-heading_large">{anomalyCount}</p>
                     </div>
                 </div>
                 <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3 slds-p-bottom_small">
-                    <div class="ag-tile slds-box slds-box_small slds-text-align_center">
+                    <div class="ag-tile ag-tile-info slds-box slds-box_small slds-text-align_center">
                         <p class="slds-text-heading_label slds-text-color_weak">Recommendations</p>
                         <p class="ag-tile-number slds-text-heading_large">{recommendationCount}</p>
                     </div>
@@ -62,6 +62,47 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Sync coverage: per-entity counts from the latest sync -->
+            <template if:true={hasSyncedData}>
+                <div class="slds-p-horizontal_medium slds-p-top_small slds-p-bottom_x-small">
+                    <p class="slds-text-heading_small slds-text-color_default slds-m-bottom_x-small">
+                        Synced from Salesforce
+                    </p>
+                </div>
+                <div class="slds-grid slds-gutters_small slds-p-horizontal_medium slds-wrap">
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5 slds-p-bottom_x-small">
+                        <div class="ag-mini-tile slds-box slds-box_x-small slds-text-align_center">
+                            <p class="ag-mini-number">{userCount}</p>
+                            <p class="ag-mini-label">Users</p>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5 slds-p-bottom_x-small">
+                        <div class="ag-mini-tile slds-box slds-box_x-small slds-text-align_center">
+                            <p class="ag-mini-number">{profileCount}</p>
+                            <p class="ag-mini-label">Profiles</p>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5 slds-p-bottom_x-small">
+                        <div class="ag-mini-tile slds-box slds-box_x-small slds-text-align_center">
+                            <p class="ag-mini-number">{permissionSetCount}</p>
+                            <p class="ag-mini-label">Perm Sets</p>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5 slds-p-bottom_x-small">
+                        <div class="ag-mini-tile slds-box slds-box_x-small slds-text-align_center">
+                            <p class="ag-mini-number">{objectPermissionCountFormatted}</p>
+                            <p class="ag-mini-label">Object Perms</p>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-medium-size_1-of-5 slds-p-bottom_x-small">
+                        <div class="ag-mini-tile slds-box slds-box_x-small slds-text-align_center">
+                            <p class="ag-mini-number">{fieldPermissionCountFormatted}</p>
+                            <p class="ag-mini-label">Field Perms</p>
+                        </div>
+                    </div>
+                </div>
+            </template>
 
             <!-- Action buttons -->
             <div class="slds-p-around_medium slds-grid slds-grid_align-center slds-wrap">

@@ -73,6 +73,46 @@ export default class AccessGraphHome extends LightningElement {
         return this.summary ? this.summary.recommendationCount : 0;
     }
 
+    get userCount() {
+        return this.summary ? (this.summary.userCount || 0) : 0;
+    }
+
+    get profileCount() {
+        return this.summary ? (this.summary.profileCount || 0) : 0;
+    }
+
+    get permissionSetCount() {
+        return this.summary ? (this.summary.permissionSetCount || 0) : 0;
+    }
+
+    get objectPermissionCount() {
+        return this.summary ? (this.summary.objectPermissionCount || 0) : 0;
+    }
+
+    get fieldPermissionCount() {
+        return this.summary ? (this.summary.fieldPermissionCount || 0) : 0;
+    }
+
+    // Format large counts with thousands separator (e.g. 40003 -> "40,003")
+    get objectPermissionCountFormatted() {
+        return this.objectPermissionCount.toLocaleString();
+    }
+
+    get fieldPermissionCountFormatted() {
+        return this.fieldPermissionCount.toLocaleString();
+    }
+
+    // True when at least one entity was synced - hides the entire section
+    // until the first sync has populated the metadata counts.
+    get hasSyncedData() {
+        if (!this.summary) return false;
+        return (
+            (this.summary.userCount || 0) > 0 ||
+            (this.summary.profileCount || 0) > 0 ||
+            (this.summary.permissionSetCount || 0) > 0
+        );
+    }
+
     get hasLastSync() {
         return this.summary && this.summary.lastSyncDate;
     }

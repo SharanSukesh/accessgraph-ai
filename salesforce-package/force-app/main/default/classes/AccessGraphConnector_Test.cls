@@ -255,9 +255,17 @@ private class AccessGraphConnector_Test {
 
         System.assertEquals(true, summary.backendReachable, 'Backend should be reachable');
         System.assertEquals('completed', summary.lastSyncStatus, 'Should return completed status from sync-jobs');
-        System.assertNotEquals(null, summary.lastSyncDate, 'Last sync date should be parsed');
+        // lastSyncDate is now a raw ISO string (not Apex DateTime)
+        System.assert(String.isNotBlank(summary.lastSyncDate), 'Last sync date should be present');
+        System.assert(summary.lastSyncDate.startsWith('2026-05-02'), 'Should be ISO 8601 string');
         System.assertEquals(2, summary.anomalyCount, 'Should count 2 anomalies from mock');
         System.assertEquals(3, summary.recommendationCount, 'Should count 3 recommendations from mock');
+        // Per-entity sync counts pulled from metadata.counts in sync-jobs response
+        System.assertEquals(12, summary.userCount, 'Should extract user count from metadata');
+        System.assertEquals(45, summary.profileCount, 'Should extract profile count from metadata');
+        System.assertEquals(181, summary.permissionSetCount, 'Should extract permission set count from metadata');
+        System.assertEquals(8128, summary.objectPermissionCount, 'Should extract object permission count from metadata');
+        System.assertEquals(40003, summary.fieldPermissionCount, 'Should extract field permission count from metadata');
         System.assert(String.isNotBlank(summary.dashboardUrl), 'Dashboard URL should be computed');
         System.assert(summary.dashboardUrl.contains('utm_source=salesforce_app'), 'Dashboard URL should include utm tracking');
         // Dashboard URL must point to the FRONTEND, not the backend API host
@@ -324,7 +332,20 @@ private class AccessGraphConnector_Test {
             if (url.contains('/health')) {
                 res.setBody('{"status":"ok","service":"accessgraph-backend"}');
             } else if (url.contains('/sync-jobs')) {
-                res.setBody('[{"id":"job-1","status":"completed","started_at":"2026-05-02T08:06:02.467167Z","completed_at":"2026-05-02T08:07:16.425224Z"}]');
+                // Includes metadata.counts so we can verify per-entity sync
+                // counts are extracted into the OrgSummary DTO.
+                res.setBody(
+                    '[{"id":"job-1","status":"completed",' +
+                    '"started_at":"2026-05-02T08:06:02.467167Z",' +
+                    '"completed_at":"2026-05-02T08:07:16.425224Z",' +
+                    '"metadata":{"counts":{' +
+                        '"users":12,' +
+                        '"profiles":45,' +
+                        '"permission_sets":181,' +
+                        '"object_permissions":8128,' +
+                        '"field_permissions":40003' +
+                    '}}}]'
+                );
             } else if (url.contains('/anomalies')) {
                 res.setBody('[{"id":"a1"},{"id":"a2"}]');
             } else if (url.contains('/recommendations')) {

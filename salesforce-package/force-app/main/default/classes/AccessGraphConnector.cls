@@ -225,19 +225,36 @@ public with sharing class AccessGraphConnector {
             System.debug('getOrgSummary health check failed: ' + e.getMessage());
         }
 
-        // Last sync job
+        // Last sync job - also extract per-entity counts from sync metadata
         try {
             HttpResponse syncRes = sendGet(baseUrl + '/orgs/' + orgId + '/sync-jobs?limit=1', 15000);
             if (syncRes.getStatusCode() == 200) {
                 List<Object> jobs = (List<Object>) JSON.deserializeUntyped(syncRes.getBody());
                 if (!jobs.isEmpty()) {
                     Map<String, Object> latestJob = (Map<String, Object>) jobs[0];
-                    if (latestJob.get('completed_at') != null) {
-                        summary.lastSyncDate = parseIsoDateTime((String) latestJob.get('completed_at'));
-                    } else if (latestJob.get('started_at') != null) {
-                        summary.lastSyncDate = parseIsoDateTime((String) latestJob.get('started_at'));
+
+                    // Pass raw ISO strings - lightning-formatted-date-time on the
+                    // LWC side parses these natively. Avoids fragile Apex DateTime
+                    // parsing that was returning null and leaving the LWC blank.
+                    summary.lastSyncDate = (String) latestJob.get('completed_at');
+                    if (String.isBlank(summary.lastSyncDate)) {
+                        summary.lastSyncDate = (String) latestJob.get('started_at');
                     }
                     summary.lastSyncStatus = (String) latestJob.get('status');
+
+                    // Extract per-entity sync counts from metadata.counts so the
+                    // LWC can show what was actually synced.
+                    Map<String, Object> metadata = (Map<String, Object>) latestJob.get('metadata');
+                    if (metadata != null) {
+                        Map<String, Object> counts = (Map<String, Object>) metadata.get('counts');
+                        if (counts != null) {
+                            summary.userCount = toInt(counts.get('users'));
+                            summary.permissionSetCount = toInt(counts.get('permission_sets'));
+                            summary.profileCount = toInt(counts.get('profiles'));
+                            summary.objectPermissionCount = toInt(counts.get('object_permissions'));
+                            summary.fieldPermissionCount = toInt(counts.get('field_permissions'));
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
@@ -270,15 +287,36 @@ public with sharing class AccessGraphConnector {
     }
 
     /**
-     * DTO returned by getOrgSummary() - strongly typed for LWC consumption
+     * DTO returned by getOrgSummary() - strongly typed for LWC consumption.
+     * lastSyncDate is a raw ISO 8601 string (e.g. "2026-05-03T08:06:02Z");
+     * the LWC's lightning-formatted-date-time parses it natively.
      */
     public class OrgSummary {
         @AuraEnabled public Boolean backendReachable;
-        @AuraEnabled public DateTime lastSyncDate;
+        @AuraEnabled public String lastSyncDate;
         @AuraEnabled public String lastSyncStatus;
         @AuraEnabled public Integer anomalyCount;
         @AuraEnabled public Integer recommendationCount;
+        @AuraEnabled public Integer userCount;
+        @AuraEnabled public Integer permissionSetCount;
+        @AuraEnabled public Integer profileCount;
+        @AuraEnabled public Integer objectPermissionCount;
+        @AuraEnabled public Integer fieldPermissionCount;
         @AuraEnabled public String dashboardUrl;
+    }
+
+    /**
+     * Coerce a JSON-deserialized number (Integer or Long) to Integer. Default 0.
+     */
+    private static Integer toInt(Object value) {
+        if (value == null) return 0;
+        if (value instanceof Integer) return (Integer) value;
+        if (value instanceof Long) return ((Long) value).intValue();
+        try {
+            return Integer.valueOf(String.valueOf(value));
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     /**
@@ -291,23 +329,6 @@ public with sharing class AccessGraphConnector {
         req.setHeader('Content-Type', 'application/json');
         req.setTimeout(timeoutMs);
         return new Http().send(req);
-    }
-
-    /**
-     * Helper: Parse ISO 8601 datetime string from backend.
-     * Backend returns format like "2026-05-02T08:07:16.425224Z"
-     */
-    private static DateTime parseIsoDateTime(String iso) {
-        if (String.isBlank(iso)) {
-            return null;
-        }
-        try {
-            // Strip fractional seconds and Z suffix; Apex JSON parses standard ISO
-            String cleaned = iso.replaceAll('\\.[0-9]+', '').replace('Z', '+0000');
-            return (DateTime) JSON.deserialize('"' + cleaned + '"', DateTime.class);
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     /**

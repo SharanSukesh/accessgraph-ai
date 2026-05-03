@@ -5,6 +5,16 @@
     min-height: 5rem;
 }
 
+/* Anomalies tile - amber accent to draw attention to risk count */
+.ag-tile-warn {
+    background-color: #fff5e6;
+}
+
+/* Recommendations tile - green accent for actionable improvements */
+.ag-tile-info {
+    background-color: #eaf5ee;
+}
+
 .ag-tile-number {
     font-weight: 700;
     color: #0b5394;
@@ -14,4 +24,27 @@
 .ag-tile-status {
     font-weight: 500;
     margin-top: 0.5rem;
+}
+
+/* Compact mini-tiles for the per-entity sync coverage row */
+.ag-mini-tile {
+    background-color: #fafafa;
+    border-radius: 0.25rem;
+    padding: 0.5rem 0.25rem;
+    min-height: 3rem;
+}
+
+.ag-mini-number {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #16325c;
+    line-height: 1.2;
+}
+
+.ag-mini-label {
+    font-size: 0.7rem;
+    color: #706e6b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 0.125rem;
 }
