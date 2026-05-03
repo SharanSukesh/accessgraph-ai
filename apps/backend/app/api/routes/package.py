@@ -307,3 +307,106 @@ async def get_package_status(
             status_code=500,
             detail=f"Failed to get status: {str(e)}"
         )
+
+
+@router.get("/diagnose/{salesforce_org_id}", response_model=Dict[str, Any])
+async def diagnose_oauth_state(
+    salesforce_org_id: str,
+    confirm: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Diagnostic endpoint for OAuth token state. Reports:
+    - Whether the SalesforceConnection record exists
+    - Whether access_token / refresh_token decrypt to non-null values
+    - Whether token-shape looks like a Salesforce session token
+    - Whether the access_token actually works against Salesforce (live test)
+    - Whether refresh_token can mint a new access_token
+
+    Does NOT return the raw token values, only structural info.
+    Requires confirm=DIAGNOSE to run (defense against accidental probing).
+    """
+    if confirm != "DIAGNOSE":
+        raise HTTPException(
+            status_code=400,
+            detail="Pass ?confirm=DIAGNOSE to run this diagnostic"
+        )
+
+    from app.core.config import settings as cfg
+    import httpx
+
+    stmt = select(SalesforceConnection).where(
+        SalesforceConnection.organization_id_sf == salesforce_org_id
+    )
+    result = await db.execute(stmt)
+    connection = result.scalar_one_or_none()
+
+    if not connection:
+        return {"connection_found": False}
+
+    access_token = connection.access_token
+    refresh_token = connection.refresh_token
+
+    def shape_info(token: Optional[str]) -> Dict[str, Any]:
+        if not token:
+            return {"present": False, "length": 0}
+        looks_like_sf = (
+            token.startswith("00D")
+            or token.startswith("00!")
+            or token.startswith("eyJ")
+            or "!" in token[:50]
+        )
+        return {
+            "present": True,
+            "length": len(token),
+            "looks_like_sf_token": looks_like_sf,
+            "first_10": token[:10] if len(token) >= 10 else token,
+        }
+
+    diagnosis: Dict[str, Any] = {
+        "connection_found": True,
+        "connection_id": connection.id,
+        "is_active": connection.is_active,
+        "instance_url": connection.instance_url,
+        "encryption_settings": {
+            "ENABLE_FIELD_ENCRYPTION": cfg.ENABLE_FIELD_ENCRYPTION,
+            "DATABASE_ENCRYPTION_KEY_set": bool(cfg.DATABASE_ENCRYPTION_KEY),
+        },
+        "access_token": shape_info(access_token),
+        "refresh_token": shape_info(refresh_token),
+    }
+
+    # Live test: hit Salesforce /services/oauth2/userinfo with the access token
+    if access_token and connection.instance_url:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                userinfo_url = f"{connection.instance_url}/services/oauth2/userinfo"
+                r = await client.get(
+                    userinfo_url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+                diagnosis["access_token_test"] = {
+                    "endpoint": "/services/oauth2/userinfo",
+                    "status_code": r.status_code,
+                    "ok": r.status_code == 200,
+                    "body_preview": r.text[:200],
+                }
+        except Exception as e:
+            diagnosis["access_token_test"] = {"error": str(e)}
+
+    # Live test: try refreshing the token
+    if refresh_token:
+        try:
+            from app.salesforce.oauth import SalesforceOAuthClient
+            oauth = SalesforceOAuthClient()
+            new_token = await oauth.refresh_access_token(refresh_token)
+            diagnosis["refresh_test"] = {
+                "ok": True,
+                "new_access_token_length": len(new_token.access_token) if new_token.access_token else 0,
+                "new_instance_url": new_token.instance_url,
+                "matches_stored_instance_url": new_token.instance_url == connection.instance_url,
+            }
+        except Exception as e:
+            diagnosis["refresh_test"] = {"ok": False, "error": str(e)}
+
+    return diagnosis
