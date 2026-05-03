@@ -10,8 +10,12 @@
  */
 public with sharing class AccessGraphConnector {
 
-    // API Configuration
+    // Backend API endpoint (HTTP callouts go here)
     private static final String DEFAULT_API_ENDPOINT = 'https://accessgraph-ai-production.up.railway.app';
+
+    // Frontend dashboard URL (where 'Open Full Dashboard' takes the user)
+    private static final String DEFAULT_DASHBOARD_URL = 'https://gentle-love-production-1eba.up.railway.app';
+
     private static final String API_VERSION = 'v1';
 
     /**
@@ -23,6 +27,14 @@ public with sharing class AccessGraphConnector {
             return settings.API_Endpoint__c;
         }
         return DEFAULT_API_ENDPOINT;
+    }
+
+    /**
+     * Get dashboard (frontend UI) URL.
+     * Currently hardcoded; can be made configurable via custom setting later.
+     */
+    private static String getDashboardBaseUrl() {
+        return DEFAULT_DASHBOARD_URL;
     }
 
     /**
@@ -177,7 +189,12 @@ public with sharing class AccessGraphConnector {
         summary.backendReachable = false;
         summary.anomalyCount = 0;
         summary.recommendationCount = 0;
-        summary.dashboardUrl = getApiEndpoint() + '/dashboard?org=' + getOrganizationId() + '&utm_source=salesforce_app';
+        // Dashboard URL points to the FRONTEND (UI), not the backend API.
+        // We pass the Salesforce Org ID so the frontend can route the user
+        // to the right org once they sign in.
+        summary.dashboardUrl = getDashboardBaseUrl()
+            + '/?org=' + UserInfo.getOrganizationId()
+            + '&utm_source=salesforce_app';
 
         String baseUrl = getApiEndpoint();
         String orgId = getOrganizationId();

@@ -260,6 +260,15 @@ private class AccessGraphConnector_Test {
         System.assertEquals(3, summary.recommendationCount, 'Should count 3 recommendations from mock');
         System.assert(String.isNotBlank(summary.dashboardUrl), 'Dashboard URL should be computed');
         System.assert(summary.dashboardUrl.contains('utm_source=salesforce_app'), 'Dashboard URL should include utm tracking');
+        // Dashboard URL must point to the FRONTEND, not the backend API host
+        System.assert(
+            summary.dashboardUrl.contains('gentle-love-production-1eba.up.railway.app'),
+            'Dashboard URL should point to the frontend host, not the backend. Got: ' + summary.dashboardUrl
+        );
+        System.assert(
+            !summary.dashboardUrl.contains('accessgraph-ai-production.up.railway.app'),
+            'Dashboard URL must NOT point to the backend API host. Got: ' + summary.dashboardUrl
+        );
     }
 
     /**
