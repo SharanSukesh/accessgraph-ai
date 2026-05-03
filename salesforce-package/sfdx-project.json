@@ -1,8 +1,8 @@
 {
   "packageDirectories": [
     {
-      "versionName": "ver 0.1",
-      "versionNumber": "0.1.0.NEXT",
+      "versionName": "ver 0.2 - Native UI",
+      "versionNumber": "0.2.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "AccessGraph AI",
@@ -15,6 +15,7 @@
   "sourceApiVersion": "60.0",
   "packageAliases": {
     "AccessGraph AI": "0HodL0000003ZMDSA2",
-    "AccessGraph AI@0.1.0-1": "04tdL000000Ye7tQAC"
+    "AccessGraph AI@0.1.0-1": "04tdL000000Ye7tQAC",
+    "AccessGraph AI@0.2.0-1": "04tdL000000YeavQAC"
   }
 }
