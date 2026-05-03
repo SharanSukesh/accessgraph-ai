@@ -209,11 +209,15 @@ export default function OnboardingPage() {
                 setStep(step + 1)
               } else {
                 // Redirect to Salesforce OAuth. Forward env=sandbox if present
-                // (so sandbox/scratch orgs go to test.salesforce.com).
+                // in URL or sessionStorage (so sandbox/scratch orgs go to
+                // test.salesforce.com).
                 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
-                const env = typeof window !== 'undefined'
-                  ? new URLSearchParams(window.location.search).get('env')
-                  : null
+                let env: string | null = null
+                if (typeof window !== 'undefined') {
+                  env =
+                    new URLSearchParams(window.location.search).get('env') ||
+                    window.sessionStorage.getItem('accessgraph_env')
+                }
                 const url = env
                   ? `${apiUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
                   : `${apiUrl}/auth/salesforce/authorize`

@@ -52,16 +52,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetchUser()
   }, [])
 
+  // Persist 'env' from URL to sessionStorage so it survives the
+  // home -> /login redirect chain (router.push() doesn't carry query params).
+  // The Salesforce package's LWC opens the dashboard with ?env=sandbox when
+  // the underlying SF org is a sandbox/scratch; we need that hint preserved
+  // so login() can route OAuth through test.salesforce.com.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const env = new URLSearchParams(window.location.search).get('env')
+    if (env) {
+      window.sessionStorage.setItem('accessgraph_env', env)
+    }
+  }, [])
+
   const login = (redirectUrl?: string) => {
     // Redirect to Salesforce OAuth.
-    // Forward the env query param (if present) so sandbox/scratch orgs use
-    // test.salesforce.com instead of login.salesforce.com. The Salesforce
-    // package's LWC includes ?env=sandbox in the dashboard URL when the
-    // Salesforce org is a sandbox or scratch org.
+    // Read env param from URL or sessionStorage. The Salesforce package's
+    // LWC opens the dashboard with ?env=sandbox when the Salesforce org is
+    // a sandbox or scratch (so OAuth must use test.salesforce.com).
+    // Because the home page redirects to /login (which loses query params),
+    // we persist env to sessionStorage once it's seen, then read here.
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
-    const env = typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('env')
-      : null
+    let env: string | null = null
+    if (typeof window !== 'undefined') {
+      env =
+        new URLSearchParams(window.location.search).get('env') ||
+        window.sessionStorage.getItem('accessgraph_env')
+    }
     const authorizeUrl = env
       ? `${apiUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
       : `${apiUrl}/auth/salesforce/authorize`
