@@ -189,11 +189,29 @@ public with sharing class AccessGraphConnector {
         summary.backendReachable = false;
         summary.anomalyCount = 0;
         summary.recommendationCount = 0;
+
+        // Detect whether this org is a sandbox/scratch (uses test.salesforce.com
+        // for OAuth) vs a production org (uses login.salesforce.com). The
+        // frontend forwards this env param to the backend's authorize endpoint
+        // so the OAuth redirect goes to the right Salesforce login host.
+        Boolean isSandbox = false;
+        try {
+            List<Organization> orgs = [SELECT IsSandbox FROM Organization LIMIT 1];
+            if (!orgs.isEmpty()) {
+                isSandbox = orgs[0].IsSandbox;
+            }
+        } catch (Exception e) {
+            System.debug('Could not query Organization.IsSandbox: ' + e.getMessage());
+        }
+
         // Dashboard URL points to the FRONTEND (UI), not the backend API.
         // We pass the Salesforce Org ID so the frontend can route the user
-        // to the right org once they sign in.
+        // to the right org once they sign in. env=sandbox tells the frontend
+        // to use test.salesforce.com for the OAuth flow.
+        String envParam = isSandbox ? '&env=sandbox' : '';
         summary.dashboardUrl = getDashboardBaseUrl()
             + '/?org=' + UserInfo.getOrganizationId()
+            + envParam
             + '&utm_source=salesforce_app';
 
         String baseUrl = getApiEndpoint();

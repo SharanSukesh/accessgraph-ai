@@ -69,9 +69,16 @@ export function Sidebar() {
 
   // Handle reconnect to Salesforce
   const handleReconnect = () => {
-    // Redirect to backend OAuth authorization endpoint
+    // Redirect to backend OAuth authorization endpoint.
+    // Forward env=sandbox if present in URL (for sandbox/scratch orgs).
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
-    window.location.href = `${backendUrl}/auth/salesforce/authorize`
+    const env = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('env')
+      : null
+    const url = env
+      ? `${backendUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
+      : `${backendUrl}/auth/salesforce/authorize`
+    window.location.href = url
   }
 
   return (

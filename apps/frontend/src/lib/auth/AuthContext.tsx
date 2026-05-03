@@ -53,9 +53,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const login = (redirectUrl?: string) => {
-    // Redirect to Salesforce OAuth
+    // Redirect to Salesforce OAuth.
+    // Forward the env query param (if present) so sandbox/scratch orgs use
+    // test.salesforce.com instead of login.salesforce.com. The Salesforce
+    // package's LWC includes ?env=sandbox in the dashboard URL when the
+    // Salesforce org is a sandbox or scratch org.
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
-    window.location.href = `${apiUrl}/auth/salesforce/authorize`
+    const env = typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('env')
+      : null
+    const authorizeUrl = env
+      ? `${apiUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
+      : `${apiUrl}/auth/salesforce/authorize`
+    window.location.href = authorizeUrl
   }
 
   const logout = async () => {
