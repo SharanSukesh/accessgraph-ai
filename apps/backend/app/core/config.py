@@ -68,6 +68,13 @@ class Settings(BaseSettings):
         description="Salesforce login URL"
     )
 
+    # Frontend
+    FRONTEND_URL: str = Field(
+        default="https://app.accessgraphai.com",
+        description="Frontend dashboard URL (for OAuth callback redirects). "
+                    "Override via env var to http://localhost:3000 for local dev."
+    )
+
     # Encryption
     DATABASE_ENCRYPTION_KEY: str = Field(
         default="",

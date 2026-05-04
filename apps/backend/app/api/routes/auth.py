@@ -199,14 +199,9 @@ async def callback(
         # Create JWT session token
         jwt_token = create_access_token(org_id=org_id, user_info=user_info)
 
-        # Get frontend URL from CORS origins
-        frontend_url = "http://localhost:3000"  # Default for local dev
-        if settings.cors_origins_list:
-            # Use the first CORS origin that looks like a frontend URL
-            for origin in settings.cors_origins_list:
-                if "gentle-love" in origin or "localhost:3000" in origin:
-                    frontend_url = origin
-                    break
+        # Use the configured frontend URL (defaults to https://app.accessgraphai.com,
+        # overridable via FRONTEND_URL env var for local dev or alternate environments).
+        frontend_url = settings.FRONTEND_URL.rstrip("/")
 
         # Add initial_sync flag for new orgs
         redirect_url = f"{frontend_url}/orgs/{org_id}/dashboard?connected=true"
@@ -218,8 +213,8 @@ async def callback(
         # Create redirect response with JWT cookie
         response = RedirectResponse(url=redirect_url)
 
-        # Detect if we're in production (Railway uses HTTPS)
-        is_production = "railway.app" in redirect_url or redirect_url.startswith("https://")
+        # Use Secure cookies whenever we're not on localhost (production HTTPS)
+        is_production = redirect_url.startswith("https://")
 
         response.set_cookie(
             key="access_token",
@@ -238,15 +233,8 @@ async def callback(
     except Exception as e:
         logger.error(f"OAuth callback error: {e}", exc_info=True)
 
-        # Redirect to frontend error page
-        frontend_url = "http://localhost:3000"  # Default for local dev
-        if settings.cors_origins_list:
-            # Use the first CORS origin that looks like a frontend URL
-            for origin in settings.cors_origins_list:
-                if "gentle-love" in origin or "localhost:3000" in origin:
-                    frontend_url = origin
-                    break
-
+        # Redirect to frontend error page using configured FRONTEND_URL
+        frontend_url = settings.FRONTEND_URL.rstrip("/")
         error_url = f"{frontend_url}/?error=oauth_failed&message={str(e)}"
 
         return RedirectResponse(url=error_url)
