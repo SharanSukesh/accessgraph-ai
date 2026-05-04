@@ -11,7 +11,6 @@ import { LogIn, Shield, Network, Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Logo } from '@/components/shared/Logo'
-import { AnimatedBackground } from '@/components/shared/AnimatedBackground'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 function LoginContent() {
@@ -37,11 +36,12 @@ function LoginContent() {
   }
 
   return (
-    // No bg-gradient on the wrapper - AnimatedBackground provides the
-    // visual identity. Adding a gradient here creates a stacking context
-    // that renders OVER the AnimatedBackground's -z-10 canvas, hiding it.
+    // The AnimatedBackground is rendered by the root layout (app/layout.tsx)
+    // and applies to every page. We don't render it here - that would stack
+    // a second canvas on top of the global one and double the opacity.
+    // No bg-gradient on the wrapper either - it would create a stacking
+    // context that hides the global -z-10 canvas.
     <div className="min-h-screen flex items-center justify-center">
-      <AnimatedBackground />
       <div className="max-w-md w-full px-6 relative z-10">
         {/* Logo */}
         <div className="mb-8 text-center">
