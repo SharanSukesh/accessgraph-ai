@@ -11,6 +11,7 @@ import { LogIn, Shield, Network, Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Logo } from '@/components/shared/Logo'
+import { AnimatedBackground } from '@/components/shared/AnimatedBackground'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 function LoginContent() {
@@ -36,8 +37,9 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
-      <div className="max-w-md w-full px-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 relative">
+      <AnimatedBackground />
+      <div className="max-w-md w-full px-6 relative z-10">
         {/* Logo */}
         <div className="mb-8 text-center">
           <div className="flex justify-center mb-6">

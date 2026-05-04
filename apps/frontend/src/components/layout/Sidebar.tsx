@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   Users,
@@ -36,6 +37,7 @@ const navigationItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const queryClient = useQueryClient()
   const [isExpanded, setIsExpanded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
@@ -57,11 +59,18 @@ export function Sidebar() {
     try {
       await apiClient.post(`/orgs/${orgId}/sync`)
       setSyncMessage('Sync started successfully!')
-      setTimeout(() => setSyncMessage(null), 3000)
+      setTimeout(() => setSyncMessage(null), 5000)
+
+      // Invalidate sync jobs + dashboard data so the UI refreshes immediately
+      // and the auto-polling kicks in (it polls every 5s while a job is running).
+      // Without this, status only updated on a manual page refresh.
+      await queryClient.invalidateQueries({ queryKey: ['orgs', 'detail', orgId, 'sync-jobs'] })
+      // Also invalidate other dashboard data that depends on sync results
+      await queryClient.invalidateQueries({ queryKey: ['orgs', 'detail', orgId] })
     } catch (error) {
       console.error('Sync failed:', error)
       setSyncMessage('Sync failed. Please try again.')
-      setTimeout(() => setSyncMessage(null), 3000)
+      setTimeout(() => setSyncMessage(null), 5000)
     } finally {
       setIsSyncing(false)
     }
