@@ -1,22 +1,24 @@
 {
   "packageDirectories": [
     {
-      "versionName": "ver 0.3 - Production Ready",
-      "versionNumber": "0.3.0.NEXT",
       "path": "force-app",
       "default": true,
-      "package": "AccessGraph AI",
-      "versionDescription": "Salesforce permission analytics and security insights"
+      "package": "AccessGraph AI Managed",
+      "versionName": "ver 1.0",
+      "versionNumber": "1.0.0.NEXT",
+      "versionDescription": "Salesforce permission analytics and security insights - first managed package release"
     }
   ],
   "name": "AccessGraph AI",
-  "namespace": "",
+  "namespace": "accessgraphai",
   "sfdcLoginUrl": "https://login.salesforce.com",
   "sourceApiVersion": "60.0",
   "packageAliases": {
     "AccessGraph AI": "0HodL0000003ZMDSA2",
     "AccessGraph AI@0.1.0-1": "04tdL000000Ye7tQAC",
     "AccessGraph AI@0.2.0-1": "04tdL000000YeavQAC",
-    "AccessGraph AI@0.3.0-1": "04tdL000000Yos1QAC"
+    "AccessGraph AI@0.3.0-1": "04tdL000000Yos1QAC",
+    "AccessGraph AI Managed": "0HodL0000003c2LSAQ",
+    "AccessGraph AI Managed@1.0.0-1": "04tdL000000YrJdQAK"
   }
 }
