@@ -58,14 +58,15 @@ export function AnimatedBackground() {
       const darkMode = isDarkMode()
 
       // Subtle backdrop tones - the network should fade behind page content,
-      // not compete with it. Light mode is muted but still visible on the
-      // pale gradient orbs; dark mode is even softer.
+      // not compete with it. Light mode is muted but still visible against
+      // the pale gradient orbs; dark mode is slightly bolder since the dark
+      // background absorbs more of the purple.
       const nodeColor = darkMode
         ? 'rgba(124, 58, 237, 0.55)'
-        : 'rgba(109, 40, 217, 0.35)'
+        : 'rgba(109, 40, 217, 0.42)'
 
-      const edgeBaseOpacity = darkMode ? 0.28 : 0.18
-      const edgeWidth = darkMode ? 1.5 : 1.5
+      const edgeBaseOpacity = darkMode ? 0.28 : 0.24
+      const edgeWidth = darkMode ? 1.5 : 1.6
 
       // Update and draw nodes
       nodes.forEach((node) => {
