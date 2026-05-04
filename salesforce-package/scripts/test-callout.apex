@@ -5,7 +5,7 @@ System.debug('===== HTTP Callout Test =====');
 System.debug('1. Testing /health endpoint...');
 try {
     HttpRequest req = new HttpRequest();
-    req.setEndpoint('https://accessgraph-ai-production.up.railway.app/health');
+    req.setEndpoint('https://api.accessgraphai.com/health');
     req.setMethod('GET');
     req.setTimeout(10000);
 

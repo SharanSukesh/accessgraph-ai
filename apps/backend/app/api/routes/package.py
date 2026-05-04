@@ -127,9 +127,9 @@ async def handle_package_installation(
             "installation_type": installation_type,
             "message": "Package installation recorded successfully",
             "next_steps": {
-                "1_oauth": "Complete OAuth setup at https://accessgraph-ai-production.up.railway.app",
+                "1_oauth": "Complete OAuth setup at https://app.accessgraphai.com",
                 "2_sync": "Trigger initial permission sync from Salesforce or dashboard",
-                "3_dashboard": f"View analytics at https://accessgraph-ai-production.up.railway.app/orgs/{org.id}/dashboard"
+                "3_dashboard": f"View analytics at https://app.accessgraphai.com/orgs/{org.id}/dashboard"
             }
         }
 
@@ -172,14 +172,14 @@ async def handle_sync_trigger(
                 status_code=404,
                 detail=f"Organization not found: {payload.organizationId}. "
                        "Please complete OAuth setup first at "
-                       "https://accessgraph-ai-production.up.railway.app"
+                       "https://app.accessgraphai.com"
             )
 
         if not connection.access_token:
             raise HTTPException(
                 status_code=403,
                 detail="OAuth connection required. Please authorize at "
-                       "https://accessgraph-ai-production.up.railway.app"
+                       "https://app.accessgraphai.com"
             )
 
         org = await db.get(Organization, connection.organization_id)
@@ -311,7 +311,7 @@ async def get_package_status(
             } if latest_sync else None,
             "configuration_complete": oauth_connected,
             "next_steps": [] if oauth_connected else [
-                "Complete OAuth setup at https://accessgraph-ai-production.up.railway.app"
+                "Complete OAuth setup at https://app.accessgraphai.com"
             ]
         }
 

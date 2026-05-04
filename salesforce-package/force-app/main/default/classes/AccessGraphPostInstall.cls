@@ -61,7 +61,7 @@ global class AccessGraphPostInstall implements InstallHandler {
             String orgId = UserInfo.getOrganizationId();
             String orgName = UserInfo.getOrganizationName();
 
-            String endpoint = 'https://accessgraph-ai-production.up.railway.app/package/install';
+            String endpoint = 'https://api.accessgraphai.com/package/install';
 
             String installerEmail = '';
             try {
@@ -142,17 +142,17 @@ global class AccessGraphPostInstall implements InstallHandler {
                 '<h3>Next Steps:</h3>' +
                 '<ol>' +
                 '<li><b>Open the AccessGraph AI tab</b> in your App Launcher to see status and trigger syncs.</li>' +
-                '<li><b>Complete OAuth Setup:</b> Visit <a href="https://accessgraph-ai-production.up.railway.app">accessgraph-ai-production.up.railway.app</a> and connect your Salesforce org.</li>' +
+                '<li><b>Complete OAuth Setup:</b> Visit <a href="https://app.accessgraphai.com">app.accessgraphai.com</a> and connect your Salesforce org.</li>' +
                 '<li><b>Run Initial Sync:</b> From the AccessGraph AI tab in Salesforce, click "Sync Now" to import your permissions.</li>' +
                 '<li><b>Review Dashboard:</b> Explore your access graph, anomalies, and recommendations on the web dashboard.</li>' +
                 '</ol>' +
                 '<h3>Resources:</h3>' +
                 '<ul>' +
-                '<li><a href="https://accessgraph-ai-production.up.railway.app/legal/privacy">Privacy Policy</a></li>' +
-                '<li><a href="https://accessgraph-ai-production.up.railway.app/legal/security">Security Practices</a></li>' +
-                '<li><a href="mailto:support@accessgraph.ai">Contact Support</a></li>' +
+                '<li><a href="https://app.accessgraphai.com/legal/privacy">Privacy Policy</a></li>' +
+                '<li><a href="https://app.accessgraphai.com/legal/security">Security Practices</a></li>' +
+                '<li><a href="mailto:support@accessgraphai.com">Contact Support</a></li>' +
                 '</ul>' +
-                '<p>Questions? Email us at <a href="mailto:support@accessgraph.ai">support@accessgraph.ai</a></p>' +
+                '<p>Questions? Email us at <a href="mailto:support@accessgraphai.com">support@accessgraphai.com</a></p>' +
                 '<p>Best regards,<br>The AccessGraph AI Team</p>'
             );
 

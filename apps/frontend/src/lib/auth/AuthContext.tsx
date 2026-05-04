@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // a sandbox or scratch (so OAuth must use test.salesforce.com).
     // Because the home page redirects to /login (which loses query params),
     // we persist env to sessionStorage once it's seen, then read here.
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
     let env: string | null = null
     if (typeof window !== 'undefined') {
       env =

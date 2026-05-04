@@ -35,7 +35,7 @@ try {
 System.debug('5. Direct HTTP test to Railway backend...');
 try {
     HttpRequest req = new HttpRequest();
-    req.setEndpoint('https://accessgraph-ai-production.up.railway.app/health');
+    req.setEndpoint('https://api.accessgraphai.com/health');
     req.setMethod('GET');
     req.setTimeout(10000);
 
@@ -51,7 +51,7 @@ try {
 System.debug('6. Direct HTTP test - trigger sync...');
 try {
     HttpRequest req = new HttpRequest();
-    req.setEndpoint('https://accessgraph-ai-production.up.railway.app/orgs/e21a9d47-1931-4ffb-8202-c979bf35aa3d/sync');
+    req.setEndpoint('https://api.accessgraphai.com/orgs/e21a9d47-1931-4ffb-8202-c979bf35aa3d/sync');
     req.setMethod('POST');
     req.setHeader('Content-Type', 'application/json');
     req.setTimeout(120000);

@@ -96,12 +96,12 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins string into list"""
         if not self.BACKEND_CORS_ORIGINS or self.BACKEND_CORS_ORIGINS.strip() == "":
-            # Default origins - includes localhost and Railway domains
+            # Default origins - localhost (dev) + production AccessGraph AI domains
             return [
                 "http://localhost:3000",
                 "http://localhost:3001",
-                "https://gentle-love-production-1eba.up.railway.app",
-                "https://accessgraph-ai-production.up.railway.app"
+                "https://app.accessgraphai.com",
+                "https://api.accessgraphai.com",
             ]
         return [origin.strip() for origin in self.BACKEND_CORS_ORIGINS.split(",") if origin.strip()]
 

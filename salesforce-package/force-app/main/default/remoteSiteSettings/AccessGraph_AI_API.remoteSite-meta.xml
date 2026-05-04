@@ -3,5 +3,5 @@
     <description>AccessGraph AI API endpoint for permission sync and analysis</description>
     <disableProtocolSecurity>false</disableProtocolSecurity>
     <isActive>true</isActive>
-    <url>https://accessgraph-ai-production.up.railway.app</url>
+    <url>https://api.accessgraphai.com</url>
 </RemoteSiteSetting>

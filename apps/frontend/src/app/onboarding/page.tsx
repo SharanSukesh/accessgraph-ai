@@ -211,7 +211,7 @@ export default function OnboardingPage() {
                 // Redirect to Salesforce OAuth. Forward env=sandbox if present
                 // in URL or sessionStorage (so sandbox/scratch orgs go to
                 // test.salesforce.com).
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://accessgraph-ai-production.up.railway.app'
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
                 let env: string | null = null
                 if (typeof window !== 'undefined') {
                   env =

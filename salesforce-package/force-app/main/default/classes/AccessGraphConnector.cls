@@ -11,10 +11,10 @@
 public with sharing class AccessGraphConnector {
 
     // Backend API endpoint (HTTP callouts go here)
-    private static final String DEFAULT_API_ENDPOINT = 'https://accessgraph-ai-production.up.railway.app';
+    private static final String DEFAULT_API_ENDPOINT = 'https://api.accessgraphai.com';
 
     // Frontend dashboard URL (where 'Open Full Dashboard' takes the user)
-    private static final String DEFAULT_DASHBOARD_URL = 'https://gentle-love-production-1eba.up.railway.app';
+    private static final String DEFAULT_DASHBOARD_URL = 'https://app.accessgraphai.com';
 
     private static final String API_VERSION = 'v1';
 

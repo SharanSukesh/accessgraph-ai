@@ -270,11 +270,11 @@ private class AccessGraphConnector_Test {
         System.assert(summary.dashboardUrl.contains('utm_source=salesforce_app'), 'Dashboard URL should include utm tracking');
         // Dashboard URL must point to the FRONTEND, not the backend API host
         System.assert(
-            summary.dashboardUrl.contains('gentle-love-production-1eba.up.railway.app'),
+            summary.dashboardUrl.contains('app.accessgraphai.com'),
             'Dashboard URL should point to the frontend host, not the backend. Got: ' + summary.dashboardUrl
         );
         System.assert(
-            !summary.dashboardUrl.contains('accessgraph-ai-production.up.railway.app'),
+            !summary.dashboardUrl.contains('api.accessgraphai.com'),
             'Dashboard URL must NOT point to the backend API host. Got: ' + summary.dashboardUrl
         );
     }

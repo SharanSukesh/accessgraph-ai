@@ -1,6 +1,6 @@
 # AccessGraph AI Salesforce Package
 
-Salesforce package that integrates with [AccessGraph AI](https://accessgraph-ai-production.up.railway.app) for permission analysis and security insights.
+Salesforce package that integrates with [AccessGraph AI](https://api.accessgraphai.com) for permission analysis and security insights.
 
 ## Package Contents
 
@@ -21,7 +21,7 @@ Salesforce package that integrates with [AccessGraph AI](https://accessgraph-ai-
 3. App Launcher → "AccessGraph AI" tab (auto-assigned via PermissionSet)
 4. Tab opens to a single page showing connection status, anomaly/recommendation counts, last sync info, "Sync Now" button, and "Open Full Dashboard" link out to the web app
 
-The web app at `accessgraph-ai-production.up.railway.app` is where the deep work happens — this package is a launchpad inside Salesforce.
+The web app at `api.accessgraphai.com` is where the deep work happens — this package is a launchpad inside Salesforce.
 
 ---
 
