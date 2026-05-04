@@ -48,12 +48,20 @@ class SalesforceOAuthClient:
         digest = hashlib.sha256(verifier.encode('utf-8')).digest()
         return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
 
-    def get_authorization_url(self, state: Optional[str] = None) -> str:
+    def get_authorization_url(
+        self,
+        state: Optional[str] = None,
+        prompt: Optional[str] = None,
+    ) -> str:
         """
         Generate OAuth authorization URL with PKCE
 
         Args:
             state: Optional state parameter for CSRF protection
+            prompt: Optional OAuth 'prompt' parameter. Pass 'login' to force
+                Salesforce to show the login screen even when an active
+                session exists - used after explicit logout so users can
+                authenticate as a different identity / different org.
 
         Returns:
             Authorization URL
@@ -87,6 +95,8 @@ class SalesforceOAuthClient:
 
         if state:
             params["state"] = state
+        if prompt:
+            params["prompt"] = prompt
 
         auth_url = f"{self.login_url}/services/oauth2/authorize"
         return f"{auth_url}?{urlencode(params)}"

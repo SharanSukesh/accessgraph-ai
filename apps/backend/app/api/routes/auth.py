@@ -54,6 +54,10 @@ async def authorize(
         None,
         description="Salesforce environment: 'sandbox' (test.salesforce.com) or 'production' (login.salesforce.com). Defaults to production."
     ),
+    prompt: Optional[str] = Query(
+        None,
+        description="OAuth prompt parameter. Pass 'login' to force Salesforce to show the login screen even when a session exists - used after explicit logout so users can switch identities."
+    ),
 ):
     """
     Initiate Salesforce OAuth flow
@@ -85,11 +89,20 @@ async def authorize(
     state_token = secrets.token_urlsafe(32)
     state = f"sb_{state_token}" if is_sandbox else state_token
 
+    # Forward the OAuth 'prompt' parameter through to Salesforce.
+    # The frontend passes prompt=login after explicit logout so users can
+    # switch identities (without it, Salesforce silently re-uses the
+    # active session and re-logs the same user in).
+    sf_prompt = prompt if prompt in ("login", "consent", "select_account") else None
+
     # Create OAuth client and get authorization URL
     oauth_client = SalesforceOAuthClient(login_url=login_url)
-    auth_url = oauth_client.get_authorization_url(state=state)
+    auth_url = oauth_client.get_authorization_url(state=state, prompt=sf_prompt)
 
-    logger.info("Initiating OAuth flow", extra={"state": state, "env": env or "production"})
+    logger.info(
+        "Initiating OAuth flow",
+        extra={"state": state, "env": env or "production", "prompt": sf_prompt},
+    )
 
     return RedirectResponse(url=auth_url)
 

@@ -70,23 +70,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Read env param from URL or sessionStorage. The Salesforce package's
     // LWC opens the dashboard with ?env=sandbox when the Salesforce org is
     // a sandbox or scratch (so OAuth must use test.salesforce.com).
-    // Because the home page redirects to /login (which loses query params),
-    // we persist env to sessionStorage once it's seen, then read here.
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
     let env: string | null = null
+    let forceLogin = false
     if (typeof window !== 'undefined') {
       env =
         new URLSearchParams(window.location.search).get('env') ||
         window.sessionStorage.getItem('accessgraph_env')
+      // After explicit logout, force the Salesforce login screen (rather
+      // than silently re-using the existing SF session). Flag is set in
+      // logout() and consumed (cleared) here so it only fires once.
+      forceLogin = window.sessionStorage.getItem('accessgraph_force_login') === '1'
+      if (forceLogin) {
+        window.sessionStorage.removeItem('accessgraph_force_login')
+      }
     }
-    const authorizeUrl = env
-      ? `${apiUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
+    const params = new URLSearchParams()
+    if (env) params.set('env', env)
+    if (forceLogin) params.set('prompt', 'login')
+    const qs = params.toString()
+    const authorizeUrl = qs
+      ? `${apiUrl}/auth/salesforce/authorize?${qs}`
       : `${apiUrl}/auth/salesforce/authorize`
     window.location.href = authorizeUrl
   }
 
   const logout = async () => {
     try {
+      // Mark the next OAuth flow to force the Salesforce login screen.
+      // Salesforce keeps its own session cookie - clearing our JWT cookie
+      // doesn't end that session, so without prompt=login on the next
+      // /authorize call, Salesforce silently re-uses it and the user
+      // can't switch identities.
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('accessgraph_force_login', '1')
+      }
       await apiClient.post('/auth/logout')
       setUser(null)
       router.push('/login')

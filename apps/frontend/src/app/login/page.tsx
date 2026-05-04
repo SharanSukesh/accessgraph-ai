@@ -37,7 +37,10 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 relative">
+    // No bg-gradient on the wrapper - AnimatedBackground provides the
+    // visual identity. Adding a gradient here creates a stacking context
+    // that renders OVER the AnimatedBackground's -z-10 canvas, hiding it.
+    <div className="min-h-screen flex items-center justify-center">
       <AnimatedBackground />
       <div className="max-w-md w-full px-6 relative z-10">
         {/* Logo */}
