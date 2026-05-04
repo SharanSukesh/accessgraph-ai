@@ -4,7 +4,6 @@ Handles package installation notifications and sync triggers from Salesforce
 """
 import logging
 from typing import Dict, Optional, Any
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
@@ -208,14 +207,13 @@ async def handle_sync_trigger(
             f"(SF Org: {payload.organizationId})"
         )
 
-        # Use the same SyncOrchestrator that /orgs/{org_id}/sync uses, so
-        # the package's "Sync Now" button takes the exact same proven code
-        # path as the web app's sync button. SalesforceSyncService is a
-        # legacy parallel implementation that works on Pydantic objects
-        # while extract_all() returns dicts - SyncOrchestrator handles dicts
-        # correctly and is the path used by the working web-app sync.
+        # Schedule sync as a background task and return 202 immediately. The
+        # LWC's wired data refreshes after triggerSync resolves, so seeing
+        # PENDING here lets the user see the sync progressing in the tile
+        # rather than waiting 1-2 minutes for the request to finish before
+        # any UI update.
         from app.domain.models import SyncJob, SyncStatus
-        from app.ingestion.orchestrator import SyncOrchestrator
+        from app.ingestion.orchestrator import schedule_background_sync
 
         sync_job = SyncJob(
             organization_id=org.id,
@@ -225,10 +223,7 @@ async def handle_sync_trigger(
         await db.commit()
         await db.refresh(sync_job)
 
-        orchestrator = SyncOrchestrator(db)
-        await orchestrator.run_sync(org.id, sync_job.id)
-
-        await db.refresh(sync_job)
+        schedule_background_sync(org.id, sync_job.id)
 
         return {
             "success": True,

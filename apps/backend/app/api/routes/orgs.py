@@ -14,7 +14,7 @@ from app.api.deps import get_database
 from app.domain.models import Organization, SyncJob, SyncStatus
 from app.graph.builder import GraphBuilder
 from app.db.neo4j_client import get_neo4j_client
-from app.ingestion.orchestrator import SyncOrchestrator
+from app.ingestion.orchestrator import schedule_background_sync
 from app.services.anomaly_detection import AnomalyDetectionService
 from app.services.recommendations import RecommendationEngine
 from app.services.risk_scoring import RiskScoringService
@@ -153,15 +153,12 @@ async def trigger_sync(
     await db.commit()
     await db.refresh(sync_job)
 
-    # Run sync (in background would be better, but keeping simple)
-    orchestrator = SyncOrchestrator(db)
-    try:
-        await orchestrator.run_sync(org_id, sync_job.id)
-    except Exception as e:
-        logger.error(f"Sync failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # Schedule sync as a background task and return 202 immediately so the
+    # client can poll for status updates. The sync itself takes 1-2 minutes;
+    # blocking the HTTP request that long means the UI never shows
+    # 'pending'/'running' - it only sees 'completed' when the response lands.
+    schedule_background_sync(org_id, sync_job.id)
 
-    await db.refresh(sync_job)
     return SyncJobResponse.model_validate(sync_job)
 
 

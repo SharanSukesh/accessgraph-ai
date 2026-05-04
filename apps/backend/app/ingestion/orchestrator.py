@@ -2,6 +2,7 @@
 Sync Orchestrator
 Coordinates data extraction, normalization, and persistence
 """
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
@@ -16,6 +17,51 @@ from app.ingestion.snapshot import SnapshotPersister
 from app.salesforce.client import SalesforceAPIClient
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_sync_with_new_session(org_id: str, sync_job_id: str) -> None:
+    """
+    Run a sync job with a fresh DB session. Used when scheduling sync
+    as a fire-and-forget background task - the original HTTP request's
+    DB session would be closed by the time the sync completes.
+
+    Errors are logged but not raised - they're already recorded on the
+    SyncJob row by the orchestrator's own error handling.
+    """
+    # Local import to avoid circular dependency at module load time
+    from app.db.session import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        try:
+            await SyncOrchestrator(session).run_sync(org_id, sync_job_id)
+        except Exception as e:
+            logger.error(
+                f"Background sync {sync_job_id} for org {org_id} failed: {e}",
+                exc_info=True,
+            )
+            # Best-effort: mark the job as failed so the UI doesn't show
+            # a forever-pending state. If this also fails, at least we logged it.
+            try:
+                async with AsyncSessionLocal() as cleanup_session:
+                    job = await cleanup_session.get(SyncJob, sync_job_id)
+                    if job and job.status not in (SyncStatus.COMPLETED, SyncStatus.FAILED):
+                        job.status = SyncStatus.FAILED
+                        job.error_message = str(e)[:500]
+                        job.completed_at = datetime.now(timezone.utc)
+                        await cleanup_session.commit()
+            except Exception:
+                logger.exception("Failed to mark sync job as FAILED after background error")
+
+
+def schedule_background_sync(org_id: str, sync_job_id: str) -> None:
+    """
+    Fire-and-forget scheduling of a sync job. Returns immediately;
+    the sync runs in the asyncio event loop with its own DB session.
+
+    Use from HTTP routes that should respond fast (so the client can
+    poll for status updates) instead of blocking until sync finishes.
+    """
+    asyncio.create_task(_run_sync_with_new_session(org_id, sync_job_id))
 
 
 class SyncOrchestrator:
