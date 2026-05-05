@@ -121,6 +121,18 @@ export function ERGraphVisualization({
           shape: 'round-rectangle',
         },
       },
+      // Muting permission set nodes — distinct red treatment so they read as
+      // "removes access" at a glance, not just another permission set.
+      {
+        selector: 'node[type="muting_permission_set"]',
+        style: {
+          'background-color': '#fecaca',
+          'border-color': '#dc2626',
+          'border-width': 4,
+          'border-style': 'dashed',
+          shape: 'round-rectangle',
+        },
+      },
       // Role nodes
       {
         selector: 'node[type="role"]',
@@ -205,6 +217,17 @@ export function ERGraphVisualization({
         style: {
           'line-color': '#22d3ee',
           'target-arrow-color': '#06b6d4',
+          'line-style': 'dashed',
+          width: 2.5,
+        },
+      },
+      // ASSIGNED_MUTING_PERMISSION_SET edge — red dashed to distinguish from
+      // regular grant edges. Communicates "this path removes access".
+      {
+        selector: 'edge[type="ASSIGNED_MUTING_PERMISSION_SET"]',
+        style: {
+          'line-color': '#dc2626',
+          'target-arrow-color': '#dc2626',
           'line-style': 'dashed',
           width: 2.5,
         },

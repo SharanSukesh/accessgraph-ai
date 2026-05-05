@@ -68,19 +68,19 @@ function LoginContent() {
                 <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
                   <Network className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
-                <span>Visualize access patterns across your org</span>
+                <span>User-centric access graph — beyond field-by-field lookup</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
                 <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center flex-shrink-0">
                   <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 </div>
-                <span>AI-powered anomaly detection</span>
+                <span>ML detection of over-privileged users</span>
               </div>
               <div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
                 <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
                   <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
                 </div>
-                <span>Smart security recommendations</span>
+                <span>AI-generated fixes — not just alerts</span>
               </div>
             </div>
 

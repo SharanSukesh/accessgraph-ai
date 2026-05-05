@@ -85,6 +85,17 @@ class Settings(BaseSettings):
         description="Encrypt sensitive database fields (OAuth tokens, PII)"
     )
 
+    # Deep links from Salesforce Setup
+    DEEPLINK_SIGNING_KEY: str = Field(
+        default="",
+        description="HS256 signing key for deep-link JWTs issued to Setup-page LWCs. "
+                    "Separate from DATABASE_ENCRYPTION_KEY so a leak of one doesn't expose the other."
+    )
+    DEEPLINK_TTL_SECONDS: int = Field(
+        default=300,
+        description="Lifetime of a deep-link JWT (seconds). 5 minutes is plenty for click-to-tab."
+    )
+
     # Security
     ENFORCE_HTTPS: bool = Field(
         default=False,

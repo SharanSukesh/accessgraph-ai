@@ -379,4 +379,88 @@ private class AccessGraphConnector_Test {
             return res;
         }
     }
+
+    // ----------------------------------------------------------------------
+    // issueDeepLink tests
+    // ----------------------------------------------------------------------
+
+    /**
+     * issueDeepLink() - Success case returns the redeemUrl from the backend.
+     */
+    @isTest
+    static void testIssueDeepLink_Success() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(
+            200,
+            '{"redeemUrl":"https://app.accessgraphai.com/deeplink/redeem?token=abc.def.ghi"}'
+        ));
+
+        Test.startTest();
+        String url = AccessGraphConnector.issueDeepLink('user', '005000000000001AAA');
+        Test.stopTest();
+
+        System.assertEquals(
+            'https://app.accessgraphai.com/deeplink/redeem?token=abc.def.ghi',
+            url,
+            'Should return the redeemUrl from the backend response'
+        );
+    }
+
+    /**
+     * issueDeepLink() - 404 from backend (org not registered) surfaces a
+     * user-friendly AuraHandledException so the LWC can toast it.
+     */
+    @isTest
+    static void testIssueDeepLink_OrgNotRegistered() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(404, '{"detail":"not found"}'));
+
+        Test.startTest();
+        Boolean threw = false;
+        try {
+            AccessGraphConnector.issueDeepLink('user', '005000000000001AAA');
+        } catch (AuraHandledException e) {
+            threw = true;
+        }
+        Test.stopTest();
+
+        System.assert(threw, 'Should throw AuraHandledException on 404');
+    }
+
+    /**
+     * issueDeepLink() - generic 5xx errors throw AuraHandledException too,
+     * keeping the LWC error path consistent.
+     */
+    @isTest
+    static void testIssueDeepLink_BackendError() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(500, '{"error":"boom"}'));
+
+        Test.startTest();
+        Boolean threw = false;
+        try {
+            AccessGraphConnector.issueDeepLink('field', 'Account.Salary__c');
+        } catch (AuraHandledException e) {
+            threw = true;
+        }
+        Test.stopTest();
+
+        System.assert(threw, 'Should throw AuraHandledException on 5xx');
+    }
+
+    /**
+     * issueDeepLink() - response missing redeemUrl key throws cleanly.
+     */
+    @isTest
+    static void testIssueDeepLink_MissingRedeemUrl() {
+        Test.setMock(HttpCalloutMock.class, new AccessGraphHttpMock(200, '{"foo":"bar"}'));
+
+        Test.startTest();
+        Boolean threw = false;
+        try {
+            AccessGraphConnector.issueDeepLink('permission_set', '0PS000000000001AAA');
+        } catch (AuraHandledException e) {
+            threw = true;
+        }
+        Test.stopTest();
+
+        System.assert(threw, 'Should throw AuraHandledException when redeemUrl is missing');
+    }
 }

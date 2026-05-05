@@ -4,11 +4,16 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getOrgSummary from '@salesforce/apex/AccessGraphConnector.getOrgSummary';
 import triggerSync from '@salesforce/apex/AccessGraphConnector.triggerSync';
 
+const POLL_INTERVAL_MS = 4000;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
 export default class AccessGraphHome extends LightningElement {
     syncing = false;
     wiredSummaryResult;
     summary;
     error;
+    pollTimerId;
+    pollStartedAt;
 
     @wire(getOrgSummary)
     wiredSummary(result) {
@@ -16,9 +21,64 @@ export default class AccessGraphHome extends LightningElement {
         if (result.data) {
             this.summary = result.data;
             this.error = undefined;
+            // If a sync is running (kicked off here, from the web app, or
+            // still in flight from before this page loaded), poll until it
+            // reaches a terminal state. If we were polling and it finished,
+            // stop and notify.
+            const running = this.isSyncRunning();
+            if (running && !this.pollTimerId) {
+                this.startPolling();
+            } else if (!running && this.pollTimerId) {
+                this.stopPolling();
+                this.dispatchEvent(new ShowToastEvent({
+                    title: 'Sync Complete',
+                    message: 'Permission data refreshed.',
+                    variant: 'success'
+                }));
+            }
         } else if (result.error) {
             this.error = result.error;
             this.summary = undefined;
+        }
+    }
+
+    disconnectedCallback() {
+        this.clearPollTimer();
+    }
+
+    isSyncRunning() {
+        if (!this.summary || !this.summary.lastSyncStatus) return false;
+        const s = this.summary.lastSyncStatus.toLowerCase();
+        return s === 'running' || s === 'pending' || s === 'in_progress';
+    }
+
+    startPolling() {
+        if (this.pollTimerId) return;
+        this.syncing = true;
+        this.pollStartedAt = Date.now();
+        this.pollTimerId = setInterval(() => {
+            if (Date.now() - this.pollStartedAt > POLL_TIMEOUT_MS) {
+                this.stopPolling();
+                this.dispatchEvent(new ShowToastEvent({
+                    title: 'Sync Taking Longer Than Expected',
+                    message: 'Refresh the page or check the full dashboard.',
+                    variant: 'warning'
+                }));
+                return;
+            }
+            refreshApex(this.wiredSummaryResult);
+        }, POLL_INTERVAL_MS);
+    }
+
+    stopPolling() {
+        this.clearPollTimer();
+        this.syncing = false;
+    }
+
+    clearPollTimer() {
+        if (this.pollTimerId) {
+            clearInterval(this.pollTimerId);
+            this.pollTimerId = null;
         }
     }
 
@@ -118,7 +178,9 @@ export default class AccessGraphHome extends LightningElement {
     }
 
     handleSyncClick() {
+        if (this.syncing) return;
         this.syncing = true;
+
         triggerSync()
             .then((result) => {
                 const statusCode = result && result.statusCode;
@@ -132,8 +194,15 @@ export default class AccessGraphHome extends LightningElement {
                             variant: 'success'
                         })
                     );
-                } else if (statusCode === 403) {
-                    // OAuth not completed yet - guide user to the dashboard
+                    // Pull the new running sync job into the wire cache; the
+                    // wired callback then starts polling until it finishes.
+                    return refreshApex(this.wiredSummaryResult);
+                }
+
+                // Non-success: stop the spinner and surface the reason.
+                this.syncing = false;
+
+                if (statusCode === 403) {
                     this.dispatchEvent(
                         new ShowToastEvent({
                             title: 'OAuth Setup Required',
@@ -143,7 +212,6 @@ export default class AccessGraphHome extends LightningElement {
                         })
                     );
                 } else if (statusCode === 404) {
-                    // Org not yet registered with the backend
                     this.dispatchEvent(
                         new ShowToastEvent({
                             title: 'Org Not Registered',
@@ -161,10 +229,10 @@ export default class AccessGraphHome extends LightningElement {
                         })
                     );
                 }
-                // Refresh wired data so counts/timestamp update after backend completes
-                return refreshApex(this.wiredSummaryResult);
+                return null;
             })
             .catch((err) => {
+                this.syncing = false;
                 this.dispatchEvent(
                     new ShowToastEvent({
                         title: 'Sync Failed',
@@ -172,9 +240,6 @@ export default class AccessGraphHome extends LightningElement {
                         variant: 'error'
                     })
                 );
-            })
-            .finally(() => {
-                this.syncing = false;
             });
     }
 

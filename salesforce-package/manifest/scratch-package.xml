@@ -35,6 +35,9 @@
     </types>
     <types>
         <members>accessGraphHome</members>
+        <members>agOpenUserGraph</members>
+        <members>agOpenFieldAccess</members>
+        <members>agOpenPermissionSetImpact</members>
         <name>LightningComponentBundle</name>
     </types>
     <types>

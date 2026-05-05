@@ -60,6 +60,7 @@ class SalesforcePermissionSet(BaseModel):
     Label: str
     IsOwnedByProfile: bool = False
     ProfileId: Optional[str] = None
+    Type: Optional[str] = None  # Regular, Standard, Session, Group, Muting
 
 
 class SalesforcePermissionSetAssignment(BaseModel):

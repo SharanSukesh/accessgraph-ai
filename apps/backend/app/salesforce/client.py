@@ -193,7 +193,7 @@ class SalesforceAPIClient:
             List of SalesforcePermissionSet objects
         """
         soql = """
-            SELECT Id, Name, Label, IsOwnedByProfile, ProfileId
+            SELECT Id, Name, Label, IsOwnedByProfile, ProfileId, Type
             FROM PermissionSet
         """
 

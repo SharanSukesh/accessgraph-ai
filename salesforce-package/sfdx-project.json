@@ -4,9 +4,9 @@
       "path": "force-app",
       "default": true,
       "package": "AccessGraph AI Managed",
-      "versionName": "ver 1.0",
-      "versionNumber": "1.0.0.NEXT",
-      "versionDescription": "Salesforce permission analytics and security insights - first managed package release"
+      "versionName": "ver 1.1 promotable",
+      "versionNumber": "1.1.0.NEXT",
+      "versionDescription": "LWC: live polling of sync status so the spinner and counts update without a page refresh. Built with code coverage for promotion."
     }
   ],
   "name": "AccessGraph AI",
@@ -19,6 +19,8 @@
     "AccessGraph AI@0.2.0-1": "04tdL000000YeavQAC",
     "AccessGraph AI@0.3.0-1": "04tdL000000Yos1QAC",
     "AccessGraph AI Managed": "0HodL0000003c2LSAQ",
-    "AccessGraph AI Managed@1.0.0-1": "04tdL000000YrJdQAK"
+    "AccessGraph AI Managed@1.0.0-1": "04tdL000000YrJdQAK",
+    "AccessGraph AI Managed@1.1.0-1": "04tdL000000YsIvQAK",
+    "AccessGraph AI Managed@1.1.0-2": "04tdL000000Z2BpQAK"
   }
 }

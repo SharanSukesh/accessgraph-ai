@@ -124,6 +124,8 @@ class GraphBuilder:
                 "name": ps.name,
                 "label": ps.label,
                 "is_owned_by_profile": ps.is_owned_by_profile,
+                "ps_type": ps.ps_type or "Regular",
+                "is_muting": ps.ps_type == "Muting",
             }
             for ps in psets
         ]

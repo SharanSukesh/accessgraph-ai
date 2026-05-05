@@ -393,4 +393,58 @@ public with sharing class AccessGraphConnector {
             insert settings;
         }
     }
+
+    /**
+     * Issue a deep-link URL to the AccessGraph AI web app for a Setup-page
+     * detail view (User, Field, or Permission Set). The LWC quick actions
+     * call this on click; the returned URL is opened in a new tab.
+     *
+     * Resource types accepted by the backend:
+     *  - "user"            -> resourceId = Salesforce User Id (15 or 18 char)
+     *  - "field"           -> resourceId = "Object.Field" API name
+     *  - "permission_set"  -> resourceId = Salesforce PermissionSet Id
+     *
+     * Backend response codes:
+     *  - 200: token issued; result.redeemUrl is ready
+     *  - 404: org not registered; surface "complete OAuth setup first" toast
+     *  - 5xx / network: throw AuraHandledException so the LWC can show error
+     */
+    @AuraEnabled
+    public static String issueDeepLink(String resourceType, String resourceId) {
+        try {
+            String endpoint = getApiEndpoint() + '/auth/deeplink/issue';
+
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(endpoint);
+            req.setMethod('POST');
+            req.setHeader('Content-Type', 'application/json');
+            req.setBody(JSON.serialize(new Map<String, Object>{
+                'salesforceOrgId' => UserInfo.getOrganizationId(),
+                'salesforceUserId' => UserInfo.getUserId(),
+                'resourceType' => resourceType,
+                'resourceId' => resourceId
+            }));
+            req.setTimeout(15000);
+
+            HttpResponse res = new Http().send(req);
+            Integer status = res.getStatusCode();
+
+            if (status == 200) {
+                Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+                Object redeemUrl = body.get('redeemUrl');
+                if (redeemUrl == null) {
+                    throw new AuraHandledException('Backend response missing redeemUrl');
+                }
+                return (String) redeemUrl;
+            } else if (status == 404) {
+                throw new AuraHandledException('Org not registered with AccessGraph AI. Open the Full Dashboard first to complete setup.');
+            } else {
+                throw new AuraHandledException('Could not open AccessGraph AI (status ' + status + ').');
+            }
+        } catch (AuraHandledException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AuraHandledException('Could not reach AccessGraph AI: ' + e.getMessage());
+        }
+    }
 }

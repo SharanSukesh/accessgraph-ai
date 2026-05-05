@@ -1243,20 +1243,26 @@ async def get_user_graph(
                 profile_owned_ps_id = ps.salesforce_id
                 continue
 
-            # Regular permission set (not owned by profile)
+            # Regular permission set (not owned by profile).
+            # Surface ps_type / is_muting so the frontend can render muting
+            # permission sets distinctly (red border, dashed edges, etc).
             permission_set_ids.append(ps.salesforce_id)
+            is_muting = ps.ps_type == "Muting"
             nodes.append({
                 "id": ps.salesforce_id,
-                "type": "permission_set",
+                "type": "muting_permission_set" if is_muting else "permission_set",
                 "label": ps.label or ps.name,
-                "properties": {}
+                "properties": {
+                    "ps_type": ps.ps_type or "Regular",
+                    "is_muting": is_muting,
+                },
             })
             edges.append({
                 "id": f"user_ps_{user_sf_id}_{ps.salesforce_id}",
                 "source": user_sf_id,
                 "target": ps.salesforce_id,
-                "type": "ASSIGNED_PERMISSION_SET",
-                "label": "assigned"
+                "type": "ASSIGNED_MUTING_PERMISSION_SET" if is_muting else "ASSIGNED_PERMISSION_SET",
+                "label": "mutes via" if is_muting else "assigned",
             })
 
     # Build permission source IDs for querying

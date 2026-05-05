@@ -196,6 +196,7 @@ class SnapshotPersister:
                 existing.label = ps_data["Label"]
                 existing.is_owned_by_profile = ps_data.get("IsOwnedByProfile", False)
                 existing.profile_id = ps_data.get("ProfileId")
+                existing.ps_type = ps_data.get("Type")
                 existing.raw_data = ps_data
                 existing.sync_job_id = sync_job_id
             else:
@@ -207,6 +208,7 @@ class SnapshotPersister:
                     label=ps_data["Label"],
                     is_owned_by_profile=ps_data.get("IsOwnedByProfile", False),
                     profile_id=ps_data.get("ProfileId"),
+                    ps_type=ps_data.get("Type"),
                     raw_data=ps_data,
                 )
                 self.db.add(ps)

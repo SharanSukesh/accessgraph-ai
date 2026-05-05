@@ -99,11 +99,15 @@ class GraphRepository:
         ON CREATE SET
             p.name = ps.name,
             p.label = ps.label,
-            p.is_owned_by_profile = ps.is_owned_by_profile
+            p.is_owned_by_profile = ps.is_owned_by_profile,
+            p.ps_type = ps.ps_type,
+            p.is_muting = ps.is_muting
         ON MATCH SET
             p.name = ps.name,
             p.label = ps.label,
-            p.is_owned_by_profile = ps.is_owned_by_profile
+            p.is_owned_by_profile = ps.is_owned_by_profile,
+            p.ps_type = ps.ps_type,
+            p.is_muting = ps.is_muting
         """
         await self.client.execute_write(query, {"org_id": org_id, "permission_sets": permission_sets})
         logger.info(f"Upserted {len(permission_sets)} permission set nodes")

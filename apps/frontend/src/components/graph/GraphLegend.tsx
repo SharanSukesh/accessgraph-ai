@@ -38,6 +38,12 @@ const nodeLegend: LegendItem[] = [
     description: 'Permission sets granting additional access',
   },
   {
+    label: NODE_TYPES.MUTING_PERMISSION_SET.label,
+    color: 'bg-red-500',
+    shape: 'rounded-rectangle',
+    description: 'Muting permission sets — remove access within a permission set group',
+  },
+  {
     label: NODE_TYPES.ROLE.label,
     color: 'bg-amber-500',
     shape: 'diamond',
@@ -73,6 +79,11 @@ const edgeLegend: LegendItem[] = [
     label: EDGE_TYPES.HAS_PERMISSION_SET.label,
     color: 'border-cyan-500',
     description: 'User has permission set',
+  },
+  {
+    label: EDGE_TYPES.HAS_MUTING_PERMISSION_SET.label,
+    color: 'border-red-600',
+    description: 'User has muting permission set (removes access)',
   },
   {
     label: EDGE_TYPES.HAS_ROLE.label,

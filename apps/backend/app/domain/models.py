@@ -316,7 +316,15 @@ class PermissionSetSnapshot(Base, TimestampMixin):
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     is_owned_by_profile: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     profile_id: Mapped[Optional[str]] = mapped_column(String(18))
+    # Salesforce PermissionSet.Type: Regular | Standard | Session | Group | Muting.
+    # Nullable because rows synced before this column was added have no signal here.
+    # Treat NULL as "Regular" downstream.
+    ps_type: Mapped[Optional[str]] = mapped_column(String(32))
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    @property
+    def is_muting(self) -> bool:
+        return self.ps_type == "Muting"
 
     __table_args__ = (
         UniqueConstraint("organization_id", "salesforce_id", name="uq_ps_org_sf_id"),
@@ -911,3 +919,29 @@ class OrgUser(Base, TimestampMixin):
         }
 
         return permission_map.get(permission, False)
+
+
+class DeepLinkRedemption(Base, TimestampMixin):
+    """
+    Records redemption of a deep-link JWT issued to a managed-package quick
+    action. The jti is the unique identifier from the token; presence in this
+    table prevents replay (a token can only be redeemed once).
+
+    Rows expire (expires_at) and a nightly cleanup job can prune them.
+    """
+    __tablename__ = "deeplink_redemptions"
+
+    jti: Mapped[str] = mapped_column(String(64), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    sf_user_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    resource_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    redeemed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("ix_deeplink_redemptions_org", "organization_id"),
+        Index("ix_deeplink_redemptions_expires", "expires_at"),
+    )
