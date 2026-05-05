@@ -1,0 +1,220 @@
+<template>
+    <lightning-card title="AccessGraph AI Explorer" icon-name="standard:search">
+        <p slot="actions" class="slds-text-body_small slds-text-color_weak">
+            Search and open any user, permission set, or field in AccessGraph AI
+        </p>
+
+        <lightning-tabset variant="scoped" active-tab-value={activeTab} onselect={handleTabChange}>
+
+            <!-- =========================== USERS ========================== -->
+            <lightning-tab label="Users" value="users">
+                <div class="slds-p-around_medium">
+                    <lightning-input
+                        type="search"
+                        label="Search users by name or username"
+                        variant="label-hidden"
+                        placeholder="Search users by name or username..."
+                        value={userSearch}
+                        oninput={handleUserSearchInput}>
+                    </lightning-input>
+
+                    <template if:true={loadingUsers}>
+                        <div class="slds-p-vertical_medium slds-align_absolute-center">
+                            <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
+                        </div>
+                    </template>
+
+                    <template if:true={noUserResults}>
+                        <p class="slds-p-vertical_medium slds-text-align_center slds-text-color_weak">
+                            No users matched.
+                        </p>
+                    </template>
+
+                    <ul class="slds-has-dividers_top-space slds-m-top_small">
+                        <template for:each={userResults} for:item="user">
+                            <li key={user.id}
+                                class="slds-item slds-p-around_small slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                <div class="slds-col">
+                                    <p class="slds-text-heading_small">{user.label}</p>
+                                    <p class="slds-text-body_small slds-text-color_weak">{user.sublabel}</p>
+                                </div>
+                                <div class="slds-col_bump-left">
+                                    <lightning-button
+                                        variant="brand"
+                                        label="Open in AccessGraph AI"
+                                        icon-name="utility:new_window"
+                                        icon-position="right"
+                                        data-resource-type="user"
+                                        data-resource-id={user.id}
+                                        onclick={handleOpen}>
+                                    </lightning-button>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </lightning-tab>
+
+            <!-- ====================== PERMISSION SETS ===================== -->
+            <lightning-tab label="Permission Sets" value="permissionsets">
+                <div class="slds-p-around_medium">
+                    <lightning-input
+                        type="search"
+                        label="Search permission sets"
+                        variant="label-hidden"
+                        placeholder="Search permission sets by label or name..."
+                        value={psSearch}
+                        oninput={handlePsSearchInput}>
+                    </lightning-input>
+
+                    <template if:true={loadingPs}>
+                        <div class="slds-p-vertical_medium slds-align_absolute-center">
+                            <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
+                        </div>
+                    </template>
+
+                    <template if:true={noPsResults}>
+                        <p class="slds-p-vertical_medium slds-text-align_center slds-text-color_weak">
+                            No permission sets matched.
+                        </p>
+                    </template>
+
+                    <ul class="slds-has-dividers_top-space slds-m-top_small">
+                        <template for:each={psResults} for:item="ps">
+                            <li key={ps.id}
+                                class="slds-item slds-p-around_small slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                <div class="slds-col">
+                                    <p class="slds-text-heading_small">{ps.label}</p>
+                                    <p class="slds-text-body_small slds-text-color_weak">{ps.sublabel}</p>
+                                </div>
+                                <div class="slds-col_bump-left">
+                                    <lightning-button
+                                        variant="brand"
+                                        label="Open in AccessGraph AI"
+                                        icon-name="utility:new_window"
+                                        icon-position="right"
+                                        data-resource-type="permission_set"
+                                        data-resource-id={ps.id}
+                                        onclick={handleOpen}>
+                                    </lightning-button>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+            </lightning-tab>
+
+            <!-- ============================ FIELDS ========================= -->
+            <lightning-tab label="Fields" value="fields">
+                <div class="slds-p-around_medium">
+
+                    <!-- Step 1: pick an object -->
+                    <template if:false={hasObjectSelected}>
+                        <p class="slds-text-body_regular slds-m-bottom_small">
+                            Pick an object to see its fields.
+                        </p>
+
+                        <lightning-input
+                            type="search"
+                            label="Search objects"
+                            variant="label-hidden"
+                            placeholder="Search objects by label or API name..."
+                            value={objectSearch}
+                            oninput={handleObjectSearchInput}>
+                        </lightning-input>
+
+                        <template if:true={loadingObjects}>
+                            <div class="slds-p-vertical_medium slds-align_absolute-center">
+                                <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
+                            </div>
+                        </template>
+
+                        <template if:true={noObjectResults}>
+                            <p class="slds-p-vertical_medium slds-text-align_center slds-text-color_weak">
+                                No objects matched.
+                            </p>
+                        </template>
+
+                        <ul class="slds-has-dividers_top-space slds-m-top_small ag-object-list">
+                            <template for:each={objectResults} for:item="obj">
+                                <li key={obj.id}
+                                    class="slds-item slds-p-around_small slds-grid slds-grid_align-spread slds-grid_vertical-align-center ag-clickable"
+                                    data-object-name={obj.id}
+                                    onclick={handleSelectObject}>
+                                    <div class="slds-col">
+                                        <p class="slds-text-heading_small">{obj.label}</p>
+                                        <p class="slds-text-body_small slds-text-color_weak">{obj.sublabel}</p>
+                                    </div>
+                                    <lightning-icon
+                                        icon-name="utility:chevronright"
+                                        size="x-small"
+                                        alternative-text="Select">
+                                    </lightning-icon>
+                                </li>
+                            </template>
+                        </ul>
+                    </template>
+
+                    <!-- Step 2: fields of the selected object -->
+                    <template if:true={hasObjectSelected}>
+                        <div class="slds-grid slds-grid_align-spread slds-m-bottom_small">
+                            <p class="slds-text-heading_small">
+                                Fields on <strong>{selectedObject}</strong>
+                            </p>
+                            <lightning-button
+                                variant="neutral"
+                                label="Pick a different object"
+                                icon-name="utility:back"
+                                onclick={handleClearObject}>
+                            </lightning-button>
+                        </div>
+
+                        <lightning-input
+                            type="search"
+                            label="Search fields"
+                            variant="label-hidden"
+                            placeholder="Search fields by label or API name..."
+                            value={fieldSearch}
+                            oninput={handleFieldSearchInput}>
+                        </lightning-input>
+
+                        <template if:true={loadingFields}>
+                            <div class="slds-p-vertical_medium slds-align_absolute-center">
+                                <lightning-spinner alternative-text="Loading..." size="small"></lightning-spinner>
+                            </div>
+                        </template>
+
+                        <template if:true={noFieldResults}>
+                            <p class="slds-p-vertical_medium slds-text-align_center slds-text-color_weak">
+                                No fields matched.
+                            </p>
+                        </template>
+
+                        <ul class="slds-has-dividers_top-space slds-m-top_small">
+                            <template for:each={fieldResults} for:item="field">
+                                <li key={field.id}
+                                    class="slds-item slds-p-around_small slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                    <div class="slds-col">
+                                        <p class="slds-text-heading_small">{field.label}</p>
+                                        <p class="slds-text-body_small slds-text-color_weak">{field.sublabel}</p>
+                                    </div>
+                                    <div class="slds-col_bump-left">
+                                        <lightning-button
+                                            variant="brand"
+                                            label="Open in AccessGraph AI"
+                                            icon-name="utility:new_window"
+                                            icon-position="right"
+                                            data-resource-type="field"
+                                            data-resource-id={field.id}
+                                            onclick={handleOpen}>
+                                        </lightning-button>
+                                    </div>
+                                </li>
+                            </template>
+                        </ul>
+                    </template>
+                </div>
+            </lightning-tab>
+        </lightning-tabset>
+    </lightning-card>
+</template>

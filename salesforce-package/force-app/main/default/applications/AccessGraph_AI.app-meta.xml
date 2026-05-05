@@ -8,5 +8,6 @@
     <label>AccessGraph AI</label>
     <navType>Standard</navType>
     <tabs>AccessGraph_Home</tabs>
+    <tabs>AccessGraph_Explorer</tabs>
     <uiType>Lightning</uiType>
 </CustomApplication>

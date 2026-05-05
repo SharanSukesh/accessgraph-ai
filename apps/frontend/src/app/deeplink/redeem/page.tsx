@@ -12,7 +12,7 @@
  * and a "Sign in normally" link.
  */
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, AlertTriangle } from 'lucide-react'
 
@@ -26,6 +26,12 @@ function RedeemContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [state, setState] = useState<RedeemState>({ kind: 'pending' })
+  // Strict Mode + browser pre-fetch can both cause useEffect to fire twice.
+  // The cancelled flag only suppresses a stale state update; it does NOT
+  // abort the in-flight fetch. Without this ref, the second invocation hits
+  // /auth/deeplink/redeem again and our backend's single-use replay
+  // protection returns 409, overwriting the success state.
+  const initiatedRef = useRef(false)
 
   useEffect(() => {
     const token = searchParams.get('token')
@@ -33,6 +39,9 @@ function RedeemContent() {
       setState({ kind: 'error', message: 'This link is missing its token.' })
       return
     }
+
+    if (initiatedRef.current) return
+    initiatedRef.current = true
 
     let cancelled = false
     ;(async () => {

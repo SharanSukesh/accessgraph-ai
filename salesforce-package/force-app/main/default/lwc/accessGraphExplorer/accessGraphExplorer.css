@@ -1,0 +1,11 @@
+.ag-clickable {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.ag-clickable:hover {
+    background-color: #f3f4f6;
+}
+.ag-object-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}

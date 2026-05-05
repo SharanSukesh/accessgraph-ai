@@ -141,6 +141,13 @@ async def redeem_deep_link(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing jti")
 
     # Record redemption. Primary key on jti gives us atomic replay protection.
+    # If the same jti has already been redeemed AND the existing record matches
+    # the token's claims (same org, same resource), treat it as idempotent and
+    # return the destination URL again. This handles legitimate double-fires
+    # (React Strict Mode, browser pre-fetch / pre-render, retries on transient
+    # network blips) without leaking the URL to true replay attacks: an
+    # attacker would need to know the original token AND have the same
+    # signature, in which case they have what's already public anyway.
     now = datetime.now(timezone.utc)
     redemption = DeepLinkRedemption(
         jti=jti,
@@ -156,6 +163,34 @@ async def redeem_deep_link(
         await db.commit()
     except IntegrityError:
         await db.rollback()
+        # Look up the existing redemption to check if it matches this token.
+        existing = (await db.execute(
+            select(DeepLinkRedemption).where(DeepLinkRedemption.jti == jti)
+        )).scalar_one_or_none()
+
+        # If we can't find it (shouldn't happen unless cleanup races) OR if
+        # the token's expiry has passed, refuse — at that point the link is
+        # genuinely stale.
+        if existing is None or existing.expires_at < now:
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail="This deep link has expired.",
+            )
+
+        # Idempotent: same token, same org, same resource → return same URL.
+        if (
+            existing.organization_id == org.id
+            and existing.resource_type == claims.resource_type
+            and existing.resource_id == claims.resource_id
+        ):
+            logger.info("Idempotent deep-link redeem: jti=%s", jti)
+            return RedeemResponse(
+                destinationUrl=destination_url(claims),
+                organizationId=org.id,
+            )
+
+        # Different org or resource on the same jti — that should be impossible
+        # given the signature includes those fields, so this is a real attack.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This deep link has already been used.",

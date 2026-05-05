@@ -28,18 +28,26 @@
     </types>
     <types>
         <members>AccessGraph_Home</members>
+        <members>AccessGraph_Explorer</members>
         <name>CustomTab</name>
     </types>
     <types>
         <members>AccessGraph_Home_Page</members>
+        <members>AccessGraph_Explorer_Page</members>
         <name>FlexiPage</name>
     </types>
     <types>
         <members>accessGraphHome</members>
+        <members>accessGraphExplorer</members>
         <members>agOpenUserGraph</members>
         <members>agOpenFieldAccess</members>
         <members>agOpenPermissionSetImpact</members>
         <name>LightningComponentBundle</name>
+    </types>
+    <types>
+        <members>User.Open_in_AccessGraph_AI</members>
+        <members>PermissionSet.Show_Impact_in_AccessGraph_AI</members>
+        <name>QuickAction</name>
     </types>
     <types>
         <members>AccessGraph_Admin</members>

@@ -4,9 +4,10 @@
       "path": "force-app",
       "default": true,
       "package": "AccessGraph AI Managed",
-      "versionName": "ver 1.1 promotable",
-      "versionNumber": "1.1.0.NEXT",
-      "versionDescription": "LWC: live polling of sync status so the spinner and counts update without a page refresh. Built with code coverage for promotion."
+      "versionName": "ver 1.4",
+      "versionNumber": "1.4.0.NEXT",
+      "ancestorId": "04tdL000000Z5zJQAS",
+      "versionDescription": "Adds the AccessGraph Explorer tab: a searchable picker for users / permission sets / fields with one-click deep-link to AccessGraph AI. Replaces the Setup-page detail-button approach (which doesn't surface cleanly from managed packages on standard objects)."
     }
   ],
   "name": "AccessGraph AI",
@@ -21,6 +22,9 @@
     "AccessGraph AI Managed": "0HodL0000003c2LSAQ",
     "AccessGraph AI Managed@1.0.0-1": "04tdL000000YrJdQAK",
     "AccessGraph AI Managed@1.1.0-1": "04tdL000000YsIvQAK",
-    "AccessGraph AI Managed@1.1.0-2": "04tdL000000Z2BpQAK"
+    "AccessGraph AI Managed@1.1.0-2": "04tdL000000Z2BpQAK",
+    "AccessGraph AI Managed@1.2.0-1": "04tdL000000Z5jBQAS",
+    "AccessGraph AI Managed@1.3.0-1": "04tdL000000Z5zJQAS",
+    "AccessGraph AI Managed@1.4.0-1": "04tdL000000Z6FRQA0"
   }
 }

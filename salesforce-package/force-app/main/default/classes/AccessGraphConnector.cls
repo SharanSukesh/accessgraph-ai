@@ -447,4 +447,146 @@ public with sharing class AccessGraphConnector {
             throw new AuraHandledException('Could not reach AccessGraph AI: ' + e.getMessage());
         }
     }
+
+    // ----------------------------------------------------------------------
+    // Explorer methods - power the AccessGraph Explorer tab. These return
+    // lightweight picker rows so the LWC can render search results without
+    // round-tripping the backend.
+    // ----------------------------------------------------------------------
+
+    /**
+     * Picker row used by the Explorer LWC. Plain old Apex DTO.
+     */
+    public class PickerItem {
+        @AuraEnabled public String id;
+        @AuraEnabled public String label;
+        @AuraEnabled public String sublabel;
+    }
+
+    /**
+     * List active users for the Users tab. Filters out automated accounts
+     * (UserType = Standard) and supports a partial-name search.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<PickerItem> listUsersForExplorer(String searchTerm) {
+        List<PickerItem> items = new List<PickerItem>();
+        String pattern = String.isBlank(searchTerm) ? '%' : '%' + searchTerm + '%';
+        for (User u : [
+            SELECT Id, Name, Username
+            FROM User
+            WHERE IsActive = true
+              AND UserType = 'Standard'
+              AND (Name LIKE :pattern OR Username LIKE :pattern)
+            ORDER BY Name ASC
+            LIMIT 50
+        ]) {
+            PickerItem item = new PickerItem();
+            item.id = u.Id;
+            item.label = u.Name;
+            item.sublabel = u.Username;
+            items.add(item);
+        }
+        return items;
+    }
+
+    /**
+     * List non-profile-owned permission sets for the Permission Sets tab.
+     * Profile-owned PSes are excluded since admins manage those via Profiles.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<PickerItem> listPermissionSetsForExplorer(String searchTerm) {
+        List<PickerItem> items = new List<PickerItem>();
+        String pattern = String.isBlank(searchTerm) ? '%' : '%' + searchTerm + '%';
+        for (PermissionSet ps : [
+            SELECT Id, Name, Label, Type
+            FROM PermissionSet
+            WHERE IsOwnedByProfile = false
+              AND (Label LIKE :pattern OR Name LIKE :pattern)
+            ORDER BY Label ASC
+            LIMIT 50
+        ]) {
+            PickerItem item = new PickerItem();
+            item.id = ps.Id;
+            item.label = ps.Label;
+            item.sublabel = ps.Type == null || ps.Type == 'Regular'
+                ? ps.Name
+                : ps.Name + ' (' + ps.Type + ')';
+            items.add(item);
+        }
+        return items;
+    }
+
+    /**
+     * List custom + queryable standard objects for the Fields tab's object
+     * picker. Hides "system" objects and Salesforce internals to keep the list
+     * usable.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<PickerItem> listObjectsForExplorer(String searchTerm) {
+        List<PickerItem> items = new List<PickerItem>();
+        String search = String.isBlank(searchTerm) ? '' : searchTerm.toLowerCase();
+        Map<String, Schema.SObjectType> globalDescribe = Schema.getGlobalDescribe();
+        List<String> sortedKeys = new List<String>(globalDescribe.keySet());
+        sortedKeys.sort();
+        for (String objectKey : sortedKeys) {
+            Schema.SObjectType sobjType = globalDescribe.get(objectKey);
+            Schema.DescribeSObjectResult d = sobjType.getDescribe();
+            if (!d.isQueryable() || d.isCustomSetting()) continue;
+            // Skip share/history/feed/changeevent and similar system tables
+            String name = d.getName();
+            if (name.endsWith('__Share') || name.endsWith('__History')
+                || name.endsWith('__Feed') || name.endsWith('__ChangeEvent')
+                || name.endsWith('__e') || name.endsWith('__Tag')) continue;
+            String label = d.getLabel();
+            if (search != '' && !label.toLowerCase().contains(search)
+                && !name.toLowerCase().contains(search)) continue;
+
+            PickerItem item = new PickerItem();
+            item.id = name;
+            item.label = label;
+            item.sublabel = name;
+            items.add(item);
+            // 500 is plenty for most orgs and avoids cutting off alphabetically
+            // (there are ~150+ standard SObjects, so a low cap would hide User
+            // and other late-alphabet objects).
+            if (items.size() >= 500) break;
+        }
+        return items;
+    }
+
+    /**
+     * List fields for a given object. resourceId for the deep-link is
+     * "ObjectName.FieldName" (the qualified API name), passed back from the
+     * picker.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<PickerItem> listFieldsForExplorer(String objectName, String searchTerm) {
+        List<PickerItem> items = new List<PickerItem>();
+        if (String.isBlank(objectName)) return items;
+        String search = String.isBlank(searchTerm) ? '' : searchTerm.toLowerCase();
+
+        Schema.SObjectType sobjType = Schema.getGlobalDescribe().get(objectName);
+        if (sobjType == null) return items;
+        Schema.DescribeSObjectResult d = sobjType.getDescribe();
+        Map<String, Schema.SObjectField> fieldMap = d.fields.getMap();
+        List<String> sortedFieldKeys = new List<String>(fieldMap.keySet());
+        sortedFieldKeys.sort();
+        for (String fieldKey : sortedFieldKeys) {
+            Schema.DescribeFieldResult fd = fieldMap.get(fieldKey).getDescribe();
+            if (!fd.isAccessible()) continue;
+            String name = fd.getName();
+            String label = fd.getLabel();
+            if (search != '' && !label.toLowerCase().contains(search)
+                && !name.toLowerCase().contains(search)) continue;
+
+            PickerItem item = new PickerItem();
+            // The resourceId we send to the deep-link issuer is "Object.Field"
+            item.id = objectName + '.' + name;
+            item.label = label;
+            item.sublabel = name;
+            items.add(item);
+            if (items.size() >= 200) break;
+        }
+        return items;
+    }
 }

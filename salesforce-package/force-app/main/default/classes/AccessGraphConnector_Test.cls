@@ -463,4 +463,148 @@ private class AccessGraphConnector_Test {
 
         System.assert(threw, 'Should throw AuraHandledException when redeemUrl is missing');
     }
+
+    // ----------------------------------------------------------------------
+    // Explorer picker tests
+    // ----------------------------------------------------------------------
+
+    /**
+     * listUsersForExplorer() returns at least the test-running user and
+     * filters to active Standard users.
+     */
+    @isTest
+    static void testListUsersForExplorer_ReturnsActiveUsers() {
+        Test.startTest();
+        List<AccessGraphConnector.PickerItem> items =
+            AccessGraphConnector.listUsersForExplorer(null);
+        Test.stopTest();
+
+        System.assert(items.size() > 0, 'Should return at least one active user');
+        Boolean foundCurrentUser = false;
+        for (AccessGraphConnector.PickerItem p : items) {
+            if (p.id == UserInfo.getUserId()) {
+                foundCurrentUser = true;
+                break;
+            }
+        }
+        System.assert(foundCurrentUser, 'Should include the test-running user');
+    }
+
+    /**
+     * listUsersForExplorer() filters by the search term against name and
+     * username, case-insensitive (LIKE).
+     */
+    @isTest
+    static void testListUsersForExplorer_FiltersBySearch() {
+        Test.startTest();
+        // Use a guaranteed-no-match string so we expect zero results.
+        List<AccessGraphConnector.PickerItem> none =
+            AccessGraphConnector.listUsersForExplorer('zzzzzzzznoMatchExpected');
+        Test.stopTest();
+        System.assertEquals(0, none.size(), 'Garbage search term should return no users');
+    }
+
+    /**
+     * listPermissionSetsForExplorer() excludes profile-owned PSes.
+     */
+    @isTest
+    static void testListPermissionSetsForExplorer_ExcludesProfileOwned() {
+        Test.startTest();
+        List<AccessGraphConnector.PickerItem> items =
+            AccessGraphConnector.listPermissionSetsForExplorer(null);
+        Test.stopTest();
+
+        // We can't easily assert which PSes show up because tests run in
+        // arbitrary orgs, but we can assert the helper at least runs cleanly.
+        System.assertNotEquals(null, items, 'Should return a list (possibly empty)');
+        // If there are any items, none should be profile-owned. We re-query
+        // to check.
+        Set<String> returnedIds = new Set<String>();
+        for (AccessGraphConnector.PickerItem p : items) returnedIds.add(p.id);
+        if (!returnedIds.isEmpty()) {
+            for (PermissionSet ps : [
+                SELECT IsOwnedByProfile FROM PermissionSet WHERE Id IN :returnedIds
+            ]) {
+                System.assert(!ps.IsOwnedByProfile, 'Profile-owned PSes must not appear');
+            }
+        }
+    }
+
+    /**
+     * listObjectsForExplorer() with no search returns objects and excludes
+     * share/history/feed system tables. We don't assert User specifically
+     * here because alphabetic ordering + cap may push it out — the targeted
+     * search test below covers the User case explicitly.
+     */
+    @isTest
+    static void testListObjectsForExplorer_ReturnsCoreObjects() {
+        Test.startTest();
+        List<AccessGraphConnector.PickerItem> items =
+            AccessGraphConnector.listObjectsForExplorer(null);
+        Test.stopTest();
+
+        System.assert(items.size() > 0, 'Should return some objects');
+        for (AccessGraphConnector.PickerItem p : items) {
+            // None of the picker items should be system share/history tables
+            System.assert(!p.id.endsWith('__Share'), 'Should exclude __Share');
+            System.assert(!p.id.endsWith('__History'), 'Should exclude __History');
+            System.assert(!p.id.endsWith('__Feed'), 'Should exclude __Feed');
+            System.assert(!p.id.endsWith('__ChangeEvent'), 'Should exclude __ChangeEvent');
+        }
+    }
+
+    /**
+     * listObjectsForExplorer('user') filters down to User and any other
+     * User-prefixed objects, which proves the search path works AND that
+     * User is reachable (the no-search variant might cut User off due to
+     * alphabetic ordering + soft cap).
+     */
+    @isTest
+    static void testListObjectsForExplorer_SearchFindsUser() {
+        Test.startTest();
+        List<AccessGraphConnector.PickerItem> items =
+            AccessGraphConnector.listObjectsForExplorer('user');
+        Test.stopTest();
+
+        System.assert(items.size() > 0, 'Search "user" should match at least User');
+        Boolean foundUser = false;
+        for (AccessGraphConnector.PickerItem p : items) {
+            if (p.id == 'User') {
+                foundUser = true;
+                break;
+            }
+        }
+        System.assert(foundUser, 'Search "user" must include the User SObject');
+    }
+
+    /**
+     * listFieldsForExplorer() returns fields for User and produces ids in
+     * the "Object.Field" format the deep-link issuer expects.
+     */
+    @isTest
+    static void testListFieldsForExplorer_ProducesQualifiedIds() {
+        Test.startTest();
+        List<AccessGraphConnector.PickerItem> items =
+            AccessGraphConnector.listFieldsForExplorer('User', null);
+        Test.stopTest();
+
+        System.assert(items.size() > 0, 'User should expose at least one field');
+        for (AccessGraphConnector.PickerItem p : items) {
+            System.assert(p.id.startsWith('User.'),
+                'Field id should be qualified with the object name: ' + p.id);
+        }
+    }
+
+    /**
+     * listFieldsForExplorer() returns empty list for unknown object name,
+     * not an exception.
+     */
+    @isTest
+    static void testListFieldsForExplorer_UnknownObjectReturnsEmpty() {
+        Test.startTest();
+        List<AccessGraphConnector.PickerItem> items =
+            AccessGraphConnector.listFieldsForExplorer('NotARealObject__c', null);
+        Test.stopTest();
+        System.assertEquals(0, items.size(), 'Unknown object should return empty list');
+    }
 }
