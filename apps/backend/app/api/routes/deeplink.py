@@ -26,9 +26,8 @@ redemptions with the same jti return 409.
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -115,7 +114,6 @@ async def issue_deep_link(
 @router.post("/redeem", response_model=RedeemResponse)
 async def redeem_deep_link(
     payload: RedeemRequest,
-    response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> RedeemResponse:
     """Validate a deep-link JWT, record the redemption to prevent replay,
@@ -157,6 +155,12 @@ async def redeem_deep_link(
         resource_id=claims.resource_id,
         redeemed_at=now,
         expires_at=now + timedelta(seconds=settings.DEEPLINK_TTL_SECONDS),
+        # Set timestamps explicitly so the INSERT doesn't rely on the DB-side
+        # server_default — defends against migrations that forget the default
+        # (which is exactly how the original deeplink_redemptions migration
+        # shipped, hence migration d6f1a2b3c4e5).
+        created_at=now,
+        updated_at=now,
     )
     db.add(redemption)
     try:

@@ -30,8 +30,8 @@ def upgrade() -> None:
         sa.Column('resource_id', sa.String(length=255), nullable=False),
         sa.Column('redeemed_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(
             ['organization_id'], ['organizations.id'], ondelete='CASCADE'
         ),
