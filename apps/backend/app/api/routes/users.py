@@ -986,8 +986,49 @@ async def get_field_details(
     perms_result = await db.execute(perms_query)
     permissions = perms_result.scalars().all()
 
+    inherited_from_object = False
     if not permissions:
-        raise HTTPException(status_code=404, detail="Field not found")
+        # No explicit FieldPermission rows. For mandatory standard fields
+        # (Id, Name, AccountNumber, etc.) Salesforce doesn't allow FLS to
+        # restrict them — access is inherited from object permissions. For
+        # other fields without explicit FLS, the field is accessible to
+        # anyone with the parent object's Read permission by default.
+        # Either way, fall back to ObjectPermissionSnapshot to compute who
+        # actually has access. This is the SAME logic Salesforce uses to
+        # render fields on a record page.
+        from app.domain.models import ObjectPermissionSnapshot
+        obj_perms_query = select(ObjectPermissionSnapshot).where(
+            ObjectPermissionSnapshot.organization_id == org_id,
+            ObjectPermissionSnapshot.sobject_type == object_name,
+            ObjectPermissionSnapshot.permissions_read == True,
+        )
+        obj_perms_result = await db.execute(obj_perms_query)
+        obj_permissions = obj_perms_result.scalars().all()
+        if not obj_permissions:
+            # Object isn't synced or genuinely nobody has access. 404 is
+            # the right answer here — there's no inherited access to show.
+            raise HTTPException(status_code=404, detail="Field not found")
+
+        # Reshape ObjectPermission rows into FieldPermission-like shape so
+        # the iteration below works unchanged. Read inherits from object
+        # Read; Edit on field inherits from object Edit (subject to
+        # Salesforce's actual semantics, but that's a reasonable default
+        # for the inheritance case).
+        class _SyntheticFieldPerm:
+            def __init__(self, parent_id, p_read, p_edit):
+                self.parent_id = parent_id
+                self.permissions_read = p_read
+                self.permissions_edit = p_edit
+
+        permissions = [
+            _SyntheticFieldPerm(
+                p.parent_id,
+                p.permissions_read,
+                p.permissions_edit,
+            )
+            for p in obj_permissions
+        ]
+        inherited_from_object = True
 
     # Get profiles and permission sets that grant access (deduplicate by ID)
     profiles_dict = {}
@@ -1125,6 +1166,11 @@ async def get_field_details(
         "totalUsers": len(users_with_access),
         "totalProfiles": len(profiles_with_access),
         "totalPermissionSets": len(permission_sets_with_access),
+        # True when the access list was derived from object-level CRUD
+        # rather than explicit FLS rows. Lets the UI surface "access
+        # inherited from {object}" context instead of pretending these are
+        # explicit field grants.
+        "inheritedFromObject": inherited_from_object,
     }
 
 
