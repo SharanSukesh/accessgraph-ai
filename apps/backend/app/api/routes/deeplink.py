@@ -166,38 +166,17 @@ async def redeem_deep_link(
     try:
         await db.commit()
     except IntegrityError:
+        # Token's signature was already verified above, so claims are
+        # authoritative. A jti collision means this is a retry / double-fire
+        # of the same legitimately-issued token (React Strict Mode, browser
+        # pre-fetch, network retry). Return the same destinationUrl
+        # idempotently — replaying this endpoint exposes nothing because
+        # the destination page enforces its own auth on arrival.
         await db.rollback()
-        # Look up the existing redemption to check if it matches this token.
-        existing = (await db.execute(
-            select(DeepLinkRedemption).where(DeepLinkRedemption.jti == jti)
-        )).scalar_one_or_none()
-
-        # If we can't find it (shouldn't happen unless cleanup races) OR if
-        # the token's expiry has passed, refuse — at that point the link is
-        # genuinely stale.
-        if existing is None or existing.expires_at < now:
-            raise HTTPException(
-                status_code=status.HTTP_410_GONE,
-                detail="This deep link has expired.",
-            )
-
-        # Idempotent: same token, same org, same resource → return same URL.
-        if (
-            existing.organization_id == org.id
-            and existing.resource_type == claims.resource_type
-            and existing.resource_id == claims.resource_id
-        ):
-            logger.info("Idempotent deep-link redeem: jti=%s", jti)
-            return RedeemResponse(
-                destinationUrl=destination_url(claims),
-                organizationId=org.id,
-            )
-
-        # Different org or resource on the same jti — that should be impossible
-        # given the signature includes those fields, so this is a real attack.
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This deep link has already been used.",
+        logger.info("Idempotent deep-link redeem (jti collision): jti=%s", jti)
+        return RedeemResponse(
+            destinationUrl=destination_url(claims),
+            organizationId=org.id,
         )
 
     # NOTE: full session-cookie issuance happens via the existing auth flow.
