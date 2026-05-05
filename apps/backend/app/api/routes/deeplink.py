@@ -138,14 +138,21 @@ async def redeem_deep_link(
     if not jti:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing jti")
 
-    # Record redemption. Primary key on jti gives us atomic replay protection.
-    # If the same jti has already been redeemed AND the existing record matches
-    # the token's claims (same org, same resource), treat it as idempotent and
-    # return the destination URL again. This handles legitimate double-fires
-    # (React Strict Mode, browser pre-fetch / pre-render, retries on transient
-    # network blips) without leaking the URL to true replay attacks: an
-    # attacker would need to know the original token AND have the same
-    # signature, in which case they have what's already public anyway.
+    # Check-first pattern: if this jti has already been redeemed, return the
+    # destination URL idempotently. The token's signature was verified above,
+    # so claims are authoritative — a duplicate jti just means a legitimate
+    # retry / double-fire (React Strict Mode, browser pre-fetch, network
+    # retry). Replaying /redeem exposes nothing because the destination page
+    # enforces its own auth on arrival.
+    existing = await db.get(DeepLinkRedemption, jti)
+    if existing is not None:
+        logger.info("Idempotent deep-link redeem (existing jti): jti=%s", jti)
+        return RedeemResponse(
+            destinationUrl=destination_url(claims),
+            organizationId=org.id,
+        )
+
+    # Fresh redemption — record it.
     now = datetime.now(timezone.utc)
     redemption = DeepLinkRedemption(
         jti=jti,
@@ -155,10 +162,10 @@ async def redeem_deep_link(
         resource_id=claims.resource_id,
         redeemed_at=now,
         expires_at=now + timedelta(seconds=settings.DEEPLINK_TTL_SECONDS),
-        # Set timestamps explicitly so the INSERT doesn't rely on the DB-side
-        # server_default — defends against migrations that forget the default
-        # (which is exactly how the original deeplink_redemptions migration
-        # shipped, hence migration d6f1a2b3c4e5).
+        # Defense in depth: set timestamps explicitly so the INSERT doesn't
+        # rely on the DB-side server_default. Migration c5e7f3a8b9d4 shipped
+        # without that default; d6f1a2b3c4e5 fixes it but this guards future
+        # migrations that forget the default too.
         created_at=now,
         updated_at=now,
     )
@@ -166,24 +173,11 @@ async def redeem_deep_link(
     try:
         await db.commit()
     except IntegrityError:
-        # Token's signature was already verified above, so claims are
-        # authoritative. A jti collision means this is a retry / double-fire
-        # of the same legitimately-issued token (React Strict Mode, browser
-        # pre-fetch, network retry). Return the same destinationUrl
-        # idempotently — replaying this endpoint exposes nothing because
-        # the destination page enforces its own auth on arrival.
+        # Race: a concurrent request inserted the same jti between our
+        # existence check and commit. Treat as idempotent.
         await db.rollback()
-        logger.info("Idempotent deep-link redeem (jti collision): jti=%s", jti)
-        return RedeemResponse(
-            destinationUrl=destination_url(claims),
-            organizationId=org.id,
-        )
+        logger.info("Idempotent deep-link redeem (commit race): jti=%s", jti)
 
-    # NOTE: full session-cookie issuance happens via the existing auth flow.
-    # For v1.0 we return the destination URL and rely on the frontend's
-    # existing session-cookie machinery (the user is typically already
-    # authenticated in the web app from prior OAuth). If they're not, the
-    # destination page redirects them to login with ?redirect= preserved.
     return RedeemResponse(
         destinationUrl=destination_url(claims),
         organizationId=org.id,
