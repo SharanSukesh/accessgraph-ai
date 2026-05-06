@@ -37,7 +37,7 @@ class SalesforceAPIClient:
     Handles SOQL queries and metadata extraction
     """
 
-    def __init__(self, instance_url: str, access_token: str, api_version: str = "v59.0"):
+    def __init__(self, instance_url: str, access_token: str, api_version: str = "v62.0"):
         self.instance_url = instance_url.rstrip("/")
         self.access_token = access_token
         self.api_version = api_version
@@ -185,6 +185,40 @@ class SalesforceAPIClient:
         logger.info(f"Extracted {len(profiles)} profiles")
         return profiles
 
+    # Curated set of high-value Permissions* boolean fields on PermissionSet
+    # the PS detail page surfaces as "system permissions". Salesforce has
+    # ~250 such fields; these are the ones admins most frequently audit.
+    # They land in raw_data via Pydantic's extra-fields handling.
+    #
+    # Field availability varies by API version and org features (Data Cloud,
+    # MFA add-on, etc.) — e.g., PermissionsTwoFactorMfa was added in v60.0,
+    # PermissionsManageDataIntegrations requires Data Cloud licensing. So the
+    # rich query can 400 in some orgs even with a current API version. We try
+    # the rich query first; on HTTP 400 we fall back to core fields so the
+    # sync isn't blocked. The PS detail page just shows fewer system perms.
+    _PS_RICH_FIELDS = [
+        "PermissionsViewAllData", "PermissionsModifyAllData",
+        "PermissionsViewAllUsers", "PermissionsManageUsers",
+        "PermissionsResetPasswords", "PermissionsManageRoles",
+        "PermissionsManageProfilesPermissionsets",
+        "PermissionsAssignPermissionSets",
+        "PermissionsCustomizeApplication", "PermissionsManageSharing",
+        "PermissionsViewSetup", "PermissionsManageDataIntegrations",
+        "PermissionsApiEnabled", "PermissionsApiUserOnly",
+        "PermissionsAuthorApex", "PermissionsManageMobile",
+        "PermissionsRunReports", "PermissionsExportReport",
+        "PermissionsScheduleReports", "PermissionsViewAllForecasts",
+        "PermissionsManageDashbds", "PermissionsCreateDashFolders",
+        "PermissionsBulkApiHardDelete", "PermissionsTransferAnyCase",
+        "PermissionsTransferAnyEntity", "PermissionsTransferAnyLead",
+        "PermissionsManageEncryptionKeys",
+        "PermissionsViewEncryptedData",
+        "PermissionsTwoFactorApi", "PermissionsTwoFactorMfa",
+        "PermissionsManageContentPermissions",
+        "PermissionsPasswordNeverExpires",
+    ]
+    _PS_CORE_FIELDS = ["Id", "Name", "Label", "IsOwnedByProfile", "ProfileId", "Type"]
+
     async def extract_permission_sets(self) -> List[SalesforcePermissionSet]:
         """
         Extract all permission sets
@@ -192,37 +226,24 @@ class SalesforceAPIClient:
         Returns:
             List of SalesforcePermissionSet objects
         """
-        # We pull a curated set of high-value system permissions (Permissions*
-        # boolean columns on PermissionSet) so the PS detail page can show
-        # what each PS actually does beyond just object/field perms.
-        # Salesforce has ~250 Permissions* fields; we pull the ones admins
-        # most frequently audit. They land in raw_data via Pydantic's
-        # extra-fields handling.
-        soql = """
-            SELECT Id, Name, Label, IsOwnedByProfile, ProfileId, Type,
-                   PermissionsViewAllData, PermissionsModifyAllData,
-                   PermissionsViewAllUsers, PermissionsManageUsers,
-                   PermissionsResetPasswords, PermissionsManageRoles,
-                   PermissionsManageProfilesPermissionsets,
-                   PermissionsAssignPermissionSets,
-                   PermissionsCustomizeApplication, PermissionsManageSharing,
-                   PermissionsViewSetup, PermissionsManageDataIntegrations,
-                   PermissionsApiEnabled, PermissionsApiUserOnly,
-                   PermissionsAuthorApex, PermissionsManageMobile,
-                   PermissionsRunReports, PermissionsExportReport,
-                   PermissionsScheduleReports, PermissionsViewAllForecasts,
-                   PermissionsManageDashbds, PermissionsCreateDashFolders,
-                   PermissionsBulkApiHardDelete, PermissionsTransferAnyCase,
-                   PermissionsTransferAnyEntity, PermissionsTransferAnyLead,
-                   PermissionsManageEncryptionKeys,
-                   PermissionsViewEncryptedData,
-                   PermissionsTwoFactorApi, PermissionsTwoFactorMfa,
-                   PermissionsManageContentPermissions,
-                   PermissionsPasswordNeverExpires
-            FROM PermissionSet
-        """
+        rich_soql = (
+            f"SELECT {', '.join(self._PS_CORE_FIELDS + self._PS_RICH_FIELDS)} "
+            f"FROM PermissionSet"
+        )
+        try:
+            records = await self.query_all(rich_soql)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code != 400:
+                raise
+            logger.warning(
+                "PermissionSet rich query rejected (400) — likely an unsupported "
+                "Permissions* field for this org's API version. Falling back to "
+                "core fields. Response: %s",
+                e.response.text[:500],
+            )
+            core_soql = f"SELECT {', '.join(self._PS_CORE_FIELDS)} FROM PermissionSet"
+            records = await self.query_all(core_soql)
 
-        records = await self.query_all(soql)
         permission_sets = [SalesforcePermissionSet(**rec) for rec in records]
 
         logger.info(f"Extracted {len(permission_sets)} permission sets")

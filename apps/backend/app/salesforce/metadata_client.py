@@ -17,7 +17,7 @@ class SalesforceMetadataClient:
     Reads profile metadata to get field-level security for standard profiles
     """
 
-    def __init__(self, instance_url: str, access_token: str, api_version: str = "v59.0"):
+    def __init__(self, instance_url: str, access_token: str, api_version: str = "v62.0"):
         self.instance_url = instance_url.rstrip("/")
         self.access_token = access_token
         self.api_version = api_version
