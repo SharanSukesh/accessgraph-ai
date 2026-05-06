@@ -1,6 +1,12 @@
 """
 Anomaly Detection Service
-Uses IsolationForest and feature engineering for access anomalies
+
+Uses a Mahalanobis-distance multivariate outlier detector + per-archetype
+feature engineering. The detector was selected by the benchmark in
+research/anomaly_benchmark/ (see REPORT.md): on synthetic Salesforce-org
+data with planted ground-truth anomalies, Mahalanobis beat Isolation
+Forest by AUC-PR Δ = +0.017, Wilcoxon Bonferroni-adjusted p = 0.0039,
+and runs ~700x faster (0.3ms vs 219ms fit time).
 """
 import logging
 from collections import defaultdict
@@ -10,13 +16,55 @@ from typing import Dict, List, Optional
 try:
     import numpy as np
     import pandas as pd
-    from sklearn.ensemble import IsolationForest
-    SKLEARN_AVAILABLE = True
+    SKLEARN_AVAILABLE = True  # name kept for compat with downstream callers
 except ImportError:
     SKLEARN_AVAILABLE = False
     np = None
     pd = None
-    IsolationForest = None
+
+
+# Fraction of users to flag as anomalies. Observed prevalence in real
+# Salesforce orgs (and our synthetic benchmark) is 0.5–5%; 0.02 is a
+# safe default that floors the low end of the prevalence range.
+# (The previous IsolationForest used contamination=0.20 which was an
+# order of magnitude too aggressive — see REPORT.md § 7.1.)
+DEFAULT_ANOMALY_FRACTION = 0.02
+
+
+class _MahalanobisDetector:
+    """Multivariate-distance anomaly detector.
+
+    Fit estimates the centroid and the inverse covariance matrix of the
+    feature data (with light regularization so even rank-deficient orgs
+    are invertible). Score returns the per-row Mahalanobis distance —
+    higher means more anomalous.
+
+    Implementation lifted verbatim from
+    research/anomaly_benchmark/algorithms/mahalanobis.py to keep
+    apps/backend self-contained (no dependency on research/).
+    """
+
+    def __init__(self, regularization: float = 1e-4):
+        self.regularization = regularization
+        self._mean: Optional["np.ndarray"] = None
+        self._inv_cov: Optional["np.ndarray"] = None
+
+    def fit(self, X: "np.ndarray") -> None:
+        self._mean = X.mean(axis=0)
+        cov = np.cov(X, rowvar=False)
+        n_features = cov.shape[0]
+        cov = cov + self.regularization * np.eye(n_features)
+        try:
+            self._inv_cov = np.linalg.inv(cov)
+        except np.linalg.LinAlgError:
+            self._inv_cov = np.linalg.pinv(cov)
+
+    def score(self, X: "np.ndarray") -> "np.ndarray":
+        if self._mean is None or self._inv_cov is None:
+            raise RuntimeError("fit() must be called before score()")
+        diff = X - self._mean
+        m2 = np.einsum("ij,jk,ik->i", diff, self._inv_cov, diff)
+        return np.sqrt(np.maximum(m2, 0.0))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -117,22 +165,38 @@ class AnomalyDetectionService:
 
         X = df[feature_cols].values
 
-        # Run IsolationForest
-        clf = IsolationForest(contamination=0.2, random_state=42)
-        scores = clf.fit_predict(X)
-        anomaly_scores = clf.score_samples(X)
+        # Run the Mahalanobis detector. Selected by the benchmark in
+        # research/anomaly_benchmark/REPORT.md as the algorithm with the
+        # best AUC-PR (statistically significant lead over Isolation Forest,
+        # Wilcoxon Bonferroni-adjusted p = 0.0039) AND the fastest fit time
+        # (~700x faster than IF). It's also parameter-free — no
+        # `contamination` knob to mistune.
+        detector = _MahalanobisDetector()
+        detector.fit(X)
+        raw_scores = detector.score(X)
 
-        # Normalize scores to 0-1 (lower is more anomalous)
-        anomaly_scores_norm = (anomaly_scores - anomaly_scores.min()) / (
-            anomaly_scores.max() - anomaly_scores.min() + 1e-10
+        # Normalize to 0-1 so the rest of this method (severity bands,
+        # `score > 0.5` threshold check) keeps working unchanged. Higher
+        # = more anomalous in both the raw and normalized scores.
+        score_min = raw_scores.min()
+        score_max = raw_scores.max()
+        anomaly_scores_norm = (raw_scores - score_min) / (
+            score_max - score_min + 1e-10
         )
-        anomaly_scores_norm = 1 - anomaly_scores_norm  # Invert so higher = more anomalous
+
+        # Mark the top-k highest-scoring users as ML-flagged anomalies.
+        # k = floor(n_users * DEFAULT_ANOMALY_FRACTION), with a floor of 1
+        # so we always flag at least one user when the org has any users.
+        n_users = len(X)
+        k = max(1, int(n_users * DEFAULT_ANOMALY_FRACTION))
+        # argpartition is O(n) — cheaper than a full sort for big orgs.
+        top_k_idx = set(np.argpartition(-raw_scores, k - 1)[:k].tolist())
 
         # Create anomaly records
         anomalies = []
         for idx, user in enumerate(users):
             score = float(anomaly_scores_norm[idx])
-            is_anomaly = scores[idx] == -1
+            is_anomaly = idx in top_k_idx
 
             # Compute peer stats for context
             peer_stats = await self._compute_peer_stats(
