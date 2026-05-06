@@ -30,6 +30,56 @@ except ImportError:
 # order of magnitude too aggressive — see REPORT.md § 7.1.)
 DEFAULT_ANOMALY_FRACTION = 0.02
 
+# Sentinel for users with no recorded last-login (never logged in, or
+# pre-v2 sync): treat them as maximally dormant. The detector then sees
+# them as anomalously dormant if combined with elevated permissions —
+# which is exactly the DORMANT_POWERFUL pattern.
+NEVER_LOGGED_IN_DAYS = 9999
+
+# Standard Salesforce object → primary business department mapping. Used
+# by the cross_department_access_ratio feature to flag cross-domain
+# over-reach (e.g., Sales user with HR object access). Custom objects
+# are classified by prefix where possible, otherwise fall through.
+_STANDARD_OBJECT_DEPARTMENT: Dict[str, str] = {
+    # Sales
+    "Account": "Sales", "Contact": "Sales", "Lead": "Sales",
+    "Opportunity": "Sales", "OpportunityLineItem": "Sales",
+    "Quote": "Sales", "QuoteLineItem": "Sales",
+    "Pricebook2": "Sales", "PricebookEntry": "Sales",
+    # Marketing
+    "Campaign": "Marketing", "CampaignMember": "Marketing",
+    # Support
+    "Case": "Support", "CaseComment": "Support", "Solution": "Support",
+    "WorkOrder": "Support", "ServiceAppointment": "Support",
+    "ServiceResource": "Support", "ServiceContract": "Support",
+    # Legal / Operations
+    "Contract": "Legal", "Order": "Operations", "OrderItem": "Operations",
+    "Asset": "Operations",
+    # IT / Admin
+    "User": "IT", "Profile": "IT", "PermissionSet": "IT",
+    "PermissionSetGroup": "IT", "UserRole": "IT",
+}
+
+# Custom-object prefix → department. Conventional naming patterns we've
+# seen across audits. Falls through to None for unknown prefixes.
+_CUSTOM_PREFIX_DEPARTMENT: List[tuple] = [
+    ("HR_", "HR"), ("Hr_", "HR"), ("Employee_", "HR"),
+    ("Fin_", "Finance"), ("Finance_", "Finance"),
+    ("Invoice", "Finance"), ("Payment", "Finance"),
+    ("Legal_", "Legal"), ("Compliance_", "Legal"),
+]
+
+
+def _classify_object_department(object_name: str) -> Optional[str]:
+    """Return the business department associated with an object, or None
+    if it can't be classified. Used by the cross-department feature."""
+    if object_name in _STANDARD_OBJECT_DEPARTMENT:
+        return _STANDARD_OBJECT_DEPARTMENT[object_name]
+    for prefix, dept in _CUSTOM_PREFIX_DEPARTMENT:
+        if object_name.startswith(prefix):
+            return dept
+    return None
+
 
 class _MahalanobisDetector:
     """Multivariate-distance anomaly detector.
@@ -137,10 +187,41 @@ class AnomalyDetectionService:
             logger.warning("Not enough users for anomaly detection")
             return []
 
-        # Extract features for all users
+        # Phase 1: pull access for every user once. The unique-access feature
+        # below needs an org-wide view of who has what; computing per-user
+        # twice (once for unique counts, once for features) would be wasteful.
+        all_user_access: Dict[str, tuple] = {}
+        for user in users:
+            try:
+                obj_access = await self.access_service.get_user_object_access(
+                    org_id, user.salesforce_id,
+                )
+                field_access = await self.access_service.get_user_field_access(
+                    org_id, user.salesforce_id,
+                )
+            except Exception:  # noqa: BLE001 — best-effort feature extraction
+                obj_access = {"objects": []}
+                field_access = {"fields": []}
+            all_user_access[user.salesforce_id] = (obj_access, field_access)
+
+        # Phase 2: org-wide unique-access counts. For each (object, perm)
+        # tuple, build the set of users with that grant; users who appear
+        # in singleton sets get their unique_access_count incremented.
+        # Closes the SOLE_ACCESS_RISK blind spot from REPORT.md § 7.2.
+        unique_access_counts = self._compute_unique_access_counts(all_user_access)
+
+        # Phase 3: per-user feature extraction (now O(1) work per user since
+        # access is already loaded; previously each call re-queried).
         feature_data = []
         for user in users:
-            features = await self._extract_user_features(org_id, user)
+            obj_access, field_access = all_user_access[user.salesforce_id]
+            unique_count = unique_access_counts.get(user.salesforce_id, 0)
+            features = await self._extract_user_features(
+                org_id, user,
+                obj_access=obj_access,
+                field_access=field_access,
+                unique_access_count=unique_count,
+            )
             feature_data.append(features)
 
         # Create DataFrame
@@ -149,7 +230,10 @@ class AnomalyDetectionService:
         roles = df["role_id"].tolist()
         profiles = df["profile_id"].tolist()
 
-        # Feature columns for ML
+        # Feature columns for ML. v2 = 13 features (was 10 in v1). The 3
+        # additions close blind spots identified in REPORT.md § 7.2:
+        # last_login → DORMANT_POWERFUL, cross_dept → ROLE_MISMATCH,
+        # unique_access → SOLE_ACCESS_RISK.
         feature_cols = [
             "num_permission_sets",
             "num_permission_set_groups",
@@ -161,6 +245,9 @@ class AnomalyDetectionService:
             "num_sensitive_objects",
             "num_sensitive_fields",
             "permission_breadth_score",
+            "last_login_days_ago",
+            "cross_department_access_ratio",
+            "unique_access_count",
         ]
 
         X = df[feature_cols].values
@@ -240,8 +327,25 @@ class AnomalyDetectionService:
         logger.info(f"Detected {len(anomalies)} anomalies")
         return anomalies
 
-    async def _extract_user_features(self, org_id: str, user: UserSnapshot) -> Dict:
-        """Extract ML features for user"""
+    async def _extract_user_features(
+        self,
+        org_id: str,
+        user: UserSnapshot,
+        obj_access: Optional[Dict] = None,
+        field_access: Optional[Dict] = None,
+        unique_access_count: int = 0,
+    ) -> Dict:
+        """Extract ML features for user.
+
+        v2 (13 features): the original 10 production features + 3 new ones
+        that close archetype blind spots identified in REPORT.md § 7.2.
+
+        Callers normally pass `obj_access` and `field_access` pre-loaded
+        from `detect_anomalies` to avoid duplicate queries; the parameters
+        default to None so the method still works standalone (e.g., in
+        tests or one-off scripts), in which case it falls back to the
+        access service for that user only.
+        """
         # Permission set assignments
         result = await self.db.execute(
             select(PermissionSetAssignmentSnapshot).where(
@@ -254,13 +358,14 @@ class AnomalyDetectionService:
         num_ps = len([a for a in assignments if not a.permission_set_id.startswith("0PG")])
         num_psg = len([a for a in assignments if a.permission_set_id.startswith("0PG")])
 
-        # Get effective access
-        try:
-            obj_access = await self.access_service.get_user_object_access(org_id, user.salesforce_id)
-            field_access = await self.access_service.get_user_field_access(org_id, user.salesforce_id)
-        except:
-            obj_access = {"objects": []}
-            field_access = {"fields": []}
+        # Lazy-load access if caller didn't pre-fetch (standalone path).
+        if obj_access is None or field_access is None:
+            try:
+                obj_access = await self.access_service.get_user_object_access(org_id, user.salesforce_id)
+                field_access = await self.access_service.get_user_field_access(org_id, user.salesforce_id)
+            except Exception:  # noqa: BLE001
+                obj_access = {"objects": []}
+                field_access = {"fields": []}
 
         # Count permissions by type
         num_obj_read = sum(1 for obj in obj_access.get("objects", []) if obj["access"]["read"])
@@ -284,6 +389,50 @@ class AnomalyDetectionService:
         # Breadth score
         breadth_score = num_obj_edit + num_obj_delete * 2 + num_field_edit + num_sensitive_fields * 3
 
+        # ----------------------------------------------------------------
+        # v2 features
+        # ----------------------------------------------------------------
+        # last_login_days_ago: integer days since user last logged in.
+        # Sentinel NEVER_LOGGED_IN_DAYS for null (never logged in / pre-v2 sync).
+        if user.last_login_at is not None:
+            now = datetime.now(timezone.utc)
+            # Defensive against tz-naive values from older snapshot rows.
+            last = user.last_login_at
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            last_login_days_ago = max(0, (now - last).days)
+        else:
+            last_login_days_ago = NEVER_LOGGED_IN_DAYS
+
+        # cross_department_access_ratio: fraction of the user's accessible
+        # objects/fields that belong to a department OTHER than their own.
+        # Captures cross-domain over-reach (Sales user with HR/Finance access).
+        user_dept = user.department
+        cross_dept_count = 0
+        classifiable_count = 0
+        if user_dept:
+            for obj in obj_access.get("objects", []):
+                if not obj["access"].get("read"):
+                    continue
+                obj_dept = _classify_object_department(obj["object"])
+                if obj_dept is None:
+                    continue
+                classifiable_count += 1
+                if obj_dept != user_dept:
+                    cross_dept_count += 1
+            for f in field_access.get("fields", []):
+                if not f.get("access", {}).get("read"):
+                    continue
+                obj_dept = _classify_object_department(f.get("objectName", ""))
+                if obj_dept is None:
+                    continue
+                classifiable_count += 1
+                if obj_dept != user_dept:
+                    cross_dept_count += 1
+        cross_department_access_ratio = (
+            cross_dept_count / classifiable_count if classifiable_count > 0 else 0.0
+        )
+
         return {
             "user_id": user.salesforce_id,
             "user_name": user.name,
@@ -300,7 +449,41 @@ class AnomalyDetectionService:
             "num_sensitive_objects": num_sensitive_objs,
             "num_sensitive_fields": num_sensitive_fields,
             "permission_breadth_score": breadth_score,
+            # v2 features
+            "last_login_days_ago": last_login_days_ago,
+            "cross_department_access_ratio": cross_department_access_ratio,
+            "unique_access_count": unique_access_count,
         }
+
+    @staticmethod
+    def _compute_unique_access_counts(
+        all_user_access: Dict[str, tuple],
+    ) -> Dict[str, int]:
+        """Walk every user's effective access; count grants where they're
+        the sole grantee in the org.
+
+        all_user_access[sf_user_id] = (obj_access_dict, field_access_dict).
+        Returns sf_user_id → count of singleton grants.
+        """
+        # (kind, identifier, perm_type) → set of sf_user_ids with that grant
+        grants_by_users: Dict[tuple, set] = defaultdict(set)
+        for sf_id, (obj_access, field_access) in all_user_access.items():
+            for obj in obj_access.get("objects", []):
+                obj_name = obj["object"]
+                for perm_kind in ("read", "create", "edit", "delete"):
+                    if obj["access"].get(perm_kind):
+                        grants_by_users[("obj", obj_name, perm_kind)].add(sf_id)
+            for f in field_access.get("fields", []):
+                fid = f"{f.get('objectName', '')}.{f.get('fieldName', '')}"
+                for perm_kind in ("read", "edit"):
+                    if f.get("access", {}).get(perm_kind):
+                        grants_by_users[("field", fid, perm_kind)].add(sf_id)
+
+        counts: Dict[str, int] = {sf_id: 0 for sf_id in all_user_access}
+        for user_set in grants_by_users.values():
+            if len(user_set) == 1:
+                counts[next(iter(user_set))] += 1
+        return counts
 
     async def _compute_peer_stats(
         self, org_id: str, user: UserSnapshot, df: pd.DataFrame, feature_cols: List[str], user_idx: int

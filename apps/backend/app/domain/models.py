@@ -249,6 +249,10 @@ class UserSnapshot(Base, TimestampMixin):
     # Metadata
     department: Mapped[Optional[str]] = mapped_column(String(255))
     title: Mapped[Optional[str]] = mapped_column(String(255))
+    # Most recent Salesforce login timestamp. Powers the
+    # last_login_days_ago feature in anomaly detection (closes the
+    # DORMANT_POWERFUL blind spot from REPORT.md § 7.2).
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Relationships

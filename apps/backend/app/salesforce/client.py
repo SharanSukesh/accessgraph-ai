@@ -138,7 +138,7 @@ class SalesforceAPIClient:
         """
         soql = """
             SELECT Id, Username, Name, Email, ProfileId, UserRoleId,
-                   IsActive, UserType, Department, Title
+                   IsActive, UserType, Department, Title, LastLoginDate
             FROM User
             WHERE IsActive = true
         """

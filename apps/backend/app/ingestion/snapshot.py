@@ -29,6 +29,27 @@ from app.domain.models import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_sf_datetime(value: Optional[str]) -> Optional[datetime]:
+    """Parse a Salesforce SOQL datetime string ("2026-04-12T15:23:01.000+0000")
+    into a tz-aware datetime. Returns None for null / unparseable inputs so
+    a malformed value never breaks ingestion — the field is optional anyway.
+    """
+    if not value:
+        return None
+    try:
+        # SF returns "+0000"; Python <3.11 needs a colon ("+00:00") for fromisoformat.
+        normalized = value.replace("Z", "+00:00")
+        if len(normalized) >= 5 and normalized[-5] in ("+", "-") and normalized[-3] != ":":
+            normalized = normalized[:-2] + ":" + normalized[-2:]
+        dt = datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except (ValueError, TypeError):
+        logger.warning("Could not parse SF datetime: %r", value)
+        return None
+
+
 class SnapshotPersister:
     """
     Persist Salesforce data snapshots
@@ -57,6 +78,8 @@ class SnapshotPersister:
             )
             existing = result.scalar_one_or_none()
 
+            last_login_at = _parse_sf_datetime(user_data.get("LastLoginDate"))
+
             if existing:
                 # Update
                 existing.username = user_data["Username"]
@@ -68,6 +91,7 @@ class SnapshotPersister:
                 existing.user_role_id = user_data.get("UserRoleId")
                 existing.department = user_data.get("Department")
                 existing.title = user_data.get("Title")
+                existing.last_login_at = last_login_at
                 existing.raw_data = user_data
                 existing.sync_job_id = sync_job_id
             else:
@@ -85,6 +109,7 @@ class SnapshotPersister:
                     user_role_id=user_data.get("UserRoleId"),
                     department=user_data.get("Department"),
                     title=user_data.get("Title"),
+                    last_login_at=last_login_at,
                     raw_data=user_data,
                 )
                 self.db.add(user)

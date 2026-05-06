@@ -15,8 +15,11 @@ import pytest
 
 from app.services.anomaly_detection import (
     DEFAULT_ANOMALY_FRACTION,
+    NEVER_LOGGED_IN_DAYS,
     _MahalanobisDetector,
+    _classify_object_department,
 )
+from app.services.anomaly_detection import AnomalyDetectionService
 
 
 def test_detector_flags_obvious_outlier_above_normal_users():
@@ -140,3 +143,108 @@ def test_detector_top_k_includes_planted_anomaly_in_realistic_org():
         f"top-{k} were {sorted(top_k)} with scores "
         f"{[round(scores[i], 2) for i in sorted(top_k)]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# v2 feature helpers — added with the 10 → 13 feature expansion.
+# ---------------------------------------------------------------------------
+
+
+def test_classify_object_department_known_objects():
+    """Standard SF objects should map to their canonical departments.
+    The cross_department_access_ratio feature is only useful if the
+    object→department classifier knows the common ones."""
+    assert _classify_object_department("Account") == "Sales"
+    assert _classify_object_department("Opportunity") == "Sales"
+    assert _classify_object_department("Case") == "Support"
+    assert _classify_object_department("Contract") == "Legal"
+    assert _classify_object_department("PermissionSet") == "IT"
+
+
+def test_classify_object_department_custom_prefixes():
+    """Custom objects should be classified by prefix when standard
+    naming patterns apply, so HR_Employee__c → 'HR' even though it's
+    not in the standard map."""
+    assert _classify_object_department("HR_Employee__c") == "HR"
+    assert _classify_object_department("Fin_Invoice__c") == "Finance"
+    assert _classify_object_department("Finance_Payment__c") == "Finance"
+
+
+def test_classify_object_department_unknown_returns_none():
+    """Unclassifiable objects must return None so they don't pollute the
+    cross-department ratio with arbitrary assignments."""
+    assert _classify_object_department("Custom_Unknown__c") is None
+    assert _classify_object_department("MyRandomObj__c") is None
+
+
+def test_never_logged_in_sentinel_is_high_enough_to_flag_dormancy():
+    """The sentinel for users who have never logged in should be high
+    enough that combined with any non-zero permissions, dormancy stands
+    out. Anything < ~365 wouldn't meaningfully discriminate."""
+    assert NEVER_LOGGED_IN_DAYS >= 365
+
+
+def test_compute_unique_access_counts_singleton_grants():
+    """Users who are the sole grantee of any (object, perm) tuple should
+    have their unique_access_count incremented by 1 per such grant."""
+    # Three users:
+    #   alice: sole Read on HR_Employee, shares Read on Account with bob
+    #   bob:   shares Read on Account with alice
+    #   carol: sole Edit on Contract
+    all_user_access = {
+        "alice": (
+            {"objects": [
+                {"object": "HR_Employee__c", "access": {"read": True, "create": False, "edit": False, "delete": False}},
+                {"object": "Account",         "access": {"read": True, "create": False, "edit": False, "delete": False}},
+            ]},
+            {"fields": []},
+        ),
+        "bob": (
+            {"objects": [
+                {"object": "Account",         "access": {"read": True, "create": False, "edit": False, "delete": False}},
+            ]},
+            {"fields": []},
+        ),
+        "carol": (
+            {"objects": [
+                {"object": "Contract",        "access": {"read": True, "create": False, "edit": True, "delete": False}},
+            ]},
+            {"fields": []},
+        ),
+    }
+    counts = AnomalyDetectionService._compute_unique_access_counts(all_user_access)
+    # alice has 1 unique grant (HR_Employee__c read)
+    assert counts["alice"] == 1
+    # bob shares everything → 0 unique
+    assert counts["bob"] == 0
+    # carol has 2 unique grants (Contract read AND Contract edit — she's the only one)
+    assert counts["carol"] == 2
+
+
+def test_compute_unique_access_counts_field_grants():
+    """Field-level grants count toward unique_access_count too."""
+    all_user_access = {
+        "u1": (
+            {"objects": []},
+            {"fields": [
+                {"objectName": "Account", "fieldName": "AnnualRevenue",
+                 "access": {"read": True, "edit": False}},
+            ]},
+        ),
+        "u2": (
+            {"objects": []},
+            {"fields": [
+                {"objectName": "Account", "fieldName": "OtherField",
+                 "access": {"read": True, "edit": False}},
+            ]},
+        ),
+    }
+    counts = AnomalyDetectionService._compute_unique_access_counts(all_user_access)
+    assert counts["u1"] == 1
+    assert counts["u2"] == 1
+
+
+def test_compute_unique_access_counts_handles_empty_org():
+    """Empty input must return an empty dict, not crash."""
+    counts = AnomalyDetectionService._compute_unique_access_counts({})
+    assert counts == {}

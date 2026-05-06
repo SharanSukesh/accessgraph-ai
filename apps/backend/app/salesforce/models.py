@@ -38,6 +38,10 @@ class SalesforceUser(BaseModel):
     UserType: Optional[str] = None
     Department: Optional[str] = None
     Title: Optional[str] = None
+    # ISO 8601 string from the SOQL response — Salesforce returns
+    # something like "2026-04-12T15:23:01.000+0000". May be null for
+    # users who have never logged in (rare but real).
+    LastLoginDate: Optional[str] = None
 
 
 class SalesforceUserRole(BaseModel):
