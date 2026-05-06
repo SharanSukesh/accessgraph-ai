@@ -1174,6 +1174,141 @@ async def get_field_details(
     }
 
 
+@router.get("/orgs/{org_id}/permission-sets/{ps_sf_id}")
+async def get_permission_set_detail(
+    org_id: str,
+    ps_sf_id: str,
+    db: AsyncSession = Depends(get_database),
+):
+    """Permission Set detail: basic info + assigned users + object permissions
+    granted. Powers the deep-link landing page from the AccessGraph Explorer
+    tab in the Salesforce package."""
+    from app.domain.models import (
+        PermissionSetSnapshot,
+        PermissionSetAssignmentSnapshot,
+        PermissionSetGroupSnapshot,
+        PermissionSetGroupComponentSnapshot,
+        ObjectPermissionSnapshot,
+        UserSnapshot,
+        ProfileSnapshot,
+    )
+
+    # 1. Look up the PS itself.
+    ps_query = select(PermissionSetSnapshot).where(
+        PermissionSetSnapshot.organization_id == org_id,
+        PermissionSetSnapshot.salesforce_id == ps_sf_id,
+    )
+    ps = (await db.execute(ps_query)).scalar_one_or_none()
+    if ps is None:
+        raise HTTPException(status_code=404, detail="Permission Set not found")
+
+    # 2. If profile-owned, surface the underlying profile too.
+    profile = None
+    if ps.is_owned_by_profile and ps.profile_id:
+        prof_q = select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id,
+            ProfileSnapshot.salesforce_id == ps.profile_id,
+        )
+        profile = (await db.execute(prof_q)).scalar_one_or_none()
+
+    # 3. Direct assignments to this PS.
+    assignment_q = select(PermissionSetAssignmentSnapshot).where(
+        PermissionSetAssignmentSnapshot.organization_id == org_id,
+        PermissionSetAssignmentSnapshot.permission_set_id == ps_sf_id,
+    )
+    direct_assignments = (await db.execute(assignment_q)).scalars().all()
+    direct_user_ids = {a.assignee_id for a in direct_assignments}
+
+    # 4. PSGs that include this PS as a component → users with those PSGs
+    #    inherit this PS's permissions.
+    psg_component_q = select(PermissionSetGroupComponentSnapshot).where(
+        PermissionSetGroupComponentSnapshot.organization_id == org_id,
+        PermissionSetGroupComponentSnapshot.permission_set_id == ps_sf_id,
+    )
+    psg_components = (await db.execute(psg_component_q)).scalars().all()
+    psg_ids = {c.permission_set_group_id for c in psg_components}
+
+    psgs = []
+    indirect_user_ids: set[str] = set()
+    if psg_ids:
+        psg_q = select(PermissionSetGroupSnapshot).where(
+            PermissionSetGroupSnapshot.organization_id == org_id,
+            PermissionSetGroupSnapshot.salesforce_id.in_(psg_ids),
+        )
+        psgs = (await db.execute(psg_q)).scalars().all()
+
+        # PSG assignments are stored on PermissionSetAssignmentSnapshot with
+        # permission_set_id = psg_id (Salesforce treats PSGs polymorphically).
+        psg_assignment_q = select(PermissionSetAssignmentSnapshot).where(
+            PermissionSetAssignmentSnapshot.organization_id == org_id,
+            PermissionSetAssignmentSnapshot.permission_set_id.in_(psg_ids),
+        )
+        for a in (await db.execute(psg_assignment_q)).scalars().all():
+            indirect_user_ids.add(a.assignee_id)
+
+    all_user_ids = direct_user_ids | indirect_user_ids
+
+    # 5. Resolve user details for the union of direct + indirect.
+    users = []
+    if all_user_ids:
+        user_q = select(UserSnapshot).where(
+            UserSnapshot.organization_id == org_id,
+            UserSnapshot.salesforce_id.in_(all_user_ids),
+        )
+        for u in (await db.execute(user_q)).scalars().all():
+            users.append({
+                "id": u.salesforce_id,
+                "name": u.name,
+                "username": u.username,
+                "email": u.email,
+                "isActive": u.is_active,
+                "assignmentType": "direct" if u.salesforce_id in direct_user_ids else "via_psg",
+            })
+        # Sort by assignment type (direct first), then name.
+        users.sort(key=lambda x: (x["assignmentType"] != "direct", (x["name"] or "").lower()))
+
+    # 6. Object permissions granted by this PS.
+    obj_perm_q = select(ObjectPermissionSnapshot).where(
+        ObjectPermissionSnapshot.organization_id == org_id,
+        ObjectPermissionSnapshot.parent_id == ps_sf_id,
+    )
+    object_permissions = []
+    for op in (await db.execute(obj_perm_q)).scalars().all():
+        object_permissions.append({
+            "objectName": op.sobject_type,
+            "read": op.permissions_read,
+            "create": op.permissions_create,
+            "edit": op.permissions_edit,
+            "delete": op.permissions_delete,
+            "viewAll": op.permissions_view_all_records,
+            "modifyAll": op.permissions_modify_all_records,
+        })
+    object_permissions.sort(key=lambda x: x["objectName"])
+
+    return {
+        "id": ps.salesforce_id,
+        "name": ps.name,
+        "label": ps.label,
+        "type": ps.ps_type or "Regular",
+        "isMuting": (ps.ps_type == "Muting"),
+        "isOwnedByProfile": ps.is_owned_by_profile,
+        "profile": {
+            "id": profile.salesforce_id,
+            "name": profile.name,
+        } if profile else None,
+        "permissionSetGroups": [
+            {"id": g.salesforce_id, "name": g.developer_name, "label": g.master_label}
+            for g in psgs
+        ],
+        "users": users,
+        "totalUsers": len(users),
+        "totalDirectAssignments": len(direct_user_ids),
+        "totalViaPsgAssignments": len(indirect_user_ids - direct_user_ids),
+        "objectPermissions": object_permissions,
+        "totalObjectsGranted": len(object_permissions),
+    }
+
+
 @router.get("/orgs/{org_id}/graph/user/{user_sf_id}")
 async def get_user_graph(
     org_id: str,

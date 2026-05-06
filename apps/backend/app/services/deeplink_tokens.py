@@ -138,6 +138,6 @@ def destination_url(payload: DeepLinkPayload) -> str:
         # segment. The existing /fields/[fieldId] route handles this.
         return f"{base}/orgs/{org}/fields/{quote(payload.resource_id, safe='')}"
     if payload.resource_type == "permission_set":
-        return f"{base}/orgs/{org}/graph?focus=ps:{payload.resource_id}"
+        return f"{base}/orgs/{org}/permission-sets/{payload.resource_id}"
     # Unreachable — decode_token() already validated.
     raise DeepLinkInvalid(f"Unknown resource_type: {payload.resource_type}")
