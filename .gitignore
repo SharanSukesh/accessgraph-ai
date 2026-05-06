@@ -67,6 +67,11 @@ docker-compose.override.yml
 data/
 volumes/
 
+# But the synthetic-data generator under research/ is real source code,
+# not a local cache — whitelist Python files only (not __pycache__).
+!research/anomaly_benchmark/data/
+!research/anomaly_benchmark/data/*.py
+
 # Misc
 .turbo/
 *.pem
