@@ -5,7 +5,7 @@
  * Main navigation for the application - Collapsible on hover
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
+import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 
 const navigationItems = [
   { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
@@ -39,12 +40,43 @@ export function Sidebar() {
   const pathname = usePathname()
   const queryClient = useQueryClient()
   const [isExpanded, setIsExpanded] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
+  // Local "in flight" tag covers the brief window between clicking the
+  // button and the trigger POST returning. Once the new sync job exists,
+  // the polling-driven `isJobRunning` below takes over and keeps the
+  // spinner up for the full ~1-2 minute backend sync.
+  const [isTriggering, setIsTriggering] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   // Extract orgId from current path (e.g., /orgs/abc123/dashboard -> abc123)
   const orgIdMatch = pathname.match(/\/orgs\/([^/]+)/)
   const orgId = orgIdMatch ? orgIdMatch[1] : 'demo-org'
+
+  // useSyncJobs polls every 5 seconds while the latest job is in
+  // pending/running state (see useOrgs.ts:164). We derive the spinner
+  // from that — the moment the latest job hits a terminal state
+  // (completed / failed / partial), polling stops and the spinner clears.
+  const { data: syncJobs } = useSyncJobs(orgId)
+  const latestJobStatus = syncJobs?.[0]?.status
+  const isJobRunning = latestJobStatus === 'pending' || latestJobStatus === 'running'
+  const isSyncing = isTriggering || isJobRunning
+
+  // Toast on sync completion / failure. We watch for transitions out of
+  // the running state (was running, now isn't) and surface a message so
+  // the user isn't left wondering whether the spinner stopping means
+  // success or silent failure. Mirrors the LWC's polling toast behavior.
+  const wasRunningRef = useRef(false)
+  useEffect(() => {
+    if (wasRunningRef.current && !isJobRunning && latestJobStatus) {
+      if (latestJobStatus === 'completed') {
+        setSyncMessage('Sync completed.')
+        setTimeout(() => setSyncMessage(null), 5000)
+      } else if (latestJobStatus === 'failed') {
+        setSyncMessage('Sync failed. Reconnect Salesforce if the issue persists.')
+        setTimeout(() => setSyncMessage(null), 8000)
+      }
+    }
+    wasRunningRef.current = isJobRunning
+  }, [isJobRunning, latestJobStatus])
 
   // Build navigation with current orgId
   const navigation = navigationItems.map(item => ({
@@ -52,27 +84,32 @@ export function Sidebar() {
     href: `/orgs/${orgId}/${item.path}`
   }))
 
-  // Handle sync button click
+  // Handle sync button click. The trigger POST returns instantly because
+  // sync runs as a background asyncio task; the actual SF metadata pull
+  // takes 1-2 minutes. We hand spinner control to the polling-derived
+  // isJobRunning above as soon as the trigger returns — that way the icon
+  // animates through the entire backend run, not just the trigger latency.
   const handleSync = async () => {
-    setIsSyncing(true)
+    setIsTriggering(true)
     setSyncMessage(null)
     try {
       await apiClient.post(`/orgs/${orgId}/sync`)
       setSyncMessage('Sync started successfully!')
       setTimeout(() => setSyncMessage(null), 5000)
 
-      // Invalidate sync jobs + dashboard data so the UI refreshes immediately
-      // and the auto-polling kicks in (it polls every 5s while a job is running).
-      // Without this, status only updated on a manual page refresh.
-      await queryClient.invalidateQueries({ queryKey: ['orgs', 'detail', orgId, 'sync-jobs'] })
-      // Also invalidate other dashboard data that depends on sync results
+      // Refetch sync jobs so isJobRunning picks up the new pending row
+      // immediately. The auto-polling in useSyncJobs takes over from here.
+      await queryClient.invalidateQueries({ queryKey: orgKeys.syncJobs(orgId) })
+      // Other dashboard data depends on sync results — refresh those too.
       await queryClient.invalidateQueries({ queryKey: ['orgs', 'detail', orgId] })
     } catch (error) {
       console.error('Sync failed:', error)
       setSyncMessage('Sync failed. Please try again.')
       setTimeout(() => setSyncMessage(null), 5000)
     } finally {
-      setIsSyncing(false)
+      // Only release the local "triggering" tag. isSyncing stays true
+      // because isJobRunning is now true (just-created job in pending).
+      setIsTriggering(false)
     }
   }
 
