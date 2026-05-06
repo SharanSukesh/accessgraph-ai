@@ -5,7 +5,7 @@
  * Salesforce OAuth authentication
  */
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { LogIn, Shield, Network, Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
@@ -18,6 +18,20 @@ function LoginContent() {
   const searchParams = useSearchParams()
   const { isAuthenticated, isLoading, login } = useAuth()
   const redirect = searchParams.get('redirect')
+  // Sandbox/scratch orgs must auth via test.salesforce.com (production orgs
+  // use login.salesforce.com). We default the toggle to whatever ?env= came
+  // in on the URL or was stashed in sessionStorage by AuthContext, so users
+  // arriving from the SF package's deep link don't have to re-tick the box.
+  const [isSandbox, setIsSandbox] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const fromUrl = new URLSearchParams(window.location.search).get('env')
+    const fromStorage = window.sessionStorage.getItem('accessgraph_env')
+    const env = (fromUrl || fromStorage || '').toLowerCase()
+    if (env === 'sandbox' || env === 'scratch' || env === 'test') {
+      setIsSandbox(true)
+    }
+  }, [])
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -32,7 +46,7 @@ function LoginContent() {
   }, [isAuthenticated, isLoading, redirect, router])
 
   const handleLogin = () => {
-    login()
+    login(undefined, isSandbox ? 'sandbox' : undefined)
   }
 
   return (
@@ -94,6 +108,18 @@ function LoginContent() {
               <LogIn className="h-5 w-5 mr-2" />
               Sign in with Salesforce
             </Button>
+
+            {/* Sandbox/scratch toggle. Without this, the OAuth flow defaults to
+                login.salesforce.com which rejects sandbox/scratch credentials. */}
+            <label className="flex items-center justify-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={isSandbox}
+                onChange={(e) => setIsSandbox(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+              />
+              <span>This is a sandbox or scratch org</span>
+            </label>
 
             {/* Info */}
             <div className="text-center text-xs text-gray-500 dark:text-gray-400">

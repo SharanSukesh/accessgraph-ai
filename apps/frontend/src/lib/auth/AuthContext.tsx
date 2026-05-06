@@ -22,7 +22,7 @@ interface AuthContextType {
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (redirectUrl?: string) => void
+  login: (redirectUrl?: string, envOverride?: string) => void
   logout: () => Promise<void>
   refetch: () => Promise<void>
 }
@@ -65,18 +65,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = (redirectUrl?: string) => {
+  const login = (redirectUrl?: string, envOverride?: string) => {
     // Redirect to Salesforce OAuth.
-    // Read env param from URL or sessionStorage. The Salesforce package's
-    // LWC opens the dashboard with ?env=sandbox when the Salesforce org is
-    // a sandbox or scratch (so OAuth must use test.salesforce.com).
+    // env resolution order:
+    //   1. envOverride argument (e.g., login page's "sandbox" toggle)
+    //   2. ?env=... in current URL (deep link from the SF package's LWC)
+    //   3. sessionStorage (preserved across the home → /login redirect chain)
+    // The Salesforce package's LWC opens the dashboard with ?env=sandbox
+    // when the underlying SF org is sandbox/scratch, so OAuth routes to
+    // test.salesforce.com instead of login.salesforce.com.
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
-    let env: string | null = null
+    let env: string | null = envOverride ?? null
     let forceLogin = false
     if (typeof window !== 'undefined') {
-      env =
-        new URLSearchParams(window.location.search).get('env') ||
-        window.sessionStorage.getItem('accessgraph_env')
+      if (!env) {
+        env =
+          new URLSearchParams(window.location.search).get('env') ||
+          window.sessionStorage.getItem('accessgraph_env')
+      }
       // After explicit logout, force the Salesforce login screen (rather
       // than silently re-using the existing SF session). Flag is set in
       // logout() and consumed (cleared) here so it only fires once.
