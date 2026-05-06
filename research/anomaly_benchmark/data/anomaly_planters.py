@@ -93,10 +93,9 @@ def plant_dormant_powerful(
         f"retains {u.num_objects_delete} delete grants and "
         f"{u.num_sensitive_objects} sensitive-object accesses."
     )
-    # NOTE: the current 10 features don't include last_login. The dormant
-    # archetype is intentionally hard for the production detector to find,
-    # which is exactly the kind of result we want the benchmark to surface.
-    # (REPORT.md will recommend adding last_login as a feature for v2.)
+    # last_login_days_ago is now a v2 feature, so the detector CAN see this
+    # archetype. The v1 benchmark (10 features) showed all algorithms blind
+    # to dormant accounts; v2 should fix it.
     return True
 
 
@@ -129,12 +128,19 @@ def plant_role_mismatch(
         u.num_objects_edit, u.num_objects_delete,
         u.num_fields_edit, u.num_sensitive_fields,
     )
+    # The v2 cross_department_access_ratio feature is what makes this
+    # archetype detectable. Sales user with 60-80% of their access in
+    # other departments — that's the signal. Without this feature
+    # ROLE_MISMATCH was essentially invisible to every algorithm in v1.
+    u.cross_department_access_ratio = float(rng.uniform(0.6, 0.85))
     u.is_anomaly = True
     u.anomaly_archetype = AnomalyArchetype.ROLE_MISMATCH
     u.anomaly_note = (
         f"Sales user ({u.profile_name}) has {u.num_sensitive_objects} "
         f"sensitive-object grants and {u.num_sensitive_fields} sensitive "
-        f"field grants — typical of Finance/HR seniority, not Sales."
+        f"field grants — typical of Finance/HR seniority, not Sales. "
+        f"{int(u.cross_department_access_ratio * 100)}% of their access "
+        f"is outside their own department."
     )
     return True
 
@@ -192,12 +198,17 @@ def plant_sole_access_risk(
         u.num_objects_edit, u.num_objects_delete,
         u.num_fields_edit, u.num_sensitive_fields,
     )
+    # v2: explicit unique_access_count makes this archetype detectable.
+    # Sole-access users have 3-8 grants where they're the ONLY user in
+    # the org with that permission. Normal users have 0-1.
+    u.unique_access_count = int(rng.integers(low=3, high=9))
     u.is_anomaly = True
     u.anomaly_archetype = AnomalyArchetype.SOLE_ACCESS_RISK
     u.anomaly_note = (
         f"User has {u.num_objects_delete} delete grants on "
-        f"{u.num_sensitive_objects} sensitive objects — "
-        f"likely the only person in the org with this combination."
+        f"{u.num_sensitive_objects} sensitive objects, with "
+        f"{u.unique_access_count} grants unique to this user in the org "
+        f"— sole custodian of access that should have a backup grantee."
     )
     return True
 

@@ -41,7 +41,12 @@ class SyntheticUser:
     is_active: bool
     last_login_days_ago: int  # used by dormant-but-powerful archetype
 
-    # The 10 features production uses. See anomaly_detection.py:179-239.
+    # The 13 features used by the v2 benchmark. The first 10 mirror what
+    # production currently computes; the last 3 close blind spots
+    # identified in REPORT.md § 7.2:
+    #   - last_login_days_ago         → unlocks DORMANT_POWERFUL
+    #   - cross_department_access_ratio → unlocks ROLE_MISMATCH
+    #   - unique_access_count         → unlocks SOLE_ACCESS_RISK
     num_permission_sets: int
     num_permission_set_groups: int
     num_objects_read: int
@@ -53,6 +58,11 @@ class SyntheticUser:
     num_sensitive_fields: int
     permission_breadth_score: float
 
+    # New v2 features. Defaults make these backward-compatible for any
+    # callers that don't set them yet (production hasn't shipped them yet).
+    cross_department_access_ratio: float = 0.0
+    unique_access_count: int = 0
+
     # Ground-truth label. NEVER used during fit/predict.
     is_anomaly: bool = False
     anomaly_archetype: Optional[AnomalyArchetype] = None
@@ -61,9 +71,9 @@ class SyntheticUser:
     anomaly_note: Optional[str] = None
 
     def feature_vector(self) -> np.ndarray:
-        """Return the 10 features in a fixed order. The order here defines
-        column ordering for the entire benchmark — don't reorder without
-        updating algorithms/feature ablation logic too."""
+        """Return the 13 features in canonical order. The order here
+        defines the column ordering for the entire benchmark — don't
+        reorder without updating algorithms/feature ablation too."""
         return np.array([
             self.num_permission_sets,
             self.num_permission_set_groups,
@@ -75,6 +85,9 @@ class SyntheticUser:
             self.num_sensitive_objects,
             self.num_sensitive_fields,
             self.permission_breadth_score,
+            float(self.last_login_days_ago),
+            self.cross_department_access_ratio,
+            float(self.unique_access_count),
         ], dtype=np.float64)
 
 
@@ -91,6 +104,9 @@ FEATURE_NAMES: tuple[str, ...] = (
     "num_sensitive_objects",
     "num_sensitive_fields",
     "permission_breadth_score",
+    "last_login_days_ago",
+    "cross_department_access_ratio",
+    "unique_access_count",
 )
 
 

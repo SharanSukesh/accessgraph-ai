@@ -13,7 +13,7 @@ adapter file and register it in `_REGISTRY` below.
 """
 from __future__ import annotations
 
-from typing import Callable, Dict, Optional, Protocol, Tuple
+from typing import Callable, Dict, Protocol, Tuple
 
 import numpy as np
 
@@ -104,6 +104,7 @@ def _import_all() -> None:
     from . import gmm                # noqa: F401
     from . import mahalanobis        # noqa: F401
     from . import zscore_mad         # noqa: F401
+    from . import mahalanobis_gmm_ensemble  # noqa: F401
 
     # PyOD-based: optional
     for mod in ("ecod", "copod", "hbos", "knn_ad", "extended_if"):

@@ -32,14 +32,80 @@ def test_generate_org_different_seeds_produce_different_orgs():
         or not np.array_equal(a.feature_matrix(), b.feature_matrix())
 
 
-def test_feature_matrix_has_10_columns_in_canonical_order():
+def test_feature_matrix_has_13_columns_in_canonical_order():
+    """v2 schema: 10 production-parity features + 3 new features that
+    close blind spots identified in REPORT.md § 7.2."""
     org = generate_org(persona="mid_market", seed=1)
     X = org.feature_matrix()
-    assert X.shape[1] == 10
-    assert len(FEATURE_NAMES) == 10
-    # Spot check column order: num_permission_sets is column 0, breadth is col 9.
+    assert X.shape[1] == 13
+    assert len(FEATURE_NAMES) == 13
+    # First 10 features mirror the production schema exactly.
     assert FEATURE_NAMES[0] == "num_permission_sets"
-    assert FEATURE_NAMES[-1] == "permission_breadth_score"
+    assert FEATURE_NAMES[9] == "permission_breadth_score"
+    # The last 3 are the v2 additions.
+    assert FEATURE_NAMES[10] == "last_login_days_ago"
+    assert FEATURE_NAMES[11] == "cross_department_access_ratio"
+    assert FEATURE_NAMES[12] == "unique_access_count"
+
+
+def test_role_mismatch_planter_sets_high_cross_dept_ratio():
+    """ROLE_MISMATCH should mutate cross_department_access_ratio into the
+    0.6-0.85 range — that's the signal v2 algorithms detect."""
+    found = False
+    for seed in range(50):
+        org = generate_org(persona="mid_market", seed=seed)
+        for u in org.users:
+            if u.anomaly_archetype == AnomalyArchetype.ROLE_MISMATCH:
+                assert 0.55 <= u.cross_department_access_ratio <= 0.90, (
+                    f"ROLE_MISMATCH user has cross_dept_ratio="
+                    f"{u.cross_department_access_ratio:.3f}; expected ~0.6-0.85"
+                )
+                found = True
+                break
+        if found:
+            break
+    assert found, "ROLE_MISMATCH never planted across 50 seeds"
+
+
+def test_sole_access_planter_sets_high_unique_access_count():
+    """SOLE_ACCESS_RISK should mutate unique_access_count to >= 3."""
+    found = False
+    for seed in range(50):
+        org = generate_org(persona="mid_market", seed=seed)
+        for u in org.users:
+            if u.anomaly_archetype == AnomalyArchetype.SOLE_ACCESS_RISK:
+                assert u.unique_access_count >= 3, (
+                    f"SOLE_ACCESS user has unique_access_count="
+                    f"{u.unique_access_count}; expected >= 3"
+                )
+                found = True
+                break
+        if found:
+            break
+    assert found, "SOLE_ACCESS_RISK never planted across 50 seeds"
+
+
+def test_normal_users_have_low_cross_dept_ratio():
+    """Sanity: most normal users should have low cross-department access
+    (they work mostly within their own dept). If this breaks, ROLE_MISMATCH
+    anomalies become indistinguishable from normal users."""
+    org = generate_org(persona="mid_market", seed=42, n_users=500)
+    normals = [u for u in org.users if not u.is_anomaly]
+    median_ratio = float(np.median([u.cross_department_access_ratio for u in normals]))
+    assert median_ratio < 0.25, (
+        f"Median normal cross_dept_ratio is {median_ratio:.3f}; expected < 0.25"
+    )
+
+
+def test_normal_users_have_zero_or_low_unique_access():
+    """Sanity: most normal users have zero unique-access grants. Senior
+    users may have a few; admins more. But the median should be 0 or 1."""
+    org = generate_org(persona="mid_market", seed=42, n_users=500)
+    normals = [u for u in org.users if not u.is_anomaly]
+    median_unique = float(np.median([u.unique_access_count for u in normals]))
+    assert median_unique <= 1, (
+        f"Median normal unique_access_count is {median_unique}; expected <= 1"
+    )
 
 
 def test_at_least_one_anomaly_planted():

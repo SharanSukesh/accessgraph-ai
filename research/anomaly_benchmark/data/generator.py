@@ -66,6 +66,24 @@ def _generate_normal_user(
         num_obj_edit, num_obj_delete, num_field_edit, num_sensitive_fields,
     )
 
+    # New v2 features for normal users.
+    # cross_department_access_ratio: most users have low cross-dept access
+    # (their permissions are concentrated in their own department). Modeled
+    # as Beta(2, 18) which centers around 0.10 with a thin tail to 0.30.
+    cross_dept_ratio = float(rng.beta(2, 18))
+
+    # unique_access_count: most users share their access with peers. Senior/
+    # admin users occasionally have 1-2 unique grants. We model with a Poisson
+    # whose lambda scales with seniority — admins more likely to have unique
+    # custodial access than juniors.
+    unique_lambda = {
+        "junior": 0.05,
+        "mid":    0.15,
+        "senior": 0.40,
+        "admin":  0.80,
+    }.get(profile.seniority, 0.10)
+    unique_count = int(rng.poisson(unique_lambda))
+
     return SyntheticUser(
         user_id=f"u{user_idx:06d}",
         profile_name=profile.name,
@@ -83,6 +101,8 @@ def _generate_normal_user(
         num_sensitive_objects=num_sensitive_objects,
         num_sensitive_fields=num_sensitive_fields,
         permission_breadth_score=breadth,
+        cross_department_access_ratio=cross_dept_ratio,
+        unique_access_count=unique_count,
     )
 
 
