@@ -16,7 +16,9 @@ import pytest
 from app.services.anomaly_detection import (
     DEFAULT_ANOMALY_FRACTION,
     NEVER_LOGGED_IN_DAYS,
+    _GMMDetector,
     _MahalanobisDetector,
+    _MahalanobisGMMAvgDetector,
     _classify_object_department,
 )
 from app.services.anomaly_detection import AnomalyDetectionService
@@ -248,3 +250,91 @@ def test_compute_unique_access_counts_handles_empty_org():
     """Empty input must return an empty dict, not crash."""
     counts = AnomalyDetectionService._compute_unique_access_counts({})
     assert counts == {}
+
+
+# ---------------------------------------------------------------------------
+# Mahalanobis + GMM ensemble — production v2 detector
+# ---------------------------------------------------------------------------
+
+
+def test_ensemble_score_distribution_differs_from_components():
+    """The ensemble's scores should be different from either component
+    alone — proves the rank-averaging actually combines two signals
+    rather than degenerating to one of them.
+
+    NOTE: catch-rate / recall behavior of the ensemble is empirically
+    measured by the v2 benchmark (research/anomaly_benchmark/REPORT.md),
+    not in unit tests. The benchmark's 1,500 paired runs across 150
+    synthetic orgs is the authoritative measurement; trying to assert
+    catch rates on a single 100-user fixture risks reflecting only the
+    documented archetype-specific quirks (e.g., GMM absorbing tight
+    outlier clusters as their own component, hurting OVER_PRIVILEGED
+    detection — see REPORT.md § 7)."""
+    rng = np.random.default_rng(seed=42)
+    X = rng.standard_normal((100, 13))
+
+    maha = _MahalanobisDetector()
+    maha.fit(X)
+    s_maha = maha.score(X)
+
+    gmm = _GMMDetector(seed=42)
+    gmm.fit(X)
+    s_gmm = gmm.score(X)
+
+    ensemble = _MahalanobisGMMAvgDetector()
+    ensemble.fit(X)
+    s_ens = ensemble.score(X)
+
+    # The ensemble's ordering shouldn't be identical to either member's.
+    # If it were, rank-averaging would be a no-op (one member dominating).
+    rank_maha = np.argsort(s_maha)
+    rank_gmm = np.argsort(s_gmm)
+    rank_ens = np.argsort(s_ens)
+    assert not np.array_equal(rank_ens, rank_maha), (
+        "Ensemble rank order matches Mahalanobis exactly — rank-averaging didn't combine signals"
+    )
+    assert not np.array_equal(rank_ens, rank_gmm), (
+        "Ensemble rank order matches GMM exactly — rank-averaging didn't combine signals"
+    )
+
+
+def test_ensemble_score_shape_matches_input():
+    """Ensemble must return one score per row, regardless of feature count."""
+    rng = np.random.default_rng(seed=1)
+    X = rng.standard_normal((50, 13))
+    ensemble = _MahalanobisGMMAvgDetector()
+    ensemble.fit(X)
+    scores = ensemble.score(X)
+    assert scores.shape == (50,)
+
+
+def test_ensemble_scores_are_rank_normalized_average():
+    """Ensemble scores should be in [0, n-1] (the rank range), since both
+    components are rank-normalized before averaging. This guards against
+    accidentally returning raw unnormalized scores."""
+    rng = np.random.default_rng(seed=7)
+    n = 50
+    X = rng.standard_normal((n, 13))
+    ensemble = _MahalanobisGMMAvgDetector()
+    ensemble.fit(X)
+    scores = ensemble.score(X)
+    assert scores.min() >= 0.0
+    assert scores.max() <= n - 1.0
+
+
+def test_ensemble_score_before_fit_raises():
+    """Calling score() before fit() must raise — both components do."""
+    ensemble = _MahalanobisGMMAvgDetector()
+    with pytest.raises(RuntimeError):
+        ensemble.score(np.zeros((5, 13)))
+
+
+def test_gmm_detector_smoke():
+    """The GMM helper class should fit + score 13-feature data cleanly."""
+    rng = np.random.default_rng(seed=3)
+    X = rng.standard_normal((40, 13))
+    gmm = _GMMDetector(seed=3)
+    gmm.fit(X)
+    scores = gmm.score(X)
+    assert scores.shape == (40,)
+    assert np.all(np.isfinite(scores))

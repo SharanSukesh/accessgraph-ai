@@ -1,12 +1,18 @@
 """
 Anomaly Detection Service
 
-Uses a Mahalanobis-distance multivariate outlier detector + per-archetype
-feature engineering. The detector was selected by the benchmark in
-research/anomaly_benchmark/ (see REPORT.md): on synthetic Salesforce-org
-data with planted ground-truth anomalies, Mahalanobis beat Isolation
-Forest by AUC-PR Δ = +0.017, Wilcoxon Bonferroni-adjusted p = 0.0039,
-and runs ~700x faster (0.3ms vs 219ms fit time).
+Uses a Mahalanobis + GMM rank-average ensemble + per-archetype feature
+engineering (13 features). The detector was selected by the v2 benchmark
+in research/anomaly_benchmark/REPORT.md: on synthetic Salesforce-org
+data with planted ground-truth anomalies and the v2 13-feature schema,
+the ensemble beats single Mahalanobis by AUC-PR Δ = +0.028 (Wilcoxon
+Bonferroni-adjusted p = 0.0104).
+
+Trade-off documented in REPORT.md § 7: the ensemble loses some
+OVER_PRIVILEGED recall vs single Mahalanobis (10% vs 32%) but gains
+across the other four archetypes, especially SOLE_ACCESS_RISK (56% vs
+45%) and ROLE_MISMATCH (35% vs 7%). A v3 follow-up exploring weighted
+or 3-way ensembles is staged in REPORT.md § 8.
 """
 import logging
 from collections import defaultdict
@@ -82,16 +88,13 @@ def _classify_object_department(object_name: str) -> Optional[str]:
 
 
 class _MahalanobisDetector:
-    """Multivariate-distance anomaly detector.
+    """Multivariate-distance anomaly detector. One of two members of the
+    production ensemble below; also used standalone in tests.
 
     Fit estimates the centroid and the inverse covariance matrix of the
     feature data (with light regularization so even rank-deficient orgs
     are invertible). Score returns the per-row Mahalanobis distance —
     higher means more anomalous.
-
-    Implementation lifted verbatim from
-    research/anomaly_benchmark/algorithms/mahalanobis.py to keep
-    apps/backend self-contained (no dependency on research/).
     """
 
     def __init__(self, regularization: float = 1e-4):
@@ -115,6 +118,95 @@ class _MahalanobisDetector:
         diff = X - self._mean
         m2 = np.einsum("ij,jk,ik->i", diff, self._inv_cov, diff)
         return np.sqrt(np.maximum(m2, 0.0))
+
+
+class _GMMDetector:
+    """Gaussian Mixture Model anomaly detector. Other ensemble member.
+
+    Fits a small mixture (3 components by default) and uses negative
+    log-likelihood as the anomaly score. Models multimodal cluster
+    structure that single-Gaussian Mahalanobis can't — particularly
+    effective at ROLE_MISMATCH and PERMISSION_ACCUMULATOR archetypes
+    per the v2 benchmark.
+
+    sklearn's GaussianMixture is the underlying solver; we wrap it for
+    interface parity with the rest of the production detector code.
+    """
+
+    def __init__(self, n_components: int = 3, seed: int = 42):
+        self.n_components = n_components
+        self.seed = seed
+        self._model = None  # lazy-imported sklearn GMM
+
+    def fit(self, X: "np.ndarray") -> None:
+        # Lazy import so missing sklearn doesn't break module load.
+        from sklearn.mixture import GaussianMixture
+        try:
+            self._model = GaussianMixture(
+                n_components=self.n_components,
+                covariance_type="full",
+                random_state=self.seed,
+                reg_covar=1e-4,
+            )
+            self._model.fit(X)
+        except Exception:  # noqa: BLE001 — fall back to diagonal covariance
+            self._model = GaussianMixture(
+                n_components=self.n_components,
+                covariance_type="diag",
+                random_state=self.seed,
+                reg_covar=1e-3,
+            )
+            self._model.fit(X)
+
+    def score(self, X: "np.ndarray") -> "np.ndarray":
+        if self._model is None:
+            raise RuntimeError("fit() must be called before score()")
+        # GMM.score_samples returns log-likelihood (higher = more normal).
+        # Negate so higher = more anomalous, matching our convention.
+        return -self._model.score_samples(X)
+
+
+class _MahalanobisGMMAvgDetector:
+    """Production v2 detector: rank-average ensemble of Mahalanobis + GMM.
+
+    Selected by the v2 benchmark (research/anomaly_benchmark/REPORT.md):
+    AUC-PR 0.362 vs 0.334 for single Mahalanobis (Δ=+0.028, Wilcoxon
+    Bonferroni adj_p=0.0104). Wins on every archetype except
+    OVER_PRIVILEGED, where it loses some signal vs single Mahalanobis
+    due to rank-averaging diluting the strongest member.
+
+    Why rank-average rather than score-average:
+      Mahalanobis returns Euclidean-like distances (open-ended scale).
+      GMM returns negative log-likelihoods (different scale, different
+      sign behavior). Averaging the raw scores would let one member
+      dominate purely because of scale. Rank-averaging is scale-invariant:
+      each member contributes a position in [0, n-1] and the ensemble's
+      ordering is determined by the average rank.
+    """
+
+    def __init__(self, regularization: float = 1e-4, gmm_components: int = 3, seed: int = 42):
+        self._maha = _MahalanobisDetector(regularization=regularization)
+        self._gmm = _GMMDetector(n_components=gmm_components, seed=seed)
+
+    def fit(self, X: "np.ndarray") -> None:
+        self._maha.fit(X)
+        self._gmm.fit(X)
+
+    def score(self, X: "np.ndarray") -> "np.ndarray":
+        s_maha = self._maha.score(X)
+        s_gmm = self._gmm.score(X)
+        # Rank-normalize each member into [0, n-1] (higher = more anomalous),
+        # then average. ties get the natural argsort tie-break which is fine
+        # for our k-of-n top-flag use case.
+        n = s_maha.shape[0]
+
+        def to_ranks(scores: "np.ndarray") -> "np.ndarray":
+            order = np.argsort(scores)
+            ranks = np.empty(n, dtype=np.float64)
+            ranks[order] = np.arange(n, dtype=np.float64)
+            return ranks
+
+        return (to_ranks(s_maha) + to_ranks(s_gmm)) / 2.0
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -252,13 +344,13 @@ class AnomalyDetectionService:
 
         X = df[feature_cols].values
 
-        # Run the Mahalanobis detector. Selected by the benchmark in
-        # research/anomaly_benchmark/REPORT.md as the algorithm with the
-        # best AUC-PR (statistically significant lead over Isolation Forest,
-        # Wilcoxon Bonferroni-adjusted p = 0.0039) AND the fastest fit time
-        # (~700x faster than IF). It's also parameter-free — no
-        # `contamination` knob to mistune.
-        detector = _MahalanobisDetector()
+        # Run the v2 production detector: Mahalanobis + GMM rank-average
+        # ensemble. Selected by the v2 benchmark (research/anomaly_benchmark/
+        # REPORT.md): AUC-PR 0.362 vs single Mahalanobis 0.334 (Δ=+0.028,
+        # Wilcoxon Bonferroni adj_p=0.0104). The ensemble inherits GMM's
+        # multimodal modeling for cluster-aware anomalies while keeping
+        # Mahalanobis's per-archetype coverage on most other types.
+        detector = _MahalanobisGMMAvgDetector()
         detector.fit(X)
         raw_scores = detector.score(X)
 
