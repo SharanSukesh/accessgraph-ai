@@ -9,7 +9,7 @@ Production-grade backend service for **AccessGraph AI** - an enterprise access i
 1. **Data Ingestion** - Extracts access metadata from Salesforce orgs (or demo fixtures)
 2. **Graph Modeling** - Builds Neo4j graph representation of access relationships
 3. **Effective Access** - Computes what users can actually access (profile + PS + PSG aggregation)
-4. **Anomaly Detection** - Uses IsolationForest ML to find unusual access patterns
+4. **Anomaly Detection** - Mahalanobis + Gaussian-Mixture rank-average ensemble (selected after benchmarking 14 algorithms; see `research/anomaly_benchmark/REPORT.md`) to find unusual access patterns
 5. **Risk Scoring** - Transparent weighted model for user/permission set risk
 6. **Recommendations** - Rule-based suggestions for access optimization
 7. **REST API** - Clean endpoints for frontend and integrations
@@ -68,7 +68,7 @@ app/
 │   └── models.py          # Pydantic schemas
 └── services/               # Business logic
     ├── effective_access.py    # Access computation
-    ├── anomaly_detection.py   # IsolationForest ML
+    ├── anomaly_detection.py   # Mahalanobis + GMM rank-average ensemble
     ├── risk_scoring.py        # Weighted risk model
     └── recommendations.py     # Rule engine
 ```
@@ -290,15 +290,24 @@ GET /orgs/{org_id}/users/005.../explain/object/Opportunity
 
 ### Algorithm
 
-**IsolationForest** from scikit-learn with engineered features:
+**Mahalanobis + Gaussian-Mixture rank-average ensemble** — each detector
+is fit on the per-org user feature matrix, ranks users by anomaly score
+independently, and the two ranks are averaged. Selected after benchmarking
+14 algorithms across 5 paradigms (tree/ensemble, statistical, distance,
+mixture, neural); see `research/anomaly_benchmark/REPORT.md` for the
+full evaluation. Beats Isolation Forest on AUC-PR by +0.143 (65% relative)
+with statistical significance.
 
-**Features:**
+**Features (13 total):**
 - `num_permission_sets` - Count of direct PS assignments
 - `num_permission_set_groups` - Count of PSG assignments
 - `num_objects_read/edit/delete` - Permission breadth
 - `num_fields_read/edit` - Field-level access
 - `num_sensitive_objects/fields` - Sensitive data access
 - `permission_breadth_score` - Weighted combination
+- `last_login_days_ago` - Dormancy signal (closes DORMANT_BUT_POWERFUL gap)
+- `cross_department_access_ratio` - Sales user with HR/Finance access? (closes ROLE_MISMATCH gap)
+- `unique_access_count` - Number of grants only this user has (closes SOLE_ACCESS gap)
 
 **Peer Comparison:**
 1. Primary: Same role

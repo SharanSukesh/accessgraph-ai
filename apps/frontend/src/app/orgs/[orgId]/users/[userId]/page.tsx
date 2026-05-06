@@ -657,13 +657,17 @@ export default function UserDetailPage() {
                             </ul>
                           </div>
                           <div>
-                            <strong>2. Feature Analysis:</strong> We analyzed 10 key metrics including number of permission sets,
-                            object access levels, field permissions, and sensitive data access patterns.
+                            <strong>2. Feature Analysis:</strong> We analyzed 13 access-pattern signals including number
+                            of permission sets, object and field permissions, sensitive-data access, days since last
+                            login, cross-department access ratio, and how many of this user's grants are unique to them.
                           </div>
                           <div>
-                            <strong>3. ML Detection:</strong> Using IsolationForest algorithm, we flagged this user because their
-                            access pattern combination is statistically unusual compared to peers. Anomaly score of <strong>{typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}</strong>
-                            indicates deviation level (0=normal, 1=highly unusual).
+                            <strong>3. ML Detection:</strong> A Mahalanobis-distance + Gaussian-Mixture rank-average
+                            ensemble flagged this user because their feature combination is statistically unusual
+                            compared to peers. The ensemble was selected after benchmarking 14 algorithms across 5
+                            paradigms; see <code>research/anomaly_benchmark/REPORT.md</code> for the methodology.
+                            Anomaly score of <strong>{typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}</strong>
+                            indicates deviation level (0 = normal, 1 = highly unusual).
                           </div>
                           <div>
                             <strong>4. Why System Admins Get Flagged:</strong> If this user is the only System Administrator, or has
