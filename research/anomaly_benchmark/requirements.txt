@@ -1,0 +1,29 @@
+# Research-only dependencies. Not used by apps/backend in production.
+# Install via: pip install -r research/anomaly_benchmark/requirements.txt
+
+# Core numerical stack
+numpy>=1.26.0
+scipy>=1.11.0
+pandas>=2.2.0
+pyarrow>=14.0.0     # Parquet IO for results_store
+
+# Classical ML
+scikit-learn>=1.5.0
+
+# Anomaly-detection library (provides ECOD, COPOD, HBOS, kNN-AD, AutoEncoder, VAE, etc.)
+pyod>=2.0.0
+
+# Neural backends used by PyOD's AutoEncoder/VAE. CPU-only torch is enough.
+torch>=2.0.0
+
+# Plotting & analysis
+matplotlib>=3.8.0
+seaborn>=0.13.0
+jupyter>=1.0.0
+ipykernel>=6.29.0
+
+# Statistical tests are in scipy.stats; no extra dep needed.
+
+# Test runner (kept here so research code can be tested without depending on
+# apps/backend/requirements.txt)
+pytest>=8.0.0
