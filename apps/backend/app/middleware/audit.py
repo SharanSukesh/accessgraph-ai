@@ -4,6 +4,7 @@ Automatically logs API access to sensitive endpoints for compliance and security
 """
 import logging
 import time
+import uuid
 from typing import Callable
 
 from fastapi import Request, Response
@@ -73,14 +74,42 @@ def get_audit_action(method: str, path: str) -> AuditAction | None:
     return None
 
 
+def _is_valid_uuid(value: str) -> bool:
+    """True iff `value` parses as a UUID. Used to filter out non-UUID
+    org identifiers (e.g., Salesforce Org IDs like '00DC2000003TTxlMAG'
+    that occasionally end up in `/orgs/{...}` paths via misrouted package
+    callers). Inserting those into audit_logs.organization_id violates
+    the FK to organizations.id and bloats Postgres WAL with rejected
+    inserts — see the early-deployment incident logs.
+    """
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        uuid.UUID(value)
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def extract_org_id(path: str) -> str | None:
-    """Extract organization ID from path"""
+    """Extract organization ID from path. Returns None for non-UUID values
+    so the audit-log insert is skipped rather than failing the FK check."""
     parts = path.split("/")
     try:
         if "orgs" in parts:
             org_index = parts.index("orgs")
             if len(parts) > org_index + 1:
-                return parts[org_index + 1]
+                candidate = parts[org_index + 1]
+                if _is_valid_uuid(candidate):
+                    return candidate
+                # Non-UUID — most commonly a Salesforce Org ID slipping
+                # through from a package endpoint. Logging at debug level
+                # since this is expected for some traffic patterns; we
+                # don't want to flood logs in production.
+                logger.debug(
+                    "Skipping audit log: extracted org_id %r is not a UUID",
+                    candidate,
+                )
     except (ValueError, IndexError):
         pass
     return None
