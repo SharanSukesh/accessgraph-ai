@@ -54,7 +54,15 @@ class SalesforceProfile(BaseModel):
 
 
 class SalesforcePermissionSet(BaseModel):
-    """Salesforce PermissionSet object"""
+    """Salesforce PermissionSet object.
+
+    Permissions* fields are accepted via extra='allow' and flow through to
+    raw_data on PermissionSetSnapshot. The PS detail endpoint extracts and
+    categorizes them at read time. Adding new ones to the SOQL just needs
+    a sync — no schema/Pydantic change required.
+    """
+    model_config = {"extra": "allow"}
+
     Id: str
     Name: str
     Label: str

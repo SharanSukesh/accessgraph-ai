@@ -37,6 +37,22 @@ export interface PermissionSetDetail {
     modifyAll: boolean
   }>
   totalObjectsGranted: number
+  fieldPermissions: Array<{
+    objectName: string
+    fieldCount: number
+    fields: Array<{
+      fieldName: string
+      qualifiedId: string
+      read: boolean
+      edit: boolean
+    }>
+  }>
+  totalFieldsGranted: number
+  // Keys are categories (e.g., "Data Access"); values are arrays of granted
+  // system permissions in that category. Categories with zero granted perms
+  // are omitted, so the UI can iterate Object.entries() safely.
+  systemPermissions: Record<string, Array<{ apiName: string; label: string }>>
+  totalSystemPermissionsGranted: number
 }
 
 export const permissionSetKeys = {

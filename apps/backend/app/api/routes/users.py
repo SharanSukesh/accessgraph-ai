@@ -1285,6 +1285,46 @@ async def get_permission_set_detail(
         })
     object_permissions.sort(key=lambda x: x["objectName"])
 
+    # 7. Field permissions granted by this PS, grouped by object.
+    from app.domain.models import FieldPermissionSnapshot
+    fp_query = select(FieldPermissionSnapshot).where(
+        FieldPermissionSnapshot.organization_id == org_id,
+        FieldPermissionSnapshot.parent_id == ps_sf_id,
+    )
+    field_perms_by_object: dict[str, list[dict]] = {}
+    total_fields_granted = 0
+    for fp in (await db.execute(fp_query)).scalars().all():
+        # Field column on FieldPermissionSnapshot is "Object.Field"; split.
+        if "." in fp.field:
+            _, field_name = fp.field.split(".", 1)
+        else:
+            field_name = fp.field
+        if not (fp.permissions_read or fp.permissions_edit):
+            continue
+        field_perms_by_object.setdefault(fp.sobject_type, []).append({
+            "fieldName": field_name,
+            "qualifiedId": f"{fp.sobject_type}.{field_name}",
+            "read": fp.permissions_read,
+            "edit": fp.permissions_edit,
+        })
+        total_fields_granted += 1
+    field_permissions = [
+        {
+            "objectName": obj,
+            "fields": sorted(fields, key=lambda f: f["fieldName"]),
+            "fieldCount": len(fields),
+        }
+        for obj, fields in sorted(field_perms_by_object.items())
+    ]
+
+    # 8. System permissions extracted from raw_data. Salesforce surfaces ~250
+    # Permissions* booleans on the PermissionSet object; we pulled a curated
+    # ~30 in the SOQL. Group them so the UI can render meaningfully.
+    system_permissions_by_category = _extract_system_permissions(ps.raw_data or {})
+    total_system_perms_granted = sum(
+        len(perms) for perms in system_permissions_by_category.values()
+    )
+
     return {
         "id": ps.salesforce_id,
         "name": ps.name,
@@ -1306,7 +1346,79 @@ async def get_permission_set_detail(
         "totalViaPsgAssignments": len(indirect_user_ids - direct_user_ids),
         "objectPermissions": object_permissions,
         "totalObjectsGranted": len(object_permissions),
+        "fieldPermissions": field_permissions,
+        "totalFieldsGranted": total_fields_granted,
+        "systemPermissions": system_permissions_by_category,
+        "totalSystemPermissionsGranted": total_system_perms_granted,
     }
+
+
+# Permissions* fields we pull from PermissionSet, grouped into UI categories.
+# Each entry: (api_field_on_PermissionSet, display_label).
+_SYSTEM_PERMISSION_CATEGORIES: dict[str, list[tuple[str, str]]] = {
+    "Data Access": [
+        ("PermissionsViewAllData", "View All Data"),
+        ("PermissionsModifyAllData", "Modify All Data"),
+        ("PermissionsViewEncryptedData", "View Encrypted Data"),
+        ("PermissionsBulkApiHardDelete", "Bulk API Hard Delete"),
+    ],
+    "User Management": [
+        ("PermissionsViewAllUsers", "View All Users"),
+        ("PermissionsManageUsers", "Manage Users"),
+        ("PermissionsResetPasswords", "Reset User Passwords and Unlock Users"),
+        ("PermissionsManageRoles", "Manage Roles"),
+        ("PermissionsManageProfilesPermissionsets", "Manage Profiles and Permission Sets"),
+        ("PermissionsAssignPermissionSets", "Assign Permission Sets"),
+    ],
+    "Setup & Customization": [
+        ("PermissionsCustomizeApplication", "Customize Application"),
+        ("PermissionsManageSharing", "Manage Sharing"),
+        ("PermissionsViewSetup", "View Setup and Configuration"),
+        ("PermissionsManageDataIntegrations", "Manage Data Integrations"),
+        ("PermissionsManageMobile", "Manage Mobile Configurations"),
+        ("PermissionsManageContentPermissions", "Manage Content Permissions"),
+    ],
+    "Development & API": [
+        ("PermissionsApiEnabled", "API Enabled"),
+        ("PermissionsApiUserOnly", "API Only User"),
+        ("PermissionsAuthorApex", "Author Apex"),
+    ],
+    "Reports & Dashboards": [
+        ("PermissionsRunReports", "Run Reports"),
+        ("PermissionsExportReport", "Export Reports"),
+        ("PermissionsScheduleReports", "Schedule Reports"),
+        ("PermissionsViewAllForecasts", "View All Forecasts"),
+        ("PermissionsManageDashbds", "Manage Dashboards"),
+        ("PermissionsCreateDashFolders", "Create Dashboard Folders"),
+    ],
+    "Security": [
+        ("PermissionsManageEncryptionKeys", "Manage Encryption Keys"),
+        ("PermissionsTwoFactorApi", "Multi-Factor Authentication for API Logins"),
+        ("PermissionsTwoFactorMfa", "Multi-Factor Authentication for User Interface Logins"),
+        ("PermissionsPasswordNeverExpires", "Password Never Expires"),
+    ],
+    "Record Transfers": [
+        ("PermissionsTransferAnyCase", "Transfer Cases"),
+        ("PermissionsTransferAnyEntity", "Transfer Record"),
+        ("PermissionsTransferAnyLead", "Transfer Leads"),
+    ],
+}
+
+
+def _extract_system_permissions(raw_data: dict) -> dict[str, list[dict]]:
+    """Walk our curated category list and return only the permissions that
+    are set to True in raw_data. Old PS rows synced before the SOQL was
+    expanded simply won't have these keys, and the function returns an
+    empty dict for those — which the UI surfaces as "re-sync to populate"."""
+    result: dict[str, list[dict]] = {}
+    for category, perms in _SYSTEM_PERMISSION_CATEGORIES.items():
+        granted = []
+        for api_name, label in perms:
+            if raw_data.get(api_name) is True:
+                granted.append({"apiName": api_name, "label": label})
+        if granted:
+            result[category] = granted
+    return result
 
 
 @router.get("/orgs/{org_id}/graph/user/{user_sf_id}")

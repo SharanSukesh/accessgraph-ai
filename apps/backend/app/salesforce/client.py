@@ -192,8 +192,33 @@ class SalesforceAPIClient:
         Returns:
             List of SalesforcePermissionSet objects
         """
+        # We pull a curated set of high-value system permissions (Permissions*
+        # boolean columns on PermissionSet) so the PS detail page can show
+        # what each PS actually does beyond just object/field perms.
+        # Salesforce has ~250 Permissions* fields; we pull the ones admins
+        # most frequently audit. They land in raw_data via Pydantic's
+        # extra-fields handling.
         soql = """
-            SELECT Id, Name, Label, IsOwnedByProfile, ProfileId, Type
+            SELECT Id, Name, Label, IsOwnedByProfile, ProfileId, Type,
+                   PermissionsViewAllData, PermissionsModifyAllData,
+                   PermissionsViewAllUsers, PermissionsManageUsers,
+                   PermissionsResetPasswords, PermissionsManageRoles,
+                   PermissionsManageProfilesPermissionsets,
+                   PermissionsAssignPermissionSets,
+                   PermissionsCustomizeApplication, PermissionsManageSharing,
+                   PermissionsViewSetup, PermissionsManageDataIntegrations,
+                   PermissionsApiEnabled, PermissionsApiUserOnly,
+                   PermissionsAuthorApex, PermissionsManageMobile,
+                   PermissionsRunReports, PermissionsExportReport,
+                   PermissionsScheduleReports, PermissionsViewAllForecasts,
+                   PermissionsManageDashbds, PermissionsCreateDashFolders,
+                   PermissionsBulkApiHardDelete, PermissionsTransferAnyCase,
+                   PermissionsTransferAnyEntity, PermissionsTransferAnyLead,
+                   PermissionsManageEncryptionKeys,
+                   PermissionsViewEncryptedData,
+                   PermissionsTwoFactorApi, PermissionsTwoFactorMfa,
+                   PermissionsManageContentPermissions,
+                   PermissionsPasswordNeverExpires
             FROM PermissionSet
         """
 
