@@ -44,7 +44,7 @@ export default function PermissionSetDetailPage() {
       <EmptyState
         title="Permission Set Not Found"
         description="The requested permission set could not be found in this org's last sync."
-        icon="shield"
+        icon="default"
         action={{
           label: 'Back to Graph',
           onClick: () => router.push(`/orgs/${orgId}/graph`),
@@ -76,7 +76,7 @@ export default function PermissionSetDetailPage() {
             </p>
           </div>
           <div className="flex gap-2 ml-4">
-            <Badge variant={ps.isMuting ? 'error' : 'info'} size="sm">
+            <Badge variant={ps.isMuting ? 'danger' : 'info'} size="sm">
               {ps.type}
             </Badge>
             {ps.isOwnedByProfile && (
