@@ -70,6 +70,17 @@ class ApiClient {
       const response = await fetch(url, {
         ...fetchConfig,
         headers,
+        // Cookies are how we carry the session (the JWT cookie set by the
+        // OAuth callback at /auth/salesforce/callback). Without
+        // credentials:"include", fetch defaults to "same-origin" — which
+        // means the cookie is NOT sent on cross-origin requests from
+        // app.accessgraphai.com → api.accessgraphai.com, even though
+        // the SameSite=Lax cookie technically allows same-site sends.
+        // Result was that /auth/me always returned 401 even after a
+        // successful OAuth flow. The backend's CORS middleware already
+        // sets allow_credentials=True, so this is the missing piece on
+        // the frontend.
+        credentials: "include",
       })
 
       // Handle non-OK responses
