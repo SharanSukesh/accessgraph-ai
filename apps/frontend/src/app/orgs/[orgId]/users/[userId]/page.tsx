@@ -605,7 +605,7 @@ export default function UserDetailPage() {
                           <div className="flex items-center gap-2 mb-2">
                             <SeverityBadge severity={anomaly.severity} />
                             <span className="text-xs text-gray-500 dark:text-gray-400">
-                              Anomaly Score: {anomaly.anomaly_score}
+                              Anomaly Score: {typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}
                             </span>
                           </div>
                           <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
@@ -662,7 +662,7 @@ export default function UserDetailPage() {
                           </div>
                           <div>
                             <strong>3. ML Detection:</strong> Using IsolationForest algorithm, we flagged this user because their
-                            access pattern combination is statistically unusual compared to peers. Anomaly score of <strong>{anomaly.anomaly_score}</strong>
+                            access pattern combination is statistically unusual compared to peers. Anomaly score of <strong>{typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}</strong>
                             indicates deviation level (0=normal, 1=highly unusual).
                           </div>
                           <div>

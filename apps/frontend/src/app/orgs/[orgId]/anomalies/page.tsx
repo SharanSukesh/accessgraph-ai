@@ -354,7 +354,9 @@ export default function AnomaliesPage() {
                           </div>
                         </div>
                         <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                          {user.anomalyScore}
+                          {typeof user.anomalyScore === 'number'
+                            ? user.anomalyScore.toFixed(2)
+                            : user.anomalyScore}
                         </div>
                       </button>
                     ))}
