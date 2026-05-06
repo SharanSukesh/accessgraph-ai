@@ -361,68 +361,143 @@ export default function PermissionSetDetailPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Field Permissions
-            <Badge variant="default" size="sm">{ps.totalFieldsGranted}</Badge>
+            Field Access
+            <Badge variant="default" size="sm">
+              {ps.fieldPermissions.length} explicit · {ps.objectPermissions.length - ps.fieldPermissions.length} inherited
+            </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {ps.fieldPermissions.length === 0 ? (
+          {ps.objectPermissions.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
-              This permission set grants no explicit field-level permissions. Users with this PS access fields through the parent objects' CRUD permissions.
+              This permission set grants no object-level access, so it provides no field access.
             </p>
           ) : (
-            <div className="space-y-2">
-              {ps.fieldPermissions.map(group => {
-                const isExpanded = !!expandedFieldGroups[group.objectName]
-                return (
-                  <div key={group.objectName} className="border border-gray-200 dark:border-gray-700 rounded-md">
-                    <button
-                      type="button"
-                      onClick={() => toggleFieldGroup(group.objectName)}
-                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-900 text-left"
-                    >
-                      <div className="flex items-center gap-2">
-                        {isExpanded ? <ChevronDown className="h-4 w-4 text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-500" />}
-                        <span className="font-mono text-sm text-gray-900 dark:text-white">{group.objectName}</span>
+            <>
+              <div className="space-y-2">
+                {/* Build a unified row per object: merge object-level perms
+                    with any explicit FLS overrides for that object. */}
+                {(() => {
+                  const flsByObject = new Map(
+                    ps.fieldPermissions.map(g => [g.objectName, g])
+                  )
+                  // One row per object that has any access (object-level OR FLS).
+                  // Sort: explicit FLS objects first (so they're visually
+                  // grouped at the top), then inherited.
+                  const rows = ps.objectPermissions
+                    .map(op => ({
+                      objectName: op.objectName,
+                      objectPerm: op,
+                      fls: flsByObject.get(op.objectName) || null,
+                    }))
+                    .sort((a, b) => {
+                      const aHasFLS = a.fls != null ? 0 : 1
+                      const bHasFLS = b.fls != null ? 0 : 1
+                      if (aHasFLS !== bHasFLS) return aHasFLS - bHasFLS
+                      return a.objectName.localeCompare(b.objectName)
+                    })
+
+                  return rows.map(({ objectName, objectPerm, fls }) => {
+                    const isExpanded = !!expandedFieldGroups[objectName]
+                    const isInherited = fls === null
+                    // Compute object-level access summary for the inherited case.
+                    const inheritedFlags: string[] = []
+                    if (objectPerm.read) inheritedFlags.push('Read')
+                    if (objectPerm.create) inheritedFlags.push('Create')
+                    if (objectPerm.edit) inheritedFlags.push('Edit')
+                    if (objectPerm.delete) inheritedFlags.push('Delete')
+                    return (
+                      <div key={objectName} className="border border-gray-200 dark:border-gray-700 rounded-md">
+                        <button
+                          type="button"
+                          onClick={() => toggleFieldGroup(objectName)}
+                          className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-900 text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-500" />}
+                            <span className="font-mono text-sm text-gray-900 dark:text-white">{objectName}</span>
+                          </div>
+                          {isInherited ? (
+                            <Badge variant="default" size="sm">
+                              All fields inherited ({inheritedFlags.join(' / ') || 'no access'})
+                            </Badge>
+                          ) : (
+                            <Badge variant="info" size="sm">{fls!.fieldCount} explicit FLS</Badge>
+                          )}
+                        </button>
+                        {isExpanded && (
+                          <div className="border-t border-gray-200 dark:border-gray-700">
+                            {isInherited ? (
+                              <div className="px-3 py-3 text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                                <p>
+                                  <strong>No field-level security overrides on this object.</strong>
+                                  {' '}Every field on <span className="font-mono">{objectName}</span> is accessible to users with this PS via inherited object-level{' '}
+                                  <strong>{inheritedFlags.join(' / ') || 'access'}</strong>.
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Salesforce only stores FieldPermission rows when an admin
+                                  explicitly grants or revokes access on a specific field.
+                                  Standard fields (Id, Name, etc.) cannot have FLS at all
+                                  and always inherit object-level access.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => router.push(`/orgs/${orgId}/objects/${encodeURIComponent(objectName)}`)}
+                                  className="text-xs text-primary-600 hover:underline"
+                                >
+                                  Open {objectName} in AccessGraph AI →
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                  <thead className="bg-gray-50 dark:bg-gray-900">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Read</th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Edit</th>
+                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {fls!.fields.map(f => (
+                                      <tr key={f.qualifiedId} className="hover:bg-gray-50 dark:hover:bg-gray-900">
+                                        <td className="px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">{f.fieldName}</td>
+                                        <td className="px-3 py-2 text-center text-sm">{f.read ? '✓' : ''}</td>
+                                        <td className="px-3 py-2 text-center text-sm">{f.edit ? '✓' : ''}</td>
+                                        <td className="px-3 py-2 text-right">
+                                          <button
+                                            type="button"
+                                            onClick={() => router.push(`/orgs/${orgId}/fields/${encodeURIComponent(f.qualifiedId)}`)}
+                                            className="text-xs text-primary-600 hover:underline"
+                                          >
+                                            Open
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                <p className="px-3 py-2 text-xs text-gray-500 border-t border-gray-200 dark:border-gray-700">
+                                  These are explicit FLS rows. Other fields on{' '}
+                                  <span className="font-mono">{objectName}</span> still inherit{' '}
+                                  {inheritedFlags.join(' / ') || 'no access'} from the object-level grant above.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <Badge variant="default" size="sm">{group.fieldCount} fields</Badge>
-                    </button>
-                    {isExpanded && (
-                      <div className="border-t border-gray-200 dark:border-gray-700 overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                          <thead className="bg-gray-50 dark:bg-gray-900">
-                            <tr>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
-                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Read</th>
-                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Edit</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"></th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {group.fields.map(f => (
-                              <tr key={f.qualifiedId} className="hover:bg-gray-50 dark:hover:bg-gray-900">
-                                <td className="px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">{f.fieldName}</td>
-                                <td className="px-3 py-2 text-center text-sm">{f.read ? '✓' : ''}</td>
-                                <td className="px-3 py-2 text-center text-sm">{f.edit ? '✓' : ''}</td>
-                                <td className="px-3 py-2 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => router.push(`/orgs/${orgId}/fields/${encodeURIComponent(f.qualifiedId)}`)}
-                                    className="text-xs text-primary-600 hover:underline"
-                                  >
-                                    Open
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })
+                })()}
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                <strong>Explicit FLS</strong> = an admin set field-level security on that field.
+                {' '}<strong>Inherited</strong> = field has no FLS row, so access follows the object's
+                CRUD grant above.
+              </p>
+            </>
           )}
         </CardContent>
       </Card>
