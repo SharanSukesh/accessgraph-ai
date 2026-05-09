@@ -548,9 +548,10 @@ class EquityRecommendationService:
             "ps_overlap": int(self._build_ps_adjacency(graph).sum()),
         }
 
+        now = datetime.now(timezone.utc)
         snapshot = EquitySnapshot(
             organization_id=org_id,
-            snapshot_at=datetime.now(timezone.utc),
+            snapshot_at=now,
             equity_index=equity_index,
             disparity=disparity,
             most_disadvantaged_group=most_dis,
@@ -565,6 +566,8 @@ class EquityRecommendationService:
                 "policy_loaded": os.path.exists(self.policy_path),
             },
             recommendations_generated=len(proposals),
+            created_at=now,
+            updated_at=now,
         )
         self.db.add(snapshot)
 
@@ -614,9 +617,10 @@ class EquityRecommendationService:
     async def _persist_empty_snapshot(
         self, org_id: str, graph: EquityGraph
     ) -> EquityRunResult:
+        now = datetime.now(timezone.utc)
         snapshot = EquitySnapshot(
             organization_id=org_id,
-            snapshot_at=datetime.now(timezone.utc),
+            snapshot_at=now,
             equity_index=1.0,
             disparity=0.0,
             most_disadvantaged_group=None,
@@ -625,6 +629,8 @@ class EquityRecommendationService:
             edge_type_counts={},
             raw_metrics={"reason": "empty_R", "n_users": len(graph.user_ids)},
             recommendations_generated=0,
+            created_at=now,
+            updated_at=now,
         )
         self.db.add(snapshot)
         await self.db.commit()
