@@ -273,15 +273,13 @@ class EquityRecommendationService:
         ps_index = {pid: i for i, pid in enumerate(ps_ids)}
 
         # ----- VIP set R (multi-signal) -----
+        # Each signal must produce evidence that a user is a VIP. The earlier
+        # `admin_roots` heuristic ("manager_id IS NULL → user is at the top
+        # of the tree") was over-eager: in dev / sparsely-populated orgs
+        # ManagerId is universally null, so it tagged nearly every user as
+        # a VIP and left almost no juniors. Now removed; the four remaining
+        # signals stand on their own.
         managers_in_data: Set[str] = {u.manager_id for u in users if u.manager_id}
-        admin_roots: Set[str] = set()
-        for u in users:
-            if u.manager_id is None and (
-                u.user_role_id is None
-                or roles_by_id.get(u.user_role_id) is not None
-                and roles_by_id[u.user_role_id].parent_role_id is None
-            ):
-                admin_roots.add(u.salesforce_id)
         # Top-2 levels of role tree
         depth_0 = {r.salesforce_id for r in roles if r.parent_role_id is None}
         depth_1 = {r.salesforce_id for r in roles if r.parent_role_id in depth_0}
@@ -302,7 +300,7 @@ class EquityRecommendationService:
         unpinned = {d.user_sf_id for d in designations if d.kind == VIPDesignationKind.UNPIN}
 
         vip_user_ids = (
-            (managers_in_data | admin_roots | top_role_users | name_match | pinned)
+            (managers_in_data | top_role_users | name_match | pinned)
             - unpinned
         )
         vip_user_ids &= set(user_ids)
