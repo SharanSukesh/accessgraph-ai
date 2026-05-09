@@ -1,0 +1,8 @@
+# Heavy ML deps — these stay out of apps/backend/requirements.txt and
+# Railway's Docker image. Inference-time weights are exported to .npz so
+# the production backend reads them with numpy alone.
+torch>=2.5
+gymnasium>=0.29
+networkx>=3.2
+numpy>=1.26
+tqdm>=4.66

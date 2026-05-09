@@ -137,7 +137,7 @@ class SalesforceAPIClient:
             List of SalesforceUser objects
         """
         soql = """
-            SELECT Id, Username, Name, Email, ProfileId, UserRoleId,
+            SELECT Id, Username, Name, Email, ProfileId, UserRoleId, ManagerId,
                    IsActive, UserType, Department, Title, LastLoginDate
             FROM User
             WHERE IsActive = true

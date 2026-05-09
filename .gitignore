@@ -71,6 +71,15 @@ volumes/
 # not a local cache — whitelist Python files only (not __pycache__).
 !research/anomaly_benchmark/data/
 !research/anomaly_benchmark/data/*.py
+!research/rl_solution/data/
+!research/rl_solution/data/*.py
+
+# RL training artifacts: large binaries, regenerated per training run.
+# The exported policy at research/rl_solution/artifacts/policy_v1.npz IS
+# committed (it's the production inference artifact); intermediate
+# checkpoints are not.
+research/rl_solution/checkpoints/
+research/rl_solution/checkpoints_smoke/
 
 # Misc
 .turbo/

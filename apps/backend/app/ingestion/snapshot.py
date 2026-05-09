@@ -89,6 +89,7 @@ class SnapshotPersister:
                 existing.is_active = user_data.get("IsActive", True)
                 existing.profile_id = user_data.get("ProfileId")
                 existing.user_role_id = user_data.get("UserRoleId")
+                existing.manager_id = user_data.get("ManagerId")
                 existing.department = user_data.get("Department")
                 existing.title = user_data.get("Title")
                 existing.last_login_at = last_login_at
@@ -107,6 +108,7 @@ class SnapshotPersister:
                     is_active=user_data.get("IsActive", True),
                     profile_id=user_data.get("ProfileId"),
                     user_role_id=user_data.get("UserRoleId"),
+                    manager_id=user_data.get("ManagerId"),
                     department=user_data.get("Department"),
                     title=user_data.get("Title"),
                     last_login_at=last_login_at,
