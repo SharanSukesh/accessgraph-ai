@@ -34,6 +34,7 @@ class SalesforceUser(BaseModel):
     Email: Optional[str] = None
     ProfileId: str
     UserRoleId: Optional[str] = None
+    ManagerId: Optional[str] = None
     IsActive: bool = True
     UserType: Optional[str] = None
     Department: Optional[str] = None

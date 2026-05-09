@@ -264,6 +264,7 @@ class SalesforceSyncService:
                 email=sf_user.Email,
                 profile_id=sf_user.ProfileId,
                 user_role_id=sf_user.UserRoleId,
+                manager_id=sf_user.ManagerId,
                 is_active=sf_user.IsActive,
                 user_type=sf_user.UserType,
                 department=sf_user.Department,

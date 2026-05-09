@@ -74,6 +74,7 @@ class RecommendationType(str, PyEnum):
     ACCOUNT_CLEANUP = "account_cleanup"
     PSG_MIGRATION = "psg_migration"
     UNDER_PERMISSIONED = "under_permissioned"
+    GRANT_FOR_EQUITY = "grant_for_equity"
 
 
 class RecommendationStatus(str, PyEnum):
@@ -245,6 +246,7 @@ class UserSnapshot(Base, TimestampMixin):
     # References
     profile_id: Mapped[Optional[str]] = mapped_column(String(18))
     user_role_id: Mapped[Optional[str]] = mapped_column(String(18))
+    manager_id: Mapped[Optional[str]] = mapped_column(String(18))
 
     # Metadata
     department: Mapped[Optional[str]] = mapped_column(String(255))
@@ -264,6 +266,7 @@ class UserSnapshot(Base, TimestampMixin):
         Index("ix_user_sf_id", "salesforce_id"),
         Index("ix_user_profile", "profile_id"),
         Index("ix_user_role", "user_role_id"),
+        Index("ix_user_manager", "manager_id"),
     )
 
     def __repr__(self) -> str:
@@ -948,4 +951,72 @@ class DeepLinkRedemption(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_deeplink_redemptions_org", "organization_id"),
         Index("ix_deeplink_redemptions_expires", "expires_at"),
+    )
+
+
+# ============================================================================
+# Equity (RL-driven graph-augmentation track)
+# ============================================================================
+
+
+class VIPDesignationKind(str, PyEnum):
+    """Pin = explicitly mark as VIP. Unpin = explicitly exclude from VIP set."""
+    PIN = "pin"
+    UNPIN = "unpin"
+
+
+class VIPDesignation(Base, TimestampMixin):
+    """Admin override for the equity track's VIP set (R).
+
+    Heuristics (manager-id tree, role-tree depth, name-pattern match) supply
+    the default VIP set. Admins can pin a missed user or unpin a false
+    positive via this table; pins/unpins always win over heuristics.
+    """
+    __tablename__ = "vip_designations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_sf_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    kind: Mapped[VIPDesignationKind] = mapped_column(
+        Enum(VIPDesignationKind, native_enum=False, length=10),
+        nullable=False,
+    )
+    designated_by: Mapped[Optional[str]] = mapped_column(String(36))  # OrgUser.id
+    note: Mapped[Optional[str]] = mapped_column(Text)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "user_sf_id", name="uq_vip_designation_org_user"),
+        Index("ix_vip_designation_org", "organization_id"),
+    )
+
+
+class EquitySnapshot(Base, TimestampMixin):
+    """One row per equity-recommendations run.
+
+    Carries the headline diagnostic metrics surfaced in the UI plus the
+    raw per-department utilities and edge-type counts so the per-user and
+    per-VIP drill-downs can hydrate without recomputing the graph.
+    """
+    __tablename__ = "equity_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Headline metrics
+    equity_index: Mapped[float] = mapped_column(Float, nullable=False)         # 1 - Gini
+    disparity: Mapped[float] = mapped_column(Float, nullable=False)            # sum |U_g − Ū|
+    most_disadvantaged_group: Mapped[Optional[str]] = mapped_column(String(255))
+    vip_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Detail JSON for per-dept utility bars and edge-type counts
+    per_dept_utilities: Mapped[dict] = mapped_column(JSON, default=dict)
+    edge_type_counts: Mapped[dict] = mapped_column(JSON, default=dict)
+    raw_metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # How many GRANT_FOR_EQUITY recommendations this run produced
+    recommendations_generated: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (
+        Index("ix_equity_snapshot_org_time", "organization_id", "snapshot_at"),
     )
