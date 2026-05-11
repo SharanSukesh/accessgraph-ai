@@ -272,9 +272,19 @@ def main() -> int:
 
     best_eval_equity = -math.inf
     eval_seeds = list(range(10000, 10005))
+    print(
+        f"[start] persona={args.persona} episodes={args.episodes} budget={args.budget} "
+        f"eval_every={args.eval_every} device={device}",
+        flush=True,
+    )
 
     with open(log_path, "w", encoding="utf-8") as logf:
         for episode in range(args.episodes):
+            if episode % 5 == 0:
+                print(
+                    f"[heartbeat] ep={episode+1}/{args.episodes}",
+                    flush=True,
+                )
             env = EquityAccessEnv(budget=args.budget, lambda_disparity=args.lambda_disparity)
             ep_seed = args.seed + episode + 1
             ep = _collect_episode(env, policy, persona=args.persona, seed=ep_seed, device=device)
