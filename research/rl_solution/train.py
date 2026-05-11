@@ -71,7 +71,7 @@ def _select_action(
             action = int(torch.argmax(flat).item())
         else:
             action = int(dist.sample().item())
-        return action, float(dist.log_prob(torch.tensor(action)).item()), float(value.item())
+        return action, float(dist.log_prob(torch.tensor(action, device=flat.device)).item()), float(value.item())
 
 
 def _collect_episode(
