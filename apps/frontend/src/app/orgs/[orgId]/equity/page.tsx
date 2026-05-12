@@ -10,8 +10,18 @@
  * Mutating call (generate) lives behind a button.
  */
 
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Info, Scale, Sparkles, TrendingUp, Users as UsersIcon } from 'lucide-react'
+import {
+  Check,
+  ExternalLink,
+  Info,
+  Scale,
+  Sparkles,
+  TrendingUp,
+  Users as UsersIcon,
+  X as XIcon,
+} from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
@@ -20,10 +30,179 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import {
   useEquityDiagnostic,
+  useEquityHistory,
   useGenerateEquityRecommendations,
+  useUserDisparity,
   type EquityDiagnostic,
+  type EquityHistoryPoint,
 } from '@/lib/api/hooks/useEquity'
-import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
+import {
+  useRecommendations,
+  useUpdateRecommendationStatus,
+} from '@/lib/api/hooks/useRecommendations'
+
+
+// Construct a Salesforce deep-link that opens the New PermissionSetAssignment
+// page pre-filled with the rec's user + PS IDs. Lightning's defaultFieldValues
+// query param picks up AssigneeId and PermissionSetId automatically.
+function salesforceDeepLink(
+  instanceUrl: string | null | undefined,
+  userSfId: string | undefined,
+  psSfId: string | undefined,
+): string | null {
+  if (!instanceUrl || !userSfId || !psSfId) return null
+  // Strip trailing slash
+  const base = instanceUrl.replace(/\/$/, '')
+  return (
+    `${base}/lightning/o/PermissionSetAssignment/new?` +
+    `defaultFieldValues=AssigneeId=${encodeURIComponent(userSfId)},` +
+    `PermissionSetId=${encodeURIComponent(psSfId)}`
+  )
+}
+
+
+// Tiny inline-SVG sparkline. Returns null when there are fewer than 2
+// points (no trend to draw). Keeps the dep surface small — no recharts
+// just for a tiny graph.
+function Sparkline({ points }: { points: EquityHistoryPoint[] }) {
+  if (points.length < 2) return null
+  const W = 260
+  const H = 40
+  const PAD = 4
+  const xs = points.map((_, i) => i)
+  const ys = points.map(p => p.equity_index)
+  const yMin = Math.min(...ys, 0)
+  const yMax = Math.max(...ys, 1)
+  const xMin = xs[0]
+  const xMax = xs[xs.length - 1]
+  const sx = (x: number) =>
+    PAD + ((x - xMin) / Math.max(1e-6, xMax - xMin)) * (W - 2 * PAD)
+  const sy = (y: number) =>
+    H - PAD - ((y - yMin) / Math.max(1e-6, yMax - yMin)) * (H - 2 * PAD)
+  const d = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(i).toFixed(1)} ${sy(p.equity_index).toFixed(1)}`)
+    .join(' ')
+  const lastX = sx(points.length - 1)
+  const lastY = sy(points[points.length - 1].equity_index)
+  return (
+    <svg width={W} height={H} className="overflow-visible">
+      <path d={d} stroke="rgb(99 102 241)" strokeWidth="1.5" fill="none" />
+      <circle cx={lastX} cy={lastY} r="2.5" fill="rgb(99 102 241)" />
+    </svg>
+  )
+}
+
+
+// Slide-in side panel showing per-user disparity stats. Opens when the
+// user clicks a target_entity_id in a suggested-grant card.
+function UserDisparityDrawer({
+  orgId,
+  userSfId,
+  onClose,
+}: {
+  orgId: string
+  userSfId: string | null
+  onClose: () => void
+}) {
+  const { data, isLoading, error } = useUserDisparity(
+    orgId,
+    userSfId || undefined,
+  )
+  const open = !!userSfId
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/40 z-40 transition-opacity ${
+          open ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onClose}
+      />
+      {/* Drawer */}
+      <aside
+        className={`fixed right-0 top-0 h-full w-full sm:w-96 bg-white dark:bg-gray-900 shadow-xl z-50 transform transition-transform overflow-y-auto ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              User disparity
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            >
+              <XIcon className="h-5 w-5" />
+            </button>
+          </div>
+          {!open ? null : isLoading ? (
+            <p className="text-sm text-gray-500">Loading…</p>
+          ) : error ? (
+            <p className="text-sm text-red-600">Failed to load user disparity.</p>
+          ) : !data ? (
+            <p className="text-sm text-gray-500">No data.</p>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">
+                  Salesforce user
+                </p>
+                <p className="text-sm font-mono text-gray-900 dark:text-white">
+                  {data.user_sf_id}
+                </p>
+                {data.is_vip && (
+                  <Badge variant="info" size="sm">
+                    VIP
+                  </Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-gray-500">Department</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {data.department || '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Distance to nearest VIP</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {data.distance_to_nearest_vip == null
+                      ? '∞ (unreachable)'
+                      : data.distance_to_nearest_vip.toFixed(2) + ' hops'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">This user's utility</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {data.inverse_distance_utility.toFixed(3)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Dept avg</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {data.department_avg_utility.toFixed(3)}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-500">Org avg (juniors)</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {data.org_avg_utility.toFixed(3)}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 italic pt-2 border-t border-gray-200 dark:border-gray-700">
+                Higher utility = shorter path to a VIP. Lower distance is
+                better. Equity recommendations target users whose utility
+                drags their department's average down.
+              </p>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  )
+}
 
 
 // "5m ago" / "2h ago" / "3d ago". Keeps the dep surface small (no
@@ -144,9 +323,14 @@ export default function EquityPage() {
     isLoading: recsLoading,
   } = useRecommendations(orgId, { track: 'equity' })
 
+  const { data: history } = useEquityHistory(orgId, 30)
   const generateMutation = useGenerateEquityRecommendations(orgId)
+  const updateStatus = useUpdateRecommendationStatus()
   const narration = diagnostic ? narrate(diagnostic) : null
   const emptyState = suggestedGrantsEmpty(diagnostic)
+
+  // Side-panel state: which user's disparity drill-down is open
+  const [drawerUserSfId, setDrawerUserSfId] = useState<string | null>(null)
 
   const handleGenerate = () => generateMutation.mutate(undefined)
 
@@ -217,8 +401,8 @@ export default function EquityPage() {
       {/* Headline metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Equity Index
               </p>
@@ -232,8 +416,17 @@ export default function EquityPage() {
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
                 1.0 = perfect parity, 0.0 = maximal inequality
               </p>
+              {/* Trend sparkline — last 30 snapshots */}
+              {history && history.length >= 2 && (
+                <div className="mt-3">
+                  <Sparkline points={history} />
+                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Trend across last {history.length} runs
+                  </p>
+                </div>
+              )}
             </div>
-            <TrendingUp className="h-8 w-8 text-indigo-400" />
+            <TrendingUp className="h-8 w-8 text-indigo-400 flex-shrink-0" />
           </div>
         </Card>
 
@@ -373,35 +566,112 @@ export default function EquityPage() {
             <TableSkeleton rows={5} />
           ) : equityRecs && equityRecs.length > 0 ? (
             <div className="space-y-3">
-              {equityRecs.map((rec: any) => (
-                <div
-                  key={rec.id}
-                  className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="info" size="sm">
-                        <Scale className="h-3 w-3 mr-1 inline" />
-                        Equity
-                      </Badge>
-                      <Badge variant="default" size="sm">
-                        {rec.status?.replace(/_/g, ' ')}
-                      </Badge>
+              {equityRecs.map((rec: any) => {
+                const aa = rec.affected_access || {}
+                const psId = aa.ps_id as string | undefined
+                const userSfId = (rec.target_entity_id || aa.user_id) as string | undefined
+                const sfLink = salesforceDeepLink(
+                  diagnostic?.salesforce_instance_url,
+                  userSfId,
+                  psId,
+                )
+                const isApplied = rec.status === 'applied'
+                const isDismissed = rec.status === 'rejected' || rec.status === 'dismissed'
+                const isInactive = isApplied || isDismissed
+                return (
+                  <div
+                    key={rec.id}
+                    className={`p-4 border rounded-lg transition ${
+                      isInactive
+                        ? 'border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/30 opacity-60'
+                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="info" size="sm">
+                          <Scale className="h-3 w-3 mr-1 inline" />
+                          Equity
+                        </Badge>
+                        <Badge
+                          variant={
+                            isApplied
+                              ? 'success'
+                              : isDismissed
+                              ? 'default'
+                              : 'warning'
+                          }
+                          size="sm"
+                        >
+                          {rec.status?.replace(/_/g, ' ')}
+                        </Badge>
+                      </div>
+                    </div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {rec.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      {rec.description}
+                    </p>
+                    {rec.rationale && (
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
+                        {rec.rationale}
+                      </p>
+                    )}
+                    {/* Action row */}
+                    <div className="flex items-center gap-2 mt-3 flex-wrap">
+                      {/* Open user disparity drawer */}
+                      {userSfId && (
+                        <button
+                          onClick={() => setDrawerUserSfId(userSfId)}
+                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          View user disparity
+                        </button>
+                      )}
+                      {/* Spacer */}
+                      <div className="flex-1" />
+                      {/* Salesforce deep-link */}
+                      {sfLink && !isInactive && (
+                        <a
+                          href={sfLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Open in Salesforce
+                        </a>
+                      )}
+                      {/* Apply / Dismiss */}
+                      {!isInactive && (
+                        <>
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({ recId: rec.id, status: 'rejected' })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          >
+                            <XIcon className="h-3 w-3" />
+                            Dismiss
+                          </button>
+                          <button
+                            onClick={() =>
+                              updateStatus.mutate({ recId: rec.id, status: 'applied' })
+                            }
+                            disabled={updateStatus.isPending}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700"
+                          >
+                            <Check className="h-3 w-3" />
+                            Mark applied
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                    {rec.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    {rec.description}
-                  </p>
-                  {rec.rationale && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
-                      {rec.rationale}
-                    </p>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <EmptyState
@@ -411,6 +681,13 @@ export default function EquityPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Per-user disparity drawer (slides in when a target user is clicked) */}
+      <UserDisparityDrawer
+        orgId={orgId}
+        userSfId={drawerUserSfId}
+        onClose={() => setDrawerUserSfId(null)}
+      />
     </div>
   )
 }

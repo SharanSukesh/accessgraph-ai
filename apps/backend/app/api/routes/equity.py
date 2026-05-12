@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,6 +55,15 @@ class DiagnosticResponse(BaseModel):
     edge_type_counts: Dict[str, int]
     recommendations_generated: int
     has_data: bool
+    salesforce_instance_url: Optional[str] = None
+
+
+class HistoryPointResponse(BaseModel):
+    snapshot_at: str
+    equity_index: float
+    disparity: float
+    vip_count: int
+    recommendations_generated: int
 
 
 class UserDisparityResponse(BaseModel):
@@ -101,6 +110,25 @@ async def get_equity_diagnostic(
     service = EquityDiagnosticService(db)
     payload = await service.latest_diagnostic(org_id)
     return DiagnosticResponse(**payload.__dict__)
+
+
+@router.get(
+    "/orgs/{org_id}/equity/history",
+    response_model=List[HistoryPointResponse],
+)
+async def get_equity_history(
+    org_id: str,
+    limit: int = Query(30, ge=1, le=200),
+    db: AsyncSession = Depends(get_database),
+) -> List[HistoryPointResponse]:
+    """Equity Index trend across past snapshots (chronological).
+
+    Feeds the sparkline on the Equity dashboard. Default 30 points
+    is roughly a month of daily generates; capped at 200.
+    """
+    service = EquityDiagnosticService(db)
+    points = await service.history(org_id, limit=limit)
+    return [HistoryPointResponse(**p.__dict__) for p in points]
 
 
 @router.get(

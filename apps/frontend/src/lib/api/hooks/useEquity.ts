@@ -26,6 +26,17 @@ export interface EquityDiagnostic {
   edge_type_counts: Record<string, number>
   recommendations_generated: number
   has_data: boolean
+  // Salesforce instance URL so the frontend can build deep-links into
+  // the right org. Null when no active connection exists.
+  salesforce_instance_url?: string | null
+}
+
+export interface EquityHistoryPoint {
+  snapshot_at: string
+  equity_index: number
+  disparity: number
+  vip_count: number
+  recommendations_generated: number
 }
 
 export interface EquityGenerateResult {
@@ -53,6 +64,8 @@ export interface UserDisparity {
 export const equityKeys = {
   all: ['equity'] as const,
   diagnostic: (orgId: string) => [...equityKeys.all, 'diagnostic', orgId] as const,
+  history: (orgId: string, limit?: number) =>
+    [...equityKeys.all, 'history', orgId, limit] as const,
   userDisparity: (orgId: string, userSfId: string) =>
     [...equityKeys.all, 'user', orgId, userSfId] as const,
 }
@@ -104,7 +117,25 @@ export function useGenerateEquityRecommendations(orgId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: equityKeys.diagnostic(orgId) })
+      queryClient.invalidateQueries({ queryKey: equityKeys.history(orgId) })
       queryClient.invalidateQueries({ queryKey: recommendationKeys.lists() })
     },
+  })
+}
+
+/**
+ * Chronological history of equity snapshots for an org — drives the
+ * Equity Index trend sparkline on the dashboard.
+ */
+export function useEquityHistory(orgId: string, limit: number = 30) {
+  return useQuery({
+    queryKey: equityKeys.history(orgId, limit),
+    queryFn: async () => {
+      return apiClient.get<EquityHistoryPoint[]>(
+        endpoints.equityHistory(orgId),
+        { params: { limit } as any },
+      )
+    },
+    enabled: !!orgId,
   })
 }

@@ -51,9 +51,11 @@ export const endpoints = {
 
   // Recommendations
   recommendations: (orgId: string) => `/orgs/${orgId}/recommendations`,
+  recommendation: (recId: string) => `/recommendations/${recId}`,
 
   // Equity (GAEA-driven recommendation track)
   equityDiagnostic: (orgId: string) => `/orgs/${orgId}/equity/diagnostic`,
   equityGenerate: (orgId: string) => `/orgs/${orgId}/equity/recommendations/generate`,
+  equityHistory: (orgId: string) => `/orgs/${orgId}/equity/history`,
   equityUser: (orgId: string, userSfId: string) => `/orgs/${orgId}/equity/users/${userSfId}`,
 } as const

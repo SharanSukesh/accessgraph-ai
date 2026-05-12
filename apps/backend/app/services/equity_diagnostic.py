@@ -10,14 +10,14 @@ run errored last time.
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import numpy as np
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models import EquitySnapshot, UserSnapshot
+from app.domain.models import EquitySnapshot, SalesforceConnection
 from app.services.equity_recommendations import EquityRecommendationService
 
 
@@ -36,6 +36,20 @@ class DiagnosticPayload:
     edge_type_counts: Dict[str, int]
     recommendations_generated: int
     has_data: bool
+    # Salesforce instance URL ("https://orgfarm-xyz.my.salesforce.com") so
+    # the frontend can build deep-links from recommendations into the
+    # right org. Null if no active SalesforceConnection for this org.
+    salesforce_instance_url: Optional[str] = None
+
+
+@dataclass
+class HistoryPoint:
+    """One row in the Equity Index trend series."""
+    snapshot_at: str
+    equity_index: float
+    disparity: float
+    vip_count: int
+    recommendations_generated: int
 
 
 @dataclass
@@ -53,7 +67,25 @@ class EquityDiagnosticService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _instance_url(self, org_id: str) -> Optional[str]:
+        """Fetch the most recent active SalesforceConnection.instance_url
+        for the org. Used so frontend can build SF deep-links from recs.
+        """
+        conn: Optional[SalesforceConnection] = (
+            await self.db.execute(
+                select(SalesforceConnection)
+                .where(
+                    SalesforceConnection.organization_id == org_id,
+                    SalesforceConnection.is_active.is_(True),
+                )
+                .order_by(desc(SalesforceConnection.created_at))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return conn.instance_url if conn else None
+
     async def latest_diagnostic(self, org_id: str) -> DiagnosticPayload:
+        instance_url = await self._instance_url(org_id)
         snapshot: Optional[EquitySnapshot] = (
             await self.db.execute(
                 select(EquitySnapshot)
@@ -68,6 +100,7 @@ class EquityDiagnosticService:
                 disparity=0.0, most_disadvantaged_group=None, vip_count=0,
                 per_dept_utilities={}, edge_type_counts={},
                 recommendations_generated=0, has_data=False,
+                salesforce_instance_url=instance_url,
             )
         return DiagnosticPayload(
             snapshot_id=snapshot.id,
@@ -80,7 +113,37 @@ class EquityDiagnosticService:
             edge_type_counts=dict(snapshot.edge_type_counts or {}),
             recommendations_generated=int(snapshot.recommendations_generated or 0),
             has_data=True,
+            salesforce_instance_url=instance_url,
         )
+
+    async def history(self, org_id: str, limit: int = 30) -> List[HistoryPoint]:
+        """Last N equity snapshots, oldest first (for left-to-right plotting).
+
+        Caps at 200 server-side. Returns an empty list when no snapshots
+        have ever been generated; the frontend can render an empty
+        sparkline gracefully.
+        """
+        limit = max(1, min(int(limit), 200))
+        rows: List[EquitySnapshot] = (
+            await self.db.execute(
+                select(EquitySnapshot)
+                .where(EquitySnapshot.organization_id == org_id)
+                .order_by(desc(EquitySnapshot.snapshot_at))
+                .limit(limit)
+            )
+        ).scalars().all()
+        # We queried newest-first; reverse for chronological order so
+        # the sparkline reads left-to-right.
+        return [
+            HistoryPoint(
+                snapshot_at=r.snapshot_at.isoformat() if r.snapshot_at else "",
+                equity_index=float(r.equity_index or 0.0),
+                disparity=float(r.disparity or 0.0),
+                vip_count=int(r.vip_count or 0),
+                recommendations_generated=int(r.recommendations_generated or 0),
+            )
+            for r in reversed(rows)
+        ]
 
     async def user_disparity(self, org_id: str, user_sf_id: str) -> UserDisparityPayload:
         """Recompute the live graph + utilities so the per-user view is

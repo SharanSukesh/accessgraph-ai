@@ -94,9 +94,15 @@ class RecommendationResponse(BaseModel):
     description: str
     rationale: Optional[str] = None
     status: str
+    affected_access: Optional[dict] = None  # carries ps_id / user_id for SF deep-link
 
     class Config:
         from_attributes = True
+
+
+class RecommendationStatusUpdate(BaseModel):
+    """PATCH body for updating a recommendation's status."""
+    status: str  # must be one of RecommendationStatus enum values
 
 
 # ============================================================================
@@ -574,9 +580,53 @@ async def list_recommendations(
             "description": r.description,
             "rationale": r.rationale,
             "status": r.status.value if hasattr(r.status, "value") else r.status,
+            "affected_access": r.affected_access,
         }
         for r in recs
     ]
+
+
+@router.patch(
+    "/recommendations/{rec_id}",
+    response_model=RecommendationResponse,
+)
+async def update_recommendation_status(
+    rec_id: str,
+    payload: RecommendationStatusUpdate,
+    db: AsyncSession = Depends(get_database),
+):
+    """Update a recommendation's status (apply / dismiss / etc).
+
+    Used by both the equity track (Apply / Dismiss buttons on
+    suggested grants) and the security track (existing recs page).
+    Accepts any value from RecommendationStatus — pending / accepted /
+    rejected / applied. Returns the updated row.
+    """
+    from app.domain.models import Recommendation, RecommendationStatus
+    valid = {s.value for s in RecommendationStatus}
+    if payload.status not in valid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {sorted(valid)}",
+        )
+    rec = await db.get(Recommendation, rec_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+    rec.status = RecommendationStatus(payload.status)
+    await db.commit()
+    await db.refresh(rec)
+    return {
+        "id": rec.id,
+        "rec_type": rec.rec_type.value if hasattr(rec.rec_type, "value") else rec.rec_type,
+        "track": rec.track.value if hasattr(rec.track, "value") else (rec.track or "security"),
+        "severity": rec.severity.value if hasattr(rec.severity, "value") else rec.severity,
+        "target_entity_id": rec.target_entity_id,
+        "title": rec.title,
+        "description": rec.description,
+        "rationale": rec.rationale,
+        "status": rec.status.value if hasattr(rec.status, "value") else rec.status,
+        "affected_access": rec.affected_access,
+    }
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}/record-access")

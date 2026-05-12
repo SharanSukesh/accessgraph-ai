@@ -2,7 +2,7 @@
  * Recommendations API Hooks
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import { endpoints } from '../endpoints'
 
@@ -28,6 +28,11 @@ interface Recommendation {
   title: string
   description: string
   rationale?: string
+  // affected_access carries ps_id / ps_label / user_id / user_name so
+  // the UI can render readable names + build SF deep-links without
+  // another DB round-trip.
+  affected_access?: Record<string, unknown>
+  target_entity_id?: string        // Salesforce ID of the user the rec targets
   userId?: string
   userName?: string
   affectedResources: string[]
@@ -35,6 +40,12 @@ interface Recommendation {
   status: string
   createdAt: string
 }
+
+export type RecommendationStatus =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'applied'
 
 // Query Keys
 export const recommendationKeys = {
@@ -58,5 +69,33 @@ export function useRecommendations(orgId: string, filters?: RecommendationFilter
       return data
     },
     enabled: !!orgId,
+  })
+}
+
+/**
+ * PATCH a recommendation's status (apply / dismiss / accept / reject).
+ *
+ * Used by both the Equity page's Apply / Dismiss buttons and any future
+ * actionability on the unified recs page. Invalidates the recs list cache
+ * on success so the row reflects the new status without a manual refresh.
+ */
+export function useUpdateRecommendationStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      recId,
+      status,
+    }: {
+      recId: string
+      status: RecommendationStatus
+    }) => {
+      return apiClient.patch<Recommendation>(
+        endpoints.recommendation(recId),
+        { status },
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: recommendationKeys.lists() })
+    },
   })
 }
