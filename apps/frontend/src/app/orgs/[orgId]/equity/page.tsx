@@ -11,7 +11,7 @@
  */
 
 import { useParams } from 'next/navigation'
-import { Scale, Sparkles, TrendingUp, Users as UsersIcon } from 'lucide-react'
+import { Info, Scale, Sparkles, TrendingUp, Users as UsersIcon } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
@@ -21,8 +21,113 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import {
   useEquityDiagnostic,
   useGenerateEquityRecommendations,
+  type EquityDiagnostic,
 } from '@/lib/api/hooks/useEquity'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
+
+
+// "5m ago" / "2h ago" / "3d ago". Keeps the dep surface small (no
+// date-fns just for this). Returns "just now" for the first minute and
+// drops to a localized date string after ~7 days.
+function formatTimeAgo(iso: string): string {
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return ''
+  const diff = Math.max(0, Date.now() - then)
+  const m = Math.floor(diff / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 7) return `${d}d ago`
+  return new Date(iso).toLocaleDateString()
+}
+
+
+// Plain-English summary of what the snapshot says. Driven by the same
+// fields the UI cards render — keeps the narration in sync with the
+// numbers above it. Returns null when there's no data to narrate.
+function narrate(d: EquityDiagnostic): string | null {
+  if (!d.has_data) return null
+  if (d.vip_count === 0) {
+    return (
+      "No VIP nodes detected. The equity policy needs at least one user " +
+      "marked as a VIP to compute disparity. Set ManagerId on a user in " +
+      "Salesforce, or pin one via the vip_designations table, then click " +
+      "Generate again."
+    )
+  }
+  const depts = Object.entries(d.per_dept_utilities)
+  if (depts.length === 0) {
+    return (
+      `Found ${d.vip_count} VIP${d.vip_count === 1 ? '' : 's'} but no ` +
+      "department groups to compare across. Junior users may have null " +
+      "Department values — populate Department in Salesforce and resync."
+    )
+  }
+  const tied = new Set(depts.map(([, v]) => v.toFixed(3))).size === 1
+  const dept = d.most_disadvantaged_group
+  const manages = d.edge_type_counts?.manages ?? 0
+  const roleAbove = d.edge_type_counts?.role_above ?? 0
+  if (tied) {
+    const u = depts[0][1]
+    const hops = u > 0 ? (1 / u).toFixed(1) : '∞'
+    return (
+      `All ${depts.length} departments are tied at utility ${u.toFixed(2)} ` +
+      `(~${hops} hops to the nearest VIP). With ${manages} manager and ` +
+      `${roleAbove} role-hierarchy edges, the graph has limited structural ` +
+      "variation — populate ManagerId on more users to differentiate groups."
+    )
+  }
+  const worstUtil = depts.find(([k]) => k === dept)?.[1] ?? 0
+  const worstHops = worstUtil > 0 ? (1 / worstUtil).toFixed(1) : '∞'
+  return (
+    `${dept} juniors have the lowest access (~${worstHops} hops to the ` +
+    `nearest of your ${d.vip_count} VIP${d.vip_count === 1 ? '' : 's'}). ` +
+    `The policy suggested ${d.recommendations_generated} grant${
+      d.recommendations_generated === 1 ? '' : 's'
+    } to lift them.`
+  )
+}
+
+
+// Empty-state copy for the suggested grants section. Different message
+// based on which signal is missing, so admins know what to fix instead
+// of seeing a generic "no data" placeholder.
+function suggestedGrantsEmpty(
+  d: EquityDiagnostic | undefined,
+): { title: string; description: string } {
+  if (!d?.has_data) {
+    return {
+      title: 'No equity snapshot yet',
+      description:
+        'Click "Generate recommendations" above to compute the first batch.',
+    }
+  }
+  if (d.vip_count === 0) {
+    return {
+      title: 'No VIPs to anchor recommendations',
+      description:
+        'Set ManagerId on a user in Salesforce, or pin one via the ' +
+        'vip_designations table. Then click Generate again.',
+    }
+  }
+  if (d.recommendations_generated === 0) {
+    return {
+      title: 'No improvements found',
+      description:
+        'The policy could not find grants that meaningfully reduce ' +
+        'disparity for the current data. Try syncing the org for fresh ' +
+        'permission state, or increasing the budget.',
+    }
+  }
+  return {
+    title: 'No equity recommendations',
+    description:
+      'Recommendations may have been cleared. Click "Generate ' +
+      'recommendations" to run a fresh batch.',
+  }
+}
 
 export default function EquityPage() {
   const params = useParams()
@@ -40,6 +145,8 @@ export default function EquityPage() {
   } = useRecommendations(orgId, { track: 'equity' })
 
   const generateMutation = useGenerateEquityRecommendations(orgId)
+  const narration = diagnostic ? narrate(diagnostic) : null
+  const emptyState = suggestedGrantsEmpty(diagnostic)
 
   const handleGenerate = () => generateMutation.mutate(undefined)
 
@@ -75,6 +182,11 @@ export default function EquityPage() {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               GAEA-driven recommendations to balance access across teams
             </p>
+            {hasData && diagnostic?.snapshot_at && (
+              <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+                Last computed {formatTimeAgo(diagnostic.snapshot_at)}
+              </p>
+            )}
           </div>
         </div>
         <Button
@@ -87,6 +199,20 @@ export default function EquityPage() {
           {generateMutation.isPending ? 'Computing…' : 'Generate recommendations'}
         </Button>
       </div>
+
+      {/* Plain-English narration of the snapshot */}
+      {narration && (
+        <Card variant="bordered" className="border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-indigo-900 dark:text-indigo-100">
+                {narration}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Headline metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -279,12 +405,8 @@ export default function EquityPage() {
             </div>
           ) : (
             <EmptyState
-              title="No equity recommendations yet"
-              description={
-                hasData
-                  ? 'The last run produced no proposals. Try syncing the org or pinning a VIP user.'
-                  : 'Click "Generate recommendations" to compute the first batch.'
-              }
+              title={emptyState.title}
+              description={emptyState.description}
             />
           )}
         </CardContent>

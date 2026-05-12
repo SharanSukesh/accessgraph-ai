@@ -539,16 +539,24 @@ async def list_recommendations(
     org_id: str,
     rec_type: Optional[str] = None,
     status: Optional[str] = None,
+    track: Optional[str] = None,
     limit: int = Query(100, le=1000),
     db: AsyncSession = Depends(get_database),
 ):
-    """List recommendations for organization"""
+    """List recommendations for organization.
+
+    Filters: rec_type (enum value), status (enum value), track ('security'
+    or 'equity'). Track is the high-level UI grouping introduced for the
+    GAEA equity recommendations track — see RecommendationTrack.
+    """
     query = select(Recommendation).where(Recommendation.organization_id == org_id)
 
     if rec_type:
         query = query.where(Recommendation.rec_type == rec_type)
     if status:
         query = query.where(Recommendation.status == status)
+    if track:
+        query = query.where(Recommendation.track == track)
 
     query = query.order_by(Recommendation.generated_at.desc()).limit(limit)
 
@@ -558,12 +566,14 @@ async def list_recommendations(
     return [
         {
             "id": r.id,
-            "rec_type": r.rec_type.value,
-            "severity": r.severity.value,
+            "rec_type": r.rec_type.value if hasattr(r.rec_type, "value") else r.rec_type,
+            "track": r.track.value if hasattr(r.track, "value") else (r.track or "security"),
+            "severity": r.severity.value if hasattr(r.severity, "value") else r.severity,
             "target_entity_id": r.target_entity_id,
             "title": r.title,
             "description": r.description,
-            "status": r.status.value,
+            "rationale": r.rationale,
+            "status": r.status.value if hasattr(r.status, "value") else r.status,
         }
         for r in recs
     ]
