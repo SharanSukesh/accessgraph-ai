@@ -8,4 +8,9 @@ cmds = ["pip install -r requirements.txt"]
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+# alembic upgrade head runs before uvicorn so the DB schema is up to
+# date with the model code before the app starts serving. Without this,
+# new migrations only apply if a human remembers to run them by hand —
+# which is how the b6e4f7a9c2d5 deploy went out with a missing track
+# column and broke the recommendations endpoint.
+cmd = "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
