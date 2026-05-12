@@ -560,11 +560,15 @@ class Recommendation(Base, TimestampMixin):
     )
     # Track grouping for the UI (Security vs Equity). Defaults to SECURITY
     # at the DB level so legacy code paths that don't set it explicitly
-    # land in the existing recommendations list as before.
+    # land in the existing recommendations list as before. server_default
+    # uses the enum NAME ('SECURITY') not the value ('security') because
+    # SQLAlchemy's Enum(native_enum=False) stores names by default and
+    # raises LookupError on read if the stored string doesn't match a
+    # known name — matches the storage convention of the other enum cols.
     track: Mapped[RecommendationTrack] = mapped_column(
         Enum(RecommendationTrack, native_enum=False, length=20),
         default=RecommendationTrack.SECURITY,
-        server_default=RecommendationTrack.SECURITY.value,
+        server_default=RecommendationTrack.SECURITY.name,
         nullable=False,
     )
     status: Mapped[RecommendationStatus] = mapped_column(
