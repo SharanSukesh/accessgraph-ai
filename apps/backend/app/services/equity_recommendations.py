@@ -80,8 +80,15 @@ class EquityGraph:
     user_seniority: List[Optional[str]]
     user_profile_name: List[str]
     user_role_name: List[str]
+    # Readable name (User.Name from Salesforce) keyed by salesforce_id, so
+    # recommendation cards can show "Grant Mentorship_PS to John Smith"
+    # instead of the raw 18-char IDs.
+    user_display_name: Dict[str, str]
     ps_ids: List[str]
     ps_index: Dict[str, int]
+    # PermissionSet display label (PermissionSet.Label) keyed by sf_id —
+    # same readability story as user_display_name.
+    ps_label_by_id: Dict[str, str]
     # Adjacency matrices (n, n) for user-user relations
     adj_manages: np.ndarray
     adj_role_above: np.ndarray
@@ -272,6 +279,19 @@ class EquityRecommendationService:
 
         ps_ids = sorted({ps.salesforce_id for ps in permission_sets})
         ps_index = {pid: i for i, pid in enumerate(ps_ids)}
+        # PS label lookup for recommendation display. Prefer the human
+        # label (e.g. "Sales Manager"), fall back to the API name (e.g.
+        # "Sales_Manager"), then to the raw salesforce_id so the field
+        # is never missing.
+        ps_label_by_id: Dict[str, str] = {
+            ps.salesforce_id: (ps.label or ps.name or ps.salesforce_id)
+            for ps in permission_sets
+        }
+        # User display name lookup keyed by salesforce_id.
+        user_display_name: Dict[str, str] = {
+            u.salesforce_id: (u.name or u.username or u.salesforce_id)
+            for u in users
+        }
 
         # ----- VIP set R (multi-signal) -----
         # Each signal must produce evidence that a user is a VIP. The earlier
@@ -321,8 +341,10 @@ class EquityRecommendationService:
             user_seniority=user_seniority,
             user_profile_name=user_profile_name,
             user_role_name=user_role_name,
+            user_display_name=user_display_name,
             ps_ids=ps_ids,
             ps_index=ps_index,
+            ps_label_by_id=ps_label_by_id,
             adj_manages=adj_manages,
             adj_role_above=adj_role_above,
             user_ps=user_ps,
@@ -571,6 +593,11 @@ class EquityRecommendationService:
         self.db.add(snapshot)
 
         for p in proposals:
+            # Resolve readable PS + user names; fall back to the raw
+            # salesforce_id if the snapshot is missing them (shouldn't
+            # happen on a synced org but worth being defensive).
+            ps_label = graph.ps_label_by_id.get(p.ps_sf_id, p.ps_sf_id)
+            user_name = graph.user_display_name.get(p.user_sf_id, p.user_sf_id)
             rec = Recommendation(
                 organization_id=org_id,
                 rec_type=RecommendationType.GRANT_FOR_EQUITY,
@@ -579,11 +606,15 @@ class EquityRecommendationService:
                 severity=AnomalySeverity.INFO,
                 target_entity_type="user",
                 target_entity_id=p.user_sf_id,
-                title=f"Grant {p.ps_sf_id} for equity ({p.department or 'unknown'})",
+                title=(
+                    f"Grant {ps_label} ({p.ps_sf_id}) for equity "
+                    f"({p.department or 'unknown'})"
+                ),
                 description=(
-                    f"Granting permission set {p.ps_sf_id} to user {p.user_sf_id} is "
-                    f"predicted to improve {p.department or 'their group'}'s "
-                    f"access to VIP resources."
+                    f"Granting permission set {ps_label} ({p.ps_sf_id}) to "
+                    f"{user_name} ({p.user_sf_id}) is predicted to improve "
+                    f"{p.department or 'their group'}'s access to VIP "
+                    "resources."
                 ),
                 rationale=p.rationale,
                 impact_summary={
@@ -594,7 +625,9 @@ class EquityRecommendationService:
                 },
                 affected_access={
                     "ps_id": p.ps_sf_id,
+                    "ps_label": ps_label,
                     "user_id": p.user_sf_id,
+                    "user_name": user_name,
                     "track": "equity",
                 },
                 generated_at=datetime.now(timezone.utc),
