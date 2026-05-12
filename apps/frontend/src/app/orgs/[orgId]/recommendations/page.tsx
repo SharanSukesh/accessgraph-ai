@@ -17,6 +17,8 @@ import {
   Clock,
   Info,
   ChevronRight,
+  ShieldAlert,
+  Scale,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -34,6 +36,10 @@ export default function RecommendationsPage() {
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
+  // 'all' | 'security' | 'equity' — distinguishes anomaly-driven recs from
+  // the new GAEA equity-driven track. Default 'all' so existing users see
+  // the familiar full list, but the chip row above makes the split obvious.
+  const [trackFilter, setTrackFilter] = useState<'all' | 'security' | 'equity'>('all')
   const [selectedRec, setSelectedRec] = useState<any>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -45,6 +51,7 @@ export default function RecommendationsPage() {
     search,
     severity: severityFilter || undefined,
     status: statusFilter || undefined,
+    track: trackFilter === 'all' ? undefined : trackFilter,
   })
 
   const handleSelectAll = () => {
@@ -186,6 +193,37 @@ export default function RecommendationsPage() {
         </Card>
       </div>
 
+      {/* Track filter chips — distinguishes Security (existing) from Equity (GAEA) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-gray-500 dark:text-gray-400 mr-1">Track:</span>
+        {([
+          { value: 'all',      label: 'All',      icon: null },
+          { value: 'security', label: 'Security', icon: ShieldAlert },
+          { value: 'equity',   label: 'Equity',   icon: Scale },
+        ] as const).map((chip) => {
+          const active = trackFilter === chip.value
+          const Icon = chip.icon
+          return (
+            <button
+              key={chip.value}
+              onClick={() => setTrackFilter(chip.value)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${
+                active
+                  ? chip.value === 'equity'
+                    ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
+                    : chip.value === 'security'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                    : 'bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-white'
+                  : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              {Icon && <Icon className="h-3.5 w-3.5" />}
+              {chip.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Filters */}
       <Card variant="bordered">
         <CardContent className="py-4">
@@ -281,7 +319,19 @@ export default function RecommendationsPage() {
                         >
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                {/* Track badge — first so it sets the mental model */}
+                                {rec.track === 'equity' ? (
+                                  <Badge variant="info" size="sm">
+                                    <Scale className="h-3 w-3 mr-1 inline" />
+                                    Equity
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="danger" size="sm">
+                                    <ShieldAlert className="h-3 w-3 mr-1 inline" />
+                                    Security
+                                  </Badge>
+                                )}
                                 <SeverityBadge severity={rec.severity} />
                                 <Badge
                                   variant={

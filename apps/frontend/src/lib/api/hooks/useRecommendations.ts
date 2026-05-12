@@ -12,6 +12,8 @@ interface RecommendationFilters {
   type?: string
   severity?: string
   status?: string
+  rec_type?: string                // backend column name
+  track?: 'security' | 'equity'    // backend column for high-level grouping
   userId?: string
   limit?: number
   offset?: number
@@ -20,13 +22,15 @@ interface RecommendationFilters {
 interface Recommendation {
   id: string
   type: string
+  rec_type?: string                // mirrors backend; e.g. "grant_for_equity"
+  track?: 'security' | 'equity'    // backend grouping column
   severity: string
   title: string
   description: string
+  rationale?: string
   userId?: string
   userName?: string
   affectedResources: string[]
-  rationale: string
   estimatedImpact?: string
   status: string
   createdAt: string

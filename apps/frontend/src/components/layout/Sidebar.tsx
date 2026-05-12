@@ -20,6 +20,7 @@ import {
   Menu,
   RefreshCw,
   Link2,
+  Scale,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
@@ -33,6 +34,7 @@ const navigationItems = [
   { name: 'Fields', path: 'fields', icon: FileText },
   { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
   { name: 'Recommendations', path: 'recommendations', icon: CheckCircle },
+  { name: 'Equity', path: 'equity', icon: Scale },
   { name: 'Graph Explorer', path: 'graph', icon: Network },
 ]
 

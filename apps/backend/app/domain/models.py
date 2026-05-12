@@ -77,6 +77,20 @@ class RecommendationType(str, PyEnum):
     GRANT_FOR_EQUITY = "grant_for_equity"
 
 
+class RecommendationTrack(str, PyEnum):
+    """High-level grouping for the recommendations list UI.
+
+    SECURITY  — anomaly-driven, action is revoke/review, severity Low→Critical
+    EQUITY    — GAEA-driven, action is grant/connect, severity Info
+
+    These answer different product questions and surface in distinct UI
+    sections (Anomalies+Recommendations vs the Equity dashboard). A future
+    track might be COMPLIANCE or COST_OPTIMIZATION; keep the enum open.
+    """
+    SECURITY = "security"
+    EQUITY = "equity"
+
+
 class RecommendationStatus(str, PyEnum):
     """Recommendation status"""
     PENDING = "pending"
@@ -544,6 +558,15 @@ class Recommendation(Base, TimestampMixin):
         Enum(RecommendationType, native_enum=False, length=50),
         nullable=False
     )
+    # Track grouping for the UI (Security vs Equity). Defaults to SECURITY
+    # at the DB level so legacy code paths that don't set it explicitly
+    # land in the existing recommendations list as before.
+    track: Mapped[RecommendationTrack] = mapped_column(
+        Enum(RecommendationTrack, native_enum=False, length=20),
+        default=RecommendationTrack.SECURITY,
+        server_default=RecommendationTrack.SECURITY.value,
+        nullable=False,
+    )
     status: Mapped[RecommendationStatus] = mapped_column(
         Enum(RecommendationStatus, native_enum=False, length=20),
         default=RecommendationStatus.PENDING,
@@ -576,6 +599,7 @@ class Recommendation(Base, TimestampMixin):
         Index("ix_rec_org", "organization_id"),
         Index("ix_rec_target", "target_entity_type", "target_entity_id"),
         Index("ix_rec_type", "rec_type"),
+        Index("ix_rec_track", "track"),
         Index("ix_rec_status", "status"),
         Index("ix_rec_severity", "severity"),
     )

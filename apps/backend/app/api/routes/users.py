@@ -87,10 +87,12 @@ class RiskScoreResponse(BaseModel):
 class RecommendationResponse(BaseModel):
     id: str
     rec_type: str
+    track: str  # 'security' or 'equity' — drives UI grouping
     severity: str
     target_entity_id: str
     title: str
     description: str
+    rationale: Optional[str] = None
     status: str
 
     class Config:

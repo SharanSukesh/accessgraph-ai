@@ -33,6 +33,7 @@ from app.domain.models import (
     ProfileSnapshot,
     Recommendation,
     RecommendationStatus,
+    RecommendationTrack,
     RecommendationType,
     RoleSnapshot,
     UserSnapshot,
@@ -573,6 +574,7 @@ class EquityRecommendationService:
             rec = Recommendation(
                 organization_id=org_id,
                 rec_type=RecommendationType.GRANT_FOR_EQUITY,
+                track=RecommendationTrack.EQUITY,
                 status=RecommendationStatus.PENDING,
                 severity=AnomalySeverity.INFO,
                 target_entity_type="user",
