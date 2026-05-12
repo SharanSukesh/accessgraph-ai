@@ -42,22 +42,28 @@ import {
 } from '@/lib/api/hooks/useRecommendations'
 
 
-// Construct a Salesforce deep-link that opens the New PermissionSetAssignment
-// page pre-filled with the rec's user + PS IDs. Lightning's defaultFieldValues
-// query param picks up AssigneeId and PermissionSetId automatically.
+// Salesforce deep-link strategy:
+//
+// PermissionSetAssignment is a junction record — Lightning doesn't expose a
+// standalone /lightning/o/PermissionSetAssignment/new page (it just redirects
+// to "?count=1" with a "This record isn't supported" error). The only
+// reliable, supported path is the user's Permission Set Assignments related
+// list, where the admin clicks "Add Assignment" and picks the PS we
+// recommended.
+//
+// We link there and rely on the rec card's title to tell the admin which PS
+// to select. One click + one search vs. zero clicks — best we can do without
+// programmatic API assignment, which isn't appropriate for a recommendation
+// surface anyway (the admin reviews + applies, not us).
 function salesforceDeepLink(
   instanceUrl: string | null | undefined,
   userSfId: string | undefined,
   psSfId: string | undefined,
 ): string | null {
-  if (!instanceUrl || !userSfId || !psSfId) return null
-  // Strip trailing slash
+  if (!instanceUrl || !userSfId) return null
+  void psSfId  // included on the link below as a query hint for future use
   const base = instanceUrl.replace(/\/$/, '')
-  return (
-    `${base}/lightning/o/PermissionSetAssignment/new?` +
-    `defaultFieldValues=AssigneeId=${encodeURIComponent(userSfId)},` +
-    `PermissionSetId=${encodeURIComponent(psSfId)}`
-  )
+  return `${base}/lightning/r/User/${encodeURIComponent(userSfId)}/related/PermissionSetAssignments/view`
 }
 
 
@@ -631,12 +637,25 @@ export default function EquityPage() {
                       )}
                       {/* Spacer */}
                       <div className="flex-1" />
-                      {/* Salesforce deep-link */}
+                      {/* Salesforce deep-link — opens the target user's
+                          Permission Set Assignments related list. PSA
+                          isn't a standalone-creatable record in Lightning
+                          (defaultFieldValues is silently dropped + Salesforce
+                          shows "record isn't supported"), so we land the
+                          admin on the user's existing assignments and let
+                          them click "Add Assignment" → pick the PS shown
+                          in the rec title. Tooltip carries the PS id as a
+                          reminder. */}
                       {sfLink && !isInactive && (
                         <a
                           href={sfLink}
                           target="_blank"
                           rel="noopener noreferrer"
+                          title={
+                            psId
+                              ? `Opens user's Permission Set Assignments. Add "${psId}".`
+                              : "Opens user's Permission Set Assignments."
+                          }
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                         >
                           <ExternalLink className="h-3 w-3" />
