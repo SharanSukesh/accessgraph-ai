@@ -88,6 +88,15 @@ export default function ReportingGraphPage() {
   // node drag creates a new edge. Mutually exclusive because the same
   // drag gesture can't do both.
   const [tool, setTool] = useState<'move' | 'draw'>('move')
+  // Mirror tool into a ref so the canvas-init useEffect (which doesn't
+  // depend on `tool` because we don't want a full rebuild on toggle)
+  // can re-apply the user's chosen mode to a freshly-built canvas after
+  // a refetch — without this, post-save the canvas resets to "Move" while
+  // the toolbar button still says "Draw."
+  const toolRef = useRef<'move' | 'draw'>('move')
+  useEffect(() => {
+    toolRef.current = tool
+  }, [tool])
   // Stash the edgehandles instance + on/off so the toolbar button can
   // flip modes without re-mounting Cytoscape.
   const ehRef = useRef<any>(null)
@@ -279,6 +288,22 @@ export default function ReportingGraphPage() {
       edgeType: () => 'flat',
     })
     ehRef.current = eh
+    // Re-apply the user's current tool mode to this fresh instance. The
+    // [tool] effect below only fires when tool changes — if the canvas
+    // rebuilt under us (e.g. post-save refetch) but the tool didn't, the
+    // new instance would be left in default mode while the toolbar still
+    // says "Draw."
+    if (toolRef.current === 'draw') {
+      try {
+        eh.enableDrawMode()
+      } catch {
+        /* idempotent */
+      }
+      cy.nodes().ungrabify()
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'crosshair'
+      }
+    }
 
     cy.on('ehcomplete', (_evt: any, sourceNode: any, targetNode: any, addedEdge: any) => {
       const src = sourceNode.id()
@@ -499,17 +524,50 @@ export default function ReportingGraphPage() {
     }))
     try {
       const result = await apply.mutateAsync(edits)
-      const failed = new Set(
+      const failedKeys = new Set(
         result.results
           .filter(r => !r.success)
           .map(r => `${r.user_sf_id}::${r.field}`),
       )
-      // Drop succeeded edits from pending so the canvas + side-panel
-      // refresh to the new committed state. Keep failures visible so
-      // the admin can retry or revert.
+      // Drop succeeded edits from pending so the side panel clears.
+      // Failed rows stay so the admin can retry / revert.
       setPending(prev =>
-        prev.filter(p => failed.has(`${p.user_sf_id}::${p.field}`)),
+        prev.filter(p => failedKeys.has(`${p.user_sf_id}::${p.field}`)),
       )
+      // Eagerly clean the canvas — the React Query refetch will rebuild
+      // the whole canvas momentarily, but doing it here means the side
+      // panel and the canvas are consistent instantly rather than during
+      // the network round-trip. Remove succeeded pending-add edges; clear
+      // the pending-remove class on committed edges that just got cleared
+      // (those will vanish entirely once refetch lands, but stripping the
+      // strikethrough now avoids a flash of red).
+      const cy = cyRef.current
+      if (cy) {
+        for (const r of result.results) {
+          if (!r.success) continue
+          const k = `${r.user_sf_id}::${r.field}`
+          if (failedKeys.has(k)) continue
+          // For add edits, remove the corresponding pending__ edge
+          if (r.new_value) {
+            const pendingId = `pending__${r.field}__${r.user_sf_id}__${r.new_value}`
+            cy.$(`edge[id="${pendingId}"]`).remove()
+          }
+          // For remove edits (new_value = null) or re-routes, drop the
+          // pending-remove class on any committed edge of the same field
+          // from this user — it'll be re-rendered by the refetch with the
+          // new state.
+          const edgeType =
+            r.field === 'ManagerId' ? 'manager' : 'delegated_approver'
+          cy.edges().forEach(e => {
+            if (
+              e.data('source') === r.user_sf_id &&
+              e.data('edge_type') === edgeType
+            ) {
+              e.removeClass('pending-remove')
+            }
+          })
+        }
+      }
       if (result.failed === 0) {
         setToast({
           kind: 'success',
