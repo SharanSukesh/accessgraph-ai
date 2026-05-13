@@ -47,11 +47,19 @@ async def get_current_org(access_token: Optional[str] = Cookie(None)) -> str:
 
 
 async def get_current_actor_email(access_token: Optional[str] = Cookie(None)) -> str:
-    """Return the email claim from the JWT for audit-attribution purposes.
+    """Return an actor identifier from the JWT for audit attribution.
 
-    Used by mutating endpoints (write-back, reporting-graph apply) that
-    need to record who performed the change. Raises 401 if no token, no
-    decodable email, or invalid token.
+    Used by mutating endpoints (write-back, reporting-graph apply). We
+    prefer the email claim, but Salesforce's OAuth token response does
+    not return an email — the `id` field is a userinfo URL we don't
+    follow today — so older JWTs have email=None. To avoid bricking
+    write-back for every existing session, we fall back to:
+      1. `email`             (set once we wire userinfo fetch on login)
+      2. `user_id`           (Salesforce user id, always present)
+      3. `sf-org:<org_id>`   (last resort, never None for an auth'd req)
+
+    The actual ORG_ADMIN authorization happens later in the service;
+    this dep only feeds audit logs.
     """
     if not access_token:
         raise HTTPException(
@@ -62,12 +70,18 @@ async def get_current_actor_email(access_token: Optional[str] = Cookie(None)) ->
     try:
         payload = verify_token(access_token)
         email = payload.get("email")
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token missing email claim.",
-            )
-        return email
+        if email:
+            return email
+        user_id = payload.get("user_id")
+        if user_id:
+            return f"sf-user:{user_id}"
+        org_id = payload.get("org_id")
+        if org_id:
+            return f"sf-org:{org_id}"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has no usable identity claim.",
+        )
     except HTTPException:
         raise
     except Exception as e:

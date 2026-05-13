@@ -301,31 +301,67 @@ export default function ReportingGraphPage() {
         field === 'ManagerId'
           ? `→ manager (pending)`
           : `→ delegated (pending)`
-      // Replace the auto-created edge with a styled pending edge
+      // Replace the auto-created edge with a styled pending edge.
       addedEdge.remove()
+      const newEdgeId = `pending__${field}__${src}__${tgt}`
+      // A user can only have one ManagerId / DelegatedApproverId, so any
+      // earlier pending edge for the same (src, field) is now superseded.
+      // Remove it from the canvas BEFORE adding the new one — otherwise
+      // both stay visible and the pending list (which dedupes by user+field)
+      // disagrees with what the user sees. Same logic for committed edges
+      // of the same field: drag re-routing should mark the original for
+      // removal too, so the save batch ends up clearing the prior value.
+      const edgeType =
+        field === 'ManagerId' ? 'manager' : 'delegated_approver'
+      cy.edges().forEach(e => {
+        const eid = (e.data('id') as string) || ''
+        if (eid === newEdgeId) return
+        // Superseded pending edge for same (user, field)
+        if (
+          eid.startsWith(`pending__${field}__${src}__`) &&
+          eid !== newEdgeId
+        ) {
+          e.remove()
+          return
+        }
+        // Committed edge of same field originating from same user — mark
+        // it as pending-remove so the save batch clears the prior value
+        // before setting the new one.
+        if (
+          e.data('source') === src &&
+          e.data('edge_type') === edgeType &&
+          !eid.startsWith('pending__')
+        ) {
+          e.addClass('pending-remove')
+        }
+      })
       cy.add({
         group: 'edges',
         data: {
-          id: `pending__${field}__${src}__${tgt}`,
+          id: newEdgeId,
           source: src,
           target: tgt,
           label: edgeLabel,
         },
         classes: edgeClass,
       })
-      setPending(prev => [
-        ...prev.filter(p =>
-          !(p.user_sf_id === src && p.field === field),
-        ),
-        {
-          user_sf_id: src,
-          field,
-          new_value: tgt,
-          kind: 'add',
-          source_name: sourceName,
-          target_name: targetName,
-        },
-      ])
+      setPending(prev => {
+        // Dedupe by (user, field) only; every other pending edit stays.
+        const filtered = prev.filter(
+          p => !(p.user_sf_id === src && p.field === field),
+        )
+        return [
+          ...filtered,
+          {
+            user_sf_id: src,
+            field,
+            new_value: tgt,
+            kind: 'add',
+            source_name: sourceName,
+            target_name: targetName,
+          },
+        ]
+      })
     })
 
     cy.on('tap', 'node', evt => {
