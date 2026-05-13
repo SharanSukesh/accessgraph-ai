@@ -66,6 +66,17 @@ class HistoryPointResponse(BaseModel):
     recommendations_generated: int
 
 
+class UserEquityRowResponse(BaseModel):
+    user_sf_id: str
+    name: str
+    department: Optional[str]
+    is_vip: bool
+    distance_to_nearest_vip: Optional[float]
+    inverse_distance_utility: float
+    department_avg_utility: float
+    open_recommendations: int
+
+
 class UserDisparityResponse(BaseModel):
     user_sf_id: str
     department: Optional[str]
@@ -129,6 +140,46 @@ async def get_equity_history(
     service = EquityDiagnosticService(db)
     points = await service.history(org_id, limit=limit)
     return [HistoryPointResponse(**p.__dict__) for p in points]
+
+
+@router.get(
+    "/orgs/{org_id}/equity/users",
+    response_model=List[UserEquityRowResponse],
+)
+async def list_user_equity(
+    org_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    include_vips: bool = Query(True),
+    db: AsyncSession = Depends(get_database),
+) -> List[UserEquityRowResponse]:
+    """Per-user equity stats for the LWC + admin user list.
+
+    Returns rows sorted with worst-off juniors first; VIPs land at the
+    end (or are excluded entirely if include_vips=false). Each row also
+    counts the user's open equity recommendations so the LWC can show a
+    badge without an additional round-trip.
+    """
+    service = EquityDiagnosticService(db)
+    rows = await service.user_equity_list(
+        org_id, limit=limit, offset=offset, include_vips=include_vips,
+    )
+    out: List[UserEquityRowResponse] = []
+    for r in rows:
+        dist = r.distance_to_nearest_vip
+        if dist is not None and not math.isfinite(dist):
+            dist = None
+        out.append(UserEquityRowResponse(
+            user_sf_id=r.user_sf_id,
+            name=r.name,
+            department=r.department,
+            is_vip=r.is_vip,
+            distance_to_nearest_vip=dist,
+            inverse_distance_utility=r.inverse_distance_utility,
+            department_avg_utility=r.department_avg_utility,
+            open_recommendations=r.open_recommendations,
+        ))
+    return out
 
 
 @router.get(

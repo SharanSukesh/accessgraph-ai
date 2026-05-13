@@ -359,6 +359,35 @@ public with sharing class AccessGraphConnector {
     }
 
     /**
+     * Resolve the current SF org's internal AccessGraph UUID via
+     * /package/status. Returns null if the org isn't registered yet
+     * (install handler hasn't run / OAuth not completed).
+     *
+     * Cached behaviour is intentional via the package-status endpoint
+     * being cheap. Callers should handle null by returning a graceful
+     * "not configured" state to the LWC.
+     */
+    private static String resolveInternalOrgId() {
+        String baseUrl = getApiEndpoint();
+        String salesforceOrgId = UserInfo.getOrganizationId();
+        try {
+            HttpResponse statusRes = sendGet(
+                baseUrl + '/package/status/' + salesforceOrgId, 10000
+            );
+            if (statusRes.getStatusCode() == 200) {
+                Map<String, Object> body = (Map<String, Object>)
+                    JSON.deserializeUntyped(statusRes.getBody());
+                if (body.get('installed') == true) {
+                    return (String) body.get('organization_id');
+                }
+            }
+        } catch (Exception e) {
+            System.debug('resolveInternalOrgId failed: ' + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Update sync status in custom settings
      * Truncates status to 50 chars to fit field limit
      */
@@ -588,5 +617,327 @@ public with sharing class AccessGraphConnector {
             if (items.size() >= 200) break;
         }
         return items;
+    }
+
+    // ========================================================================
+    // Equity (GAEA) — backend callouts for the in-Salesforce equity UI
+    // ========================================================================
+
+    /**
+     * Headline equity metrics for the current org. Powers the AccessGraph
+     * Equity app tab — Equity Index, most-disadvantaged group, VIP count,
+     * per-department utility map.
+     */
+    @AuraEnabled
+    public static EquityDiagnostic getEquityDiagnostic() {
+        String internalOrgId = resolveInternalOrgId();
+        EquityDiagnostic d = new EquityDiagnostic();
+        d.hasData = false;
+        if (String.isBlank(internalOrgId)) {
+            d.errorReason = 'Org not registered with AccessGraph AI yet.';
+            return d;
+        }
+        try {
+            HttpResponse res = sendGet(
+                getApiEndpoint() + '/orgs/' + internalOrgId + '/equity/diagnostic',
+                15000
+            );
+            if (res.getStatusCode() != 200) {
+                d.errorReason = 'Backend returned ' + res.getStatusCode();
+                return d;
+            }
+            Map<String, Object> body = (Map<String, Object>)
+                JSON.deserializeUntyped(res.getBody());
+            d.hasData = (Boolean) body.get('has_data');
+            d.snapshotAt = (String) body.get('snapshot_at');
+            d.equityIndex = (Double) body.get('equity_index');
+            d.disparity = (Double) body.get('disparity');
+            d.mostDisadvantagedGroup = (String) body.get('most_disadvantaged_group');
+            d.vipCount = toInt(body.get('vip_count'));
+            d.recommendationsGenerated = toInt(body.get('recommendations_generated'));
+            Map<String, Object> perDept =
+                (Map<String, Object>) body.get('per_dept_utilities');
+            if (perDept != null) {
+                d.perDeptUtilities = new Map<String, Double>();
+                for (String k : perDept.keySet()) {
+                    Object v = perDept.get(k);
+                    if (v == null) continue;
+                    d.perDeptUtilities.put(k, Double.valueOf(String.valueOf(v)));
+                }
+            }
+        } catch (Exception e) {
+            d.errorReason = 'Callout failed: ' + e.getMessage();
+        }
+        return d;
+    }
+
+    /**
+     * Bulk per-user equity stats — drives the "All Users" view in the
+     * AccessGraph Equity app tab. Sorted worst-off-first by the backend
+     * so the most interesting rows surface immediately.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<EquityUser> getEquityUserList(Integer pageLimit) {
+        Integer requested = pageLimit == null ? 100 : pageLimit;
+        if (requested < 1) requested = 1;
+        if (requested > 500) requested = 500;
+
+        String internalOrgId = resolveInternalOrgId();
+        if (String.isBlank(internalOrgId)) {
+            return new List<EquityUser>();
+        }
+        List<EquityUser> rows = new List<EquityUser>();
+        try {
+            HttpResponse res = sendGet(
+                getApiEndpoint() + '/orgs/' + internalOrgId
+                    + '/equity/users?limit=' + requested,
+                20000
+            );
+            if (res.getStatusCode() != 200) return rows;
+            List<Object> list = (List<Object>) JSON.deserializeUntyped(res.getBody());
+            for (Object item : list) {
+                Map<String, Object> row = (Map<String, Object>) item;
+                EquityUser eu = new EquityUser();
+                eu.userSfId = (String) row.get('user_sf_id');
+                eu.name = (String) row.get('name');
+                eu.department = (String) row.get('department');
+                eu.isVip = (Boolean) row.get('is_vip');
+                Object dist = row.get('distance_to_nearest_vip');
+                eu.distanceToNearestVip =
+                    dist == null ? null : Double.valueOf(String.valueOf(dist));
+                eu.utility = Double.valueOf(
+                    String.valueOf(row.get('inverse_distance_utility'))
+                );
+                eu.departmentAvgUtility = Double.valueOf(
+                    String.valueOf(row.get('department_avg_utility'))
+                );
+                eu.openRecommendations = toInt(row.get('open_recommendations'));
+                rows.add(eu);
+            }
+        } catch (Exception e) {
+            System.debug('getEquityUserList failed: ' + e.getMessage());
+        }
+        return rows;
+    }
+
+    /**
+     * Per-user disparity drill-down — used by both the User detail page
+     * panel and the click-into-a-row flow in the Equity tab.
+     */
+    @AuraEnabled(cacheable=true)
+    public static EquityUserDetail getUserEquity(String userSfId) {
+        EquityUserDetail d = new EquityUserDetail();
+        d.userSfId = userSfId;
+        if (String.isBlank(userSfId)) {
+            d.errorReason = 'No userSfId provided.';
+            return d;
+        }
+        String internalOrgId = resolveInternalOrgId();
+        if (String.isBlank(internalOrgId)) {
+            d.errorReason = 'Org not registered yet.';
+            return d;
+        }
+        try {
+            HttpResponse res = sendGet(
+                getApiEndpoint() + '/orgs/' + internalOrgId
+                    + '/equity/users/' + userSfId,
+                15000
+            );
+            if (res.getStatusCode() == 404) {
+                d.errorReason = 'User not yet synced to AccessGraph AI.';
+                return d;
+            }
+            if (res.getStatusCode() != 200) {
+                d.errorReason = 'Backend returned ' + res.getStatusCode();
+                return d;
+            }
+            Map<String, Object> body = (Map<String, Object>)
+                JSON.deserializeUntyped(res.getBody());
+            d.department = (String) body.get('department');
+            Object dist = body.get('distance_to_nearest_vip');
+            d.distanceToNearestVip =
+                dist == null ? null : Double.valueOf(String.valueOf(dist));
+            d.utility = Double.valueOf(
+                String.valueOf(body.get('inverse_distance_utility'))
+            );
+            d.departmentAvgUtility = Double.valueOf(
+                String.valueOf(body.get('department_avg_utility'))
+            );
+            d.orgAvgUtility = Double.valueOf(
+                String.valueOf(body.get('org_avg_utility'))
+            );
+            d.isVip = (Boolean) body.get('is_vip');
+        } catch (Exception e) {
+            d.errorReason = 'Callout failed: ' + e.getMessage();
+        }
+        return d;
+    }
+
+    /**
+     * Equity recommendations targeting a specific user. Returns the
+     * grant_for_equity rows the policy proposed for them, with rationale
+     * + status so the LWC can render Apply / Dismiss controls.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<EquityRecommendation> getUserEquityRecommendations(String userSfId) {
+        List<EquityRecommendation> out = new List<EquityRecommendation>();
+        if (String.isBlank(userSfId)) return out;
+        String internalOrgId = resolveInternalOrgId();
+        if (String.isBlank(internalOrgId)) return out;
+        try {
+            HttpResponse res = sendGet(
+                getApiEndpoint() + '/orgs/' + internalOrgId
+                    + '/recommendations?track=equity&limit=200',
+                15000
+            );
+            if (res.getStatusCode() != 200) return out;
+            List<Object> rows = (List<Object>) JSON.deserializeUntyped(res.getBody());
+            for (Object item : rows) {
+                Map<String, Object> r = (Map<String, Object>) item;
+                if (String.valueOf(r.get('target_entity_id')) != userSfId) continue;
+                EquityRecommendation er = new EquityRecommendation();
+                er.id = (String) r.get('id');
+                er.title = (String) r.get('title');
+                er.description = (String) r.get('description');
+                er.rationale = (String) r.get('rationale');
+                er.severity = (String) r.get('severity');
+                er.status = (String) r.get('status');
+                er.targetEntityId = (String) r.get('target_entity_id');
+                Map<String, Object> aa =
+                    (Map<String, Object>) r.get('affected_access');
+                if (aa != null) {
+                    er.psId = (String) aa.get('ps_id');
+                    er.psLabel = (String) aa.get('ps_label');
+                }
+                out.add(er);
+            }
+        } catch (Exception e) {
+            System.debug('getUserEquityRecommendations failed: ' + e.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Update an equity (or any) recommendation's status. Backed by the
+     * existing PATCH /recommendations/{id} endpoint.
+     */
+    @AuraEnabled
+    public static Map<String, Object> updateRecommendationStatus(
+        String recId, String newStatus
+    ) {
+        if (String.isBlank(recId) || String.isBlank(newStatus)) {
+            return new Map<String, Object>{
+                'success' => false,
+                'message' => 'recId and newStatus are required.'
+            };
+        }
+        try {
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(getApiEndpoint() + '/recommendations/' + recId);
+            req.setMethod('PATCH');
+            req.setHeader('Content-Type', 'application/json');
+            req.setBody(JSON.serialize(new Map<String, Object>{
+                'status' => newStatus
+            }));
+            req.setTimeout(15000);
+            HttpResponse res = new Http().send(req);
+            return new Map<String, Object>{
+                'success' => res.getStatusCode() == 200,
+                'statusCode' => res.getStatusCode(),
+                'message' => res.getBody()
+            };
+        } catch (Exception e) {
+            return new Map<String, Object>{
+                'success' => false,
+                'message' => e.getMessage()
+            };
+        }
+    }
+
+    /**
+     * Trigger a fresh equity-recommendations run. Mirrors the "Generate
+     * recommendations" button on the web app's Equity page.
+     */
+    @AuraEnabled
+    public static Map<String, Object> generateEquityRecommendations() {
+        String internalOrgId = resolveInternalOrgId();
+        if (String.isBlank(internalOrgId)) {
+            return new Map<String, Object>{
+                'success' => false,
+                'message' => 'Org not registered with AccessGraph AI yet.'
+            };
+        }
+        try {
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(
+                getApiEndpoint() + '/orgs/' + internalOrgId
+                    + '/equity/recommendations/generate'
+            );
+            req.setMethod('POST');
+            req.setHeader('Content-Type', 'application/json');
+            req.setBody('{}');
+            req.setTimeout(60000);  // policy rollout can take ~10-30s on big orgs
+            HttpResponse res = new Http().send(req);
+            return new Map<String, Object>{
+                'success' => res.getStatusCode() == 200,
+                'statusCode' => res.getStatusCode(),
+                'response' => res.getBody()
+            };
+        } catch (Exception e) {
+            return new Map<String, Object>{
+                'success' => false,
+                'message' => e.getMessage()
+            };
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Equity DTOs — @AuraEnabled so LWCs can bind to typed properties
+    // -------------------------------------------------------------------
+
+    public class EquityDiagnostic {
+        @AuraEnabled public Boolean hasData;
+        @AuraEnabled public String snapshotAt;
+        @AuraEnabled public Double equityIndex;
+        @AuraEnabled public Double disparity;
+        @AuraEnabled public String mostDisadvantagedGroup;
+        @AuraEnabled public Integer vipCount;
+        @AuraEnabled public Integer recommendationsGenerated;
+        @AuraEnabled public Map<String, Double> perDeptUtilities;
+        @AuraEnabled public String errorReason;
+    }
+
+    public class EquityUser {
+        @AuraEnabled public String userSfId;
+        @AuraEnabled public String name;
+        @AuraEnabled public String department;
+        @AuraEnabled public Boolean isVip;
+        @AuraEnabled public Double distanceToNearestVip;
+        @AuraEnabled public Double utility;
+        @AuraEnabled public Double departmentAvgUtility;
+        @AuraEnabled public Integer openRecommendations;
+    }
+
+    public class EquityUserDetail {
+        @AuraEnabled public String userSfId;
+        @AuraEnabled public String department;
+        @AuraEnabled public Boolean isVip;
+        @AuraEnabled public Double distanceToNearestVip;
+        @AuraEnabled public Double utility;
+        @AuraEnabled public Double departmentAvgUtility;
+        @AuraEnabled public Double orgAvgUtility;
+        @AuraEnabled public String errorReason;
+    }
+
+    public class EquityRecommendation {
+        @AuraEnabled public String id;
+        @AuraEnabled public String title;
+        @AuraEnabled public String description;
+        @AuraEnabled public String rationale;
+        @AuraEnabled public String severity;
+        @AuraEnabled public String status;
+        @AuraEnabled public String targetEntityId;
+        @AuraEnabled public String psId;
+        @AuraEnabled public String psLabel;
     }
 }

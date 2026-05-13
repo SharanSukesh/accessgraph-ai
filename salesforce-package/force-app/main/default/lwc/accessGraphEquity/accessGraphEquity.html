@@ -1,0 +1,195 @@
+<template>
+    <div class="slds-p-around_medium">
+        <!-- Header -->
+        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_medium">
+            <div class="slds-col">
+                <h1 class="slds-text-heading_large">AccessGraph Equity</h1>
+                <p class="slds-text-body_small slds-text-color_weak">
+                    GAEA-driven recommendations to balance access across teams.
+                </p>
+            </div>
+            <div class="slds-col slds-no-flex">
+                <lightning-button
+                    label={generateButtonLabel}
+                    variant="brand"
+                    icon-name="utility:magicwand"
+                    onclick={handleGenerate}
+                    disabled={generating}>
+                </lightning-button>
+            </div>
+        </div>
+
+        <template if:true={errorReason}>
+            <div class="slds-notify slds-notify_alert slds-theme_alert-texture slds-theme_warning slds-m-bottom_medium" role="alert">
+                <span class="slds-assistive-text">Warning</span>
+                <span>{errorReason}</span>
+            </div>
+        </template>
+
+        <!-- Headline metrics -->
+        <lightning-layout multiple-rows class="slds-m-bottom_medium">
+            <lightning-layout-item size="4" padding="around-small">
+                <div class="slds-box slds-box_x-small">
+                    <p class="slds-text-title slds-text-color_weak">Equity Index</p>
+                    <p class="slds-text-heading_large slds-m-top_x-small">
+                        {equityIndexDisplay}
+                    </p>
+                    <p class="slds-text-body_small slds-text-color_weak">
+                        1.0 = perfect parity, 0.0 = max inequality
+                    </p>
+                </div>
+            </lightning-layout-item>
+            <lightning-layout-item size="4" padding="around-small">
+                <div class="slds-box slds-box_x-small">
+                    <p class="slds-text-title slds-text-color_weak">Most disadvantaged</p>
+                    <p class="slds-text-heading_large slds-m-top_x-small">
+                        {mostDisadvantagedDisplay}
+                    </p>
+                    <p class="slds-text-body_small slds-text-color_weak">
+                        Group with lowest avg access to VIP nodes
+                    </p>
+                </div>
+            </lightning-layout-item>
+            <lightning-layout-item size="4" padding="around-small">
+                <div class="slds-box slds-box_x-small">
+                    <p class="slds-text-title slds-text-color_weak">VIP set size</p>
+                    <p class="slds-text-heading_large slds-m-top_x-small">
+                        {vipCountDisplay}
+                    </p>
+                    <p class="slds-text-body_small slds-text-color_weak">
+                        Users identified as opportunity / authority nodes
+                    </p>
+                </div>
+            </lightning-layout-item>
+        </lightning-layout>
+
+        <!-- User list + drill-down -->
+        <lightning-layout multiple-rows>
+            <!-- User list -->
+            <lightning-layout-item size={listSize} padding="around-small">
+                <lightning-card title="All users by equity score">
+                    <div class="slds-p-horizontal_small" style="height: 600px;">
+                        <lightning-datatable
+                            key-field="id"
+                            data={users}
+                            columns={columns}
+                            max-row-selection="1"
+                            onrowselection={handleRowSelection}
+                            hide-checkbox-column={hideCheckbox}>
+                        </lightning-datatable>
+                    </div>
+                    <p class="slds-text-body_small slds-text-color_weak slds-m-around_small">
+                        Sorted worst-off-first. Select a row to see disparity breakdown + recommendations.
+                    </p>
+                </lightning-card>
+            </lightning-layout-item>
+
+            <!-- Drill-down panel -->
+            <template if:true={hasSelectedUser}>
+                <lightning-layout-item size="6" padding="around-small">
+                    <lightning-card title="User disparity breakdown">
+                        <lightning-button-icon
+                            slot="actions"
+                            icon-name="utility:close"
+                            variant="border-filled"
+                            alternative-text="Close"
+                            onclick={handleClearSelection}>
+                        </lightning-button-icon>
+
+                        <div class="slds-p-around_medium">
+                            <p class="slds-text-heading_medium slds-m-bottom_x-small">
+                                {selectedUserName}
+                            </p>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_medium">
+                                Salesforce ID: {selectedUserId}
+                            </p>
+
+                            <template if:true={selectedIsVip}>
+                                <lightning-badge label="VIP" variant="success" class="slds-m-bottom_small"></lightning-badge>
+                            </template>
+
+                            <!-- Stats grid -->
+                            <div class="slds-grid slds-wrap slds-m-bottom_medium">
+                                <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                                    <p class="slds-text-title slds-text-color_weak">Distance to nearest VIP</p>
+                                    <p class="slds-text-heading_small">{selectedDistanceDisplay}</p>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                                    <p class="slds-text-title slds-text-color_weak">This user's utility</p>
+                                    <p class="slds-text-heading_small">{selectedUtilityDisplay}</p>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                                    <p class="slds-text-title slds-text-color_weak">Department avg</p>
+                                    <p class="slds-text-heading_small">{selectedDeptAvgDisplay}</p>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                                    <p class="slds-text-title slds-text-color_weak">Org avg (juniors)</p>
+                                    <p class="slds-text-heading_small">{selectedOrgAvgDisplay}</p>
+                                </div>
+                            </div>
+
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_medium" style="font-style: italic;">
+                                Higher utility = shorter path to a VIP. Equity recommendations target users whose
+                                utility drags their department's average down.
+                            </p>
+
+                            <!-- Recommendations -->
+                            <template if:true={selectedHasRecs}>
+                                <p class="slds-text-title_caps slds-m-bottom_x-small">
+                                    Suggested grants for this user
+                                </p>
+                                <template for:each={decoratedSelectedRecs} for:item="rec">
+                                    <div key={rec.id} class={rec.cardClass}>
+                                        <p class="slds-text-body_regular">
+                                            <strong>{rec.psLabel}</strong>
+                                            <span class="slds-text-color_weak">({rec.psId})</span>
+                                        </p>
+                                        <p class="slds-text-body_small slds-m-top_xx-small">
+                                            {rec.description}
+                                        </p>
+                                        <template if:true={rec.rationale}>
+                                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_xx-small" style="font-style: italic;">
+                                                {rec.rationale}
+                                            </p>
+                                        </template>
+                                        <div class="slds-grid slds-grid_align-end slds-m-top_x-small">
+                                            <template if:true={rec.isApplied}>
+                                                <lightning-badge label="Applied" variant="success"></lightning-badge>
+                                            </template>
+                                            <template if:true={rec.isDismissed}>
+                                                <lightning-badge label="Dismissed"></lightning-badge>
+                                            </template>
+                                            <template if:false={rec.isApplied}>
+                                                <template if:false={rec.isDismissed}>
+                                                    <lightning-button
+                                                        label="Dismiss"
+                                                        variant="neutral"
+                                                        data-rec-id={rec.id}
+                                                        onclick={handleDismiss}
+                                                        class="slds-m-right_x-small">
+                                                    </lightning-button>
+                                                    <lightning-button
+                                                        label="Mark applied"
+                                                        variant="brand"
+                                                        data-rec-id={rec.id}
+                                                        onclick={handleApply}>
+                                                    </lightning-button>
+                                                </template>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </template>
+
+                            <template if:false={selectedHasRecs}>
+                                <div class="slds-text-body_small slds-text-color_weak slds-m-top_small">
+                                    No active equity recommendations for this user.
+                                </div>
+                            </template>
+                        </div>
+                    </lightning-card>
+                </lightning-layout-item>
+            </template>
+        </lightning-layout>
+    </div>
+</template>

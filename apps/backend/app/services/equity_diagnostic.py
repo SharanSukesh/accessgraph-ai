@@ -63,6 +63,21 @@ class UserDisparityPayload:
     is_vip: bool
 
 
+@dataclass
+class UserEquityRow:
+    """One row in the bulk per-user equity list (drives the LWC + admin tab)."""
+    user_sf_id: str
+    name: str
+    department: Optional[str]
+    is_vip: bool
+    # Distance to nearest VIP — None when unreachable. Lower = better.
+    distance_to_nearest_vip: Optional[float]
+    inverse_distance_utility: float
+    department_avg_utility: float
+    # How many active (status=pending) equity recommendations target this user
+    open_recommendations: int
+
+
 class EquityDiagnosticService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -144,6 +159,99 @@ class EquityDiagnosticService:
             )
             for r in reversed(rows)
         ]
+
+    async def user_equity_list(
+        self,
+        org_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        include_vips: bool = True,
+    ) -> List[UserEquityRow]:
+        """Per-user equity stats for the LWC + admin tab user list.
+
+        Returns rows sorted by ascending utility (worst-off juniors first)
+        which is the most informative view for an admin scanning who to
+        help. Caps at 500 per page; pagination via offset.
+        """
+        from sqlalchemy import func
+        from app.domain.models import Recommendation, RecommendationStatus, RecommendationTrack, UserSnapshot
+        limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
+
+        rec_service = EquityRecommendationService(self.db)
+        graph = await rec_service._build_graph(org_id)
+        if not graph.user_ids:
+            return []
+
+        cost = rec_service._compute_distances(graph)
+        _, _, _, per_user_util = rec_service._group_utilities(graph)
+        group_util, _, _, _ = rec_service._group_utilities(graph)
+
+        # Count open (pending) equity recs per target user in one round-trip
+        rec_counts: Dict[str, int] = {}
+        if not include_vips:
+            rec_counts = {}  # we'll only show juniors anyway
+        rows = (
+            await self.db.execute(
+                select(Recommendation.target_entity_id, func.count())
+                .where(
+                    Recommendation.organization_id == org_id,
+                    Recommendation.track == RecommendationTrack.EQUITY,
+                    Recommendation.status == RecommendationStatus.PENDING,
+                )
+                .group_by(Recommendation.target_entity_id)
+            )
+        ).all()
+        for sf_id, count in rows:
+            rec_counts[sf_id] = int(count)
+
+        # Build name lookup
+        users_by_sf_id = {
+            u.salesforce_id: u for u in (
+                await self.db.execute(
+                    select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
+                )
+            ).scalars().all()
+        }
+
+        vip_set = set(graph.vip_indices.tolist())
+        results: List[UserEquityRow] = []
+        for sf_id, idx in graph.user_index.items():
+            is_vip = idx in vip_set
+            if is_vip and not include_vips:
+                continue
+            dept = graph.user_dept[idx]
+            vip_dist = (
+                cost[idx, graph.vip_indices]
+                if graph.vip_indices.size > 0
+                else None
+            )
+            if vip_dist is None or not np.isfinite(np.min(vip_dist)):
+                nearest = None
+                utility = 0.0
+            else:
+                nearest = float(np.min(vip_dist))
+                utility = float(per_user_util[idx])
+            user_row = users_by_sf_id.get(sf_id)
+            display_name = (
+                user_row.name if user_row and user_row.name
+                else (user_row.username if user_row else sf_id)
+            )
+            results.append(UserEquityRow(
+                user_sf_id=sf_id,
+                name=display_name,
+                department=dept,
+                is_vip=is_vip,
+                distance_to_nearest_vip=nearest,
+                inverse_distance_utility=utility,
+                department_avg_utility=float(group_util.get(dept, 0.0)) if dept else 0.0,
+                open_recommendations=int(rec_counts.get(sf_id, 0)),
+            ))
+
+        # Sort: juniors with lowest utility first (most interesting). VIPs
+        # land at the end via the (is_vip, utility) key.
+        results.sort(key=lambda r: (r.is_vip, r.inverse_distance_utility))
+        return results[offset:offset + limit]
 
     async def user_disparity(self, org_id: str, user_sf_id: str) -> UserDisparityPayload:
         """Recompute the live graph + utilities so the per-user view is

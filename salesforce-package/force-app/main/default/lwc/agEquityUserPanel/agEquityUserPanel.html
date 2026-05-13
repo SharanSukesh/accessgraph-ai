@@ -1,0 +1,116 @@
+<template>
+    <lightning-card title="AccessGraph Equity" icon-name="custom:custom33">
+        <lightning-button-icon
+            slot="actions"
+            icon-name="utility:refresh"
+            variant="border-filled"
+            alternative-text="Refresh"
+            onclick={handleRefresh}>
+        </lightning-button-icon>
+
+        <div class="slds-p-horizontal_medium">
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading equity data" size="small"></lightning-spinner>
+            </template>
+
+            <template if:false={isLoading}>
+                <template if:true={errorReason}>
+                    <div class="slds-text-body_small slds-text-color_weak">
+                        {errorReason}
+                    </div>
+                </template>
+
+                <template if:true={hasEquityData}>
+                    <!-- Status badge row -->
+                    <div class="slds-m-bottom_small">
+                        <lightning-badge label={vipBadgeLabel} variant={vipBadgeVariant}></lightning-badge>
+                        <template if:true={equity.department}>
+                            <span class="slds-text-body_small slds-m-left_small">
+                                Department: <strong>{equity.department}</strong>
+                            </span>
+                        </template>
+                    </div>
+
+                    <!-- Stats grid -->
+                    <div class="slds-grid slds-wrap slds-gutters_x-small">
+                        <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                            <p class="slds-text-title slds-text-color_weak">Distance to nearest VIP</p>
+                            <p class="slds-text-heading_small">{distanceDisplay}</p>
+                        </div>
+                        <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                            <p class="slds-text-title slds-text-color_weak">Utility</p>
+                            <p class="slds-text-heading_small">{utilityDisplay}</p>
+                            <p class={utilityCompareClass} style="font-size: 0.75rem;">
+                                {utilityCompareLabel}
+                            </p>
+                        </div>
+                        <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                            <p class="slds-text-title slds-text-color_weak">Dept avg</p>
+                            <p class="slds-text-heading_small">{departmentAvgDisplay}</p>
+                        </div>
+                        <div class="slds-col slds-size_1-of-2 slds-m-bottom_small">
+                            <p class="slds-text-title slds-text-color_weak">Org avg (juniors)</p>
+                            <p class="slds-text-heading_small">{orgAvgDisplay}</p>
+                        </div>
+                    </div>
+
+                    <!-- Recommendations -->
+                    <template if:true={hasRecommendations}>
+                        <div class="slds-m-top_medium">
+                            <p class="slds-text-title_caps slds-m-bottom_x-small">
+                                Suggested grants for this user
+                            </p>
+                            <template for:each={decoratedRecs} for:item="rec">
+                                <div key={rec.id} class={rec.cardClass}>
+                                    <p class="slds-text-body_regular slds-text-color_default">
+                                        <strong>{rec.psLabel}</strong>
+                                        <span class="slds-text-color_weak">({rec.psId})</span>
+                                    </p>
+                                    <p class="slds-text-body_small slds-m-top_xx-small">
+                                        {rec.description}
+                                    </p>
+                                    <template if:true={rec.rationale}>
+                                        <p class="slds-text-body_small slds-text-color_weak slds-m-top_xx-small" style="font-style: italic;">
+                                            {rec.rationale}
+                                        </p>
+                                    </template>
+                                    <div class="slds-grid slds-grid_align-end slds-m-top_x-small">
+                                        <template if:true={rec.isApplied}>
+                                            <lightning-badge label="Applied" variant="success"></lightning-badge>
+                                        </template>
+                                        <template if:true={rec.isDismissed}>
+                                            <lightning-badge label="Dismissed"></lightning-badge>
+                                        </template>
+                                        <template if:false={rec.isApplied}>
+                                            <template if:false={rec.isDismissed}>
+                                                <lightning-button
+                                                    label="Dismiss"
+                                                    variant="neutral"
+                                                    data-rec-id={rec.id}
+                                                    onclick={handleDismiss}
+                                                    class="slds-m-right_x-small">
+                                                </lightning-button>
+                                                <lightning-button
+                                                    label="Mark applied"
+                                                    variant="brand"
+                                                    data-rec-id={rec.id}
+                                                    onclick={handleApply}>
+                                                </lightning-button>
+                                            </template>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <template if:false={hasRecommendations}>
+                        <div class="slds-text-body_small slds-text-color_weak slds-m-top_small">
+                            No active equity recommendations for this user.
+                        </div>
+                    </template>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>

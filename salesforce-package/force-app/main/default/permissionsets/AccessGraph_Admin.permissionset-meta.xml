@@ -17,6 +17,10 @@
         <tab>AccessGraph_Explorer</tab>
         <visibility>Visible</visibility>
     </tabSettings>
+    <tabSettings>
+        <tab>AccessGraph_Equity</tab>
+        <visibility>Visible</visibility>
+    </tabSettings>
 
     <classAccesses>
         <apexClass>AccessGraphConnector</apexClass>

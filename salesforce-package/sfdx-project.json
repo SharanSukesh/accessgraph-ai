@@ -4,10 +4,10 @@
       "path": "force-app",
       "default": true,
       "package": "AccessGraph AI Managed",
-      "versionName": "ver 1.4",
-      "versionNumber": "1.4.0.NEXT",
-      "ancestorId": "04tdL000000Z5zJQAS",
-      "versionDescription": "Adds the AccessGraph Explorer tab: a searchable picker for users / permission sets / fields with one-click deep-link to AccessGraph AI. Replaces the Setup-page detail-button approach (which doesn't surface cleanly from managed packages on standard objects)."
+      "versionName": "ver 1.5",
+      "versionNumber": "1.5.0.NEXT",
+      "ancestorId": "04tdL000000Z6FRQA0",
+      "versionDescription": "Adds the AccessGraph Equity tab and a User-record-page panel showing GAEA-driven equity recommendations. The tab lists all users sorted worst-off-first by access utility to VIP nodes; selecting a row opens a disparity drill-down with the policy's suggested permission grants and Apply / Dismiss controls. Same recs surface on User Lightning Record Pages via the new agEquityUserPanel component (drop it in via App Builder)."
     }
   ],
   "name": "AccessGraph AI",
