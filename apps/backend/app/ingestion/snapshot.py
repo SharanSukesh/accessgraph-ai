@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import (
     AccountShareSnapshot,
     AccountTeamMemberSnapshot,
+    OpportunityTeamMemberSnapshot,
     FieldPermissionSnapshot,
     GroupMemberSnapshot,
     GroupSnapshot,
@@ -90,6 +91,7 @@ class SnapshotPersister:
                 existing.profile_id = user_data.get("ProfileId")
                 existing.user_role_id = user_data.get("UserRoleId")
                 existing.manager_id = user_data.get("ManagerId")
+                existing.delegated_approver_id = user_data.get("DelegatedApproverId")
                 existing.department = user_data.get("Department")
                 existing.title = user_data.get("Title")
                 existing.last_login_at = last_login_at
@@ -109,6 +111,7 @@ class SnapshotPersister:
                     profile_id=user_data.get("ProfileId"),
                     user_role_id=user_data.get("UserRoleId"),
                     manager_id=user_data.get("ManagerId"),
+                    delegated_approver_id=user_data.get("DelegatedApproverId"),
                     department=user_data.get("Department"),
                     title=user_data.get("Title"),
                     last_login_at=last_login_at,
@@ -673,6 +676,53 @@ class SnapshotPersister:
         logger.info(f"Persisted {count} account team members")
         return count
 
+    async def persist_opportunity_team_members(
+        self,
+        org_id: str,
+        members: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist opportunity team member snapshots."""
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for member_data in members:
+            result = await self.db.execute(
+                select(OpportunityTeamMemberSnapshot).where(
+                    OpportunityTeamMemberSnapshot.organization_id == org_id,
+                    OpportunityTeamMemberSnapshot.salesforce_id == member_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.opportunity_id = member_data["OpportunityId"]
+                existing.user_id = member_data["UserId"]
+                existing.team_member_role = member_data.get("TeamMemberRole")
+                existing.opportunity_access_level = member_data.get(
+                    "OpportunityAccessLevel"
+                )
+                existing.snapshot_date = snapshot_date
+            else:
+                member = OpportunityTeamMemberSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=member_data["Id"],
+                    opportunity_id=member_data["OpportunityId"],
+                    user_id=member_data["UserId"],
+                    team_member_role=member_data.get("TeamMemberRole"),
+                    opportunity_access_level=member_data.get(
+                        "OpportunityAccessLevel"
+                    ),
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(member)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} opportunity team members")
+        return count
+
     async def persist_all(
         self,
         org_id: str,
@@ -724,6 +774,9 @@ class SnapshotPersister:
         )
         counts["account_team_members"] = await self.persist_account_team_members(
             org_id, data.get("account_team_members", []), sync_job_id
+        )
+        counts["opportunity_team_members"] = await self.persist_opportunity_team_members(
+            org_id, data.get("opportunity_team_members", []), sync_job_id
         )
 
         await self.db.commit()

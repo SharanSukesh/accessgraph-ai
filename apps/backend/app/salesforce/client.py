@@ -14,6 +14,7 @@ from app.salesforce.models import (
     SalesforceAccountShare,
     SalesforceAccountTeamMember,
     SalesforceFieldPermission,
+    SalesforceOpportunityTeamMember,
     SalesforceGroup,
     SalesforceGroupMember,
     SalesforceObjectPermission,
@@ -126,6 +127,59 @@ class SalesforceAPIClient:
             return QueryResponse(**data)
 
     # =========================================================================
+    # Mutation Methods (write-back to Salesforce records)
+    # =========================================================================
+    #
+    # First write-paths in the AccessGraph backend. Used by the Reporting
+    # Graph editor in the web app — admins draw / delete edges in the UI
+    # and the resulting User.ManagerId / User.DelegatedApproverId updates
+    # land here. Every PATCH is audit-logged at the route layer.
+
+    async def update_user(
+        self,
+        user_sf_id: str,
+        fields: Dict[str, Any],
+    ) -> int:
+        """PATCH /services/data/v62.0/sobjects/User/{id}.
+
+        Salesforce returns 204 No Content on success (no response body)
+        and a 4xx with a JSON error array on failure. We return the HTTP
+        status code so callers can distinguish success/failure cleanly.
+
+        `fields` is the partial payload — e.g. {"ManagerId": "005gL...",
+        "DelegatedApproverId": null}. Sending null clears the lookup.
+        """
+        url = f"{self.base_url}/sobjects/User/{user_sf_id}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.patch(
+                url, headers=self._get_headers(), json=fields,
+            )
+            if response.status_code >= 400:
+                # raise_for_status loses the body; surface it for the caller
+                raise httpx.HTTPStatusError(
+                    f"Salesforce PATCH User/{user_sf_id} returned "
+                    f"{response.status_code}: {response.text}",
+                    request=response.request,
+                    response=response,
+                )
+            return response.status_code
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        reraise=True,
+    )
+    async def update_user_with_retry(
+        self,
+        user_sf_id: str,
+        fields: Dict[str, Any],
+    ) -> int:
+        """update_user wrapped in the standard tenacity backoff. Used by
+        the bulk reporting-graph apply path; transient 5xx → 3 retries."""
+        return await self.update_user(user_sf_id, fields)
+
+    # =========================================================================
     # Extraction Methods
     # =========================================================================
 
@@ -138,7 +192,8 @@ class SalesforceAPIClient:
         """
         soql = """
             SELECT Id, Username, Name, Email, ProfileId, UserRoleId, ManagerId,
-                   IsActive, UserType, Department, Title, LastLoginDate
+                   DelegatedApproverId, IsActive, UserType, Department, Title,
+                   LastLoginDate
             FROM User
             WHERE IsActive = true
         """
@@ -437,6 +492,29 @@ class SalesforceAPIClient:
         logger.info(f"Extracted {len(members)} account team members")
         return members
 
+    async def extract_opportunity_team_members(
+        self,
+    ) -> List[SalesforceOpportunityTeamMember]:
+        """Extract OpportunityTeamMember rows.
+
+        Optional — not all orgs have Sales Cloud team selling enabled.
+        Caller (sync orchestrator) should wrap this in try/except since a
+        query against this object can 400 on orgs where it's not provisioned.
+        """
+        soql = """
+            SELECT Id, OpportunityId, UserId, TeamMemberRole,
+                   OpportunityAccessLevel
+            FROM OpportunityTeamMember
+        """
+
+        records = await self.query_all(soql)
+        members = [
+            SalesforceOpportunityTeamMember(**rec) for rec in records
+        ]
+
+        logger.info(f"Extracted {len(members)} opportunity team members")
+        return members
+
     async def extract_sharing_rules(self) -> List[SalesforceSharingRule]:
         """
         Extract all sharing rules using Tooling API
@@ -554,6 +632,17 @@ class SalesforceAPIClient:
         except Exception as e:
             logger.warning(f"Could not extract account team members (may not be enabled): {e}")
 
+        # OpportunityTeamMember is also optional — requires Sales Cloud team
+        # selling to be turned on. Same defensive pattern as account teams.
+        opportunity_team_members = []
+        try:
+            opportunity_team_members = await self.extract_opportunity_team_members()
+        except Exception as e:
+            logger.warning(
+                f"Could not extract opportunity team members "
+                f"(may not be enabled): {e}"
+            )
+
         # Extract sharing rules
         sharing_rules = await self.extract_sharing_rules()
 
@@ -574,6 +663,7 @@ class SalesforceAPIClient:
             "account_shares": [ash.model_dump() for ash in account_shares],
             "opportunity_shares": [osh.model_dump() for osh in opportunity_shares],
             "account_team_members": [atm.model_dump() for atm in account_team_members],
+            "opportunity_team_members": [otm.model_dump() for otm in opportunity_team_members],
             "organization_wide_defaults": [owd.model_dump() for owd in organization_wide_defaults],
             "sharing_rules": [sr.model_dump() for sr in sharing_rules],
         }

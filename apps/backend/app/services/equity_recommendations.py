@@ -26,8 +26,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
+    AccountShareSnapshot,
+    AccountTeamMemberSnapshot,
     AnomalySeverity,
     EquitySnapshot,
+    OpportunityShareSnapshot,
+    OpportunityTeamMemberSnapshot,
     PermissionSetAssignmentSnapshot,
     PermissionSetSnapshot,
     ProfileSnapshot,
@@ -45,12 +49,28 @@ from app.domain.models import (
 logger = logging.getLogger(__name__)
 
 
-# Edge-type weights — must match research/rl_solution/env.py:EDGE_WEIGHTS.
+# Edge-type weights — higher weight = stronger tie = lower traversal cost
+# (cost = 1/weight). Ordered by semantic strength from "direct supervisory
+# claim" down to "shared resource context".
+#
+# v1 had three edges (manages, role_above, ps_overlap). Phase 2 adds four
+# more — delegated_approver, account_team, opportunity_team, record_share —
+# turning ps_overlap from a primary signal into a proxy fallback for orgs
+# with sparse structural data.
 EDGE_WEIGHTS = {
-    "manages": 1.0,
-    "role_above": 0.7,
-    "ps_overlap": 0.5,
+    "manages":            1.0,   # User.ManagerId — direct supervision
+    "delegated_approver": 0.9,   # User.DelegatedApproverId — backup approver
+    "role_above":         0.7,   # UserRole hierarchy
+    "opportunity_team":   0.6,   # OpportunityTeamMember — same-deal collab
+    "account_team":       0.6,   # AccountTeamMember — same-account collab
+    "ps_overlap":         0.5,   # shared Permission Set — proxy fallback
+    "record_share":       0.4,   # shared Account/Opp visibility
 }
+
+# Hard cap on per-record-share rows folded into the graph per generate.
+# AccountShare/OpportunityShare can be 10M+ on enterprise orgs; this keeps
+# the (n × n) adjacency build tractable. Tune via env var if needed.
+RECORD_SHARE_MAX_ROWS = int(os.environ.get("EQUITY_RECORD_SHARE_MAX", "50000"))
 
 # Canonical vocabulary — must match research/rl_solution/env.py exactly so
 # trained weights line up with the inference-time feature encoding. If
@@ -89,9 +109,16 @@ class EquityGraph:
     # PermissionSet display label (PermissionSet.Label) keyed by sf_id —
     # same readability story as user_display_name.
     ps_label_by_id: Dict[str, str]
-    # Adjacency matrices (n, n) for user-user relations
+    # Adjacency matrices (n, n) for user-user relations. Edge types are
+    # additive — a single pair can be connected by multiple types and the
+    # cheapest wins in Floyd-Warshall.
     adj_manages: np.ndarray
     adj_role_above: np.ndarray
+    # Phase 2 additions:
+    adj_delegated_approver: np.ndarray   # User.DelegatedApproverId
+    adj_account_team: np.ndarray         # AccountTeamMember co-membership
+    adj_opportunity_team: np.ndarray     # OpportunityTeamMember co-membership
+    adj_record_share: np.ndarray         # shared Account/Opp visibility
     # User-PS bipartite, mutated during the rollout
     user_ps: Dict[str, Set[str]]
     # R: integer indices into user_ids
@@ -195,8 +222,44 @@ class EquityRecommendationService:
             select(VIPDesignation).where(VIPDesignation.organization_id == org_id)
         )).scalars().all()
 
+        # Phase 2 data: team-membership + record-share rows feed the new
+        # edge types. Both fetches are filtered to the current org and
+        # capped per-record-share to keep adjacency build tractable on
+        # enterprise customers (millions of share rows).
+        account_team_members = (await self.db.execute(
+            select(AccountTeamMemberSnapshot).where(
+                AccountTeamMemberSnapshot.organization_id == org_id,
+                AccountTeamMemberSnapshot.is_deleted.is_(False),
+            )
+        )).scalars().all()
+
+        opportunity_team_members = (await self.db.execute(
+            select(OpportunityTeamMemberSnapshot).where(
+                OpportunityTeamMemberSnapshot.organization_id == org_id,
+                OpportunityTeamMemberSnapshot.is_deleted.is_(False),
+            )
+        )).scalars().all()
+
+        account_shares = (await self.db.execute(
+            select(AccountShareSnapshot).where(
+                AccountShareSnapshot.organization_id == org_id,
+                AccountShareSnapshot.is_deleted.is_(False),
+            ).limit(RECORD_SHARE_MAX_ROWS)
+        )).scalars().all()
+
+        opportunity_shares = (await self.db.execute(
+            select(OpportunityShareSnapshot).where(
+                OpportunityShareSnapshot.organization_id == org_id,
+                OpportunityShareSnapshot.is_deleted.is_(False),
+            ).limit(RECORD_SHARE_MAX_ROWS)
+        )).scalars().all()
+
         return self._materialize_graph(
             users, roles, profiles, assignments, permission_sets, designations,
+            account_team_members=account_team_members,
+            opportunity_team_members=opportunity_team_members,
+            account_shares=account_shares,
+            opportunity_shares=opportunity_shares,
         )
 
     def _materialize_graph(
@@ -207,7 +270,15 @@ class EquityRecommendationService:
         assignments: List[PermissionSetAssignmentSnapshot],
         permission_sets: List[PermissionSetSnapshot],
         designations: List[VIPDesignation],
+        account_team_members: Optional[List[AccountTeamMemberSnapshot]] = None,
+        opportunity_team_members: Optional[List[OpportunityTeamMemberSnapshot]] = None,
+        account_shares: Optional[List[AccountShareSnapshot]] = None,
+        opportunity_shares: Optional[List[OpportunityShareSnapshot]] = None,
     ) -> EquityGraph:
+        account_team_members = account_team_members or []
+        opportunity_team_members = opportunity_team_members or []
+        account_shares = account_shares or []
+        opportunity_shares = opportunity_shares or []
         user_ids = [u.salesforce_id for u in users]
         user_index = {sf_id: i for i, sf_id in enumerate(user_ids)}
         n = len(users)
@@ -270,6 +341,48 @@ class EquityRecommendationService:
                 if v.user_role_id in anc and v.salesforce_id != u.salesforce_id:
                     j = user_index[v.salesforce_id]
                     adj_role_above[i, j] = 1.0
+
+        # Adjacency: delegated_approver — directed junior -> delegated approver,
+        # same shape as `manages`. Treated as a near-equivalent supervisory tie.
+        adj_delegated_approver = np.zeros((n, n), dtype=np.float32)
+        for u in users:
+            if u.delegated_approver_id and u.delegated_approver_id in user_index:
+                i = user_index[u.salesforce_id]
+                j = user_index[u.delegated_approver_id]
+                adj_delegated_approver[i, j] = 1.0
+
+        # Adjacency: account_team — bidirectional edge between every pair of
+        # users on the same account team. Justified as "collaborating on the
+        # same account daily". We use the maximal-clique-per-record approach
+        # because team roles aren't strictly ranked across Salesforce orgs.
+        adj_account_team = self._build_team_adjacency(
+            n,
+            user_index,
+            [(m.account_id, m.user_id) for m in account_team_members],
+        )
+
+        adj_opportunity_team = self._build_team_adjacency(
+            n,
+            user_index,
+            [(m.opportunity_id, m.user_id) for m in opportunity_team_members],
+        )
+
+        # Adjacency: record_share — bidirectional edge between every pair of
+        # users with shared (non-owner) access to the same Account or
+        # Opportunity. Captures "users with co-visibility into the same
+        # business entity". Capped by RECORD_SHARE_MAX_ROWS in _build_graph.
+        record_share_pairs: List[tuple] = []
+        for s in account_shares:
+            uog = s.user_or_group_id
+            if uog and uog in user_index:
+                record_share_pairs.append((s.account_id, uog))
+        for s in opportunity_shares:
+            uog = s.user_or_group_id
+            if uog and uog in user_index:
+                record_share_pairs.append((s.opportunity_id, uog))
+        adj_record_share = self._build_team_adjacency(
+            n, user_index, record_share_pairs,
+        )
 
         # User-PS bipartite (mutable during rollout)
         user_ps: Dict[str, Set[str]] = {sf_id: set() for sf_id in user_ids}
@@ -347,10 +460,45 @@ class EquityRecommendationService:
             ps_label_by_id=ps_label_by_id,
             adj_manages=adj_manages,
             adj_role_above=adj_role_above,
+            adj_delegated_approver=adj_delegated_approver,
+            adj_account_team=adj_account_team,
+            adj_opportunity_team=adj_opportunity_team,
+            adj_record_share=adj_record_share,
             user_ps=user_ps,
             vip_indices=vip_indices,
             junior_indices=junior_indices,
         )
+
+    @staticmethod
+    def _build_team_adjacency(
+        n: int,
+        user_index: Dict[str, int],
+        pairs: List[tuple],
+    ) -> np.ndarray:
+        """Build a symmetric user-user adjacency from (record_id, user_id) rows.
+
+        Used for account_team / opportunity_team / record_share edges. For
+        each record, every user that touches it gets an edge to every other
+        user that touches the same record — a maximal-clique-per-record
+        construction. Cheaper than computing actual cliques and good enough
+        because shortest-path in Floyd-Warshall folds redundant edges away.
+
+        Skips users not in `user_index` (group recipients, deleted users, etc).
+        """
+        adj = np.zeros((n, n), dtype=np.float32)
+        by_record: Dict[str, List[int]] = {}
+        for record_id, user_sf_id in pairs:
+            if not user_sf_id or user_sf_id not in user_index:
+                continue
+            by_record.setdefault(record_id, []).append(user_index[user_sf_id])
+        for idxs in by_record.values():
+            if len(idxs) < 2:
+                continue
+            for a in idxs:
+                for b in idxs:
+                    if a != b:
+                        adj[a, b] = 1.0
+        return adj
 
     # ------------------------------------------------------------------
     # Distance / utility math (numpy-only; mirrors env._snapshot_info)
@@ -383,8 +531,18 @@ class EquityRecommendationService:
             cost[mask] = np.minimum(cost[mask], edge_cost)
 
         _apply(graph.adj_manages, 1.0 / EDGE_WEIGHTS["manages"])
+        _apply(
+            graph.adj_delegated_approver,
+            1.0 / EDGE_WEIGHTS["delegated_approver"],
+        )
         _apply(graph.adj_role_above, 1.0 / EDGE_WEIGHTS["role_above"])
+        _apply(
+            graph.adj_opportunity_team,
+            1.0 / EDGE_WEIGHTS["opportunity_team"],
+        )
+        _apply(graph.adj_account_team, 1.0 / EDGE_WEIGHTS["account_team"])
         _apply(self._build_ps_adjacency(graph), 1.0 / EDGE_WEIGHTS["ps_overlap"])
+        _apply(graph.adj_record_share, 1.0 / EDGE_WEIGHTS["record_share"])
 
         for k in range(n):
             row_k = cost[k, :][None, :]
@@ -564,9 +722,13 @@ class EquityRecommendationService:
         group_util, disparity, most_dis, _ = self._group_utilities(graph)
         equity_index = self._equity_index(group_util)
         edge_counts = {
-            "manages": int(graph.adj_manages.sum()),
-            "role_above": int(graph.adj_role_above.sum()),
-            "ps_overlap": int(self._build_ps_adjacency(graph).sum()),
+            "manages":            int(graph.adj_manages.sum()),
+            "delegated_approver": int(graph.adj_delegated_approver.sum()),
+            "role_above":         int(graph.adj_role_above.sum()),
+            "opportunity_team":   int(graph.adj_opportunity_team.sum()),
+            "account_team":       int(graph.adj_account_team.sum()),
+            "ps_overlap":         int(self._build_ps_adjacency(graph).sum()),
+            "record_share":       int(graph.adj_record_share.sum()),
         }
 
         now = datetime.now(timezone.utc)

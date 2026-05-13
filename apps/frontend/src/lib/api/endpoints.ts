@@ -58,4 +58,9 @@ export const endpoints = {
   equityGenerate: (orgId: string) => `/orgs/${orgId}/equity/recommendations/generate`,
   equityHistory: (orgId: string) => `/orgs/${orgId}/equity/history`,
   equityUser: (orgId: string, userSfId: string) => `/orgs/${orgId}/equity/users/${userSfId}`,
+
+  // Reporting Graph editor — drag-and-drop manager / delegated-approver
+  // editor. POST /apply writes through to Salesforce User records.
+  reportingGraph: (orgId: string) => `/orgs/${orgId}/reporting-graph`,
+  reportingGraphApply: (orgId: string) => `/orgs/${orgId}/reporting-graph/apply`,
 } as const

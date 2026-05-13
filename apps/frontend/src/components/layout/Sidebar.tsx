@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Link2,
   Scale,
+  GitBranch,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
@@ -36,6 +37,7 @@ const navigationItems = [
   { name: 'Recommendations', path: 'recommendations', icon: CheckCircle },
   { name: 'Equity', path: 'equity', icon: Scale },
   { name: 'Graph Explorer', path: 'graph', icon: Network },
+  { name: 'Reporting Graph', path: 'reporting-graph', icon: GitBranch },
 ]
 
 export function Sidebar() {

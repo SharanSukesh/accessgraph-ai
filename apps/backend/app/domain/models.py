@@ -128,6 +128,10 @@ class AuditAction(str, PyEnum):
     # Salesforce
     CONNECT_SALESFORCE = "connect_salesforce"
     DISCONNECT_SALESFORCE = "disconnect_salesforce"
+    # Reporting Graph editor — drag-and-drop edge save writes back to
+    # User.ManagerId / User.DelegatedApproverId. Each edit logged
+    # with prior_value + new_value in context_data.
+    UPDATE_USER_RELATIONSHIP = "update_user_relationship"
 
 
 class OrgUserRole(str, PyEnum):
@@ -261,6 +265,10 @@ class UserSnapshot(Base, TimestampMixin):
     profile_id: Mapped[Optional[str]] = mapped_column(String(18))
     user_role_id: Mapped[Optional[str]] = mapped_column(String(18))
     manager_id: Mapped[Optional[str]] = mapped_column(String(18))
+    # Backup approver — second strongest user-to-user supervisory tie after
+    # ManagerId. Powers the `delegated_approver` edge type in the equity
+    # graph (apps/backend/app/services/equity_recommendations.py).
+    delegated_approver_id: Mapped[Optional[str]] = mapped_column(String(18))
 
     # Metadata
     department: Mapped[Optional[str]] = mapped_column(String(255))
@@ -281,6 +289,7 @@ class UserSnapshot(Base, TimestampMixin):
         Index("ix_user_profile", "profile_id"),
         Index("ix_user_role", "user_role_id"),
         Index("ix_user_manager", "manager_id"),
+        Index("ix_user_delegated_approver", "delegated_approver_id"),
     )
 
     def __repr__(self) -> str:
@@ -744,6 +753,38 @@ class AccountTeamMemberSnapshot(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<AccountTeamMemberSnapshot(account={self.account_id}, user={self.user_id}, role={self.team_member_role})>"
+
+
+class OpportunityTeamMemberSnapshot(Base, TimestampMixin):
+    """OpportunityTeamMember snapshot — used by GAEA `opportunity_team` edge.
+
+    Each row = one user on the team of one opportunity, with their stated
+    role and access level. Provides strong "users collaborating on the
+    same deal" signal for the equity graph.
+    """
+    __tablename__ = "opportunity_team_member_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
+
+    opportunity_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    team_member_role: Mapped[Optional[str]] = mapped_column(String(100))
+    opportunity_access_level: Mapped[Optional[str]] = mapped_column(String(20))
+
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "salesforce_id", "snapshot_date", name="uq_opp_team_org_sf_snapshot"),
+        Index("ix_opp_team_org", "organization_id"),
+        Index("ix_opp_team_opportunity", "opportunity_id"),
+        Index("ix_opp_team_user", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<OpportunityTeamMemberSnapshot(opp={self.opportunity_id}, user={self.user_id}, role={self.team_member_role})>"
 
 
 class GroupSnapshot(Base, TimestampMixin):

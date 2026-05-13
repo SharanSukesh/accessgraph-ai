@@ -46,6 +46,38 @@ async def get_current_org(access_token: Optional[str] = Cookie(None)) -> str:
         )
 
 
+async def get_current_actor_email(access_token: Optional[str] = Cookie(None)) -> str:
+    """Return the email claim from the JWT for audit-attribution purposes.
+
+    Used by mutating endpoints (write-back, reporting-graph apply) that
+    need to record who performed the change. Raises 401 if no token, no
+    decodable email, or invalid token.
+    """
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated. Please log in.",
+        )
+    from app.auth.jwt import verify_token
+    try:
+        payload = verify_token(access_token)
+        email = payload.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token missing email claim.",
+            )
+        return email
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Authentication error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed",
+        )
+
+
 async def get_current_org_optional(access_token: Optional[str] = Cookie(None)) -> Optional[str]:
     """
     Get current organization ID from JWT cookie (optional)

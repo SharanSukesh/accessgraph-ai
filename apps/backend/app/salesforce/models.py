@@ -35,6 +35,7 @@ class SalesforceUser(BaseModel):
     ProfileId: str
     UserRoleId: Optional[str] = None
     ManagerId: Optional[str] = None
+    DelegatedApproverId: Optional[str] = None
     IsActive: bool = True
     UserType: Optional[str] = None
     Department: Optional[str] = None
@@ -181,6 +182,21 @@ class SalesforceAccountTeamMember(BaseModel):
     AccountAccessLevel: str
     OpportunityAccessLevel: str
     CaseAccessLevel: str
+
+
+class SalesforceOpportunityTeamMember(BaseModel):
+    """Salesforce OpportunityTeamMember object.
+
+    Junction object linking a User to an Opportunity with a stated team
+    role + the user's record-level access to that opportunity. Used by
+    the GAEA equity model as a strong "users collaborating on the same
+    deal" edge (apps/backend/app/services/equity_recommendations.py).
+    """
+    Id: str
+    OpportunityId: str
+    UserId: str
+    TeamMemberRole: Optional[str] = None
+    OpportunityAccessLevel: str
 
 
 class SalesforceOrganizationWideDefault(BaseModel):

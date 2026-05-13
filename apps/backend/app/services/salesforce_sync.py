@@ -265,6 +265,7 @@ class SalesforceSyncService:
                 profile_id=sf_user.ProfileId,
                 user_role_id=sf_user.UserRoleId,
                 manager_id=sf_user.ManagerId,
+                delegated_approver_id=sf_user.DelegatedApproverId,
                 is_active=sf_user.IsActive,
                 user_type=sf_user.UserType,
                 department=sf_user.Department,
