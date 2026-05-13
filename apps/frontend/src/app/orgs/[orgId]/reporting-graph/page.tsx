@@ -67,6 +67,13 @@ export default function ReportingGraphPage() {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [search, setSearch] = useState('')
   const [edgeMode, setEdgeMode] = useState<RelationshipField>('ManagerId')
+  // The Cytoscape 'ehcomplete' listener captures values at canvas-build time,
+  // so a useState alone would be stale when the user toggles modes after the
+  // canvas mounts. The ref is the source of truth read inside the listener.
+  const edgeModeRef = useRef<RelationshipField>('ManagerId')
+  useEffect(() => {
+    edgeModeRef.current = edgeMode
+  }, [edgeMode])
   const [pending, setPending] = useState<PendingEdit[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -91,6 +98,12 @@ export default function ReportingGraphPage() {
           source: e.source,
           target: e.target,
           edge_type: e.edge_type,
+          // Direction label so it's obvious who manages whom at a glance.
+          // Arrow + label both point from junior (source) → senior (target).
+          label:
+            e.edge_type === 'manager'
+              ? '→ manager'
+              : '→ delegated',
         },
         classes: e.edge_type === 'manager' ? 'edge-manager' : 'edge-delegated',
       })
@@ -104,7 +117,22 @@ export default function ReportingGraphPage() {
     const cy = cytoscape({
       container: containerRef.current,
       elements,
-      layout: { name: 'cose', animate: false, fit: true } as any,
+      // Nodes must remain user-grabbable so admins can reposition the
+      // org chart. Pan/zoom enabled. Layout runs once to seed positions;
+      // afterwards positions are sticky.
+      autoungrabify: false,
+      autounselectify: false,
+      userPanningEnabled: true,
+      userZoomingEnabled: true,
+      boxSelectionEnabled: false,
+      layout: {
+        name: 'cose',
+        animate: false,
+        fit: true,
+        nodeRepulsion: 12000,
+        idealEdgeLength: 90,
+        edgeElasticity: 100,
+      } as any,
       style: [
         {
           selector: 'node',
@@ -134,7 +162,14 @@ export default function ReportingGraphPage() {
             width: 2,
             'curve-style': 'bezier',
             'target-arrow-shape': 'triangle',
+            'arrow-scale': 1.4,
             opacity: 0.85,
+            label: 'data(label)',
+            'font-size': 8,
+            color: '#6b7280',
+            'text-background-color': '#fff',
+            'text-background-opacity': 0.85,
+            'text-background-padding': '2px',
           },
         },
         {
@@ -153,7 +188,15 @@ export default function ReportingGraphPage() {
           },
         },
         {
-          selector: '.pending-add',
+          selector: '.pending-add-manager',
+          style: {
+            'line-color': '#22c55e',
+            'target-arrow-color': '#22c55e',
+            width: 3,
+          },
+        },
+        {
+          selector: '.pending-add-delegated',
           style: {
             'line-color': '#22c55e',
             'target-arrow-color': '#22c55e',
@@ -169,20 +212,35 @@ export default function ReportingGraphPage() {
             opacity: 0.4,
           },
         },
+        {
+          selector: '.eh-handle',
+          style: {
+            'background-color': '#22c55e',
+            width: 12,
+            height: 12,
+            shape: 'ellipse',
+            'overlay-opacity': 0,
+            'border-width': 2,
+            'border-color': '#fff',
+          },
+        },
       ],
     })
     cyRef.current = cy
 
-    // Initialize edgehandles extension for drag-to-create-edge
+    // Initialize edgehandles extension. Critically we do NOT call
+    // enableDrawMode() — that was making every node-drag start an edge
+    // and locking us out of repositioning nodes. Default behavior is to
+    // show a small green handle on hover; the user clicks/drags THAT
+    // handle to draw an edge, leaving the node body normally grabbable.
     const eh = (cy as any).edgehandles({
-      preview: true,
-      hoverDelay: 80,
+      preview: false,
+      hoverDelay: 120,
       snap: true,
       noEdgeEventsInDraw: false,
       handleNodes: 'node',
       edgeType: () => 'flat',
     })
-    eh.enableDrawMode()
 
     cy.on('ehcomplete', (_evt: any, sourceNode: any, targetNode: any, addedEdge: any) => {
       const src = sourceNode.id()
@@ -191,10 +249,21 @@ export default function ReportingGraphPage() {
         addedEdge.remove()
         return
       }
-      const field: RelationshipField = edgeMode
+      // Read the current edge mode from the ref, not the closure — the
+      // useState value would be stale because this listener was bound at
+      // canvas-build time.
+      const field: RelationshipField = edgeModeRef.current
       const sourceName = sourceNode.data('label')
       const targetName = targetNode.data('label')
-      // Replace the auto-created edge with a styled "pending-add" edge
+      const edgeClass =
+        field === 'ManagerId'
+          ? 'pending-add-manager'
+          : 'pending-add-delegated'
+      const edgeLabel =
+        field === 'ManagerId'
+          ? `→ manager (pending)`
+          : `→ delegated (pending)`
+      // Replace the auto-created edge with a styled pending edge
       addedEdge.remove()
       cy.add({
         group: 'edges',
@@ -202,8 +271,9 @@ export default function ReportingGraphPage() {
           id: `pending__${field}__${src}__${tgt}`,
           source: src,
           target: tgt,
+          label: edgeLabel,
         },
-        classes: 'pending-add',
+        classes: edgeClass,
       })
       setPending(prev => [
         ...prev.filter(p =>
@@ -226,19 +296,21 @@ export default function ReportingGraphPage() {
     cy.on('tap', evt => {
       if (evt.target === cy) setSelectedNodeId(null)
     })
-    // Right-click an edge → mark for removal
+    // Right-click an edge → mark for removal (or drop a pending add)
     cy.on('cxttap', 'edge', evt => {
       const edge = evt.target
-      const edgeType = edge.data('edge_type') as 'manager' | 'delegated_approver' | undefined
-      if (!edgeType) {
-        // pending-add edge — just drop it
+      const edgeId = (edge.data('id') as string) || ''
+      // pending-add edges have IDs like "pending__ManagerId__sf1__sf2"
+      if (edgeId.startsWith('pending__')) {
+        const parts = edgeId.split('__')
+        const field = (parts[1] as RelationshipField) || 'ManagerId'
         const src = edge.data('source')
-        const cls = edge.data('id') as string
-        const field = cls.includes('ManagerId') ? 'ManagerId' : 'DelegatedApproverId'
         setPending(prev => prev.filter(p => !(p.user_sf_id === src && p.field === field)))
         edge.remove()
         return
       }
+      const edgeType = edge.data('edge_type') as 'manager' | 'delegated_approver' | undefined
+      if (!edgeType) return
       const field: RelationshipField =
         edgeType === 'manager' ? 'ManagerId' : 'DelegatedApproverId'
       edge.addClass('pending-remove')
@@ -354,31 +426,35 @@ export default function ReportingGraphPage() {
       </div>
 
       {/* Edge-mode toggle */}
-      <div className="flex items-center gap-3 text-sm">
-        <span className="text-gray-600 dark:text-gray-400">Edge type to create:</span>
+      <div className="flex items-center gap-3 text-sm flex-wrap">
+        <span className="text-gray-600 dark:text-gray-400">Edge type:</span>
         <button
           onClick={() => setEdgeMode('ManagerId')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
             edgeMode === 'ManagerId'
-              ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              ? 'bg-indigo-600 text-white shadow'
+              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
           }`}
         >
-          Manager (solid)
+          Manager (solid line)
         </button>
         <button
           onClick={() => setEdgeMode('DelegatedApproverId')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
             edgeMode === 'DelegatedApproverId'
-              ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+              ? 'bg-sky-600 text-white shadow'
+              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
           }`}
         >
           Delegated approver (dashed)
         </button>
-        <span className="ml-auto text-xs text-gray-500">
-          Drag from any node to create an edge · Right-click an edge to remove
-        </span>
+        <div className="ml-auto text-xs text-gray-500 max-w-2xl text-right">
+          <strong>How to use:</strong> Hover a user node → a green dot appears →
+          drag the <em>dot</em> from the <strong>subordinate</strong> to their{' '}
+          <strong>{edgeMode === 'ManagerId' ? 'manager' : 'delegated approver'}</strong>.
+          Arrow points to the senior. Click+drag a node body to reposition it.
+          Right-click an edge to remove it.
+        </div>
       </div>
 
       {/* Three-column layout */}
