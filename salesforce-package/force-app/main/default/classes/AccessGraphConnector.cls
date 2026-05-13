@@ -694,9 +694,11 @@ public with sharing class AccessGraphConnector {
                 20000
             );
             if (res.getStatusCode() != 200) return rows;
-            List<Object> list = (List<Object>) JSON.deserializeUntyped(res.getBody());
-            for (Object item : list) {
-                Map<String, Object> row = (Map<String, Object>) item;
+            // `list` is a reserved Apex keyword (case-insensitive with the
+            // List type); name the locals `responseRows` / `entry` instead.
+            List<Object> responseRows = (List<Object>) JSON.deserializeUntyped(res.getBody());
+            for (Object entry : responseRows) {
+                Map<String, Object> row = (Map<String, Object>) entry;
                 EquityUser eu = new EquityUser();
                 eu.userSfId = (String) row.get('user_sf_id');
                 eu.name = (String) row.get('name');
