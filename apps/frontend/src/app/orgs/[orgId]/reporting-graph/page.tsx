@@ -23,6 +23,8 @@ import {
   X as XIcon,
   Plus,
   Trash2,
+  MousePointer,
+  Pencil,
 } from 'lucide-react'
 import cytoscape, { Core, ElementDefinition } from 'cytoscape'
 // @ts-expect-error — cytoscape-edgehandles has no bundled types
@@ -77,6 +79,13 @@ export default function ReportingGraphPage() {
   const [pending, setPending] = useState<PendingEdit[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // Canvas tool state. Move = node drag works for repositioning; Draw =
+  // node drag creates a new edge. Mutually exclusive because the same
+  // drag gesture can't do both.
+  const [tool, setTool] = useState<'move' | 'draw'>('move')
+  // Stash the edgehandles instance + on/off so the toolbar button can
+  // flip modes without re-mounting Cytoscape.
+  const ehRef = useRef<any>(null)
 
   // --- Build the Cytoscape graph from the API response ---
   const elements = useMemo<ElementDefinition[]>(() => {
@@ -228,11 +237,11 @@ export default function ReportingGraphPage() {
     })
     cyRef.current = cy
 
-    // Initialize edgehandles extension. Critically we do NOT call
-    // enableDrawMode() — that was making every node-drag start an edge
-    // and locking us out of repositioning nodes. Default behavior is to
-    // show a small green handle on hover; the user clicks/drags THAT
-    // handle to draw an edge, leaving the node body normally grabbable.
+    // Initialize edgehandles. In v4 of the plugin, "draw mode" means every
+    // node-drag creates an edge — which conflicts with node-drag-to-move.
+    // We expose a toolbar toggle ("Move" vs "Draw") to switch between
+    // them. enableDrawMode() / disableDrawMode() is driven by a separate
+    // useEffect that reacts to the `tool` state below.
     const eh = (cy as any).edgehandles({
       preview: false,
       hoverDelay: 120,
@@ -241,6 +250,7 @@ export default function ReportingGraphPage() {
       handleNodes: 'node',
       edgeType: () => 'flat',
     })
+    ehRef.current = eh
 
     cy.on('ehcomplete', (_evt: any, sourceNode: any, targetNode: any, addedEdge: any) => {
       const src = sourceNode.id()
@@ -332,11 +342,42 @@ export default function ReportingGraphPage() {
     return () => {
       cy.destroy()
       cyRef.current = null
+      ehRef.current = null
     }
     // edgeMode intentionally NOT in deps — the listener captures the
     // closure value at edge-creation time via the ref-less approach above
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elements, graph])
+
+  // Sync the Cytoscape edge-handle draw mode with the toolbar `tool`.
+  // Also force the cursor + node grabbability to match so the canvas
+  // feels right in each mode.
+  useEffect(() => {
+    const cy = cyRef.current
+    const eh = ehRef.current
+    if (!cy || !eh) return
+    if (tool === 'draw') {
+      try {
+        eh.enableDrawMode()
+      } catch {
+        /* idempotent on the plugin's side */
+      }
+      cy.nodes().ungrabify()
+      if (containerRef.current) {
+        containerRef.current.style.cursor = 'crosshair'
+      }
+    } else {
+      try {
+        eh.disableDrawMode()
+      } catch {
+        /* idempotent */
+      }
+      cy.nodes().grabify()
+      if (containerRef.current) {
+        containerRef.current.style.cursor = ''
+      }
+    }
+  }, [tool])
 
   // --- Filter the user list in the left panel ---
   const filteredNodes = useMemo(() => {
@@ -425,35 +466,84 @@ export default function ReportingGraphPage() {
         </div>
       </div>
 
-      {/* Edge-mode toggle */}
-      <div className="flex items-center gap-3 text-sm flex-wrap">
-        <span className="text-gray-600 dark:text-gray-400">Edge type:</span>
-        <button
-          onClick={() => setEdgeMode('ManagerId')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-            edgeMode === 'ManagerId'
-              ? 'bg-indigo-600 text-white shadow'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+      {/* Tool + edge-mode toolbar. Two independent groups: which CANVAS
+          TOOL is active (move vs draw) and, when drawing, which EDGE TYPE
+          gets created. Putting both in one row keeps the controls close
+          to the canvas so the active mode is hard to miss. */}
+      <div className="flex items-center gap-3 text-sm flex-wrap p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+        {/* Canvas tool toggle */}
+        <div className="flex items-center gap-1 bg-white dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700 p-0.5">
+          <button
+            onClick={() => setTool('move')}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              tool === 'move'
+                ? 'bg-indigo-600 text-white shadow'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+            title="Drag node bodies to reposition them"
+          >
+            <MousePointer className="h-3 w-3" />
+            Move
+          </button>
+          <button
+            onClick={() => setTool('draw')}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${
+              tool === 'draw'
+                ? 'bg-green-600 text-white shadow'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+            title="Drag from one node to another to create an edge"
+          >
+            <Pencil className="h-3 w-3" />
+            Draw edges
+          </button>
+        </div>
+
+        {/* Edge type — only meaningful when drawing */}
+        <div
+          className={`flex items-center gap-2 transition ${
+            tool === 'draw' ? 'opacity-100' : 'opacity-40 pointer-events-none'
           }`}
         >
-          Manager (solid line)
-        </button>
-        <button
-          onClick={() => setEdgeMode('DelegatedApproverId')}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-            edgeMode === 'DelegatedApproverId'
-              ? 'bg-sky-600 text-white shadow'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
-        >
-          Delegated approver (dashed)
-        </button>
-        <div className="ml-auto text-xs text-gray-500 max-w-2xl text-right">
-          <strong>How to use:</strong> Hover a user node → a green dot appears →
-          drag the <em>dot</em> from the <strong>subordinate</strong> to their{' '}
-          <strong>{edgeMode === 'ManagerId' ? 'manager' : 'delegated approver'}</strong>.
-          Arrow points to the senior. Click+drag a node body to reposition it.
-          Right-click an edge to remove it.
+          <span className="text-gray-600 dark:text-gray-400 text-xs">Edge type:</span>
+          <button
+            onClick={() => setEdgeMode('ManagerId')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              edgeMode === 'ManagerId'
+                ? 'bg-indigo-600 text-white shadow'
+                : 'bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+          >
+            Manager (solid)
+          </button>
+          <button
+            onClick={() => setEdgeMode('DelegatedApproverId')}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
+              edgeMode === 'DelegatedApproverId'
+                ? 'bg-sky-600 text-white shadow'
+                : 'bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+          >
+            Delegated approver (dashed)
+          </button>
+        </div>
+
+        <div className="ml-auto text-xs text-gray-500 max-w-md text-right">
+          {tool === 'move' ? (
+            <>
+              <strong>Move mode</strong>: click+drag a node to reposition.
+              Switch to <strong>Draw</strong> to create edges.
+            </>
+          ) : (
+            <>
+              <strong>Draw mode</strong>: drag from a{' '}
+              <strong>subordinate</strong> to their{' '}
+              <strong>
+                {edgeMode === 'ManagerId' ? 'manager' : 'delegated approver'}
+              </strong>
+              . Arrow points to the senior. Right-click an edge to remove it.
+            </>
+          )}
         </div>
       </div>
 
