@@ -79,6 +79,11 @@ export default function ReportingGraphPage() {
   const [pending, setPending] = useState<PendingEdit[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // Toast for save outcomes (errors or partial-success messages).
+  // null = no toast. Persists until dismissed or a new one replaces it.
+  const [toast, setToast] = useState<
+    { kind: 'success' | 'error' | 'warning'; message: string } | null
+  >(null)
   // Canvas tool state. Move = node drag works for repositioning; Draw =
   // node drag creates a new edge. Mutually exclusive because the same
   // drag gesture can't do both.
@@ -86,6 +91,24 @@ export default function ReportingGraphPage() {
   // Stash the edgehandles instance + on/off so the toolbar button can
   // flip modes without re-mounting Cytoscape.
   const ehRef = useRef<any>(null)
+
+  // Color ramp by role-hierarchy depth: 0 (root) = dark indigo, deeper
+  // = lighter slate. Capped at 6 levels which covers virtually every
+  // real Salesforce role tree. Users without a role get neutral gray.
+  const ROLE_COLORS = [
+    '#1e1b4b', // depth 0 — slate-950 / executive
+    '#3730a3', // depth 1 — VP
+    '#4f46e5', // depth 2 — director
+    '#6366f1', // depth 3 — manager
+    '#818cf8', // depth 4 — lead
+    '#a5b4fc', // depth 5+ — IC
+  ]
+  const colorForDepth = (depth: number | null | undefined): string => {
+    if (depth == null) return '#9ca3af'  // gray-400 — no role
+    if (depth < 0) return ROLE_COLORS[0]
+    if (depth >= ROLE_COLORS.length) return ROLE_COLORS[ROLE_COLORS.length - 1]
+    return ROLE_COLORS[depth]
+  }
 
   // --- Build the Cytoscape graph from the API response ---
   const elements = useMemo<ElementDefinition[]>(() => {
@@ -97,6 +120,9 @@ export default function ReportingGraphPage() {
           id: n.user_sf_id,
           label: n.name,
           department: n.department || '',
+          // Per-node color baked into data so the style selector can
+          // pick it up with `data(color)` instead of a CSS class explosion.
+          color: colorForDepth(n.role_depth),
         },
       })
     }
@@ -146,13 +172,15 @@ export default function ReportingGraphPage() {
         {
           selector: 'node',
           style: {
-            'background-color': '#6366f1',
+            // Per-node color is computed from role_depth and baked into
+            // the node's data — see colorForDepth() above.
+            'background-color': 'data(color)',
             label: 'data(label)',
             color: '#fff',
             'font-size': 10,
             'text-valign': 'center',
             'text-halign': 'center',
-            'text-outline-color': '#312e81',
+            'text-outline-color': '#0f172a',
             'text-outline-width': 1.5,
             width: 36,
             height: 36,
@@ -401,31 +429,85 @@ export default function ReportingGraphPage() {
     setPending(prev =>
       prev.filter(p => !(p.user_sf_id === edit.user_sf_id && p.field === edit.field)),
     )
-    // Refresh Cytoscape so the canvas re-renders without the pending edge
-    if (graph && cyRef.current) {
-      cyRef.current.elements().remove()
-      cyRef.current.add(elements)
-      cyRef.current.layout({ name: 'cose', animate: false, fit: true } as any).run()
+    // Only remove THIS pending edge from the canvas — not the whole graph.
+    // The earlier impl did elements().remove() + add(elements) which
+    // nuked every other pending edge in the process.
+    const cy = cyRef.current
+    if (!cy) return
+    if (edit.kind === 'add' && edit.new_value) {
+      const pendingId = `pending__${edit.field}__${edit.user_sf_id}__${edit.new_value}`
+      cy.$(`edge[id="${pendingId}"]`).remove()
+    } else if (edit.kind === 'remove') {
+      // The committed edge was marked .pending-remove; drop that class
+      // so it goes back to looking normal.
+      const edgeType =
+        edit.field === 'ManagerId' ? 'manager' : 'delegated_approver'
+      cy.edges().forEach(e => {
+        if (
+          e.data('source') === edit.user_sf_id &&
+          e.data('edge_type') === edgeType
+        ) {
+          e.removeClass('pending-remove')
+        }
+      })
     }
   }
 
   const handleSave = async () => {
     setConfirmOpen(false)
+    setToast(null)
     const edits: RelationshipEdit[] = pending.map(p => ({
       user_sf_id: p.user_sf_id,
       field: p.field,
       new_value: p.new_value,
     }))
-    const result = await apply.mutateAsync(edits)
-    // Drop succeeded edits from pending; keep failures so the admin sees them
-    const failed = new Set(
-      result.results
-        .filter(r => !r.success)
-        .map(r => `${r.user_sf_id}::${r.field}`),
-    )
-    setPending(prev =>
-      prev.filter(p => failed.has(`${p.user_sf_id}::${p.field}`)),
-    )
+    try {
+      const result = await apply.mutateAsync(edits)
+      const failed = new Set(
+        result.results
+          .filter(r => !r.success)
+          .map(r => `${r.user_sf_id}::${r.field}`),
+      )
+      // Drop succeeded edits from pending so the canvas + side-panel
+      // refresh to the new committed state. Keep failures visible so
+      // the admin can retry or revert.
+      setPending(prev =>
+        prev.filter(p => failed.has(`${p.user_sf_id}::${p.field}`)),
+      )
+      if (result.failed === 0) {
+        setToast({
+          kind: 'success',
+          message: `Saved ${result.succeeded} ${result.succeeded === 1 ? 'change' : 'changes'} to Salesforce.`,
+        })
+      } else if (result.succeeded > 0) {
+        setToast({
+          kind: 'warning',
+          message: `Partial save: ${result.succeeded} succeeded, ${result.failed} failed. Failed rows remain in the pending list.`,
+        })
+      } else {
+        const firstError = result.results.find(r => r.error)?.error
+        setToast({
+          kind: 'error',
+          message: firstError
+            ? `Save failed: ${firstError}`
+            : 'Save failed. All edits returned errors.',
+        })
+      }
+    } catch (err: any) {
+      // Network / 403 / 500 — extract a useful message
+      let message = 'Save failed.'
+      if (err?.status === 403) {
+        message =
+          'Permission denied. You need an ORG_ADMIN role to edit the reporting graph. ' +
+          '(If no ORG_ADMIN is configured yet, this falls back to allowing any user — ' +
+          'so this error means someone has explicitly locked it down.)'
+      } else if (err?.data?.detail) {
+        message = `Save failed: ${err.data.detail}`
+      } else if (err?.message) {
+        message = `Save failed: ${err.message}`
+      }
+      setToast({ kind: 'error', message })
+    }
   }
 
   if (error) {
@@ -434,6 +516,32 @@ export default function ReportingGraphPage() {
 
   return (
     <div className="space-y-4">
+      {/* Toast banner — surfaces save outcomes (success / partial / error /
+          403). Persists until dismissed; the user shouldn't miss a save
+          failure because of a fading toast. */}
+      {toast && (
+        <div
+          className={`flex items-start gap-3 p-3 rounded-lg border text-sm ${
+            toast.kind === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200'
+              : toast.kind === 'warning'
+                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200'
+                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+          }`}
+          role="status"
+        >
+          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <p className="flex-1">{toast.message}</p>
+          <button
+            onClick={() => setToast(null)}
+            className="text-current opacity-70 hover:opacity-100"
+            title="Dismiss"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -619,12 +727,62 @@ export default function ReportingGraphPage() {
                 Click a node to inspect.
               </p>
             ) : (
-              <div className="space-y-1 mb-4">
-                <p className="text-sm font-semibold">{selectedNode.name}</p>
-                <p className="text-xs text-gray-500 font-mono">{selectedNode.user_sf_id}</p>
-                <p className="text-xs">
-                  Department: <strong>{selectedNode.department || '—'}</strong>
+              <div className="space-y-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: colorForDepth(selectedNode.role_depth) }}
+                    title={
+                      selectedNode.role_depth == null
+                        ? 'No role assigned'
+                        : `Role depth ${selectedNode.role_depth} (0 = top)`
+                    }
+                  />
+                  <p className="text-sm font-semibold flex-1 truncate">{selectedNode.name}</p>
+                </div>
+                <p className="text-xs text-gray-500 font-mono break-all">
+                  {selectedNode.user_sf_id}
                 </p>
+                <dl className="text-xs space-y-1.5">
+                  {selectedNode.title && (
+                    <div className="flex gap-1.5">
+                      <dt className="text-gray-500 w-20 flex-shrink-0">Title</dt>
+                      <dd className="font-medium">{selectedNode.title}</dd>
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <dt className="text-gray-500 w-20 flex-shrink-0">Department</dt>
+                    <dd className="font-medium">{selectedNode.department || '—'}</dd>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <dt className="text-gray-500 w-20 flex-shrink-0">Role</dt>
+                    <dd className="font-medium">
+                      {selectedNode.role_name || <span className="text-gray-400">—</span>}
+                      {selectedNode.role_depth != null && (
+                        <span className="ml-1.5 text-gray-400">
+                          (depth {selectedNode.role_depth})
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <dt className="text-gray-500 w-20 flex-shrink-0">Profile</dt>
+                    <dd className="font-medium">
+                      {selectedNode.profile_name || <span className="text-gray-400">—</span>}
+                    </dd>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <dt className="text-gray-500 w-20 flex-shrink-0">Status</dt>
+                    <dd>
+                      <Badge
+                        variant={selectedNode.is_active ? 'success' : 'default'}
+                        size="sm"
+                      >
+                        {selectedNode.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </dd>
+                  </div>
+                </dl>
               </div>
             )}
 

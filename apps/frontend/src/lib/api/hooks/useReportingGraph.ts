@@ -19,6 +19,11 @@ export interface ReportingGraphNode {
   name: string
   department: string | null
   is_active: boolean
+  title?: string | null
+  role_name?: string | null
+  profile_name?: string | null
+  // 0 = top of role hierarchy, +1 per parent hop. null = no role assigned.
+  role_depth?: number | null
 }
 
 export interface ReportingGraphEdge {

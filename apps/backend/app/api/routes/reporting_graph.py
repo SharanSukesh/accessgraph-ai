@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, get_current_org
-from app.domain.models import UserSnapshot
+from app.domain.models import ProfileSnapshot, RoleSnapshot, UserSnapshot
 from app.services.reporting_graph_service import (
     ReportingGraphService,
     UserRelationshipEdit,
@@ -39,6 +39,13 @@ class ReportingGraphNode(BaseModel):
     name: str
     department: Optional[str]
     is_active: bool
+    # Phase 2 additions for the side-panel + canvas color-by-role:
+    title: Optional[str] = None
+    role_name: Optional[str] = None
+    profile_name: Optional[str] = None
+    # 0 = root of role hierarchy, 1 = next level, ..., None if user has
+    # no role assigned. Drives the canvas color ramp.
+    role_depth: Optional[int] = None
 
 
 class ReportingGraphEdge(BaseModel):
@@ -112,12 +119,55 @@ async def get_reporting_graph(
         )
     )).scalars().all()
 
+    # Side-panel enrichment + canvas color-by-role: pull RoleSnapshot +
+    # ProfileSnapshot once per org and compute each role's depth in the
+    # parent_role_id tree (BFS from roots).
+    roles = (await db.execute(
+        select(RoleSnapshot).where(RoleSnapshot.organization_id == org_id)
+    )).scalars().all()
+    profiles = (await db.execute(
+        select(ProfileSnapshot).where(ProfileSnapshot.organization_id == org_id)
+    )).scalars().all()
+
+    roles_by_id = {r.salesforce_id: r for r in roles}
+    profiles_by_id = {p.salesforce_id: p for p in profiles}
+
+    # Role depth: 0 for roots, +1 per parent hop. Cap recursion to avoid
+    # cycles (Salesforce shouldn't have cyclic role trees but defensive).
+    role_depth: dict = {}
+    for r in roles:
+        depth = 0
+        current = r.parent_role_id
+        seen: set = set()
+        while current and depth < 32 and current not in seen:
+            seen.add(current)
+            depth += 1
+            parent = roles_by_id.get(current)
+            if parent is None:
+                break
+            current = parent.parent_role_id
+        role_depth[r.salesforce_id] = depth
+
     nodes = [
         ReportingGraphNode(
             user_sf_id=u.salesforce_id,
             name=u.name or u.username or u.salesforce_id,
             department=u.department,
             is_active=u.is_active,
+            title=u.title,
+            role_name=(
+                roles_by_id[u.user_role_id].name
+                if u.user_role_id and u.user_role_id in roles_by_id
+                else None
+            ),
+            profile_name=(
+                profiles_by_id[u.profile_id].name
+                if u.profile_id and u.profile_id in profiles_by_id
+                else None
+            ),
+            role_depth=(
+                role_depth.get(u.user_role_id) if u.user_role_id else None
+            ),
         )
         for u in users
     ]
