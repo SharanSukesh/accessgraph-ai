@@ -486,6 +486,80 @@ export default function ReportingGraphPage() {
     return graph.nodes.find(n => n.user_sf_id === selectedNodeId) || null
   }, [graph, selectedNodeId])
 
+  // For the selected user, what's currently their committed manager /
+  // delegated approver (from the loaded graph) and what's any pending
+  // change against it? The right panel renders this so the admin can
+  // clear a relationship with one click instead of having to find the
+  // edge on the canvas and right-click.
+  const selectedRelationships = useMemo(() => {
+    if (!graph || !selectedNodeId) {
+      return null
+    }
+    const nodeById = new Map(graph.nodes.map(n => [n.user_sf_id, n]))
+    const findTarget = (field: RelationshipField) => {
+      const edgeType = field === 'ManagerId' ? 'manager' : 'delegated_approver'
+      const e = graph.edges.find(
+        ed => ed.source === selectedNodeId && ed.edge_type === edgeType,
+      )
+      if (!e) return null
+      const target = nodeById.get(e.target)
+      return {
+        target_id: e.target,
+        target_name: target?.name || e.target,
+      }
+    }
+    const findPending = (field: RelationshipField) =>
+      pending.find(
+        p => p.user_sf_id === selectedNodeId && p.field === field,
+      ) || null
+    return {
+      manager: {
+        committed: findTarget('ManagerId'),
+        pending: findPending('ManagerId'),
+      },
+      delegated: {
+        committed: findTarget('DelegatedApproverId'),
+        pending: findPending('DelegatedApproverId'),
+      },
+    }
+  }, [graph, selectedNodeId, pending])
+
+  // Mark a committed edge from `userSfId` of the given field for deletion.
+  // Same effect as right-clicking the edge on the canvas: adds a pending
+  // {kind: 'remove', new_value: null} edit and adds the .pending-remove
+  // class to the committed edge so the strikethrough renders.
+  const markCommittedEdgeForRemoval = (
+    userSfId: string,
+    field: RelationshipField,
+    targetUserSfId: string,
+    sourceName?: string,
+    targetName?: string,
+  ) => {
+    const cy = cyRef.current
+    if (cy) {
+      const edgeType = field === 'ManagerId' ? 'manager' : 'delegated_approver'
+      cy.edges().forEach(e => {
+        if (
+          e.data('source') === userSfId &&
+          e.data('edge_type') === edgeType
+        ) {
+          e.addClass('pending-remove')
+        }
+      })
+    }
+    setPending(prev => [
+      ...prev.filter(p => !(p.user_sf_id === userSfId && p.field === field)),
+      {
+        user_sf_id: userSfId,
+        field,
+        new_value: null,
+        kind: 'remove',
+        source_name: sourceName,
+        target_name: targetName || targetUserSfId,
+      },
+    ])
+  }
+
   const handleRevert = (edit: PendingEdit) => {
     setPending(prev =>
       prev.filter(p => !(p.user_sf_id === edit.user_sf_id && p.field === edit.field)),
@@ -734,7 +808,8 @@ export default function ReportingGraphPage() {
           {tool === 'move' ? (
             <>
               <strong>Move mode</strong>: click+drag a node to reposition.
-              Switch to <strong>Draw</strong> to create edges.
+              Click a node to inspect or clear its relationships in the
+              right panel. Switch to <strong>Draw</strong> to create edges.
             </>
           ) : (
             <>
@@ -743,7 +818,8 @@ export default function ReportingGraphPage() {
               <strong>
                 {edgeMode === 'ManagerId' ? 'manager' : 'delegated approver'}
               </strong>
-              . Arrow points to the senior. Right-click an edge to remove it.
+              . Arrow points to the senior. Right-click an edge or use the
+              Clear button in the right panel to remove one.
             </>
           )}
         </div>
@@ -877,6 +953,90 @@ export default function ReportingGraphPage() {
                     </dd>
                   </div>
                 </dl>
+              </div>
+            )}
+
+            {/* Current relationships — gives the admin a one-click way to
+                clear a manager or delegated approver. Mirrors right-click
+                on the canvas edge, but doesn't require finding the edge. */}
+            {selectedNode && selectedRelationships && (
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-3 mb-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                  Current relationships
+                </p>
+                <ul className="space-y-2">
+                  {(['ManagerId', 'DelegatedApproverId'] as RelationshipField[]).map(field => {
+                    const slot =
+                      field === 'ManagerId'
+                        ? selectedRelationships.manager
+                        : selectedRelationships.delegated
+                    const label =
+                      field === 'ManagerId' ? 'Manager' : 'Delegated approver'
+                    const markedForRemoval = slot.pending?.kind === 'remove'
+                    const pendingAdd =
+                      slot.pending?.kind === 'add' ? slot.pending : null
+                    return (
+                      <li
+                        key={field}
+                        className="flex items-center gap-2 text-xs"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-500">{label}</p>
+                          {pendingAdd ? (
+                            <p className="font-medium text-green-700 dark:text-green-400 truncate">
+                              → {pendingAdd.target_name || pendingAdd.new_value} (pending)
+                            </p>
+                          ) : slot.committed ? (
+                            <p
+                              className={`font-medium truncate ${
+                                markedForRemoval
+                                  ? 'line-through text-red-600 dark:text-red-400'
+                                  : 'text-gray-900 dark:text-gray-100'
+                              }`}
+                            >
+                              {slot.committed.target_name}
+                            </p>
+                          ) : (
+                            <p className="italic text-gray-400">None</p>
+                          )}
+                        </div>
+                        {/* Action button:
+                            - committed + not yet marked → Clear
+                            - committed + marked for removal → Undo
+                            - pending add → handled in Pending edits below
+                            - no value → no button */}
+                        {slot.committed && !pendingAdd && (
+                          markedForRemoval ? (
+                            <button
+                              onClick={() => slot.pending && handleRevert(slot.pending)}
+                              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                              title="Undo the pending removal"
+                            >
+                              Undo
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                markCommittedEdgeForRemoval(
+                                  selectedNode.user_sf_id,
+                                  field,
+                                  slot.committed!.target_id,
+                                  selectedNode.name,
+                                  slot.committed!.target_name,
+                                )
+                              }
+                              className="px-2 py-1 text-xs rounded border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1"
+                              title={`Clear this user's ${label.toLowerCase()} in Salesforce on next save`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Clear
+                            </button>
+                          )
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
             )}
 
