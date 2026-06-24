@@ -1,12 +1,33 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+/**
+ * Theme toggle — refined for the sidebar.
+ *
+ * Two shapes:
+ *   - `compact` (default): square icon button, lives in the sidebar
+ *     footer alongside Reconnect / Sync buttons.
+ *   - `row`: full-width row with label, used when the sidebar is
+ *     expanded so the toggle reads as a labelled action.
+ *
+ * Uses lucide Sun / Moon (matching the rest of the icon set) and the
+ * site's indigo/slate palette — no emoji.
+ */
 
-export function ThemeToggle() {
+import { useEffect, useState } from 'react'
+import { Moon, Sun } from 'lucide-react'
+import { cn } from '@/lib/utils/cn'
+
+interface ThemeToggleProps {
+  variant?: 'compact' | 'row'
+  className?: string
+}
+
+export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps) {
   const [darkMode, setDarkMode] = useState(false)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    // Check localStorage and system preference
+    setMounted(true)
     const isDark =
       localStorage.theme === 'dark' ||
       (!('theme' in localStorage) &&
@@ -34,17 +55,46 @@ export function ThemeToggle() {
     }
   }
 
+  // Avoid SSR-hydration flicker — render a placeholder until mounted.
+  if (!mounted) {
+    if (variant === 'row') {
+      return <div className={cn('h-11', className)} />
+    }
+    return <div className={cn('w-9 h-9', className)} />
+  }
+
+  const Icon = darkMode ? Sun : Moon
+  const label = darkMode ? 'Light mode' : 'Dark mode'
+
+  if (variant === 'row') {
+    return (
+      <button
+        onClick={toggleTheme}
+        className={cn(
+          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150 px-4 py-3 space-x-3',
+          'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60',
+          className,
+        )}
+        aria-label={label}
+      >
+        <Icon className="h-5 w-5 flex-shrink-0" />
+        <span className="whitespace-nowrap">{label}</span>
+      </button>
+    )
+  }
+
   return (
     <button
       onClick={toggleTheme}
-      className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-      aria-label="Toggle theme"
-    >
-      {darkMode ? (
-        <span className="text-xl">☀️</span>
-      ) : (
-        <span className="text-xl">🌙</span>
+      className={cn(
+        'p-3 rounded-lg transition-all duration-150 relative group',
+        'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60',
+        className,
       )}
+      aria-label={label}
+      title={label}
+    >
+      <Icon className="h-5 w-5" />
     </button>
   )
 }

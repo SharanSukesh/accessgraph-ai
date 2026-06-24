@@ -23,10 +23,14 @@ import {
   Scale,
   GitBranch,
   Stethoscope,
+  LogOut,
+  ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
+import { ThemeToggle } from '@/components/shared/ThemeToggle'
+import { useAuth } from '@/lib/auth/AuthContext'
 import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 
 const navigationItems = [
@@ -45,7 +49,29 @@ const navigationItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const queryClient = useQueryClient()
+  const { user, logout } = useAuth()
   const [isExpanded, setIsExpanded] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // Close the user dropdown when clicking outside it.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  // Collapse the dropdown when the whole sidebar collapses, otherwise it
+  // hovers awkwardly disconnected from its trigger.
+  useEffect(() => {
+    if (!isExpanded) setUserMenuOpen(false)
+  }, [isExpanded])
+
+  const avatarLetter = user?.org_name?.charAt(0).toUpperCase() || 'U'
   // Local "in flight" tag covers the brief window between clicking the
   // button and the trigger POST returning. Once the new sync job exists,
   // the polling-driven `isJobRunning` below takes over and keeps the
@@ -254,10 +280,119 @@ export function Sidebar() {
             </div>
           )}
 
+          {/* Theme toggle — adopts the row variant when expanded so it
+              reads as a labelled action; compact icon-only when collapsed. */}
+          <div className={cn(
+            "p-2 pt-0 border-t border-gray-200 dark:border-gray-700 mt-1",
+            isExpanded ? "" : "flex justify-center",
+          )}>
+            {isExpanded ? (
+              <ThemeToggle variant="row" />
+            ) : (
+              <ThemeToggle variant="compact" />
+            )}
+          </div>
+
+          {/* User menu — avatar, org name, dropdown for sign out. Lives
+              just above the version stamp so it sits at the natural
+              bottom-left of the app, matching the "expensive product"
+              convention used by Linear / Notion / Vercel. */}
+          <div
+            ref={userMenuRef}
+            className={cn(
+              "relative p-2 border-t border-gray-200 dark:border-gray-700",
+              isExpanded ? "" : "flex justify-center",
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => isExpanded && setUserMenuOpen(o => !o)}
+              className={cn(
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group w-full',
+                isExpanded ? 'space-x-3 px-3 py-2' : 'justify-center p-2',
+                'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700/60',
+              )}
+              title={!isExpanded ? (user?.org_name || 'Account') : undefined}
+              aria-expanded={userMenuOpen}
+              aria-haspopup="menu"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-sm flex-shrink-0 ring-2 ring-white dark:ring-gray-800">
+                <span className="text-white text-xs font-semibold">{avatarLetter}</span>
+              </div>
+              {isExpanded && (
+                <>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-medium truncate">
+                      {user?.org_name || 'Connected'}
+                    </p>
+                    {user?.org_domain && (
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                        {user.org_domain}
+                      </p>
+                    )}
+                  </div>
+                  <ChevronUp
+                    className={cn(
+                      'h-4 w-4 text-gray-400 transition-transform flex-shrink-0',
+                      userMenuOpen ? '' : 'rotate-180',
+                    )}
+                  />
+                </>
+              )}
+
+              {/* Tooltip for collapsed state */}
+              {!isExpanded && (
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  {user?.org_name || 'Account'}
+                </div>
+              )}
+            </button>
+
+            {/* Dropdown menu (only when expanded — collapsed sidebar
+                relies on the hover-expand to reveal it). Opens UPward
+                so it doesn't get clipped by the page edge. */}
+            {isExpanded && userMenuOpen && (
+              <div className="absolute bottom-full left-2 right-2 mb-1 rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
+                {user && (
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Connected to
+                    </p>
+                    <p
+                      className="text-sm font-medium text-gray-900 dark:text-white truncate"
+                      title={user.org_name}
+                    >
+                      {user.org_name || 'Unknown Org'}
+                    </p>
+                    {user.org_domain && (
+                      <p
+                        className="text-xs text-gray-500 dark:text-gray-400 truncate"
+                        title={user.org_domain}
+                      >
+                        {user.org_domain}
+                      </p>
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setUserMenuOpen(false)
+                    await logout()
+                  }}
+                  className="w-full text-left flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Version */}
           {isExpanded && (
-            <div className="px-4 pb-4">
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center whitespace-nowrap">
+            <div className="px-4 py-2">
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center whitespace-nowrap tracking-wider">
                 v0.1.0 • MVP
               </p>
             </div>
