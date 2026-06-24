@@ -85,7 +85,11 @@
 
   .scrollbar-themed::-webkit-scrollbar {
     width: 6px;
-    height: 6px;
+    height: 0; /* never show a horizontal scrollbar */
+  }
+
+  .scrollbar-themed::-webkit-scrollbar:horizontal {
+    display: none;
   }
 
   .scrollbar-themed::-webkit-scrollbar-track {
