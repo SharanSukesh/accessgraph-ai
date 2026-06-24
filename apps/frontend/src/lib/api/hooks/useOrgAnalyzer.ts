@@ -64,6 +64,13 @@ export interface SnapshotSummary {
   active_findings_count: number
   active_savings_cents: number
   ignored_findings_count: number
+  // Org-edition state from the latest analyzer run. Drives the
+  // non-paying-org banner on the Overview tab + the auto-detection
+  // ladder in the Price-book editor.
+  org_type?: string | null
+  is_sandbox?: boolean
+  is_trial?: boolean
+  is_paying_org?: boolean
 }
 
 export interface FindingsPage {
@@ -83,11 +90,17 @@ export interface HistoryPoint {
 export interface PriceBookRow {
   license_name: string
   monthly_cost_cents: number
+  // Whether this SKU is billed for the customer (true) or bundled
+  // at $0 (false). Sent on PUT so admin overrides persist.
+  is_billed?: boolean
   // Optional flags returned by the GET endpoint. The PUT side ignores
   // these — overrides are inferred from presence in the payload — so
   // they're omitted in the request body.
   is_override?: boolean
   in_org?: boolean
+  // Auto-detection reason for the current is_billed default. Surfaced
+  // in a tooltip in the Price-book editor.
+  billed_reason?: string | null
 }
 
 export interface PriceBookResponse {

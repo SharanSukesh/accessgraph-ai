@@ -298,6 +298,26 @@ class SalesforceAPIClient:
             logger.warning("ApexCodeCoverageAggregate query failed: %s", e)
             return []
 
+    async def extract_organization(self) -> Optional[Dict[str, Any]]:
+        """Single-row Organization fetch with edition + sandbox flags.
+
+        Drives the Org Analyzer's "is this a non-paying org" detection
+        so we don't fabricate dollar savings on Developer Edition,
+        Sandbox, Trial, or Scratch orgs. Wrapped in try/except — the
+        analyzer should still run if this fails (we just lose the
+        ability to apply the non-paying-org banner).
+        """
+        try:
+            res = await self.query(
+                "SELECT Id, Name, OrganizationType, IsSandbox, "
+                "InstanceName, TrialExpirationDate FROM Organization LIMIT 1"
+            )
+            recs = list(res.records) if res.records else []
+            return recs[0] if recs else None
+        except Exception as e:
+            logger.warning("extract_organization failed: %s", e)
+            return None
+
     async def get_user_licenses(self) -> List[Dict[str, Any]]:
         """UserLicense — the actual license SKUs in this org.
 

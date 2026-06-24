@@ -36,7 +36,10 @@ from app.domain.models import (
 )
 from app.services.org_analyzer import (
     DEFAULT_PRICE_BOOK_CENTS,
+    KNOWN_FREE_SKU_PATTERNS,
     OrgAnalyzerService,
+    _is_known_free_sku,
+    _is_paying_org,
     _lookup_default_price,
 )
 
@@ -106,6 +109,12 @@ class SnapshotSummary(BaseModel):
     active_findings_count: int = 0
     active_savings_cents: int = 0
     ignored_findings_count: int = 0
+    # Org-edition surfaced as top-level fields so the frontend doesn't
+    # have to dig through metrics. None on snapshots from before v1.7.3.
+    org_type: Optional[str] = None
+    is_sandbox: bool = False
+    is_trial: bool = False
+    is_paying_org: bool = True
 
 
 class FindingsPage(BaseModel):
@@ -125,6 +134,10 @@ class HistoryPoint(BaseModel):
 class PriceBookRow(BaseModel):
     license_name: str
     monthly_cost_cents: int = Field(ge=0)
+    # Per-row "is this actually billed for the customer's contract" flag.
+    # When false, the analyzer treats this SKU as bundled and attributes
+    # $0 savings regardless of monthly_cost_cents.
+    is_billed: bool = True
     # Whether this row's cost was set by the admin (true) or comes from
     # the built-in default catalog of Salesforce list prices (false).
     # The UI uses this to surface a "default" badge so the consultant
@@ -134,6 +147,10 @@ class PriceBookRow(BaseModel):
     # PSL inventory (true) or is a catalog-only entry shown for
     # convenience (false). Org-present SKUs render first in the editor.
     in_org: bool = False
+    # Human-readable reason for the current is_billed default. The UI
+    # surfaces it in a tooltip so the consultant understands why a row
+    # is Bundled vs Billed before they flip the toggle.
+    billed_reason: Optional[str] = None
 
 
 class PriceBookResponse(BaseModel):
@@ -254,6 +271,7 @@ async def get_latest_snapshot(
     )
     ignored_count = snap.findings_count - len(active_rows)
 
+    snap_metrics = snap.metrics or {}
     return SnapshotSummary(
         snapshot_id=snap.id,
         snapshot_at=snap.snapshot_at.isoformat(),
@@ -261,12 +279,16 @@ async def get_latest_snapshot(
         findings_by_severity=snap.findings_by_severity or {},
         findings_by_category=snap.findings_by_category or {},
         total_estimated_annual_savings_cents=snap.total_estimated_annual_savings_cents,
-        metrics=snap.metrics or {},
+        metrics=snap_metrics,
         org_limits=snap.org_limits or {},
         has_data=True,
         active_findings_count=len(active_rows),
         active_savings_cents=active_savings,
         ignored_findings_count=max(ignored_count, 0),
+        org_type=snap_metrics.get("org_type"),
+        is_sandbox=bool(snap_metrics.get("is_sandbox", False)),
+        is_trial=bool(snap_metrics.get("is_trial", False)),
+        is_paying_org=bool(snap_metrics.get("is_paying_org", True)),
     )
 
 
@@ -476,13 +498,23 @@ async def get_price_book(
             LicensePriceBook.organization_id == org_id
         )
     )
+    override_rows = list(result.scalars().all())
     overrides: Dict[str, int] = {
-        r.license_name: r.monthly_cost_cents for r in result.scalars().all()
+        r.license_name: r.monthly_cost_cents for r in override_rows
+    }
+    override_is_billed: Dict[str, bool] = {
+        r.license_name: bool(r.is_billed) for r in override_rows
     }
 
-    # Pull SKUs the org actually owns from the latest analyzer snapshot.
+    # Pull SKUs the org actually owns + org-edition state from the latest
+    # snapshot so the is_billed resolution ladder can apply.
     snap = await _latest_snapshot(db, org_id)
     org_skus: List[str] = []
+    snap_metrics = (snap.metrics if snap else {}) or {}
+    snap_is_paying = bool(snap_metrics.get("is_paying_org", True))
+    snap_org_type = snap_metrics.get("org_type")
+    snap_is_sandbox = bool(snap_metrics.get("is_sandbox", False))
+    snap_is_trial = bool(snap_metrics.get("is_trial", False))
     if snap and snap.metrics:
         for row in (snap.metrics.get("license_utilization") or []):
             name = row.get("license_name")
@@ -497,18 +529,47 @@ async def get_price_book(
             return catalog
         return DEFAULT_PRICE_BOOK_CENTS.get(name, 0)
 
+    def _resolve_billed(name: str) -> tuple:
+        """Returns (is_billed, reason) for the row. Mirrors the analyzer's
+        _is_billed_for_org ladder so the editor shows the same default
+        state that drives savings calculations."""
+        if name in override_is_billed:
+            is_billed = override_is_billed[name]
+            if is_billed:
+                return True, "Marked Billed in the Price book by you."
+            return False, "Marked Bundled in the Price book by you."
+        if not snap_is_paying:
+            edition = (
+                "Sandbox" if snap_is_sandbox
+                else "Trial" if snap_is_trial
+                else (snap_org_type or "Non-production")
+            )
+            return False, f"{edition} org — license seats are bundled at no cost."
+        if _is_known_free_sku(name):
+            return False, (
+                "Matches the documented free-SKU pattern list. "
+                "Flip to Billed if your customer's contract bills for it."
+            )
+        return True, "Default — flip to Bundled if this SKU isn't billed for your customer."
+
     rows: List[PriceBookRow] = []
     seen: set = set()
+
+    def _build_row(name: str, in_org: bool) -> PriceBookRow:
+        is_billed, reason = _resolve_billed(name)
+        return PriceBookRow(
+            license_name=name,
+            monthly_cost_cents=overrides.get(name, _default_for(name)),
+            is_billed=is_billed,
+            is_override=(name in overrides),
+            in_org=in_org,
+            billed_reason=reason,
+        )
 
     # Org's actual SKUs first — these are the ones the consultant cares
     # about and should appear at the top of the editor.
     for name in org_skus:
-        rows.append(PriceBookRow(
-            license_name=name,
-            monthly_cost_cents=overrides.get(name, _default_for(name)),
-            is_override=name in overrides,
-            in_org=True,
-        ))
+        rows.append(_build_row(name, in_org=True))
         seen.add(name)
 
     # Then the common-SKU defaults the org doesn't (yet) have, so a fresh
@@ -516,25 +577,15 @@ async def get_price_book(
     for name in DEFAULT_PRICE_BOOK_CENTS:
         if name in seen:
             continue
-        rows.append(PriceBookRow(
-            license_name=name,
-            monthly_cost_cents=overrides.get(name, _default_for(name)),
-            is_override=name in overrides,
-            in_org=False,
-        ))
+        rows.append(_build_row(name, in_org=False))
         seen.add(name)
 
     # Surface any admin overrides for SKUs that aren't in the org or the
     # default list — we shouldn't drop them silently.
-    for name, cost in overrides.items():
+    for name in overrides:
         if name in seen:
             continue
-        rows.append(PriceBookRow(
-            license_name=name,
-            monthly_cost_cents=cost,
-            is_override=True,
-            in_org=False,
-        ))
+        rows.append(_build_row(name, in_org=False))
 
     # Final ordering: org-present first, then alphabetical within each
     # bucket, so the consultant sees what matters at the top.
@@ -573,16 +624,20 @@ async def update_price_book(
         if name not in incoming_names:
             await db.delete(row)
 
-    # Upsert
+    # Upsert. `is_billed` defaults to True at the schema level so
+    # legacy clients that don't send the field don't accidentally flip
+    # rows to bundled.
     for r in payload.rows:
         if r.license_name in existing_by_name:
             existing_by_name[r.license_name].monthly_cost_cents = r.monthly_cost_cents
+            existing_by_name[r.license_name].is_billed = r.is_billed
             existing_by_name[r.license_name].updated_by = actor_email
         else:
             db.add(LicensePriceBook(
                 organization_id=org_id,
                 license_name=r.license_name,
                 monthly_cost_cents=r.monthly_cost_cents,
+                is_billed=r.is_billed,
                 updated_by=actor_email,
             ))
 

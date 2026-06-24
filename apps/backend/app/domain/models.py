@@ -1269,6 +1269,14 @@ class LicensePriceBook(Base, TimestampMixin):
     )
     license_name: Mapped[str] = mapped_column(String(100), nullable=False)
     monthly_cost_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Per-row "is this actually billed in the customer's contract" flag.
+    # When False, the analyzer treats the SKU as bundled/no-cost even if
+    # monthly_cost_cents > 0. Lets the consultant override the auto-
+    # detection ladder (org-edition + KNOWN_FREE_SKU_PATTERNS) for the
+    # edge cases the heuristics miss.
+    is_billed: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
     updated_by: Mapped[Optional[str]] = mapped_column(String(255))
 
     __table_args__ = (

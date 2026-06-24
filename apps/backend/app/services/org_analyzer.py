@@ -212,25 +212,39 @@ USER_TYPE_TO_LICENSE_LABEL: Dict[str, str] = {
 # rather than flooding the findings list with HIGH-severity zero-dollar
 # items. Match is case-insensitive substring against the MasterLabel.
 #
-# Sources: Salesforce Help "Standard User Licenses", "Communities Licenses",
-# and "Authenticated Website License" pages. List intentionally inclusive
-# so we err on the side of suppression.
+# Each entry carries a citation (Salesforce Help doc or observed-on-
+# Developer-Edition evidence). New entries land via PR with the same
+# evidence requirement — see plan §3.
+#
+# DELIBERATELY OUT of this list (billed in many real customer contracts;
+# rely on the per-row Billed toggle instead): "partner community login",
+# "customer community login", "customer community plus login".
 KNOWN_FREE_SKU_PATTERNS: tuple = (
-    "chatter free",
-    "chatter external",
-    "identity",                  # First 10 are free; rare to bill higher
-    "high volume customer portal",
-    "customer portal manager custom",
-    "authenticated website",
-    "external apps login",
-    "external apps",
-    "lightning external apps",
-    "customer community login",  # Per-login billed but flagging as free
-    "guest user",
-    "platform light",
-    "company communities",
-    "sites",
-    "site.com",
+    # Standard bundled licenses on every edition
+    "chatter free",                  # Cite: Salesforce Help "Standard User Licenses"
+    "chatter external",              # Cite: same — for external Chatter participants
+    "identity",                      # Cite: first 10 Identity logins free on all editions
+    "high volume customer portal",   # Cite: Salesforce Help "Portal Licenses" — bundled
+    "customer portal manager custom",     # Cite: legacy bundled portal SKU
+    "customer portal manager standard",   # Cite: legacy bundled portal SKU
+    "authenticated website",         # Cite: Salesforce Help "Authenticated Website License"
+    "external apps login",           # Cite: bundled on Lightning Platform editions
+    "external apps",                 # Cite: same
+    "lightning external apps",       # Cite: same
+    "guest user",                    # Cite: Salesforce Help "Guest User License" — always free
+    "platform light",                # Cite: legacy bundled
+    "company communities",           # Cite: legacy bundled
+    "sites",                         # Cite: Site.com bundled SKU
+    "site.com",                      # Cite: same
+    "salesforce mobile",             # Cite: Mobile app bundled on all paid editions
+    "work.com only",                 # Cite: legacy Work.com bundled SKU
+    "force.com - free",              # Cite: Salesforce Edition Pricing — free Force.com tier
+    "partner developer",             # Cite: ISVforce docs — developer-tier partner license
+    # Commerce / Customer Service bundled families
+    # — observed 10,000-seat allocations on every Developer Edition org,
+    #   indicating bundled/no-cost. Filed under bundled until a real
+    #   customer confirms it's billed for them and uses the override.
+    "commerce partner community",
 )
 
 
@@ -240,6 +254,84 @@ def _is_known_free_sku(label: str) -> bool:
         return False
     needle = label.strip().lower()
     return any(p in needle for p in KNOWN_FREE_SKU_PATTERNS)
+
+
+# Salesforce OrganizationType values that imply the customer is paying
+# for the org. Anything not in this set (Developer Edition, Personal
+# Edition, Base/Trial editions) means license-savings calculations are
+# fictional — we suppress.
+PAYING_ORG_TYPES = frozenset({
+    "Enterprise Edition",
+    "Unlimited Edition",
+    "Performance Edition",
+    "Professional Edition",
+    "Group Edition",
+    "Essentials Edition",
+    "Contact Manager Edition",
+})
+
+
+def _is_paying_org(
+    org_type: Optional[str],
+    is_sandbox: bool,
+    is_trial: bool,
+) -> bool:
+    """Truth table for "is this org one whose license costs are real?".
+
+    Sandbox and trial orgs short-circuit to False regardless of edition
+    name — Salesforce sandboxes report their parent-org's edition but
+    don't bill separately. TrialExpirationDate IS NOT NULL is the
+    strongest trial signal because Trial editions sometimes still
+    report their underlying paid edition.
+    """
+    if is_sandbox or is_trial:
+        return False
+    if not org_type:
+        # Unknown edition → assume paying so we don't accidentally
+        # suppress real findings on production orgs where the
+        # Organization query failed for some other reason.
+        return True
+    return org_type.strip() in PAYING_ORG_TYPES
+
+
+def _is_billed_for_org(
+    label: Optional[str],
+    ctx: "AnalyzerContext",
+) -> Tuple[bool, Optional[str]]:
+    """Return (is_billed, non_billable_reason) for an SKU on this org.
+
+    Resolution order (highest priority first):
+      1. Explicit admin override in LicensePriceBook → use that value.
+      2. Org is non-paying (Dev / Sandbox / Trial) → False.
+      3. SKU label matches KNOWN_FREE_SKU_PATTERNS → False.
+      4. Else → True.
+
+    The reason string explains WHY a row is non-billed so the dashboard
+    + finding evidence can surface it.
+    """
+    if not label:
+        return True, None
+    if label in ctx.price_book_is_billed:
+        is_billed = ctx.price_book_is_billed[label]
+        if not is_billed:
+            return False, (
+                "Marked Bundled in the Price book by the admin."
+            )
+        return True, None
+    if not ctx.is_paying_org:
+        reason_edition = (
+            f"Sandbox org" if ctx.is_sandbox
+            else f"Trial org" if ctx.is_trial
+            else f"Org edition is {ctx.org_type or 'non-paying'}"
+        )
+        return False, f"{reason_edition} — license seats are bundled at no cost."
+    if _is_known_free_sku(label):
+        return False, (
+            "Known bundled SKU — matches the documented free-SKU pattern list. "
+            "If your customer's contract bills for this PSL, flip the 'Billed' "
+            "toggle in the Price book."
+        )
+    return True, None
 
 # Sensitive objects where Public Read/Write OWD is a red flag.
 SENSITIVE_OBJECTS = {
@@ -315,6 +407,18 @@ class AnalyzerContext:
     stale_opportunities_count: Optional[int] = None
     top_account_owners: List[Dict[str, Any]] = field(default_factory=list)
     total_account_count: Optional[int] = None
+
+    # Org-edition state (populated from the Organization sObject). Drives
+    # the non-paying-org banner + hard-suppression of license savings.
+    org_type: Optional[str] = None
+    is_sandbox: bool = False
+    is_trial: bool = False
+    is_paying_org: bool = True  # Defaults to True; set False when we know better.
+    org_metadata: Dict[str, Any] = field(default_factory=dict)
+
+    # Admin-set is_billed overrides per SKU label. Populated alongside
+    # price_book from the LicensePriceBook table.
+    price_book_is_billed: Dict[str, bool] = field(default_factory=dict)
 
 
 @dataclass
@@ -411,6 +515,10 @@ class OrgAnalyzerService:
         ctx.owds = await _q(OrganizationWideDefaultSnapshot)
 
         ctx.price_book = await self._load_price_book()
+        # Lift per-SKU is_billed overrides off the price-book rows we
+        # already loaded — saves a second DB round-trip.
+        for r in getattr(self, "_price_book_rows", []) or []:
+            ctx.price_book_is_billed[r.license_name] = bool(r.is_billed)
         return ctx
 
     async def _load_price_book(self) -> Dict[str, int]:
@@ -424,6 +532,10 @@ class OrgAnalyzerService:
         live at attribution time via _price_for_label so SKUs we discover
         in the org but have never seen before still get a sensible
         default without populating a per-SKU dict entry.
+
+        Side effect: also stashes the LicensePriceBook rows on the
+        instance so _load_context can pull the per-SKU is_billed flags
+        without re-querying.
         """
         result = await self.db.execute(
             select(LicensePriceBook).where(
@@ -431,6 +543,7 @@ class OrgAnalyzerService:
             )
         )
         rows = list(result.scalars().all())
+        self._price_book_rows = rows  # consumed in _load_context
         merged: Dict[str, int] = dict(DEFAULT_PRICE_BOOK_CENTS)
         for r in rows:
             merged[r.license_name] = int(r.monthly_cost_cents)
@@ -555,6 +668,23 @@ class OrgAnalyzerService:
         except Exception as e:
             logger.warning("get_permission_set_licenses failed: %s", e)
 
+        # Org-edition metadata — drives non-paying-org suppression.
+        org_meta = await sf_client.extract_organization()
+        if org_meta:
+            ctx.org_metadata = org_meta
+            ctx.org_type = org_meta.get("OrganizationType")
+            ctx.is_sandbox = bool(org_meta.get("IsSandbox"))
+            ctx.is_trial = bool(org_meta.get("TrialExpirationDate"))
+            ctx.is_paying_org = _is_paying_org(
+                org_type=ctx.org_type,
+                is_sandbox=ctx.is_sandbox,
+                is_trial=ctx.is_trial,
+            )
+            logger.info(
+                "Org edition: type=%s sandbox=%s trial=%s paying=%s",
+                ctx.org_type, ctx.is_sandbox, ctx.is_trial, ctx.is_paying_org,
+            )
+
         # Sales-ops signals
         try:
             ctx.stale_opportunities_count = await sf_client.count_stale_opportunities(60)
@@ -656,18 +786,28 @@ class OrgAnalyzerService:
                 source = "unknown"
 
             is_free = _is_known_free_sku(label)
-            monthly = 0 if is_free else self._price_for_label(
+            # Resolve the effective billed flag for this SKU on this org.
+            # When non-billed, monthly cost is forced to 0 even if the
+            # catalog or price-book lists a real price — the customer
+            # isn't actually paying for this seat.
+            is_billed, non_billable_reason = _is_billed_for_org(label, ctx)
+            monthly = 0 if (is_free or not is_billed) else self._price_for_label(
                 label, ctx.price_book
             )
             # If we matched the SKU via UserType but the label has no
             # price anywhere, also try the developer key from the
             # UserLicense row (some orgs label SKUs idiosyncratically).
-            if monthly == 0 and not is_free and lic and lic.get("Name"):
+            if (
+                monthly == 0 and not is_free and is_billed
+                and lic and lic.get("Name")
+            ):
                 monthly = self._price_for_label(lic["Name"], ctx.price_book)
             return {
                 "license_name": label,
                 "monthly_cents": monthly,
                 "is_free": is_free,
+                "is_billed": is_billed,
+                "non_billable_reason": non_billable_reason,
                 "license_developer_key": lic.get("Name") if lic else None,
                 "license_source": source,
             }
@@ -768,9 +908,12 @@ class OrgAnalyzerService:
                     "monthly_cents": 0,
                     "annual_cents": 0,
                     "note": (
-                        "Free / bundled license — no monetary impact."
-                        if _is_known_free_sku(name)
-                        else "No price set in the Price book — savings not attributed."
+                        slot.get("non_billable_reason")
+                        or (
+                            "Free / bundled license — no monetary impact."
+                            if _is_known_free_sku(name)
+                            else "No price set in the Price book — savings not attributed."
+                        )
                     ),
                 })
 
@@ -779,12 +922,29 @@ class OrgAnalyzerService:
             all_users = [u for u in users]
             sample = all_users[:EVIDENCE_SAMPLE_CAP]
 
+            # Surface "this finding contributes $0 because the org is
+            # non-paying" up to the evidence + description so the frontend
+            # can render the Non-billable pill + the cover-page banner.
+            final_description = description
+            non_billable_org = not ctx.is_paying_org
+            if non_billable_org:
+                edition_blurb = (
+                    "Sandbox" if ctx.is_sandbox
+                    else "Trial org" if ctx.is_trial
+                    else (ctx.org_type or "Non-production")
+                )
+                final_description = (
+                    f"**{edition_blurb} org detected — license seats are bundled "
+                    "at no cost, so no dollar savings are attributed.** "
+                    + description
+                )
+
             return FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code=code,
                 severity=sev,
                 title=title_template.format(n=n),
-                description=description,
+                description=final_description,
                 recommended_action=recommended_action,
                 affected_count=n,
                 estimated_annual_savings_cents=total_annual if paid_count else None,
@@ -796,6 +956,8 @@ class OrgAnalyzerService:
                     ),
                     "paid_user_count": paid_count,
                     "unpriced_or_free_user_count": unpriced_count,
+                    "non_billable_org": non_billable_org,
+                    "org_type": ctx.org_type,
                 },
                 sf_setup_deeplink="/lightning/setup/ManageUsers/home",
             )
@@ -862,9 +1024,25 @@ class OrgAnalyzerService:
             if op.sobject_type in sales_objects and op.permissions_read:
                 sales_grants_by_parent[op.parent_id] = True
 
+        # Hard-suppress LICENSE_OVERSIZED entirely on non-paying orgs —
+        # there's no downgrade savings to claim when seats are bundled.
         oversized_candidates: List[Dict[str, Any]] = []
+        # Also short-circuit if the "Salesforce" SKU is bundled for this
+        # org (admin override or pattern match) — the downgrade savings
+        # would be fictional.
+        sf_billed, sf_reason = _is_billed_for_org("Salesforce", ctx)
+        if not ctx.is_paying_org or not sf_billed:
+            oversized_short_circuit_reason = sf_reason or (
+                f"Org edition is {ctx.org_type or 'non-paying'} — Salesforce seats "
+                "are bundled at no cost, so no downgrade savings exist."
+            )
+        else:
+            oversized_short_circuit_reason = None
+
         for u in ctx.users:
             if not u.is_active:
+                continue
+            if oversized_short_circuit_reason:
                 continue
             lic = _resolve_user_license(u, profile_by_id, license_by_id)
             label = _license_label(lic)
@@ -958,8 +1136,58 @@ class OrgAnalyzerService:
                 continue
             sku = ul.get("Name") or ul.get("MasterLabel") or "Unknown"
             label = ul.get("MasterLabel") or sku
+            # Auto-detection ladder: admin override → org non-paying →
+            # known free SKU → billed. Returns (is_billed, reason).
+            is_billed, non_billable_reason = _is_billed_for_org(label, ctx)
+            # Belt-and-braces: the dev key variant also needs to clear
+            # the auto-detection when the MasterLabel does.
+            if is_billed and sku:
+                is_billed_dev, dev_reason = _is_billed_for_org(sku, ctx)
+                if not is_billed_dev:
+                    is_billed = False
+                    non_billable_reason = dev_reason
+            if not is_billed:
+                # Emit a count-only finding so the surplus is still
+                # visible, but with zero dollars and a clear reason.
+                surplus_n = surplus
+                out.append(FindingDraft(
+                    category=FindingCategory.LICENSE_WASTE,
+                    code="LICENSE_SEATS_UNUSED",
+                    severity=FindingSeverity.INFO,
+                    title=(
+                        f"{surplus_n} unused {label} seats "
+                        f"({used}/{total} assigned)"
+                    ),
+                    description=(
+                        f"**Non-billable: {non_billable_reason}** "
+                        f"This org has purchased {total} {label} seats but "
+                        f"only {used} are currently assigned. The surplus "
+                        "doesn't carry a renewal cost on this SKU, so no "
+                        "dollar savings are attributed."
+                    ),
+                    recommended_action=(
+                        "If your customer's contract actually bills for "
+                        "this SKU, flip the 'Billed' toggle in the Price "
+                        "book and re-run analysis."
+                    ),
+                    affected_count=surplus_n,
+                    estimated_annual_savings_cents=None,
+                    evidence={
+                        "license_name": label,
+                        "developer_key": sku,
+                        "total_purchased": total,
+                        "used": used,
+                        "surplus": surplus_n,
+                        "utilization_pct": round(used / total * 100, 1) if total else 0,
+                        "non_billable_org": not ctx.is_paying_org,
+                        "non_billable_reason": non_billable_reason,
+                    },
+                    sf_setup_deeplink="/lightning/setup/CompanyResourceDisk/home",
+                ))
+                continue
             if _is_known_free_sku(label) or _is_known_free_sku(sku):
-                # Bundled / free — nothing to bill the customer for.
+                # Defensive — _is_billed_for_org already caught this, but
+                # leaving the guard in case the patterns evolve.
                 continue
             monthly = self._price_for_label(label, ctx.price_book)
             if monthly == 0 and sku:
@@ -1049,7 +1277,46 @@ class OrgAnalyzerService:
             if surplus < 5:
                 continue
             label = psl.get("MasterLabel") or psl.get("DeveloperName") or "PSL"
+            # Apply the auto-detection ladder before pricing. Non-paying
+            # orgs + admin Bundled overrides + pattern-list matches all
+            # short-circuit to a $0 INFO finding so the consultant still
+            # sees the surplus exists without inflated dollars.
+            is_billed, non_billable_reason = _is_billed_for_org(label, ctx)
+            if not is_billed:
+                out.append(FindingDraft(
+                    category=FindingCategory.LICENSE_WASTE,
+                    code="PSL_SEATS_UNUSED",
+                    severity=FindingSeverity.INFO,
+                    title=(
+                        f"{surplus} unused {label} permission-set licenses "
+                        f"({used}/{total} assigned)"
+                    ),
+                    description=(
+                        f"**Non-billable: {non_billable_reason}** "
+                        f"{used}/{total} {label} PSLs assigned. PSLs that "
+                        "ship bundled with the base license don't carry a "
+                        "renewal cost — no dollar savings attributed."
+                    ),
+                    recommended_action=(
+                        "If your customer's contract actually bills for "
+                        "this PSL, flip the 'Billed' toggle in the Price "
+                        "book and re-run analysis."
+                    ),
+                    affected_count=surplus,
+                    estimated_annual_savings_cents=None,
+                    evidence={
+                        "license_name": label,
+                        "developer_name": psl.get("DeveloperName"),
+                        "total_purchased": total,
+                        "used": used,
+                        "surplus": surplus,
+                        "non_billable_org": not ctx.is_paying_org,
+                        "non_billable_reason": non_billable_reason,
+                    },
+                ))
+                continue
             if _is_known_free_sku(label):
+                # Defensive — _is_billed_for_org already caught this.
                 continue
             monthly = self._price_for_label(label, ctx.price_book)
             if not monthly:
@@ -2074,6 +2341,12 @@ class OrgAnalyzerService:
             })
 
         metrics: Dict[str, Any] = {
+            # Org-edition state captured at run-time so the frontend can
+            # render the non-paying-org banner without a second roundtrip.
+            "org_type": ctx.org_type,
+            "is_sandbox": ctx.is_sandbox,
+            "is_trial": ctx.is_trial,
+            "is_paying_org": ctx.is_paying_org,
             "org_health_score": health_score,
             "org_health_rubric": {
                 "starting_score": 100,
@@ -2219,18 +2492,29 @@ def _bucket_users_by_license(
 ) -> Dict[str, Dict[str, Any]]:
     """Group a list of {id, name, license_name, monthly_cents} entries
     by license_name. Returns {license_name: {count, monthly_cents,
-    annual_cents, sample}}. Free / unpriced licenses still appear in the
-    bucket with monthly=0 so the caller can decide what to do with them.
+    annual_cents, sample, non_billable_reason}}. Free / unpriced
+    licenses still appear in the bucket with monthly=0 so the caller
+    can decide what to do with them.
+
+    `non_billable_reason` propagates from the classified user dict
+    (set by `_is_billed_for_org`) so the caller can attach a clear
+    explanation when monthly is forced to $0.
     """
     _ = price_book  # accepted for API symmetry; lookup is done by caller
     buckets: Dict[str, Dict[str, Any]] = defaultdict(
-        lambda: {"count": 0, "monthly_cents": 0, "annual_cents": 0, "sample": []}
+        lambda: {
+            "count": 0, "monthly_cents": 0, "annual_cents": 0,
+            "sample": [], "non_billable_reason": None,
+        }
     )
     for u in users:
         name = u.get("license_name") or "Unknown license"
         slot = buckets[name]
         slot["count"] += 1
         slot["monthly_cents"] = u.get("monthly_cents", 0)
+        reason = u.get("non_billable_reason")
+        if reason and not slot["non_billable_reason"]:
+            slot["non_billable_reason"] = reason
         if len(slot["sample"]) < EVIDENCE_SAMPLE_CAP:
             slot["sample"].append(u)
     for name, slot in buckets.items():

@@ -279,8 +279,32 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
         : healthScore >= 60
           ? 'text-amber-600 dark:text-amber-400'
           : 'text-red-600 dark:text-red-400'
+  const isPayingOrg = summary.is_paying_org !== false
+  const orgEdition = (
+    summary.is_sandbox ? 'Sandbox'
+    : summary.is_trial ? 'Trial'
+    : (summary.org_type || 'Non-production')
+  )
   return (
     <div className="space-y-4">
+      {!isPayingOrg && (
+        <div
+          className="flex items-start gap-3 p-3 rounded-lg border bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 text-sm"
+          role="status"
+        >
+          <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold">{orgEdition} org detected — list-price calculations don&apos;t apply.</p>
+            <p className="text-xs mt-1 text-amber-800 dark:text-amber-200">
+              Salesforce bundles license seats at $0 on this edition.
+              Per-finding savings are shown as Info only; re-run on a
+              production org for a billable savings estimate, or flip the{' '}
+              <strong>Billed</strong> toggle in the Price book to override
+              specific SKUs.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <StatCard
           label="Org health score"
@@ -595,6 +619,14 @@ function FindingsTab({ orgId }: { orgId: string }) {
                         Ignored
                       </span>
                     )}
+                    {f.evidence?.non_billable_org && (
+                      <span
+                        className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                        title="No dollar savings attributed: this org's license seats are bundled at no cost."
+                      >
+                        Non-billable
+                      </span>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{f.title}</p>
                       <p className="text-xs text-gray-500 truncate">
@@ -639,6 +671,17 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
                     <EyeOff className="h-2.5 w-2.5" />
                     Ignored
+                  </span>
+                )}
+                {refreshedSelected.evidence?.non_billable_org && (
+                  <span
+                    className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                    title={
+                      refreshedSelected.evidence?.non_billable_reason
+                      || 'No dollar savings attributed: this org bundles the SKU at no cost.'
+                    }
+                  >
+                    Non-billable
                   </span>
                 )}
                 <span className="text-xs text-gray-500">
@@ -1240,8 +1283,17 @@ function PriceBookTab({ orgId }: { orgId: string }) {
     setRows(next)
   }
 
+  const handleToggleBilled = (i: number) => {
+    const next = [...display]
+    next[i] = { ...next[i], is_billed: !(next[i].is_billed ?? true) }
+    setRows(next)
+  }
+
   const handleAdd = () => {
-    setRows([...(display ?? []), { license_name: 'New SKU', monthly_cost_cents: 0 }])
+    setRows([
+      ...(display ?? []),
+      { license_name: 'New SKU', monthly_cost_cents: 0, is_billed: true },
+    ])
   }
 
   const handleDelete = (i: number) => {
@@ -1275,12 +1327,15 @@ function PriceBookTab({ orgId }: { orgId: string }) {
           are the actual{' '}
           <code>UserLicense</code> + <code>PermissionSetLicense</code>{' '}
           records this org owns. Default prices come from a built-in
-          catalog of Salesforce Enterprise list prices (refreshed
-          periodically); rows flagged{' '}
+          catalog of Salesforce Enterprise list prices; rows flagged{' '}
           <span className="font-semibold text-green-700 dark:text-green-400">Custom</span>{' '}
-          have been overridden by you. Replace the defaults with the
-          customer's actual contracted prices — those numbers drive
-          every license-savings estimate.
+          have been overridden by you. The{' '}
+          <span className="font-semibold">Billed</span> toggle controls
+          whether the SKU contributes to savings calculations — flip to{' '}
+          <span className="font-semibold">Bundled</span> for SKUs that
+          ship at $0 with your customer&apos;s contract (Dev / Sandbox /
+          Trial orgs auto-default to Bundled for all SKUs). Hover the
+          toggle for the auto-detection reason.
         </p>
         {pb.isLoading ? (
           <TableSkeleton rows={4} />
@@ -1290,71 +1345,100 @@ function PriceBookTab({ orgId }: { orgId: string }) {
               <tr className="text-left border-b border-gray-200 dark:border-gray-800">
                 <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">License</th>
                 <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Source</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Billed?</th>
                 <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Cost (cents/mo)</th>
                 <th className="py-2 text-xs uppercase tracking-wide text-gray-500">Cost (USD/mo)</th>
                 <th className="py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {display.map((r, i) => (
-                <tr key={i} className="border-b border-gray-100 dark:border-gray-900">
-                  <td className="py-1 pr-3">
-                    <input
-                      value={r.license_name}
-                      onChange={e => handleSet(i, 'license_name', e.target.value)}
-                      className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
-                    />
-                  </td>
-                  <td className="py-1 pr-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      {r.in_org && (
+              {display.map((r, i) => {
+                const billed = r.is_billed ?? true
+                return (
+                  <tr key={i} className={`border-b border-gray-100 dark:border-gray-900 ${!billed ? 'bg-gray-50/50 dark:bg-gray-900/30' : ''}`}>
+                    <td className="py-1 pr-3">
+                      <input
+                        value={r.license_name}
+                        onChange={e => handleSet(i, 'license_name', e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                      />
+                    </td>
+                    <td className="py-1 pr-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        {r.in_org && (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                            title="Detected in the org's UserLicense / PSL inventory"
+                          >
+                            In org
+                          </span>
+                        )}
+                        {r.is_override ? (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                            title="You have set this price; it overrides the catalog default"
+                          >
+                            Custom
+                          </span>
+                        ) : (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                            title="From the built-in Salesforce list-price catalog"
+                          >
+                            Default
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-1 pr-3">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBilled(i)}
+                        title={r.billed_reason || (billed ? 'This SKU contributes to savings calculations' : 'This SKU is treated as bundled — $0 savings attributed')}
+                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border transition ${
+                          billed
+                            ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
+                            : 'bg-gray-100 border-gray-300 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
+                        }`}
+                      >
                         <span
-                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
-                          title="Detected in the org's UserLicense / PSL inventory"
-                        >
-                          In org
-                        </span>
-                      )}
-                      {r.is_override ? (
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                          title="You have set this price; it overrides the catalog default"
-                        >
-                          Custom
-                        </span>
-                      ) : (
-                        <span
-                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                          title="From the built-in Salesforce list-price catalog"
-                        >
-                          Default
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-1 pr-3">
-                    <input
-                      type="number"
-                      min={0}
-                      value={r.monthly_cost_cents}
-                      onChange={e => handleSet(i, 'monthly_cost_cents', e.target.value)}
-                      className="w-32 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-mono"
-                    />
-                  </td>
-                  <td className="py-1 text-xs text-gray-500 font-mono">
-                    ${(r.monthly_cost_cents / 100).toFixed(2)}
-                  </td>
-                  <td className="py-1 text-right">
-                    <button
-                      onClick={() => handleDelete(i)}
-                      className="text-gray-400 hover:text-red-600"
-                      title="Remove SKU"
-                    >
-                      <XIcon className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                          className={`h-2.5 w-2.5 rounded-full ${
+                            billed ? 'bg-green-500' : 'bg-gray-400'
+                          }`}
+                        />
+                        {billed ? 'Billed' : 'Bundled'}
+                      </button>
+                    </td>
+                    <td className="py-1 pr-3">
+                      <input
+                        type="number"
+                        min={0}
+                        value={r.monthly_cost_cents}
+                        onChange={e => handleSet(i, 'monthly_cost_cents', e.target.value)}
+                        disabled={!billed}
+                        className={`w-32 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-mono ${
+                          !billed ? 'opacity-50' : ''
+                        }`}
+                      />
+                    </td>
+                    <td className="py-1 text-xs text-gray-500 font-mono">
+                      {billed
+                        ? `$${(r.monthly_cost_cents / 100).toFixed(2)}`
+                        : <span className="italic">bundled — $0</span>
+                      }
+                    </td>
+                    <td className="py-1 text-right">
+                      <button
+                        onClick={() => handleDelete(i)}
+                        className="text-gray-400 hover:text-red-600"
+                        title="Remove SKU"
+                      >
+                        <XIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
