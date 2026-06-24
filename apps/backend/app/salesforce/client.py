@@ -298,6 +298,79 @@ class SalesforceAPIClient:
             logger.warning("ApexCodeCoverageAggregate query failed: %s", e)
             return []
 
+    async def get_user_licenses(self) -> List[Dict[str, Any]]:
+        """UserLicense — the actual license SKUs in this org.
+
+        Returns rows with TotalLicenses / UsedLicenses / Status. Drives
+        the Org Analyzer price-book auto-population and the
+        LICENSE_SEATS_UNUSED finding (purchased seats not assigned).
+        """
+        try:
+            return await self.query_all(
+                "SELECT Id, Name, MasterLabel, LicenseDefinitionKey, "
+                "TotalLicenses, UsedLicenses, Status FROM UserLicense"
+            )
+        except Exception as e:
+            logger.warning("UserLicense query failed: %s", e)
+            return []
+
+    async def get_permission_set_licenses(self) -> List[Dict[str, Any]]:
+        """PermissionSetLicense — add-on SKUs like Sales Cloud, Service
+        Cloud, Field Service, etc."""
+        try:
+            return await self.query_all(
+                "SELECT Id, DeveloperName, MasterLabel, "
+                "TotalLicenses, UsedLicenses, Status FROM PermissionSetLicense"
+            )
+        except Exception as e:
+            logger.warning("PermissionSetLicense query failed: %s", e)
+            return []
+
+    async def count_stale_opportunities(self, days: int = 60) -> Optional[int]:
+        """Count open Opportunities not modified in `days` days.
+
+        Drives the STALE_OPPORTUNITY analyzer finding — open pipeline
+        that hasn't moved in 60+ days is a forecast-accuracy red flag.
+        """
+        try:
+            result = await self.query(
+                "SELECT COUNT() FROM Opportunity WHERE IsClosed = false "
+                f"AND LastModifiedDate < LAST_N_DAYS:{days}"
+            )
+            return int(result.totalSize or 0)
+        except Exception as e:
+            logger.warning("stale-opportunity COUNT failed: %s", e)
+            return None
+
+    async def top_account_owners(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Top account owners by record count.
+
+        Drives the ACCOUNT_OWNERSHIP_CONCENTRATION finding — if 5 owners
+        hold > 50% of accounts, that's a key-person risk + a sales-ops
+        rebalancing opportunity.
+        """
+        try:
+            soql = (
+                "SELECT OwnerId, COUNT(Id) cnt FROM Account "
+                "GROUP BY OwnerId ORDER BY COUNT(Id) DESC "
+                f"LIMIT {limit}"
+            )
+            res = await self.query(soql)
+            return list(res.records) if res.records else []
+        except Exception as e:
+            logger.warning("top_account_owners failed: %s", e)
+            return []
+
+    async def total_account_count(self) -> Optional[int]:
+        """SELECT COUNT() FROM Account — used as the denominator for the
+        ownership-concentration calculation."""
+        try:
+            res = await self.query("SELECT COUNT() FROM Account")
+            return int(res.totalSize or 0)
+        except Exception as e:
+            logger.warning("Account COUNT failed: %s", e)
+            return None
+
     # =========================================================================
     # Extraction Methods
     # =========================================================================

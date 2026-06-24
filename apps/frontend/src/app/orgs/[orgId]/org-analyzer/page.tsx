@@ -42,7 +42,6 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import {
   CATEGORY_LABELS,
-  SEVERITY_COLORS,
   SEVERITY_LABELS,
   formatMoneyCents,
   useLicensePriceBook,
@@ -69,6 +68,19 @@ const TABS: { id: Tab; label: string; icon: any }[] = [
 ]
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// Severity badge classes — literal switch instead of a dict lookup so
+// Tailwind's content scanner reliably picks up each class string. The
+// tailwind.config safelist also lists these as belt-and-braces.
+function severityBadgeClasses(s: FindingSeverity): string {
+  switch (s) {
+    case 'critical': return 'bg-red-700 text-white'
+    case 'high':     return 'bg-red-500 text-white'
+    case 'medium':   return 'bg-amber-500 text-white'
+    case 'low':      return 'bg-yellow-500 text-gray-900'
+    case 'info':     return 'bg-blue-500 text-white'
+  }
+}
 
 export default function OrgAnalyzerPage() {
   const params = useParams()
@@ -245,9 +257,26 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
   const snapshotAt = summary.snapshot_at
     ? new Date(summary.snapshot_at).toLocaleString()
     : '—'
+  const healthScore: number | undefined =
+    summary.metrics?.org_health_score
+  const healthAccent =
+    healthScore == null
+      ? 'text-gray-400'
+      : healthScore >= 80
+        ? 'text-green-600 dark:text-green-400'
+        : healthScore >= 60
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-red-600 dark:text-red-400'
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <StatCard
+          label="Org health score"
+          value={healthScore != null ? `${healthScore}` : '—'}
+          subValue={healthScore != null ? '/ 100' : undefined}
+          icon={Stethoscope}
+          accent={healthAccent}
+        />
         <StatCard
           label="Findings"
           value={summary.findings_count.toString()}
@@ -324,12 +353,14 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
 function StatCard({
   label,
   value,
+  subValue,
   icon: Icon,
   accent,
   small,
 }: {
   label: string
   value: string
+  subValue?: string
   icon: any
   accent: string
   small?: boolean
@@ -343,6 +374,9 @@ function StatCard({
         </div>
         <p className={`font-bold ${accent} ${small ? 'text-sm' : 'text-2xl'}`}>
           {value}
+          {subValue && (
+            <span className="text-xs font-normal text-gray-500 ml-1">{subValue}</span>
+          )}
         </p>
       </CardContent>
     </Card>
@@ -361,7 +395,7 @@ function SeverityBars({ counts }: { counts: Record<string, number> }) {
             <span className="text-xs w-20">{SEVERITY_LABELS[s]}</span>
             <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
               <div
-                className={SEVERITY_COLORS[s]}
+                className={severityBadgeClasses(s)}
                 style={{ width: `${(c / max) * 100}%`, height: '100%' }}
               />
             </div>
@@ -501,7 +535,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                 >
                   <div className="flex items-start gap-2">
                     <span
-                      className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${SEVERITY_COLORS[f.severity]}`}
+                      className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${severityBadgeClasses(f.severity)}`}
                     >
                       {SEVERITY_LABELS[f.severity]}
                     </span>
@@ -541,7 +575,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
                 <span
-                  className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${SEVERITY_COLORS[selected.severity]}`}
+                  className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${severityBadgeClasses(selected.severity)}`}
                 >
                   {SEVERITY_LABELS[selected.severity]}
                 </span>
@@ -577,6 +611,9 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   <ArrowRight className="h-3 w-3" />
                 </a>
               )}
+              {selected.evidence?.cost_calculation && (
+                <CostCalculationCard calc={selected.evidence.cost_calculation} />
+              )}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
                   Evidence
@@ -601,6 +638,32 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="border border-gray-200 dark:border-gray-800 rounded p-2">
       <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
       <p className="text-sm font-semibold">{value}</p>
+    </div>
+  )
+}
+
+// Shows the math behind a finding's dollar estimate so the consultant
+// can defend the number in front of a CFO: "9 users × $165/mo × 12 = $17,820".
+function CostCalculationCard({ calc }: { calc: any }) {
+  if (!calc) return null
+  return (
+    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300 mb-1">
+        How we calculated this
+      </p>
+      <p className="text-xs font-mono text-green-900 dark:text-green-100">
+        {calc.formula ?? '—'}
+      </p>
+      <p className="text-xs mt-1 text-green-800 dark:text-green-200">
+        =&nbsp;
+        <strong>{formatMoneyCents(calc.total_annual_cents)}</strong>
+        &nbsp;/year
+        {calc.license_name && (
+          <span className="text-[10px] text-green-700 dark:text-green-400 ml-1">
+            ({calc.license_name})
+          </span>
+        )}
+      </p>
     </div>
   )
 }
@@ -659,45 +722,147 @@ function SavingsTab({ orgId }: { orgId: string }) {
 // ----------------------------------------------------------- Trends tab
 
 function TrendsTab({ history, summary }: { history: any[]; summary: any }) {
+  const licenseRows: any[] = summary?.metrics?.license_utilization ?? []
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card variant="bordered">
+          <CardHeader>
+            <CardTitle>Findings count over time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Sparkline points={history} />
+            <p className="text-xs text-gray-500 mt-2">
+              {history.length} snapshot{history.length === 1 ? '' : 's'} on file.
+            </p>
+          </CardContent>
+        </Card>
+        <Card variant="bordered">
+          <CardHeader>
+            <CardTitle>Org limits</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LimitsBars limits={summary?.org_limits ?? {}} />
+          </CardContent>
+        </Card>
+      </div>
       <Card variant="bordered">
         <CardHeader>
-          <CardTitle>Findings count over time</CardTitle>
+          <CardTitle>License utilisation (purchased vs assigned)</CardTitle>
         </CardHeader>
         <CardContent>
-          <Sparkline points={history} />
-          <p className="text-xs text-gray-500 mt-2">
-            {history.length} snapshot{history.length === 1 ? '' : 's'} on file.
-          </p>
-        </CardContent>
-      </Card>
-      <Card variant="bordered">
-        <CardHeader>
-          <CardTitle>Storage utilisation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LimitsBars limits={summary?.org_limits ?? {}} />
+          <LicenseUtilizationTable rows={licenseRows} />
         </CardContent>
       </Card>
     </div>
   )
 }
 
+function LicenseUtilizationTable({ rows }: { rows: any[] }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <p className="text-sm text-gray-500 italic">
+        License inventory unavailable. Run analysis to fetch UserLicense
+        and PermissionSetLicense from the org.
+      </p>
+    )
+  }
+  // Sort highest-surplus first — that's where the savings story lives.
+  const sorted = [...rows].sort((a, b) => (b.total - b.used) - (a.total - a.used))
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="text-left border-b border-gray-200 dark:border-gray-800">
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">License</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500 text-right">Used</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500 text-right">Total</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500 text-right">Surplus</th>
+          <th className="py-2 text-xs uppercase tracking-wide text-gray-500">Utilisation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((r, i) => {
+          const surplus = (r.total ?? 0) - (r.used ?? 0)
+          return (
+            <tr key={`${r.developer_key}-${i}`} className="border-b border-gray-100 dark:border-gray-900">
+              <td className="py-2 pr-3">
+                <div className="text-sm">{r.license_name}</div>
+                <div className="text-[10px] text-gray-500">{r.kind} license</div>
+              </td>
+              <td className="py-2 pr-3 text-right font-mono text-sm">{r.used}</td>
+              <td className="py-2 pr-3 text-right font-mono text-sm">{r.total}</td>
+              <td className="py-2 pr-3 text-right font-mono text-sm">
+                <span className={surplus > 0 ? 'text-amber-600 dark:text-amber-400' : ''}>
+                  {surplus}
+                </span>
+              </td>
+              <td className="py-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden min-w-[60px]">
+                    <div
+                      className={
+                        r.utilization_pct >= 90
+                          ? 'bg-green-500 h-full'
+                          : r.utilization_pct >= 50
+                            ? 'bg-amber-500 h-full'
+                            : 'bg-red-500 h-full'
+                      }
+                      style={{ width: `${r.utilization_pct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono w-12 text-right">
+                    {r.utilization_pct}%
+                  </span>
+                </div>
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+// Pretty formatting for /limits payload values. SF returns MB for storage
+// and integers for request counters; we choose the unit per metric.
+function _formatLimit(key: string, n: number): string {
+  if (key.endsWith('MB')) {
+    if (n >= 1024) return `${(n / 1024).toFixed(2)} GB`
+    return `${n.toLocaleString()} MB`
+  }
+  return n.toLocaleString()
+}
+
+const LIMIT_LABELS: Record<string, string> = {
+  DataStorageMB: 'Data storage',
+  FileStorageMB: 'File storage',
+  DailyApiRequests: 'Daily API requests',
+  DailyBulkApiBatches: 'Daily bulk API batches',
+  DailyAsyncApexExecutions: 'Daily async Apex',
+  DailyWorkflowEmails: 'Daily workflow emails',
+  HourlyAsyncReportRuns: 'Hourly async report runs',
+  MassEmail: 'Mass email (24h)',
+  SingleEmail: 'Single email (24h)',
+}
+
 function LimitsBars({ limits }: { limits: Record<string, any> }) {
-  const keys = [
-    'DataStorageMB',
-    'FileStorageMB',
-    'DailyApiRequests',
-    'DailyBulkApiBatches',
-  ]
-  const rows = keys
-    .filter(k => limits[k] && limits[k].Max)
+  const allKeys = Object.keys(LIMIT_LABELS)
+  const rows = allKeys
+    .filter(k => limits[k] && typeof limits[k].Max === 'number')
     .map(k => {
       const { Max, Remaining } = limits[k]
-      const usedPct = Math.round(((Max - Remaining) / Max) * 100)
-      return { key: k, max: Max, remaining: Remaining, usedPct }
+      const used = Math.max(0, Max - Remaining)
+      const usedPct = Max > 0 ? Math.round((used / Max) * 100) : 0
+      return {
+        key: k,
+        label: LIMIT_LABELS[k] || k,
+        max: Max,
+        remaining: Remaining,
+        used,
+        usedPct,
+      }
     })
+
   if (rows.length === 0) {
     return (
       <p className="text-sm text-gray-500 italic">
@@ -705,31 +870,55 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
       </p>
     )
   }
+
+  const totalAcrossAll = rows.reduce((sum, r) => sum + r.used, 0)
   return (
-    <ul className="space-y-3">
-      {rows.map(r => (
-        <li key={r.key}>
-          <div className="flex items-center justify-between text-sm mb-1">
-            <span>{r.key}</span>
-            <span className="text-xs font-mono">
-              {r.usedPct}% used
-            </span>
-          </div>
-          <div className="bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
-            <div
-              className={
-                r.usedPct >= 90
-                  ? 'bg-red-600 h-full'
-                  : r.usedPct >= 75
-                    ? 'bg-amber-500 h-full'
-                    : 'bg-indigo-500 h-full'
-              }
-              style={{ width: `${r.usedPct}%` }}
-            />
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div>
+      {totalAcrossAll === 0 && (
+        <p className="text-xs text-gray-500 italic mb-3">
+          Note: every metric below reports 0% used. For a developer / scratch
+          org this is normal &mdash; the bars will populate as the org accrues
+          real usage.
+        </p>
+      )}
+      <ul className="space-y-3">
+        {rows.map(r => (
+          <li key={r.key}>
+            <div className="flex items-center justify-between text-sm mb-1">
+              <span>{r.label}</span>
+              <span className="text-xs font-mono text-gray-500">
+                {_formatLimit(r.key, r.used)} / {_formatLimit(r.key, r.max)}{' '}
+                <span
+                  className={
+                    r.usedPct >= 90
+                      ? 'text-red-600 font-semibold'
+                      : r.usedPct >= 75
+                        ? 'text-amber-600 font-semibold'
+                        : ''
+                  }
+                >
+                  ({r.usedPct}%)
+                </span>
+              </span>
+            </div>
+            <div className="bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
+              <div
+                className={
+                  r.usedPct >= 90
+                    ? 'bg-red-600 h-full'
+                    : r.usedPct >= 75
+                      ? 'bg-amber-500 h-full'
+                      : 'bg-indigo-500 h-full'
+                }
+                style={{
+                  width: `${Math.max(r.usedPct, r.used > 0 ? 1 : 0)}%`,
+                }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -783,9 +972,12 @@ function PriceBookTab({ orgId }: { orgId: string }) {
       </CardHeader>
       <CardContent>
         <p className="text-xs text-gray-500 mb-3">
-          Monthly cost per license SKU in cents. Drives the per-finding
-          savings estimates. Override the defaults with the customer's
-          actual contracted prices.
+          Monthly cost per license SKU in cents. The list is sourced from
+          the org's actual <code>UserLicense</code> and{' '}
+          <code>PermissionSetLicense</code> records on each analysis run,
+          merged with a small fallback list of common SKUs. Override the
+          cost values with the customer's actual contracted prices — those
+          numbers drive every license-savings estimate.
         </p>
         {pb.isLoading ? (
           <TableSkeleton rows={4} />

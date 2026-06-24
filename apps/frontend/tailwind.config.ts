@@ -5,6 +5,15 @@ const config: Config = {
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/lib/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  // Severity badges in the Org Analyzer compute their class string from
+  // a lookup dict. Tailwind's static scanner can't always trace that
+  // through, so the bg-red-700 / bg-yellow-500 classes occasionally
+  // dropped out of the production build. Safelist guarantees they ship.
+  safelist: [
+    'bg-red-700', 'bg-red-500', 'bg-amber-500', 'bg-yellow-500', 'bg-blue-500',
+    'text-white', 'text-gray-900',
   ],
   darkMode: 'class',
   theme: {

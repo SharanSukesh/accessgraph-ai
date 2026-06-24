@@ -21,7 +21,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -139,6 +139,11 @@ class AnalyzerContext:
     workflow_rules: List[Dict[str, Any]] = field(default_factory=list)
     validation_rules: List[Dict[str, Any]] = field(default_factory=list)
     login_history: List[Dict[str, Any]] = field(default_factory=list)
+    user_licenses: List[Dict[str, Any]] = field(default_factory=list)
+    permission_set_licenses: List[Dict[str, Any]] = field(default_factory=list)
+    stale_opportunities_count: Optional[int] = None
+    top_account_owners: List[Dict[str, Any]] = field(default_factory=list)
+    total_account_count: Optional[int] = None
 
 
 @dataclass
@@ -336,6 +341,28 @@ class OrgAnalyzerService:
         except Exception as e:
             logger.warning("get_login_history failed: %s", e)
 
+        # License inventory — actual SKUs in this org, drives both the
+        # LICENSE_SEATS_UNUSED finding and the price-book auto-population.
+        try:
+            ctx.user_licenses = await sf_client.get_user_licenses()
+        except Exception as e:
+            logger.warning("get_user_licenses failed: %s", e)
+        try:
+            ctx.permission_set_licenses = await sf_client.get_permission_set_licenses()
+        except Exception as e:
+            logger.warning("get_permission_set_licenses failed: %s", e)
+
+        # Sales-ops signals
+        try:
+            ctx.stale_opportunities_count = await sf_client.count_stale_opportunities(60)
+        except Exception as e:
+            logger.warning("count_stale_opportunities failed: %s", e)
+        try:
+            ctx.top_account_owners = await sf_client.top_account_owners(limit=10)
+            ctx.total_account_count = await sf_client.total_account_count()
+        except Exception as e:
+            logger.warning("top_account_owners failed: %s", e)
+
     @staticmethod
     def _select_objects_to_count(sobjects: List[Dict[str, Any]]) -> List[str]:
         """Choose which sObjects to run SELECT COUNT() on.
@@ -419,6 +446,7 @@ class OrgAnalyzerService:
 
         if inactive_users:
             n = len(inactive_users)
+            annual = salesforce_price * 12 * n
             out.append(FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code="LICENSE_INACTIVE_USER",
@@ -435,13 +463,23 @@ class OrgAnalyzerService:
                     "Setup → Users. Reassign records first if needed."
                 ),
                 affected_count=n,
-                estimated_annual_savings_cents=salesforce_price * 12 * n,
-                evidence={"sample": inactive_users[:EVIDENCE_SAMPLE_CAP]},
+                estimated_annual_savings_cents=annual,
+                evidence={
+                    "sample": inactive_users[:EVIDENCE_SAMPLE_CAP],
+                    "cost_calculation": _cost_calc(
+                        formula=f"{n} inactive users × ${salesforce_price/100:.2f}/mo × 12 months",
+                        per_unit_monthly_cents=salesforce_price,
+                        unit_count=n,
+                        total_annual_cents=annual,
+                        license_name="Salesforce",
+                    ),
+                },
                 sf_setup_deeplink="/lightning/setup/ManageUsers/home",
             ))
 
         if never_logged_in:
             n = len(never_logged_in)
+            annual = salesforce_price * 12 * n
             out.append(FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code="LICENSE_NEVER_LOGGED_IN",
@@ -455,8 +493,17 @@ class OrgAnalyzerService:
                 ),
                 recommended_action="Reach out to confirm onboarding status, then deactivate or unblock as appropriate.",
                 affected_count=n,
-                estimated_annual_savings_cents=salesforce_price * 12 * n,
-                evidence={"sample": never_logged_in[:EVIDENCE_SAMPLE_CAP]},
+                estimated_annual_savings_cents=annual,
+                evidence={
+                    "sample": never_logged_in[:EVIDENCE_SAMPLE_CAP],
+                    "cost_calculation": _cost_calc(
+                        formula=f"{n} never-logged-in users × ${salesforce_price/100:.2f}/mo × 12 months",
+                        per_unit_monthly_cents=salesforce_price,
+                        unit_count=n,
+                        total_annual_cents=annual,
+                        license_name="Salesforce",
+                    ),
+                },
                 sf_setup_deeplink="/lightning/setup/ManageUsers/home",
             ))
 
@@ -469,7 +516,6 @@ class OrgAnalyzerService:
         user_parent_ids: Dict[str, set] = defaultdict(set)
         for a in ctx.assignments:
             user_parent_ids[a.assignee_id].add(a.permission_set_id)
-        ps_by_id = {p.salesforce_id: p for p in ctx.permission_sets}
         profile_by_id = {p.salesforce_id: p for p in ctx.profiles}
 
         # ObjectPermission parent_id can be a profile-owned PS or a real PS.
@@ -500,6 +546,7 @@ class OrgAnalyzerService:
 
         if oversized_candidates and cost_delta > 0:
             n = len(oversized_candidates)
+            annual = cost_delta * 12 * n
             out.append(FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code="LICENSE_OVERSIZED",
@@ -517,9 +564,142 @@ class OrgAnalyzerService:
                     "license at Setup → Users → <user> → User License."
                 ),
                 affected_count=n,
-                estimated_annual_savings_cents=cost_delta * 12 * n,
-                evidence={"sample": oversized_candidates[:EVIDENCE_SAMPLE_CAP]},
+                estimated_annual_savings_cents=annual,
+                evidence={
+                    "sample": oversized_candidates[:EVIDENCE_SAMPLE_CAP],
+                    "cost_calculation": _cost_calc(
+                        formula=(
+                            f"{n} users × (${salesforce_price/100:.2f} Salesforce – "
+                            f"${platform_price/100:.2f} Platform) × 12 months"
+                        ),
+                        per_unit_monthly_cents=cost_delta,
+                        unit_count=n,
+                        total_annual_cents=annual,
+                        license_name="Salesforce → Platform downgrade",
+                    ),
+                },
                 sf_setup_deeplink="/lightning/setup/ManageUsers/home",
+            ))
+
+        # LICENSE_SEATS_UNUSED — purchased but unassigned seats. Biggest
+        # single dollar finding in most orgs ($165 × N idle seats × 12).
+        # One finding per UserLicense + PermissionSetLicense row so the
+        # consultant can drill into each SKU separately.
+        for ul in ctx.user_licenses:
+            if (ul.get("Status") or "").lower() not in ("", "active"):
+                continue
+            total = int(ul.get("TotalLicenses") or 0)
+            used = int(ul.get("UsedLicenses") or 0)
+            if total <= 0:
+                continue
+            surplus = total - used
+            if surplus <= 0:
+                continue
+            sku = ul.get("Name") or ul.get("MasterLabel") or "Unknown"
+            label = ul.get("MasterLabel") or sku
+            monthly = (
+                ctx.price_book.get(label)
+                or ctx.price_book.get(sku)
+                or 0
+            )
+            annual = monthly * 12 * surplus if monthly else None
+            sev = (
+                FindingSeverity.HIGH if surplus >= 20
+                else FindingSeverity.MEDIUM if surplus >= 5
+                else FindingSeverity.LOW
+            )
+            evidence: Dict[str, Any] = {
+                "license_name": label,
+                "developer_key": sku,
+                "total_purchased": total,
+                "used": used,
+                "surplus": surplus,
+                "utilization_pct": round(used / total * 100, 1) if total else 0,
+            }
+            if monthly and annual is not None:
+                evidence["cost_calculation"] = _cost_calc(
+                    formula=(
+                        f"{surplus} surplus {label} seats × "
+                        f"${monthly/100:.2f}/mo × 12 months"
+                    ),
+                    per_unit_monthly_cents=monthly,
+                    unit_count=surplus,
+                    total_annual_cents=annual,
+                    license_name=label,
+                )
+            out.append(FindingDraft(
+                category=FindingCategory.LICENSE_WASTE,
+                code="LICENSE_SEATS_UNUSED",
+                severity=sev,
+                title=(
+                    f"{surplus} unused {label} seats "
+                    f"({used}/{total} assigned)"
+                ),
+                description=(
+                    f"This org has purchased {total} {label} seats but "
+                    f"only {used} are currently assigned. The {surplus} "
+                    "surplus seats are renewing every year regardless of "
+                    "use. If they're not part of an imminent hiring plan, "
+                    "they're prime candidates to remove at renewal."
+                ),
+                recommended_action=(
+                    "Compare against 12-month hiring forecast. If unused "
+                    "at renewal, drop the seat count or convert to a "
+                    "lighter license type."
+                ),
+                affected_count=surplus,
+                estimated_annual_savings_cents=annual,
+                evidence=evidence,
+                sf_setup_deeplink="/lightning/setup/CompanyResourceDisk/home",
+            ))
+
+        # Also emit a SKU-level finding for any PSL with significant surplus.
+        for psl in ctx.permission_set_licenses:
+            if (psl.get("Status") or "").lower() not in ("", "active"):
+                continue
+            total = int(psl.get("TotalLicenses") or 0)
+            used = int(psl.get("UsedLicenses") or 0)
+            if total <= 0:
+                continue
+            surplus = total - used
+            if surplus < 5:
+                continue  # Tighter threshold — PSLs are often free with the base license
+            label = psl.get("MasterLabel") or psl.get("DeveloperName") or "PSL"
+            monthly = ctx.price_book.get(label) or 0
+            annual = monthly * 12 * surplus if monthly else None
+            evidence = {
+                "license_name": label,
+                "developer_name": psl.get("DeveloperName"),
+                "total_purchased": total,
+                "used": used,
+                "surplus": surplus,
+            }
+            if monthly and annual:
+                evidence["cost_calculation"] = _cost_calc(
+                    formula=(
+                        f"{surplus} surplus {label} PSL seats × "
+                        f"${monthly/100:.2f}/mo × 12 months"
+                    ),
+                    per_unit_monthly_cents=monthly,
+                    unit_count=surplus,
+                    total_annual_cents=annual,
+                    license_name=label,
+                )
+            out.append(FindingDraft(
+                category=FindingCategory.LICENSE_WASTE,
+                code="PSL_SEATS_UNUSED",
+                severity=FindingSeverity.LOW,
+                title=f"{surplus} unused {label} permission-set licenses",
+                description=(
+                    f"{used}/{total} {label} PSLs assigned. Often these "
+                    "are bundled with a base license at no extra cost — "
+                    "but if you bought them as an add-on, the unused "
+                    "headroom is a renewal-time conversation."
+                ),
+                recommended_action="Verify with your AE whether this PSL is bundled or billed separately.",
+                affected_count=surplus,
+                estimated_annual_savings_cents=annual,
+                evidence=evidence,
             ))
 
         return out
@@ -724,6 +904,56 @@ class OrgAnalyzerService:
                         {"id": r.salesforce_id, "name": r.name}
                         for r in empty_roles[:EVIDENCE_SAMPLE_CAP]
                     ]
+                },
+                sf_setup_deeplink="/lightning/setup/Roles/home",
+            ))
+
+        # ROLE_HIERARCHY_TOO_DEEP — Salesforce best practice caps roles
+        # at ~10 levels; performance and record-visibility recalc costs
+        # scale poorly past that. Compute depth via BFS from roots.
+        roles_by_id = {r.salesforce_id: r for r in ctx.roles}
+        max_depth = 0
+        deep_branches: List[Dict[str, Any]] = []
+        for r in ctx.roles:
+            depth = 0
+            current = r.parent_role_id
+            seen: set = set()
+            while current and depth < 64 and current not in seen:
+                seen.add(current)
+                depth += 1
+                parent = roles_by_id.get(current)
+                if parent is None:
+                    break
+                current = parent.parent_role_id
+            if depth >= 6:
+                deep_branches.append({
+                    "id": r.salesforce_id, "name": r.name, "depth": depth,
+                })
+            if depth > max_depth:
+                max_depth = depth
+        if deep_branches:
+            n = len(deep_branches)
+            deep_branches.sort(key=lambda r: -r["depth"])
+            out.append(FindingDraft(
+                category=FindingCategory.CONFIG_BLOAT,
+                code="ROLE_HIERARCHY_TOO_DEEP",
+                severity=FindingSeverity.MEDIUM if max_depth >= 8 else FindingSeverity.LOW,
+                title=(
+                    f"Role hierarchy is {max_depth + 1} levels deep "
+                    f"({n} roles ≥ 6 hops from root)"
+                ),
+                description=(
+                    "Deep role hierarchies inflate sharing-recalc time "
+                    "and make record-visibility hard to reason about. "
+                    "Salesforce best practice is to keep depth ≤ 5 by "
+                    "favouring sharing rules + Account Teams over "
+                    "hierarchy depth."
+                ),
+                recommended_action="Flatten by merging mid-tier roles, or shift some access into sharing rules.",
+                affected_count=n,
+                evidence={
+                    "max_depth_levels": max_depth + 1,
+                    "deep_roles": deep_branches[:EVIDENCE_SAMPLE_CAP],
                 },
                 sf_setup_deeplink="/lightning/setup/Roles/home",
             ))
@@ -1265,6 +1495,83 @@ class OrgAnalyzerService:
                 sf_setup_deeplink="/lightning/setup/ObjectManager/home",
             ))
 
+        # STALE_OPPORTUNITY — open pipeline that hasn't moved in 60+ days
+        # is a forecast-accuracy problem the consultant can quantify.
+        if ctx.stale_opportunities_count and ctx.stale_opportunities_count > 0:
+            stale_n = ctx.stale_opportunities_count
+            sev = (
+                FindingSeverity.HIGH if stale_n >= 200
+                else FindingSeverity.MEDIUM if stale_n >= 50
+                else FindingSeverity.LOW
+            )
+            out.append(FindingDraft(
+                category=FindingCategory.DATA_QUALITY,
+                code="STALE_OPPORTUNITY",
+                severity=sev,
+                title=f"{stale_n} open opportunities not modified in 60+ days",
+                description=(
+                    "Open pipeline that hasn't moved in two months is "
+                    "almost always inflating the forecast. Either close-"
+                    "lost or push the close-date out — but don't leave "
+                    "them as silent drag on win-rate reports."
+                ),
+                recommended_action=(
+                    "Add a List View filter 'Open, LastModifiedDate "
+                    "< 60d ago' and triage with the deal owners."
+                ),
+                affected_count=stale_n,
+                evidence={"open_stale_count": stale_n, "stale_days_threshold": 60},
+                sf_setup_deeplink="/lightning/o/Opportunity/list",
+            ))
+
+        # ACCOUNT_OWNERSHIP_CONCENTRATION — top owners holding > 50% of
+        # accounts is a key-person risk + a sales-ops rebalance hook.
+        if ctx.top_account_owners and ctx.total_account_count:
+            top5 = ctx.top_account_owners[:5]
+            top5_total = sum(int(r.get("cnt") or 0) for r in top5)
+            denom = max(ctx.total_account_count, 1)
+            pct = top5_total / denom
+            if pct >= 0.50:
+                user_by_id = {u.salesforce_id: u for u in ctx.users}
+                evidence_top = []
+                for r in top5:
+                    owner_id = r.get("OwnerId")
+                    cnt = int(r.get("cnt") or 0)
+                    evidence_top.append({
+                        "owner_id": owner_id,
+                        "owner_name": (
+                            user_by_id.get(owner_id).name
+                            if owner_id and owner_id in user_by_id
+                            else owner_id
+                        ),
+                        "account_count": cnt,
+                        "share_of_org_pct": round(cnt / denom * 100, 1),
+                    })
+                out.append(FindingDraft(
+                    category=FindingCategory.DATA_QUALITY,
+                    code="ACCOUNT_OWNERSHIP_CONCENTRATION",
+                    severity=FindingSeverity.HIGH if pct >= 0.70 else FindingSeverity.MEDIUM,
+                    title=(
+                        f"Top 5 owners hold {round(pct * 100)}% of "
+                        f"{ctx.total_account_count} accounts"
+                    ),
+                    description=(
+                        "Highly concentrated ownership creates key-person "
+                        "risk (departure = pipeline disruption) and "
+                        "skews reporting toward a small handful of reps. "
+                        "Rebalancing improves coverage + retention "
+                        "telemetry."
+                    ),
+                    recommended_action="Run a coverage analysis with sales-ops and reassign accounts to underloaded reps.",
+                    affected_count=top5_total,
+                    evidence={
+                        "top_owners": evidence_top,
+                        "total_accounts_in_org": ctx.total_account_count,
+                        "top5_share_pct": round(pct * 100, 1),
+                    },
+                    sf_setup_deeplink="/lightning/o/Account/list",
+                ))
+
         return out
 
     # ----------------------- 7. user activity
@@ -1332,7 +1639,52 @@ class OrgAnalyzerService:
             by_cat[d.category.value] += 1
             total_savings += d.estimated_annual_savings_cents or 0
 
+        # Org Health Score: 100 minus weighted severity counts, floored at 0.
+        # Critical hits 5x harder than Medium, High 3x, Low 1x; Info ignored.
+        # The 'rubric' field is persisted so the dashboard can explain the
+        # number without having to re-derive it client-side.
+        weights = {"critical": 15, "high": 8, "medium": 3, "low": 1, "info": 0}
+        deduction = sum(weights[s] * c for s, c in by_sev.items() if s in weights)
+        health_score = max(0, 100 - deduction)
+
+        # License utilization (purchased vs assigned) — one of the most
+        # talkable numbers for a consultant. Computed from the actual
+        # UserLicense / PSL rows pulled live.
+        license_utilization = []
+        for ul in ctx.user_licenses:
+            total = int(ul.get("TotalLicenses") or 0)
+            used = int(ul.get("UsedLicenses") or 0)
+            if total <= 0:
+                continue
+            license_utilization.append({
+                "license_name": ul.get("MasterLabel") or ul.get("Name"),
+                "developer_key": ul.get("Name"),
+                "total": total,
+                "used": used,
+                "utilization_pct": round(used / total * 100, 1),
+                "kind": "user",
+            })
+        for psl in ctx.permission_set_licenses:
+            total = int(psl.get("TotalLicenses") or 0)
+            used = int(psl.get("UsedLicenses") or 0)
+            if total <= 0:
+                continue
+            license_utilization.append({
+                "license_name": psl.get("MasterLabel") or psl.get("DeveloperName"),
+                "developer_key": psl.get("DeveloperName"),
+                "total": total,
+                "used": used,
+                "utilization_pct": round(used / total * 100, 1),
+                "kind": "permission_set",
+            })
+
         metrics: Dict[str, Any] = {
+            "org_health_score": health_score,
+            "org_health_rubric": {
+                "starting_score": 100,
+                "weights": weights,
+                "deduction": deduction,
+            },
             "total_active_users": sum(1 for u in ctx.users if u.is_active),
             "total_profiles": len(ctx.profiles),
             "total_permission_sets": len(ctx.permission_sets),
@@ -1345,7 +1697,10 @@ class OrgAnalyzerService:
             "total_flows": len(ctx.flows),
             "total_workflow_rules": len(ctx.workflow_rules),
             "total_validation_rules": len(ctx.validation_rules),
+            "total_accounts": ctx.total_account_count,
+            "stale_open_opportunities_count": ctx.stale_opportunities_count,
             "sobject_record_counts": ctx.sobject_record_counts,
+            "license_utilization": license_utilization,
         }
 
         snapshot = OrgAnalysisSnapshot(
@@ -1391,6 +1746,25 @@ def _ensure_aware(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _cost_calc(
+    formula: str,
+    per_unit_monthly_cents: int,
+    unit_count: int,
+    total_annual_cents: int,
+    license_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Structured cost-calculation evidence so the drill-down panel can
+    render 'how we got this number' instead of just a black-box dollar
+    figure. Lives in evidence.cost_calculation."""
+    return {
+        "formula": formula,
+        "per_unit_monthly_cents": per_unit_monthly_cents,
+        "unit_count": unit_count,
+        "total_annual_cents": total_annual_cents,
+        "license_name": license_name,
+    }
 
 
 _SEVERITY_LADDER = [

@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import io
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
@@ -338,12 +337,17 @@ async def get_price_book(
     current_org_id: str = Depends(get_current_org),
     db: AsyncSession = Depends(get_database),
 ) -> PriceBookResponse:
-    """Returns the per-org price book merged with defaults.
+    """Returns the price book, prioritised in this order:
+      1. Per-org admin overrides (LicensePriceBook table).
+      2. Actual SKUs detected in the org's latest analyzer snapshot
+         (UserLicense + PermissionSetLicense), with default cost when
+         the SKU name matches one we know, else $0 (forcing the admin
+         to fill in the customer's negotiated price).
+      3. A small fallback list of commonly-licensed SKUs so a brand-new
+         org without an analyzer run yet still sees something.
 
-    On first read for a fresh org we DO NOT auto-insert default rows —
-    that's a write side-effect we want gated behind PUT. The response is
-    just the merged view so the UI can show defaults until the consultant
-    explicitly customises them.
+    The response is read-only — no rows are persisted until the admin
+    explicitly PUTs the price book.
     """
     _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
@@ -351,9 +355,30 @@ async def get_price_book(
             LicensePriceBook.organization_id == org_id
         )
     )
-    overrides = {r.license_name: r.monthly_cost_cents for r in result.scalars().all()}
-    merged: Dict[str, int] = dict(DEFAULT_PRICE_BOOK_CENTS)
+    overrides: Dict[str, int] = {
+        r.license_name: r.monthly_cost_cents for r in result.scalars().all()
+    }
+
+    # Pull SKUs the org actually owns from the latest analyzer snapshot.
+    snap = await _latest_snapshot(db, org_id)
+    org_skus: List[str] = []
+    if snap and snap.metrics:
+        for row in (snap.metrics.get("license_utilization") or []):
+            name = row.get("license_name")
+            if name and name not in org_skus:
+                org_skus.append(name)
+
+    merged: Dict[str, int] = {}
+    # Org's actual SKUs first — even with $0 default, so the consultant
+    # immediately sees what the customer is paying for.
+    for name in org_skus:
+        merged[name] = DEFAULT_PRICE_BOOK_CENTS.get(name, 0)
+    # Then fall back to common defaults the org doesn't have on file yet.
+    for name, cost in DEFAULT_PRICE_BOOK_CENTS.items():
+        merged.setdefault(name, cost)
+    # Admin overrides win.
     merged.update(overrides)
+
     return PriceBookResponse(
         rows=[
             PriceBookRow(license_name=k, monthly_cost_cents=v)
