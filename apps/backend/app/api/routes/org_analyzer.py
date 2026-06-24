@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -58,6 +59,10 @@ class FindingResponse(BaseModel):
     estimated_annual_savings_cents: Optional[int]
     evidence: Dict[str, Any]
     sf_setup_deeplink: Optional[str]
+    is_ignored: bool
+    ignored_at: Optional[str]
+    ignored_by: Optional[str]
+    ignore_reason: Optional[str]
 
     @classmethod
     def from_orm(cls, f: OrgFinding) -> "FindingResponse":
@@ -73,7 +78,15 @@ class FindingResponse(BaseModel):
             estimated_annual_savings_cents=f.estimated_annual_savings_cents,
             evidence=f.evidence or {},
             sf_setup_deeplink=f.sf_setup_deeplink,
+            is_ignored=bool(getattr(f, "is_ignored", False)),
+            ignored_at=f.ignored_at.isoformat() if getattr(f, "ignored_at", None) else None,
+            ignored_by=getattr(f, "ignored_by", None),
+            ignore_reason=getattr(f, "ignore_reason", None),
         )
+
+
+class IgnoreFindingRequest(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=1000)
 
 
 class SnapshotSummary(BaseModel):
@@ -86,6 +99,12 @@ class SnapshotSummary(BaseModel):
     metrics: Dict[str, Any]
     org_limits: Dict[str, Any]
     has_data: bool
+    # Live counts after applying admin-side ignores. Differ from the
+    # snapshot's stored totals (which capture the analyzer-run state)
+    # when the user has flagged findings as intentional post-run.
+    active_findings_count: int = 0
+    active_savings_cents: int = 0
+    ignored_findings_count: int = 0
 
 
 class FindingsPage(BaseModel):
@@ -210,6 +229,21 @@ async def get_latest_snapshot(
             org_limits={},
             has_data=False,
         )
+
+    # Compute active-only counts + savings on demand so ignores reflect
+    # in the headline numbers without rewriting the snapshot row.
+    active_rows = (await db.execute(
+        select(OrgFinding).where(
+            OrgFinding.organization_id == org_id,
+            OrgFinding.snapshot_id == snap.id,
+            OrgFinding.is_ignored.is_(False),
+        )
+    )).scalars().all()
+    active_savings = sum(
+        (f.estimated_annual_savings_cents or 0) for f in active_rows
+    )
+    ignored_count = snap.findings_count - len(active_rows)
+
     return SnapshotSummary(
         snapshot_id=snap.id,
         snapshot_at=snap.snapshot_at.isoformat(),
@@ -220,6 +254,9 @@ async def get_latest_snapshot(
         metrics=snap.metrics or {},
         org_limits=snap.org_limits or {},
         has_data=True,
+        active_findings_count=len(active_rows),
+        active_savings_cents=active_savings,
+        ignored_findings_count=max(ignored_count, 0),
     )
 
 
@@ -231,6 +268,10 @@ async def list_findings(
     org_id: str,
     category: Optional[str] = Query(default=None),
     severity: Optional[str] = Query(default=None),
+    include_ignored: bool = Query(
+        default=False,
+        description="Include findings the admin has marked as ignored.",
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_org_id: str = Depends(get_current_org),
@@ -245,6 +286,8 @@ async def list_findings(
         OrgFinding.organization_id == org_id,
         OrgFinding.snapshot_id == snap.id,
     )
+    if not include_ignored:
+        q = q.where(OrgFinding.is_ignored.is_(False))
     if category:
         q = q.where(OrgFinding.category == category)
     if severity:
@@ -294,6 +337,74 @@ async def get_finding(
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Finding not found")
+    return FindingResponse.from_orm(row)
+
+
+@router.post(
+    "/orgs/{org_id}/org-analyzer/findings/{finding_id}/ignore",
+    response_model=FindingResponse,
+)
+async def ignore_finding(
+    org_id: str,
+    finding_id: str,
+    payload: IgnoreFindingRequest,
+    current_org_id: str = Depends(get_current_org),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> FindingResponse:
+    """Flag a finding as intentional / out-of-scope.
+
+    Ignored findings hide by default in the list view, drop out of the
+    headline savings number, and are visually demoted in the report.
+    The row stays in the database with an audit trail of who/when/why.
+    """
+    _enforce_same_org(org_id, current_org_id)
+    result = await db.execute(
+        select(OrgFinding).where(
+            OrgFinding.organization_id == org_id,
+            OrgFinding.id == finding_id,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    row.is_ignored = True
+    row.ignored_at = datetime.now(timezone.utc)
+    row.ignored_by = actor_email
+    row.ignore_reason = payload.reason
+    await db.commit()
+    return FindingResponse.from_orm(row)
+
+
+@router.post(
+    "/orgs/{org_id}/org-analyzer/findings/{finding_id}/unignore",
+    response_model=FindingResponse,
+)
+async def unignore_finding(
+    org_id: str,
+    finding_id: str,
+    current_org_id: str = Depends(get_current_org),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> FindingResponse:
+    """Restore a previously-ignored finding to the active list."""
+    _enforce_same_org(org_id, current_org_id)
+    # actor_email dep enforces auth; not logged for unignore.
+    del actor_email
+    result = await db.execute(
+        select(OrgFinding).where(
+            OrgFinding.organization_id == org_id,
+            OrgFinding.id == finding_id,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    row.is_ignored = False
+    row.ignored_at = None
+    row.ignored_by = None
+    row.ignore_reason = None
+    await db.commit()
     return FindingResponse.from_orm(row)
 
 
@@ -452,11 +563,14 @@ async def download_report(
             detail="No analyzer run yet. POST /run first.",
         )
 
-    # Fetch findings ordered by severity
+    # Fetch findings ordered by severity. Ignored findings stay out of
+    # the customer-facing PDF — the consultant's report should reflect
+    # the active, in-scope work, not items already explained away.
     findings_result = await db.execute(
         select(OrgFinding).where(
             OrgFinding.organization_id == org_id,
             OrgFinding.snapshot_id == snap.id,
+            OrgFinding.is_ignored.is_(False),
         )
     )
     findings = list(findings_result.scalars().all())

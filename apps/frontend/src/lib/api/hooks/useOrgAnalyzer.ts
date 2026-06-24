@@ -42,6 +42,10 @@ export interface OrgFinding {
   estimated_annual_savings_cents: number | null
   evidence: Record<string, any>
   sf_setup_deeplink: string | null
+  is_ignored: boolean
+  ignored_at: string | null
+  ignored_by: string | null
+  ignore_reason: string | null
 }
 
 export interface SnapshotSummary {
@@ -54,6 +58,12 @@ export interface SnapshotSummary {
   metrics: Record<string, any>
   org_limits: Record<string, any>
   has_data: boolean
+  // Live counts after applying admin ignores. Differ from the totals
+  // above (which are frozen on the snapshot row at run-time) when the
+  // user has flagged findings as intentional post-run.
+  active_findings_count: number
+  active_savings_cents: number
+  ignored_findings_count: number
 }
 
 export interface FindingsPage {
@@ -112,6 +122,7 @@ export function useOrgAnalyzerLatest(orgId: string) {
 export interface FindingsFilter {
   category?: FindingCategory | null
   severity?: FindingSeverity | null
+  include_ignored?: boolean
   limit?: number
   offset?: number
 }
@@ -127,11 +138,52 @@ export function useOrgAnalyzerFindings(
         params: {
           ...(filter.category ? { category: filter.category } : {}),
           ...(filter.severity ? { severity: filter.severity } : {}),
+          ...(filter.include_ignored ? { include_ignored: true } : {}),
           limit: filter.limit ?? 100,
           offset: filter.offset ?? 0,
         },
       }),
     enabled: !!orgId,
+  })
+}
+
+export function useIgnoreFinding(orgId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      findingId,
+      reason,
+    }: {
+      findingId: string
+      reason?: string
+    }) =>
+      apiClient.post<OrgFinding>(
+        endpoints.orgAnalyzerIgnoreFinding(orgId, findingId),
+        { reason: reason ?? null },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: orgAnalyzerKeys.latest(orgId) })
+      qc.invalidateQueries({
+        queryKey: [...orgAnalyzerKeys.all, 'findings', orgId],
+      })
+    },
+  })
+}
+
+export function useUnignoreFinding(orgId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (findingId: string) =>
+      apiClient.post<OrgFinding>(
+        endpoints.orgAnalyzerUnignoreFinding(orgId, findingId),
+        {},
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: orgAnalyzerKeys.latest(orgId) })
+      qc.invalidateQueries({
+        queryKey: [...orgAnalyzerKeys.all, 'findings', orgId],
+      })
+    },
   })
 }
 

@@ -70,6 +70,10 @@ export const endpoints = {
   orgAnalyzerFindings: (orgId: string) => `/orgs/${orgId}/org-analyzer/findings`,
   orgAnalyzerFinding: (orgId: string, findingId: string) =>
     `/orgs/${orgId}/org-analyzer/findings/${findingId}`,
+  orgAnalyzerIgnoreFinding: (orgId: string, findingId: string) =>
+    `/orgs/${orgId}/org-analyzer/findings/${findingId}/ignore`,
+  orgAnalyzerUnignoreFinding: (orgId: string, findingId: string) =>
+    `/orgs/${orgId}/org-analyzer/findings/${findingId}/unignore`,
   orgAnalyzerHistory: (orgId: string) => `/orgs/${orgId}/org-analyzer/history`,
   orgAnalyzerReportPdf: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.pdf`,
   orgAnalyzerPriceBook: (orgId: string) => `/orgs/${orgId}/org-analyzer/price-book`,

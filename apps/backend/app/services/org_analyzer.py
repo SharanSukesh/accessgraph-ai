@@ -70,6 +70,40 @@ DEFAULT_PRICE_BOOK_CENTS: Dict[str, int] = {
     "Community / Experience Cloud Login": 500,
 }
 
+# SKUs that ship free with every Salesforce edition. Surplus seats here
+# carry $0 cost so they're noise on the report — skip them entirely
+# rather than flooding the findings list with HIGH-severity zero-dollar
+# items. Match is case-insensitive substring against the MasterLabel.
+#
+# Sources: Salesforce Help "Standard User Licenses", "Communities Licenses",
+# and "Authenticated Website License" pages. List intentionally inclusive
+# so we err on the side of suppression.
+KNOWN_FREE_SKU_PATTERNS: tuple = (
+    "chatter free",
+    "chatter external",
+    "identity",                  # First 10 are free; rare to bill higher
+    "high volume customer portal",
+    "customer portal manager custom",
+    "authenticated website",
+    "external apps login",
+    "external apps",
+    "lightning external apps",
+    "customer community login",  # Per-login billed but flagging as free
+    "guest user",
+    "platform light",
+    "company communities",
+    "sites",
+    "site.com",
+)
+
+
+def _is_known_free_sku(label: str) -> bool:
+    """Case-insensitive substring match against the bundled-license list."""
+    if not label:
+        return False
+    needle = label.strip().lower()
+    return any(p in needle for p in KNOWN_FREE_SKU_PATTERNS)
+
 # Sensitive objects where Public Read/Write OWD is a red flag.
 SENSITIVE_OBJECTS = {
     "Account", "Opportunity", "Case", "Contact", "Lead",
@@ -582,9 +616,16 @@ class OrgAnalyzerService:
             ))
 
         # LICENSE_SEATS_UNUSED — purchased but unassigned seats. Biggest
-        # single dollar finding in most orgs ($165 × N idle seats × 12).
-        # One finding per UserLicense + PermissionSetLicense row so the
-        # consultant can drill into each SKU separately.
+        # single dollar finding in most orgs when the SKU is actually
+        # billed. Heuristics:
+        #   - Skip SKUs in KNOWN_FREE_SKU_PATTERNS (Chatter Free, External
+        #     Apps Login, Identity, etc.) — they ship at $0/mo with the
+        #     base license so surplus carries no cost.
+        #   - For SKUs we DO bill for but the user hasn't put a price on
+        #     yet, emit as INFO (not HIGH) with a prompt to set the price.
+        #   - For SKUs with a real price, severity scales with annual
+        #     savings (small surplus on $165/mo license still beats a
+        #     huge surplus on a near-zero one).
         for ul in ctx.user_licenses:
             if (ul.get("Status") or "").lower() not in ("", "active"):
                 continue
@@ -597,17 +638,15 @@ class OrgAnalyzerService:
                 continue
             sku = ul.get("Name") or ul.get("MasterLabel") or "Unknown"
             label = ul.get("MasterLabel") or sku
+            if _is_known_free_sku(label) or _is_known_free_sku(sku):
+                # Bundled / free — nothing to bill the customer for.
+                continue
             monthly = (
                 ctx.price_book.get(label)
                 or ctx.price_book.get(sku)
                 or 0
             )
             annual = monthly * 12 * surplus if monthly else None
-            sev = (
-                FindingSeverity.HIGH if surplus >= 20
-                else FindingSeverity.MEDIUM if surplus >= 5
-                else FindingSeverity.LOW
-            )
             evidence: Dict[str, Any] = {
                 "license_name": label,
                 "developer_key": sku,
@@ -616,7 +655,17 @@ class OrgAnalyzerService:
                 "surplus": surplus,
                 "utilization_pct": round(used / total * 100, 1) if total else 0,
             }
-            if monthly and annual is not None:
+            if monthly:
+                # Severity by annualised dollars: $50k+ critical, $10k+ high,
+                # $1k+ medium, rest low. Avoids the old "4999 free seats =
+                # HIGH" trap.
+                annual_dollars = (annual or 0) / 100
+                sev = (
+                    FindingSeverity.CRITICAL if annual_dollars >= 50_000
+                    else FindingSeverity.HIGH if annual_dollars >= 10_000
+                    else FindingSeverity.MEDIUM if annual_dollars >= 1_000
+                    else FindingSeverity.LOW
+                )
                 evidence["cost_calculation"] = _cost_calc(
                     formula=(
                         f"{surplus} surplus {label} seats × "
@@ -627,6 +676,16 @@ class OrgAnalyzerService:
                     total_annual_cents=annual,
                     license_name=label,
                 )
+            else:
+                # Unknown SKU with no price set — surface it quietly so the
+                # consultant can fill in the price book to unlock real $
+                # impact. Don't make it look like a critical issue.
+                sev = FindingSeverity.INFO
+                evidence["pricing_note"] = (
+                    "No monthly cost set for this SKU in the price book. "
+                    "Set a price in the Price book tab to surface dollar impact."
+                )
+
             out.append(FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code="LICENSE_SEATS_UNUSED",
@@ -638,9 +697,14 @@ class OrgAnalyzerService:
                 description=(
                     f"This org has purchased {total} {label} seats but "
                     f"only {used} are currently assigned. The {surplus} "
-                    "surplus seats are renewing every year regardless of "
-                    "use. If they're not part of an imminent hiring plan, "
-                    "they're prime candidates to remove at renewal."
+                    "surplus seats renew every year regardless of use. "
+                    + (
+                        "If they're not part of an imminent hiring plan, "
+                        "they're prime candidates to remove at renewal."
+                        if monthly else
+                        "Set the monthly cost for this SKU in the Price "
+                        "book tab to estimate the renewal-time savings."
+                    )
                 ),
                 recommended_action=(
                     "Compare against 12-month hiring forecast. If unused "
@@ -653,7 +717,9 @@ class OrgAnalyzerService:
                 sf_setup_deeplink="/lightning/setup/CompanyResourceDisk/home",
             ))
 
-        # Also emit a SKU-level finding for any PSL with significant surplus.
+        # Permission-Set Licenses: most ship free with the base license,
+        # so we ONLY emit findings when the consultant has explicitly
+        # priced the SKU (price > 0). Otherwise the report is noise.
         for psl in ctx.permission_set_licenses:
             if (psl.get("Status") or "").lower() not in ("", "active"):
                 continue
@@ -663,19 +729,23 @@ class OrgAnalyzerService:
                 continue
             surplus = total - used
             if surplus < 5:
-                continue  # Tighter threshold — PSLs are often free with the base license
+                continue
             label = psl.get("MasterLabel") or psl.get("DeveloperName") or "PSL"
+            if _is_known_free_sku(label):
+                continue
             monthly = ctx.price_book.get(label) or 0
-            annual = monthly * 12 * surplus if monthly else None
+            if not monthly:
+                # PSLs default to free — don't fabricate a finding. The
+                # consultant can override the price book to surface one.
+                continue
+            annual = monthly * 12 * surplus
             evidence = {
                 "license_name": label,
                 "developer_name": psl.get("DeveloperName"),
                 "total_purchased": total,
                 "used": used,
                 "surplus": surplus,
-            }
-            if monthly and annual:
-                evidence["cost_calculation"] = _cost_calc(
+                "cost_calculation": _cost_calc(
                     formula=(
                         f"{surplus} surplus {label} PSL seats × "
                         f"${monthly/100:.2f}/mo × 12 months"
@@ -684,19 +754,25 @@ class OrgAnalyzerService:
                     unit_count=surplus,
                     total_annual_cents=annual,
                     license_name=label,
-                )
+                ),
+            }
+            annual_dollars = annual / 100
+            sev = (
+                FindingSeverity.HIGH if annual_dollars >= 10_000
+                else FindingSeverity.MEDIUM if annual_dollars >= 1_000
+                else FindingSeverity.LOW
+            )
             out.append(FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code="PSL_SEATS_UNUSED",
-                severity=FindingSeverity.LOW,
+                severity=sev,
                 title=f"{surplus} unused {label} permission-set licenses",
                 description=(
-                    f"{used}/{total} {label} PSLs assigned. Often these "
-                    "are bundled with a base license at no extra cost — "
-                    "but if you bought them as an add-on, the unused "
-                    "headroom is a renewal-time conversation."
+                    f"{used}/{total} {label} PSLs assigned. You've priced "
+                    f"this SKU at ${monthly/100:.2f}/mo, so the surplus "
+                    "represents real renewal-time savings."
                 ),
-                recommended_action="Verify with your AE whether this PSL is bundled or billed separately.",
+                recommended_action="Verify the assignment trend with the customer and reduce seat count at renewal if appropriate.",
                 affected_count=surplus,
                 estimated_annual_savings_cents=annual,
                 evidence=evidence,

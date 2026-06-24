@@ -1223,6 +1223,16 @@ class OrgFinding(Base, TimestampMixin):
     # Optional deeplink to Salesforce Setup (e.g. /lightning/setup/ManageUsers/home)
     sf_setup_deeplink: Mapped[Optional[str]] = mapped_column(String(500))
 
+    # Ignore state — lets a consultant mark a finding as intentional /
+    # out-of-scope without losing the row. Ignored findings drop out of
+    # the snapshot's total-savings rollup and hide by default in the UI.
+    is_ignored: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    ignored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    ignored_by: Mapped[Optional[str]] = mapped_column(String(255))
+    ignore_reason: Mapped[Optional[str]] = mapped_column(Text)
+
     snapshot = relationship("OrgAnalysisSnapshot", back_populates="findings")
 
     __table_args__ = (

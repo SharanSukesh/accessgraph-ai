@@ -130,10 +130,13 @@ def _render_findings_section(findings: Iterable[OrgFinding]) -> str:
 
 
 def _render_summary_table(snapshot: OrgAnalysisSnapshot) -> str:
-    sev = snapshot.findings_by_severity or {}
+    return _render_summary_table_counts(snapshot.findings_by_severity or {})
+
+
+def _render_summary_table_counts(counts: dict) -> str:
     rows = []
     for s in SEVERITY_ORDER:
-        count = sev.get(s.value, 0)
+        count = counts.get(s.value, 0)
         if not count:
             continue
         rows.append(
@@ -152,8 +155,23 @@ def _build_html(
 ) -> str:
     snapshot_at = snapshot.snapshot_at or datetime.now(timezone.utc)
     findings_html = _render_findings_section(findings)
-    summary_html = _render_summary_table(snapshot)
-    total_savings = _fmt_money_cents(snapshot.total_estimated_annual_savings_cents or 0)
+    # Recompute totals from the passed-in findings rather than from the
+    # snapshot's stored counts — the caller may have filtered out ignored
+    # findings, and the report should reflect what the consultant intends
+    # to deliver.
+    findings_count = len(findings)
+    total_savings_cents = sum(
+        (f.estimated_annual_savings_cents or 0) for f in findings
+    )
+    sev_count: dict[str, int] = {}
+    for f in findings:
+        sev_val = (
+            f.severity.value if isinstance(f.severity, FindingSeverity)
+            else str(f.severity)
+        )
+        sev_count[sev_val] = sev_count.get(sev_val, 0) + 1
+    summary_html = _render_summary_table_counts(sev_count)
+    total_savings = _fmt_money_cents(total_savings_cents)
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>Org Health Report — {html.escape(org_name)}</title>
 <style>
@@ -189,7 +207,7 @@ def _build_html(
     <div class="subtitle">Salesforce Org Health Report</div>
     <div class="subtitle">{snapshot_at.strftime('%B %d, %Y')}</div>
     <div>
-      <div class="stat"><div class="label">Findings</div><div class="value">{snapshot.findings_count}</div></div>
+      <div class="stat"><div class="label">Findings</div><div class="value">{findings_count}</div></div>
       <div class="stat"><div class="label">Estimated annual savings</div><div class="value">{total_savings}</div></div>
     </div>
     <div style="margin-top:2em;">{summary_html}</div>

@@ -14,7 +14,7 @@
  * direct <a> to the report.pdf endpoint with `credentials: include`.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
   Activity,
@@ -22,12 +22,16 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
+  ChevronDown,
+  ChevronRight,
   DollarSign,
   Download,
+  EyeOff,
   FileText,
   Info,
   PlayCircle,
   RefreshCw,
+  RotateCcw,
   Search,
   Settings2,
   Sparkles,
@@ -44,11 +48,13 @@ import {
   CATEGORY_LABELS,
   SEVERITY_LABELS,
   formatMoneyCents,
+  useIgnoreFinding,
   useLicensePriceBook,
   useOrgAnalyzerFindings,
   useOrgAnalyzerHistory,
   useOrgAnalyzerLatest,
   useRunOrgAnalyzer,
+  useUnignoreFinding,
   useUpdateLicensePriceBook,
   type FindingCategory,
   type FindingSeverity,
@@ -259,6 +265,12 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
     : '—'
   const healthScore: number | undefined =
     summary.metrics?.org_health_score
+  // Prefer active (post-ignore) totals when present; fall back to the
+  // captured snapshot numbers for older backend versions.
+  const activeFindings = summary.active_findings_count ?? summary.findings_count
+  const activeSavings =
+    summary.active_savings_cents ?? summary.total_estimated_annual_savings_cents
+  const ignoredCount = summary.ignored_findings_count ?? 0
   const healthAccent =
     healthScore == null
       ? 'text-gray-400'
@@ -279,13 +291,14 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
         />
         <StatCard
           label="Findings"
-          value={summary.findings_count.toString()}
+          value={activeFindings.toString()}
+          subValue={ignoredCount ? `(+${ignoredCount} ignored)` : undefined}
           icon={AlertTriangle}
           accent="text-indigo-600 dark:text-indigo-400"
         />
         <StatCard
           label="Est. annual savings"
-          value={formatMoneyCents(summary.total_estimated_annual_savings_cents)}
+          value={formatMoneyCents(activeSavings)}
           icon={DollarSign}
           accent="text-green-600 dark:text-green-400"
         />
@@ -444,13 +457,41 @@ function FindingsTab({ orgId }: { orgId: string }) {
   const [category, setCategory] = useState<FindingCategory | null>(null)
   const [severity, setSeverity] = useState<FindingSeverity | null>(null)
   const [search, setSearch] = useState('')
+  const [includeIgnored, setIncludeIgnored] = useState(false)
   const [selected, setSelected] = useState<OrgFinding | null>(null)
+  const [ignoreReason, setIgnoreReason] = useState('')
 
   const findings = useOrgAnalyzerFindings(orgId, {
     category,
     severity,
+    include_ignored: includeIgnored,
     limit: 500,
   })
+  const ignore = useIgnoreFinding(orgId)
+  const unignore = useUnignoreFinding(orgId)
+
+  // Keep `selected` in sync with refreshed data — after ignore/unignore
+  // the panel should reflect the new is_ignored state.
+  const refreshedSelected = useMemo(() => {
+    if (!selected || !findings.data) return selected
+    return (
+      findings.data.findings.find(f => f.id === selected.id) ?? selected
+    )
+  }, [findings.data, selected])
+
+  const handleIgnore = async () => {
+    if (!refreshedSelected) return
+    await ignore.mutateAsync({
+      findingId: refreshedSelected.id,
+      reason: ignoreReason.trim() || undefined,
+    })
+    setIgnoreReason('')
+  }
+
+  const handleUnignore = async () => {
+    if (!refreshedSelected) return
+    await unignore.mutateAsync(refreshedSelected.id)
+  }
 
   const filtered = useMemo(() => {
     const rows = findings.data?.findings ?? []
@@ -516,6 +557,15 @@ function FindingsTab({ orgId }: { orgId: string }) {
               <option value="low">Low</option>
               <option value="info">Info</option>
             </select>
+            <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeIgnored}
+                onChange={e => setIncludeIgnored(e.target.checked)}
+                className="rounded border-gray-300 dark:border-gray-700"
+              />
+              Show ignored
+            </label>
           </div>
           {findings.isLoading ? (
             <TableSkeleton rows={6} />
@@ -528,10 +578,10 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   key={f.id}
                   onClick={() => setSelected(f)}
                   className={`py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 px-2 -mx-2 rounded ${
-                    selected?.id === f.id
+                    refreshedSelected?.id === f.id
                       ? 'bg-indigo-50 dark:bg-indigo-900/20'
                       : ''
-                  }`}
+                  } ${f.is_ignored ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-start gap-2">
                     <span
@@ -539,6 +589,12 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     >
                       {SEVERITY_LABELS[f.severity]}
                     </span>
+                    {f.is_ignored && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
+                        <EyeOff className="h-2.5 w-2.5" />
+                        Ignored
+                      </span>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{f.title}</p>
                       <p className="text-xs text-gray-500 truncate">
@@ -562,47 +618,53 @@ function FindingsTab({ orgId }: { orgId: string }) {
       <Card variant="bordered" className="col-span-12 lg:col-span-5">
         <CardHeader>
           <CardTitle>
-            {selected ? 'Finding detail' : 'Click a finding to inspect'}
+            {refreshedSelected ? 'Finding detail' : 'Click a finding to inspect'}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!selected ? (
+          {!refreshedSelected ? (
             <p className="text-sm text-gray-500 italic">
               Pick a finding from the list to see its evidence, recommended
               action, and Salesforce deeplink.
             </p>
           ) : (
             <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span
-                  className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${severityBadgeClasses(selected.severity)}`}
+                  className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${severityBadgeClasses(refreshedSelected.severity)}`}
                 >
-                  {SEVERITY_LABELS[selected.severity]}
+                  {SEVERITY_LABELS[refreshedSelected.severity]}
                 </span>
+                {refreshedSelected.is_ignored && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
+                    <EyeOff className="h-2.5 w-2.5" />
+                    Ignored
+                  </span>
+                )}
                 <span className="text-xs text-gray-500">
-                  {CATEGORY_LABELS[selected.category]}
+                  {CATEGORY_LABELS[refreshedSelected.category]}
                 </span>
               </div>
-              <h3 className="text-base font-semibold">{selected.title}</h3>
-              <p className="text-gray-700 dark:text-gray-300">{selected.description}</p>
-              {selected.recommended_action && (
+              <h3 className="text-base font-semibold">{refreshedSelected.title}</h3>
+              <p className="text-gray-700 dark:text-gray-300">{refreshedSelected.description}</p>
+              {refreshedSelected.recommended_action && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mb-1">
                     Recommended action
                   </p>
-                  <p className="text-xs">{selected.recommended_action}</p>
+                  <p className="text-xs">{refreshedSelected.recommended_action}</p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <Stat label="Affected" value={String(selected.affected_count)} />
+                <Stat label="Affected" value={String(refreshedSelected.affected_count)} />
                 <Stat
                   label="Savings/yr"
-                  value={formatMoneyCents(selected.estimated_annual_savings_cents)}
+                  value={formatMoneyCents(refreshedSelected.estimated_annual_savings_cents)}
                 />
               </div>
-              {selected.sf_setup_deeplink && (
+              {refreshedSelected.sf_setup_deeplink && (
                 <a
-                  href={selected.sf_setup_deeplink}
+                  href={refreshedSelected.sf_setup_deeplink}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
@@ -611,20 +673,83 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   <ArrowRight className="h-3 w-3" />
                 </a>
               )}
-              {selected.evidence?.cost_calculation && (
-                <CostCalculationCard calc={selected.evidence.cost_calculation} />
+              {refreshedSelected.evidence?.cost_calculation && (
+                <CostCalculationCard
+                  calc={refreshedSelected.evidence.cost_calculation}
+                />
               )}
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
                   Evidence
                 </p>
                 <pre className="text-[10px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-2 overflow-auto max-h-64">
-                  {JSON.stringify(selected.evidence, null, 2)}
+                  {JSON.stringify(refreshedSelected.evidence, null, 2)}
                 </pre>
               </div>
               <p className="text-[10px] text-gray-400 font-mono">
-                Code: {selected.code}
+                Code: {refreshedSelected.code}
               </p>
+
+              {/* Ignore controls — let the consultant flag intentional or
+                  out-of-scope findings without losing the row. Stays under
+                  the evidence so it's a deliberate action, not the default. */}
+              <div className="border-t border-gray-200 dark:border-gray-800 pt-3">
+                {refreshedSelected.is_ignored ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-500">
+                      Ignored
+                      {refreshedSelected.ignored_by && (
+                        <> by <strong>{refreshedSelected.ignored_by}</strong></>
+                      )}
+                      {refreshedSelected.ignored_at && (
+                        <> on {new Date(refreshedSelected.ignored_at).toLocaleString()}</>
+                      )}
+                      {refreshedSelected.ignore_reason && (
+                        <>
+                          {' — '}
+                          <em>"{refreshedSelected.ignore_reason}"</em>
+                        </>
+                      )}
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={unignore.isPending}
+                      onClick={handleUnignore}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                      {unignore.isPending ? 'Restoring…' : 'Restore this finding'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                      Ignore this finding
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Intentional configuration, out-of-scope, or a known
+                      false positive? Ignoring drops it from the report and
+                      the savings total. The row is preserved so you can
+                      restore it later.
+                    </p>
+                    <input
+                      value={ignoreReason}
+                      onChange={e => setIgnoreReason(e.target.value)}
+                      placeholder="Reason (optional)"
+                      className="w-full text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5"
+                    />
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={ignore.isPending}
+                      onClick={handleIgnore}
+                    >
+                      <EyeOff className="h-3.5 w-3.5 mr-1.5" />
+                      {ignore.isPending ? 'Ignoring…' : 'Ignore finding'}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
@@ -672,50 +797,157 @@ function CostCalculationCard({ calc }: { calc: any }) {
 
 function SavingsTab({ orgId }: { orgId: string }) {
   const findings = useOrgAnalyzerFindings(orgId, { limit: 500 })
-  const byCat = useMemo(() => {
-    const out: Record<string, number> = {}
+  // Group findings by category and roll up dollar amounts; expanded by
+  // default for the highest-savings category so the breakdown is visible
+  // without an extra click.
+  const grouped = useMemo(() => {
+    const map = new Map<string, { total: number; rows: OrgFinding[] }>()
     for (const f of findings.data?.findings ?? []) {
-      out[f.category] =
-        (out[f.category] ?? 0) + (f.estimated_annual_savings_cents ?? 0)
+      const slot = map.get(f.category) ?? { total: 0, rows: [] }
+      slot.total += f.estimated_annual_savings_cents ?? 0
+      slot.rows.push(f)
+      map.set(f.category, slot)
     }
-    return out
+    const sorted = Array.from(map.entries()).sort(
+      ([, a], [, b]) => b.total - a.total,
+    )
+    // Sort within each category by savings desc.
+    for (const [, slot] of sorted) {
+      slot.rows.sort(
+        (a, b) =>
+          (b.estimated_annual_savings_cents ?? 0) -
+          (a.estimated_annual_savings_cents ?? 0),
+      )
+    }
+    return sorted
   }, [findings.data])
-  const sorted = Object.entries(byCat).sort(([, a], [, b]) => b - a)
-  const max = Math.max(1, ...sorted.map(([, v]) => v))
+
+  const topCategory = grouped[0]?.[0]
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Auto-expand the top category once data arrives.
+  useEffect(() => {
+    if (topCategory && expanded.size === 0) {
+      setExpanded(new Set([topCategory]))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topCategory])
+
+  const toggle = (cat: string) => {
+    const next = new Set(expanded)
+    if (next.has(cat)) next.delete(cat)
+    else next.add(cat)
+    setExpanded(next)
+  }
+
+  const grandTotal = grouped.reduce((s, [, slot]) => s + slot.total, 0)
+  const max = Math.max(1, ...grouped.map(([, s]) => s.total))
+
   return (
     <Card variant="bordered">
       <CardHeader>
-        <CardTitle>Estimated annual savings by category</CardTitle>
+        <CardTitle className="flex items-center justify-between">
+          <span>Estimated annual savings — broken down by finding</span>
+          {grandTotal > 0 && (
+            <span className="text-base font-mono text-green-700 dark:text-green-400">
+              {formatMoneyCents(grandTotal)}
+            </span>
+          )}
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        {sorted.length === 0 ? (
+        {grouped.length === 0 ? (
           <p className="text-sm text-gray-500 italic">
             No quantifiable savings yet. License-waste findings (inactive
-            users, oversized licenses) drive most of this number — once
-            those rules fire, savings show up here.
+            users, unused seats, oversized licenses) drive most of this
+            number — once those rules fire, the math shows up here.
           </p>
         ) : (
           <ul className="space-y-3">
-            {sorted.map(([cat, cents]) => (
-              <li key={cat}>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span>{CATEGORY_LABELS[cat as FindingCategory] ?? cat}</span>
-                  <span className="font-mono font-semibold text-green-700 dark:text-green-400">
-                    {formatMoneyCents(cents)}
-                  </span>
-                </div>
-                <div className="bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
-                  <div
-                    className="bg-green-500 h-full"
-                    style={{ width: `${(cents / max) * 100}%` }}
-                  />
-                </div>
-              </li>
-            ))}
+            {grouped.map(([cat, slot]) => {
+              const isOpen = expanded.has(cat)
+              const label = CATEGORY_LABELS[cat as FindingCategory] ?? cat
+              return (
+                <li
+                  key={cat}
+                  className="border border-gray-200 dark:border-gray-800 rounded"
+                >
+                  <button
+                    onClick={() => toggle(cat)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded"
+                  >
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="font-medium flex items-center gap-1.5">
+                        {isOpen ? (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        )}
+                        {label}
+                        <span className="text-xs text-gray-500 font-normal">
+                          ({slot.rows.length}{' '}
+                          {slot.rows.length === 1 ? 'finding' : 'findings'})
+                        </span>
+                      </span>
+                      <span className="font-mono font-semibold text-green-700 dark:text-green-400">
+                        {formatMoneyCents(slot.total)}
+                      </span>
+                    </div>
+                    <div className="bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
+                      <div
+                        className="bg-green-500 h-full"
+                        style={{ width: `${(slot.total / max) * 100}%` }}
+                      />
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <ul className="border-t border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-900">
+                      {slot.rows.map(f => (
+                        <SavingsBreakdownRow key={f.id} finding={f} />
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
+  const calc = finding.evidence?.cost_calculation
+  const dollars = finding.estimated_annual_savings_cents
+  return (
+    <li className="px-3 py-2 text-xs">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{finding.title}</p>
+          {calc?.formula && (
+            <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 mt-0.5">
+              {calc.formula}
+              {calc.total_annual_cents != null && (
+                <>
+                  {' = '}
+                  <span className="text-green-700 dark:text-green-400 font-semibold">
+                    {formatMoneyCents(calc.total_annual_cents)}/yr
+                  </span>
+                </>
+              )}
+            </p>
+          )}
+          {!calc && finding.description && (
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+              {finding.description}
+            </p>
+          )}
+        </div>
+        <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
+          {dollars ? formatMoneyCents(dollars) : '—'}
+        </span>
+      </div>
+    </li>
   )
 }
 
