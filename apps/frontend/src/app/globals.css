@@ -74,6 +74,45 @@
     display: none; /* Chrome, Safari and Opera */
   }
 
+  /* Thin, theme-aware scrollbar used by the sidebar nav (and anywhere
+     else we want a discoverable but unobtrusive scrollbar). The thumb
+     is a subtle indigo that picks up on hover so it reads as a real
+     interactive element without crowding the nav-item icons. */
+  .scrollbar-themed {
+    scrollbar-width: thin; /* Firefox */
+    scrollbar-color: rgb(99 102 241 / 0.35) transparent; /* Firefox: thumb track */
+  }
+
+  .scrollbar-themed::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-themed::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-themed::-webkit-scrollbar-thumb {
+    background-color: rgb(99 102 241 / 0.35); /* indigo-500 @ 35% */
+    border-radius: 9999px;
+  }
+
+  .scrollbar-themed::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(99 102 241 / 0.6);
+  }
+
+  .dark .scrollbar-themed {
+    scrollbar-color: rgb(129 140 248 / 0.4) transparent; /* indigo-400 @ 40% */
+  }
+
+  .dark .scrollbar-themed::-webkit-scrollbar-thumb {
+    background-color: rgb(129 140 248 / 0.4);
+  }
+
+  .dark .scrollbar-themed::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(129 140 248 / 0.7);
+  }
+
   /* Animated blob effect for background gradients */
   @keyframes blob {
     0% {

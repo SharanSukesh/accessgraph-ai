@@ -187,7 +187,7 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto scrollbar-themed">
           {navigation.map((item) => {
             const Icon = item.icon
             const isActive =
