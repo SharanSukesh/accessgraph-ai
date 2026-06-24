@@ -768,27 +768,68 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 // Shows the math behind a finding's dollar estimate so the consultant
-// can defend the number in front of a CFO: "9 users × $165/mo × 12 = $17,820".
+// can defend the number in front of a CFO. Two shapes:
+//   - Flat (single-license): "9 inactive users × $165/mo × 12 = $17,820"
+//   - Mixed (by_license): one row per SKU the affected users hold, with
+//     free / unpriced rows flagged inline so the total reflects reality.
 function CostCalculationCard({ calc }: { calc: any }) {
   if (!calc) return null
+  const byLicense: any[] | undefined = calc.by_license
   return (
     <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-green-700 dark:text-green-300 mb-1">
         How we calculated this
       </p>
-      <p className="text-xs font-mono text-green-900 dark:text-green-100">
-        {calc.formula ?? '—'}
-      </p>
-      <p className="text-xs mt-1 text-green-800 dark:text-green-200">
-        =&nbsp;
-        <strong>{formatMoneyCents(calc.total_annual_cents)}</strong>
-        &nbsp;/year
-        {calc.license_name && (
-          <span className="text-[10px] text-green-700 dark:text-green-400 ml-1">
-            ({calc.license_name})
-          </span>
-        )}
-      </p>
+      {byLicense && byLicense.length > 0 ? (
+        <div className="space-y-1">
+          {byLicense.map((row, i) => (
+            <div
+              key={i}
+              className="flex items-baseline justify-between gap-2 text-xs"
+            >
+              <span className="font-mono text-green-900 dark:text-green-100 flex-1">
+                {row.count} {row.license_name}
+                {row.monthly_cents > 0 ? (
+                  <> × ${(row.monthly_cents / 100).toFixed(2)}/mo × 12</>
+                ) : (
+                  <span className="text-gray-500 dark:text-gray-400 italic">
+                    {' '}— {row.note ?? 'no monetary impact'}
+                  </span>
+                )}
+              </span>
+              <span className="font-mono font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
+                {row.monthly_cents > 0
+                  ? formatMoneyCents(row.annual_cents)
+                  : '$0'}
+              </span>
+            </div>
+          ))}
+          <div className="flex items-baseline justify-between pt-1 mt-1 border-t border-green-200 dark:border-green-800 text-xs">
+            <span className="text-green-800 dark:text-green-200 font-semibold">
+              Total annual savings
+            </span>
+            <span className="font-mono font-bold text-green-700 dark:text-green-400">
+              {formatMoneyCents(calc.total_annual_cents)}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs font-mono text-green-900 dark:text-green-100">
+            {calc.formula ?? '—'}
+          </p>
+          <p className="text-xs mt-1 text-green-800 dark:text-green-200">
+            =&nbsp;
+            <strong>{formatMoneyCents(calc.total_annual_cents)}</strong>
+            &nbsp;/year
+            {calc.license_name && (
+              <span className="text-[10px] text-green-700 dark:text-green-400 ml-1">
+                ({calc.license_name})
+              </span>
+            )}
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -919,12 +960,38 @@ function SavingsTab({ orgId }: { orgId: string }) {
 function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
   const calc = finding.evidence?.cost_calculation
   const dollars = finding.estimated_annual_savings_cents
+  const byLicense: any[] | undefined = calc?.by_license
   return (
     <li className="px-3 py-2 text-xs">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">{finding.title}</p>
-          {calc?.formula && (
+          {byLicense && byLicense.length > 0 ? (
+            <ul className="mt-0.5 space-y-0.5">
+              {byLicense.map((row, i) => (
+                <li
+                  key={i}
+                  className="text-[11px] font-mono text-gray-500 dark:text-gray-400 flex items-baseline justify-between gap-2"
+                >
+                  <span>
+                    {row.count} {row.license_name}
+                    {row.monthly_cents > 0 ? (
+                      <> × ${(row.monthly_cents / 100).toFixed(2)}/mo × 12</>
+                    ) : (
+                      <span className="italic text-gray-400">
+                        {' '}— {row.note ?? 'no monetary impact'}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-green-700 dark:text-green-400">
+                    {row.monthly_cents > 0
+                      ? formatMoneyCents(row.annual_cents)
+                      : '$0'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : calc?.formula ? (
             <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 mt-0.5">
               {calc.formula}
               {calc.total_annual_cents != null && (
@@ -936,12 +1003,11 @@ function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
                 </>
               )}
             </p>
-          )}
-          {!calc && finding.description && (
+          ) : finding.description ? (
             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
               {finding.description}
             </p>
-          )}
+          ) : null}
         </div>
         <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
           {dollars ? formatMoneyCents(dollars) : '—'}

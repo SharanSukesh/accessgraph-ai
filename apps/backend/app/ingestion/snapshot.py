@@ -187,6 +187,7 @@ class SnapshotPersister:
 
             if existing:
                 existing.name = profile_data["Name"]
+                existing.user_license_id = profile_data.get("UserLicenseId")
                 existing.raw_data = profile_data
                 existing.sync_job_id = sync_job_id
             else:
@@ -195,6 +196,7 @@ class SnapshotPersister:
                     sync_job_id=sync_job_id,
                     salesforce_id=profile_data["Id"],
                     name=profile_data["Name"],
+                    user_license_id=profile_data.get("UserLicenseId"),
                     raw_data=profile_data,
                 )
                 self.db.add(profile)

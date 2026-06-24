@@ -57,6 +57,10 @@ class SalesforceProfile(BaseModel):
     """Salesforce Profile object"""
     Id: str
     Name: str
+    # FK to UserLicense — drives accurate per-user license attribution in
+    # the Org Analyzer (a Platform user only saves $25/mo when deactivated,
+    # not the flat $165 we previously applied to everyone).
+    UserLicenseId: Optional[str] = None
 
 
 class SalesforcePermissionSet(BaseModel):

@@ -325,11 +325,16 @@ class ProfileSnapshot(Base, TimestampMixin):
 
     salesforce_id: Mapped[str] = mapped_column(String(18), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # FK to UserLicense — drives accurate per-user cost attribution in
+    # the Org Analyzer (a Platform user only saves $25/mo when deactivated,
+    # not the flat $165 we used to apply to everyone).
+    user_license_id: Mapped[Optional[str]] = mapped_column(String(18))
     raw_data: Mapped[dict] = mapped_column(JSON, default=dict)
 
     __table_args__ = (
         UniqueConstraint("organization_id", "salesforce_id", name="uq_profile_org_sf_id"),
         Index("ix_profile_org", "organization_id"),
+        Index("ix_profile_user_license", "user_license_id"),
     )
 
 

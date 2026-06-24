@@ -450,7 +450,32 @@ class OrgAnalyzerService:
     def _analyze_licenses(self, ctx: AnalyzerContext) -> List[FindingDraft]:
         out: List[FindingDraft] = []
         now = datetime.now(timezone.utc)
-        salesforce_price = ctx.price_book.get("Salesforce", 16500)
+
+        # Build the lookup chain: profile_id → UserLicense row → price.
+        # Without these, we have no way to know each user's real SKU and
+        # would fall back to charging $165 to everyone (the bug we're
+        # fixing). When the chain breaks (profile not synced yet, license
+        # row missing) we bucket the user under "Unknown license" with
+        # $0 — visible in the breakdown but not inflating savings.
+        profile_by_id = {p.salesforce_id: p for p in ctx.profiles}
+        license_by_id = {ul["Id"]: ul for ul in ctx.user_licenses if ul.get("Id")}
+
+        def _classify(user: UserSnapshot) -> Dict[str, Any]:
+            """Return {license_name, monthly_cents, is_free} for the user."""
+            lic = _resolve_user_license(user, profile_by_id, license_by_id)
+            label = _license_label(lic) or "Unknown license"
+            is_free = _is_known_free_sku(label)
+            monthly = 0 if is_free else int(
+                ctx.price_book.get(label)
+                or ctx.price_book.get(lic.get("Name") if lic else "", 0)
+                or 0
+            )
+            return {
+                "license_name": label,
+                "monthly_cents": monthly,
+                "is_free": is_free,
+                "license_developer_key": lic.get("Name") if lic else None,
+            }
 
         inactive_users: List[Dict[str, Any]] = []
         never_logged_in: List[Dict[str, Any]] = []
@@ -461,88 +486,172 @@ class OrgAnalyzerService:
                 continue
             last_login = u.last_login_at
             created = u.created_at
-            evidence_row = {
+            cls = _classify(u)
+            base = {
                 "id": u.salesforce_id,
                 "name": u.name or u.username,
                 "email": u.email,
                 "department": u.department,
                 "last_login_at": last_login.isoformat() if last_login else None,
+                **cls,
             }
             if last_login is None:
                 if created and (now - _ensure_aware(created)).days >= 30:
-                    never_logged_in.append(evidence_row)
+                    never_logged_in.append(base)
             else:
                 days_since = (now - _ensure_aware(last_login)).days
                 if days_since >= 90:
-                    inactive_users.append(evidence_row)
+                    inactive_users.append(base)
                 elif days_since >= 30:
-                    dormant_users.append(evidence_row)
+                    dormant_users.append(base)
 
-        if inactive_users:
-            n = len(inactive_users)
-            annual = salesforce_price * 12 * n
-            out.append(FindingDraft(
-                category=FindingCategory.LICENSE_WASTE,
-                code="LICENSE_INACTIVE_USER",
-                severity=_severity_for_count(n, [1, 5, 20, 50]),
-                title=f"{n} active users haven't logged in for 90+ days",
-                description=(
-                    "These users are still consuming a paid Salesforce license "
-                    "but have not logged in for at least 90 days. Deactivating "
-                    "them frees the license seat immediately and reduces audit "
-                    "surface area."
-                ),
-                recommended_action=(
-                    "Confirm with the user's manager, then deactivate via "
-                    "Setup → Users. Reassign records first if needed."
-                ),
-                affected_count=n,
-                estimated_annual_savings_cents=annual,
-                evidence={
-                    "sample": inactive_users[:EVIDENCE_SAMPLE_CAP],
-                    "cost_calculation": _cost_calc(
-                        formula=f"{n} inactive users × ${salesforce_price/100:.2f}/mo × 12 months",
-                        per_unit_monthly_cents=salesforce_price,
-                        unit_count=n,
-                        total_annual_cents=annual,
-                        license_name="Salesforce",
+        def _emit_user_finding(
+            users: List[Dict[str, Any]],
+            code: str,
+            severity_thresholds: List[int],
+            title_template: str,
+            description: str,
+            recommended_action: str,
+        ) -> Optional[FindingDraft]:
+            """Build a license-waste finding with by_license cost
+            attribution from a list of classified users. Returns None if
+            after filtering free SKUs no priced users remain (so we
+            don't emit a zero-dollar finding)."""
+            if not users:
+                return None
+            # Filter to users we can actually attribute savings to:
+            # paid licenses with a known price. Free / unpriced users
+            # still appear in the by_license breakdown so the consultant
+            # sees the full population, but they don't contribute dollars.
+            buckets = _bucket_users_by_license(users, ctx.price_book)
+            paid_buckets = {
+                name: slot for name, slot in buckets.items()
+                if slot["monthly_cents"] > 0
+            }
+            unpriced_buckets = {
+                name: slot for name, slot in buckets.items()
+                if slot["monthly_cents"] == 0
+            }
+
+            total_annual = sum(s["annual_cents"] for s in paid_buckets.values())
+            paid_count = sum(s["count"] for s in paid_buckets.values())
+            unpriced_count = sum(s["count"] for s in unpriced_buckets.values())
+            n = paid_count + unpriced_count
+
+            # Severity by annualised dollars (matches LICENSE_SEATS_UNUSED).
+            # No paid users → INFO (advisory only). Otherwise scale by $.
+            if paid_count == 0:
+                sev = FindingSeverity.INFO
+            else:
+                d = total_annual / 100
+                if d >= 50_000:
+                    sev = FindingSeverity.CRITICAL
+                elif d >= 10_000:
+                    sev = FindingSeverity.HIGH
+                elif d >= 1_000:
+                    sev = FindingSeverity.MEDIUM
+                else:
+                    sev = FindingSeverity.LOW
+            _ = severity_thresholds  # legacy parameter; severity now driven by $.
+
+            # Order rows for the by_license breakdown: paid first, then
+            # unpriced/free. Highest annual_cents first within each group.
+            rows: List[Dict[str, Any]] = []
+            for name, slot in sorted(
+                paid_buckets.items(), key=lambda kv: -kv[1]["annual_cents"]
+            ):
+                rows.append({
+                    "license_name": name,
+                    "count": slot["count"],
+                    "monthly_cents": slot["monthly_cents"],
+                    "annual_cents": slot["annual_cents"],
+                })
+            for name, slot in sorted(unpriced_buckets.items()):
+                rows.append({
+                    "license_name": name,
+                    "count": slot["count"],
+                    "monthly_cents": 0,
+                    "annual_cents": 0,
+                    "note": (
+                        "Free / bundled license — no monetary impact."
+                        if _is_known_free_sku(name)
+                        else "No price set in the Price book — savings not attributed."
                     ),
+                })
+
+            # Sample of affected users for the evidence panel; cap to keep
+            # payload size bounded.
+            all_users = [u for u in users]
+            sample = all_users[:EVIDENCE_SAMPLE_CAP]
+
+            return FindingDraft(
+                category=FindingCategory.LICENSE_WASTE,
+                code=code,
+                severity=sev,
+                title=title_template.format(n=n),
+                description=description,
+                recommended_action=recommended_action,
+                affected_count=n,
+                estimated_annual_savings_cents=total_annual if paid_count else None,
+                evidence={
+                    "sample": sample,
+                    "cost_calculation": _cost_calc_by_license(
+                        rows=rows,
+                        total_annual_cents=total_annual,
+                    ),
+                    "paid_user_count": paid_count,
+                    "unpriced_or_free_user_count": unpriced_count,
                 },
                 sf_setup_deeplink="/lightning/setup/ManageUsers/home",
-            ))
+            )
 
-        if never_logged_in:
-            n = len(never_logged_in)
-            annual = salesforce_price * 12 * n
-            out.append(FindingDraft(
-                category=FindingCategory.LICENSE_WASTE,
-                code="LICENSE_NEVER_LOGGED_IN",
-                severity=_severity_for_count(n, [1, 3, 10, 25]),
-                title=f"{n} active users have never logged in",
-                description=(
-                    "Active users with NULL LastLoginDate and account-age over "
-                    "30 days. They're consuming licenses without ever using "
-                    "the product. Likely candidates for deactivation or "
-                    "onboarding follow-up."
-                ),
-                recommended_action="Reach out to confirm onboarding status, then deactivate or unblock as appropriate.",
-                affected_count=n,
-                estimated_annual_savings_cents=annual,
-                evidence={
-                    "sample": never_logged_in[:EVIDENCE_SAMPLE_CAP],
-                    "cost_calculation": _cost_calc(
-                        formula=f"{n} never-logged-in users × ${salesforce_price/100:.2f}/mo × 12 months",
-                        per_unit_monthly_cents=salesforce_price,
-                        unit_count=n,
-                        total_annual_cents=annual,
-                        license_name="Salesforce",
-                    ),
-                },
-                sf_setup_deeplink="/lightning/setup/ManageUsers/home",
-            ))
+        inactive_finding = _emit_user_finding(
+            inactive_users,
+            code="LICENSE_INACTIVE_USER",
+            severity_thresholds=[1, 5, 20, 50],
+            title_template="{n} active users haven't logged in for 90+ days",
+            description=(
+                "These users are still consuming a license but have not "
+                "logged in for at least 90 days. Deactivating them frees "
+                "the license seat immediately and reduces audit surface "
+                "area. The savings number reflects each user's actual "
+                "license SKU — free/bundled licenses contribute $0."
+            ),
+            recommended_action=(
+                "Confirm with the user's manager, then deactivate via "
+                "Setup → Users. Reassign records first if needed."
+            ),
+        )
+        if inactive_finding:
+            out.append(inactive_finding)
 
-        # LICENSE_OVERSIZED — Standard user type but no Sales/Service object
-        # access. Candidate for downgrade to Platform license (~$25/mo).
+        never_finding = _emit_user_finding(
+            never_logged_in,
+            code="LICENSE_NEVER_LOGGED_IN",
+            severity_thresholds=[1, 3, 10, 25],
+            title_template="{n} active users have never logged in",
+            description=(
+                "Active users with NULL LastLoginDate and account-age "
+                "over 30 days. They're consuming licenses without ever "
+                "using the product. Likely candidates for deactivation "
+                "or onboarding follow-up. The savings number reflects "
+                "each user's actual license SKU — free/bundled licenses "
+                "contribute $0."
+            ),
+            recommended_action=(
+                "Reach out to confirm onboarding status, then deactivate "
+                "or unblock as appropriate."
+            ),
+        )
+        if never_finding:
+            out.append(never_finding)
+
+        # LICENSE_OVERSIZED — users actually on the full "Salesforce"
+        # license who don't appear to need it. Previously we filtered on
+        # user_type=='Standard' (too coarse — covers Platform users too).
+        # Now we check the resolved UserLicense and only consider users
+        # whose license is "Salesforce" (the full SKU).
+        salesforce_price = ctx.price_book.get("Salesforce", 16500)
         platform_price = ctx.price_book.get("Platform", 2500)
         cost_delta = max(salesforce_price - platform_price, 0)
         sales_objects = {"Opportunity", "Lead", "Campaign", "Quote", "Order"}
@@ -550,7 +659,6 @@ class OrgAnalyzerService:
         user_parent_ids: Dict[str, set] = defaultdict(set)
         for a in ctx.assignments:
             user_parent_ids[a.assignee_id].add(a.permission_set_id)
-        profile_by_id = {p.salesforce_id: p for p in ctx.profiles}
 
         # ObjectPermission parent_id can be a profile-owned PS or a real PS.
         # We accumulate sales-object grants per (parent_id).
@@ -561,30 +669,47 @@ class OrgAnalyzerService:
 
         oversized_candidates: List[Dict[str, Any]] = []
         for u in ctx.users:
-            if not u.is_active or u.user_type not in (None, "Standard"):
+            if not u.is_active:
+                continue
+            lic = _resolve_user_license(u, profile_by_id, license_by_id)
+            label = _license_label(lic)
+            # Match on the full-Salesforce SKU label. We accept exact
+            # "Salesforce" since UserLicense.MasterLabel uses that string;
+            # excludes "Salesforce Platform" / Chatter / etc.
+            if not label or label.strip().lower() != "salesforce":
                 continue
             user_parents = user_parent_ids.get(u.salesforce_id, set())
-            # Include the profile's profile-owned PS too if any
-            for parent_id in list(user_parents) + ([u.profile_id] if u.profile_id else []):
+            for parent_id in list(user_parents) + (
+                [u.profile_id] if u.profile_id else []
+            ):
                 if parent_id in sales_grants_by_parent:
                     break
             else:
-                # No parent granted any sales-object — candidate for downgrade
                 oversized_candidates.append({
                     "id": u.salesforce_id,
                     "name": u.name or u.username,
-                    "profile": (profile_by_id.get(u.profile_id).name
-                                if u.profile_id and u.profile_id in profile_by_id
-                                else None),
+                    "profile": (
+                        profile_by_id.get(u.profile_id).name
+                        if u.profile_id and u.profile_id in profile_by_id
+                        else None
+                    ),
+                    "license_name": label,
                 })
 
         if oversized_candidates and cost_delta > 0:
             n = len(oversized_candidates)
             annual = cost_delta * 12 * n
+            d = annual / 100
+            sev = (
+                FindingSeverity.CRITICAL if d >= 50_000
+                else FindingSeverity.HIGH if d >= 10_000
+                else FindingSeverity.MEDIUM if d >= 1_000
+                else FindingSeverity.LOW
+            )
             out.append(FindingDraft(
                 category=FindingCategory.LICENSE_WASTE,
                 code="LICENSE_OVERSIZED",
-                severity=_severity_for_count(n, [1, 5, 20, 50]),
+                severity=sev,
                 title=f"{n} users may be over-licensed",
                 description=(
                     "These users hold a full Salesforce license but have no "
@@ -1841,6 +1966,82 @@ def _cost_calc(
         "total_annual_cents": total_annual_cents,
         "license_name": license_name,
     }
+
+
+def _cost_calc_by_license(
+    rows: List[Dict[str, Any]],
+    total_annual_cents: int,
+) -> Dict[str, Any]:
+    """Mixed-license cost calculation: list of {license_name, count,
+    monthly_cents, annual_cents} so the UI can render the math line by
+    line. Used when a finding affects users with multiple license SKUs
+    and a single flat rate would misrepresent the savings."""
+    parts = []
+    for r in rows:
+        if r["count"] <= 0:
+            continue
+        parts.append(
+            f"{r['count']} {r['license_name']} × "
+            f"${r['monthly_cents'] / 100:.2f}/mo × 12"
+        )
+    formula = " + ".join(parts) if parts else "0 licensed users"
+    return {
+        "formula": formula,
+        "total_annual_cents": total_annual_cents,
+        "by_license": rows,
+    }
+
+
+def _resolve_user_license(
+    user: UserSnapshot,
+    profile_by_id: Dict[str, ProfileSnapshot],
+    license_by_id: Dict[str, Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Look up the UserLicense row for a given user via their profile.
+
+    Returns the raw UserLicense dict ({Id, Name, MasterLabel, ...}) or
+    None if the chain breaks anywhere (profile not synced, license
+    detail missing, etc.).
+    """
+    if not user.profile_id:
+        return None
+    profile = profile_by_id.get(user.profile_id)
+    if not profile or not profile.user_license_id:
+        return None
+    return license_by_id.get(profile.user_license_id)
+
+
+def _license_label(lic: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Pick the display name for a UserLicense row, preferring the
+    human-friendly MasterLabel over the developer Name."""
+    if not lic:
+        return None
+    return lic.get("MasterLabel") or lic.get("Name")
+
+
+def _bucket_users_by_license(
+    users: List[Dict[str, Any]],
+    price_book: Dict[str, int],
+) -> Dict[str, Dict[str, Any]]:
+    """Group a list of {id, name, license_name, monthly_cents} entries
+    by license_name. Returns {license_name: {count, monthly_cents,
+    annual_cents, sample}}. Free / unpriced licenses still appear in the
+    bucket with monthly=0 so the caller can decide what to do with them.
+    """
+    _ = price_book  # accepted for API symmetry; lookup is done by caller
+    buckets: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "monthly_cents": 0, "annual_cents": 0, "sample": []}
+    )
+    for u in users:
+        name = u.get("license_name") or "Unknown license"
+        slot = buckets[name]
+        slot["count"] += 1
+        slot["monthly_cents"] = u.get("monthly_cents", 0)
+        if len(slot["sample"]) < EVIDENCE_SAMPLE_CAP:
+            slot["sample"].append(u)
+    for name, slot in buckets.items():
+        slot["annual_cents"] = slot["count"] * slot["monthly_cents"] * 12
+    return buckets
 
 
 _SEVERITY_LADDER = [

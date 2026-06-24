@@ -416,13 +416,14 @@ class SalesforceAPIClient:
 
     async def extract_profiles(self) -> List[SalesforceProfile]:
         """
-        Extract all profiles
+        Extract all profiles, including their UserLicenseId so the Org
+        Analyzer can attribute users to the correct license SKU.
 
         Returns:
             List of SalesforceProfile objects
         """
         soql = """
-            SELECT Id, Name
+            SELECT Id, Name, UserLicenseId
             FROM Profile
         """
 
