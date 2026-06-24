@@ -83,6 +83,11 @@ export interface HistoryPoint {
 export interface PriceBookRow {
   license_name: string
   monthly_cost_cents: number
+  // Optional flags returned by the GET endpoint. The PUT side ignores
+  // these — overrides are inferred from presence in the payload — so
+  // they're omitted in the request body.
+  is_override?: boolean
+  in_org?: boolean
 }
 
 export interface PriceBookResponse {

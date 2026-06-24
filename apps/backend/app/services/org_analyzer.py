@@ -60,14 +60,151 @@ logger = logging.getLogger(__name__)
 # Defaults — overridable per-org via the license_price_book table.
 # ---------------------------------------------------------------------------
 
+# Default price catalog — approximate Salesforce Enterprise-tier LIST
+# prices as published by Salesforce. Real customer pricing varies with
+# contract terms, discounts, and bundles, so these are starting points
+# that the consultant overrides via the price-book editor with the
+# customer's negotiated rates.
+#
+# Lookup is substring-based on the SKU label (case-insensitive). The
+# table is ordered most-specific → least-specific; the FIRST pattern
+# that matches wins, so "salesforce platform" must come before plain
+# "salesforce".
+#
+# Last reviewed 2026-06; refresh from sf.com pricing pages when major
+# SKUs are added or repriced.
+DEFAULT_PRICE_CATALOG: List[tuple] = [
+    # --- Salesforce core licenses (UserLicense.MasterLabel) ---
+    ("salesforce platform - one app", 2500),
+    ("salesforce limited access - free", 0),
+    ("salesforce platform", 2500),
+    # Bare "salesforce" (full license) — match must come AFTER variants.
+    # We special-case "salesforce" as exact-match only via an alias below
+    # to avoid catching "salesforce limited" / "salesforce platform" etc.
+
+    # --- Add-on user licenses + clouds ---
+    ("service cloud", 16500),
+    ("sales cloud", 16500),  # Used both as UserLicense + PSL
+    ("field service lightning", 15000),
+    ("field service mobile", 4000),
+    ("field service", 15000),
+    ("salesforce cpq", 7500),
+    ("revenue cloud", 7500),
+
+    # --- Marketing / Analytics ---
+    ("marketing cloud account engagement", 125000),
+    ("pardot growth", 125000),
+    ("pardot", 125000),
+    ("marketing cloud", 40000),
+    ("tableau crm plus", 7500),
+    ("tableau crm growth", 7500),
+    ("crm analytics plus", 7500),
+    ("crm analytics", 5000),
+    ("einstein analytics", 7500),
+
+    # --- Sales / Service add-ons ---
+    ("sales cloud einstein", 5000),
+    ("service cloud einstein", 5000),
+    ("sales engagement", 7500),
+    ("high velocity sales", 7500),
+    ("inbox", 2500),
+    ("salesforce maps", 7500),
+
+    # --- Experience / Community Cloud ---
+    ("customer community plus login", 1500),
+    ("customer community plus", 1500),
+    ("partner community login", 2500),
+    ("partner community", 2500),
+    ("customer community login", 500),
+    ("customer community", 500),
+
+    # --- Misc ---
+    ("identity connect", 100),
+    ("cpq", 7500),
+
+    # --- Free / bundled (always $0) ---
+    ("chatter free", 0),
+    ("chatter external", 0),
+    ("identity", 0),
+    ("high volume customer portal", 0),
+    ("customer portal manager custom", 0),
+    ("authenticated website", 0),
+    ("sites", 0),
+    ("site.com", 0),
+    ("platform light", 0),
+    ("guest user", 0),
+    ("lightning external apps plus login", 1000),
+    ("lightning external apps", 0),
+    ("external apps login", 0),
+    ("external apps", 0),
+    ("company communities", 0),
+]
+
+# Exact-match alias so the catch-all "salesforce" pattern doesn't shadow
+# more specific entries above. Resolved after the substring scan.
+_SALESFORCE_FULL_PRICE_CENTS = 16500
+
+
+def _lookup_default_price(sku_name: Optional[str]) -> Optional[int]:
+    """Catalog lookup. Returns monthly cents, or None when nothing matches.
+
+    First (most specific) substring match wins. The catch-all
+    "Salesforce" full license is matched as an EXACT label only, so
+    "Salesforce Platform" doesn't accidentally route to $165.
+    """
+    if not sku_name:
+        return None
+    needle = sku_name.strip().lower()
+    if not needle:
+        return None
+    for pattern, cents in DEFAULT_PRICE_CATALOG:
+        if pattern in needle:
+            return cents
+    # Catch-all for "Salesforce" (exact) since the substring scan above
+    # deliberately doesn't include a bare "salesforce" pattern.
+    if needle == "salesforce":
+        return _SALESFORCE_FULL_PRICE_CENTS
+    return None
+
+
+# Backwards-compat name — code that imports DEFAULT_PRICE_BOOK_CENTS
+# (route + earlier callers) gets the catalog projected into a dict.
+# Only the named entries; substring matching is the catalog's job at
+# runtime.
 DEFAULT_PRICE_BOOK_CENTS: Dict[str, int] = {
-    # Salesforce Enterprise list price ~$165/user/mo as of 2026.
-    "Salesforce": 16500,
-    "Platform": 2500,
-    "Sales Cloud — Permission Set License": 0,
-    "Field Service": 15000,
+    "Salesforce": _SALESFORCE_FULL_PRICE_CENTS,
+    "Salesforce Platform": 2500,
     "Service Cloud": 16500,
-    "Community / Experience Cloud Login": 500,
+    "Sales Cloud": 16500,
+    "Field Service": 15000,
+    "Salesforce CPQ": 7500,
+    "Customer Community": 500,
+    "Customer Community Plus": 1500,
+    "Partner Community": 2500,
+    "Marketing Cloud": 40000,
+    "Pardot": 125000,
+    "Chatter Free": 0,
+    "Chatter External": 0,
+    "Identity": 0,
+    "High Volume Customer Portal": 0,
+    "Authenticated Website": 0,
+    "External Apps Login": 0,
+    "Guest User": 0,
+}
+
+
+# Heuristic fallback when a user has no profile.user_license_id (legacy
+# snapshot pre-migration). Maps User.UserType to the canonical UserLicense
+# MasterLabel — coarse but better than nothing.
+USER_TYPE_TO_LICENSE_LABEL: Dict[str, str] = {
+    "Standard": "Salesforce",
+    "PowerPartner": "Partner Community",
+    "PowerCustomerSuccess": "Customer Community Plus",
+    "CustomerSuccess": "Customer Community",
+    "CSPLitePortal": "High Volume Customer Portal",
+    "Guest": "Guest User",
+    "CsnOnly": "Chatter Free",
+    "SelfService": "Customer Community",
 }
 
 # SKUs that ship free with every Salesforce edition. Surplus seats here
@@ -277,6 +414,17 @@ class OrgAnalyzerService:
         return ctx
 
     async def _load_price_book(self) -> Dict[str, int]:
+        """Build the per-SKU price map the analyzer uses.
+
+        Priority (lowest to highest):
+          1. Named seeds in DEFAULT_PRICE_BOOK_CENTS (legacy dict).
+          2. Admin overrides from the LicensePriceBook table.
+
+        Substring-catalog lookups against DEFAULT_PRICE_CATALOG happen
+        live at attribution time via _price_for_label so SKUs we discover
+        in the org but have never seen before still get a sensible
+        default without populating a per-SKU dict entry.
+        """
         result = await self.db.execute(
             select(LicensePriceBook).where(
                 LicensePriceBook.organization_id == self.org_id
@@ -287,6 +435,27 @@ class OrgAnalyzerService:
         for r in rows:
             merged[r.license_name] = int(r.monthly_cost_cents)
         return merged
+
+    @staticmethod
+    def _price_for_label(
+        label: Optional[str],
+        price_book: Dict[str, int],
+    ) -> int:
+        """Resolve a monthly cost for an SKU label.
+
+        Goes through:
+          1. Exact match on the admin price book / DEFAULT_PRICE_BOOK_CENTS.
+          2. Substring catalog lookup (handles SKUs we haven't named yet).
+          3. 0 fallback (caller decides whether that means "free" or "unknown").
+        """
+        if not label:
+            return 0
+        if label in price_book:
+            return int(price_book[label])
+        catalog = _lookup_default_price(label)
+        if catalog is not None:
+            return int(catalog)
+        return 0
 
     # -------------------------------------------------- fetch_live_data
 
@@ -461,20 +630,46 @@ class OrgAnalyzerService:
         license_by_id = {ul["Id"]: ul for ul in ctx.user_licenses if ul.get("Id")}
 
         def _classify(user: UserSnapshot) -> Dict[str, Any]:
-            """Return {license_name, monthly_cents, is_free} for the user."""
+            """Resolve {license_name, monthly_cents, is_free} for the user.
+
+            Resolution order:
+              1. profile.user_license_id → UserLicense.MasterLabel (most
+                 accurate; requires sync after the user_license_id
+                 migration ran).
+              2. User.UserType → canonical UserLicense label (legacy
+                 fallback for snapshots taken before the new column was
+                 populated).
+              3. "Unknown license" — no attribution, $0.
+
+            Pricing then walks the admin price book → catalog → 0.
+            """
             lic = _resolve_user_license(user, profile_by_id, license_by_id)
-            label = _license_label(lic) or "Unknown license"
+            label = _license_label(lic)
+            source = "profile" if label else None
+            if not label:
+                fallback = USER_TYPE_TO_LICENSE_LABEL.get(user.user_type or "")
+                if fallback:
+                    label = fallback
+                    source = "user_type"
+            if not label:
+                label = "Unknown license"
+                source = "unknown"
+
             is_free = _is_known_free_sku(label)
-            monthly = 0 if is_free else int(
-                ctx.price_book.get(label)
-                or ctx.price_book.get(lic.get("Name") if lic else "", 0)
-                or 0
+            monthly = 0 if is_free else self._price_for_label(
+                label, ctx.price_book
             )
+            # If we matched the SKU via UserType but the label has no
+            # price anywhere, also try the developer key from the
+            # UserLicense row (some orgs label SKUs idiosyncratically).
+            if monthly == 0 and not is_free and lic and lic.get("Name"):
+                monthly = self._price_for_label(lic["Name"], ctx.price_book)
             return {
                 "license_name": label,
                 "monthly_cents": monthly,
                 "is_free": is_free,
                 "license_developer_key": lic.get("Name") if lic else None,
+                "license_source": source,
             }
 
         inactive_users: List[Dict[str, Any]] = []
@@ -766,11 +961,9 @@ class OrgAnalyzerService:
             if _is_known_free_sku(label) or _is_known_free_sku(sku):
                 # Bundled / free — nothing to bill the customer for.
                 continue
-            monthly = (
-                ctx.price_book.get(label)
-                or ctx.price_book.get(sku)
-                or 0
-            )
+            monthly = self._price_for_label(label, ctx.price_book)
+            if monthly == 0 and sku:
+                monthly = self._price_for_label(sku, ctx.price_book)
             annual = monthly * 12 * surplus if monthly else None
             evidence: Dict[str, Any] = {
                 "license_name": label,
@@ -858,10 +1051,11 @@ class OrgAnalyzerService:
             label = psl.get("MasterLabel") or psl.get("DeveloperName") or "PSL"
             if _is_known_free_sku(label):
                 continue
-            monthly = ctx.price_book.get(label) or 0
+            monthly = self._price_for_label(label, ctx.price_book)
             if not monthly:
-                # PSLs default to free — don't fabricate a finding. The
-                # consultant can override the price book to surface one.
+                # PSL has no price set and no catalog default — don't
+                # fabricate a finding. The consultant can override the
+                # price book to surface one.
                 continue
             annual = monthly * 12 * surplus
             evidence = {

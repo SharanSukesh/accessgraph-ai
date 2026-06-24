@@ -37,6 +37,7 @@ from app.domain.models import (
 from app.services.org_analyzer import (
     DEFAULT_PRICE_BOOK_CENTS,
     OrgAnalyzerService,
+    _lookup_default_price,
 )
 
 
@@ -124,6 +125,15 @@ class HistoryPoint(BaseModel):
 class PriceBookRow(BaseModel):
     license_name: str
     monthly_cost_cents: int = Field(ge=0)
+    # Whether this row's cost was set by the admin (true) or comes from
+    # the built-in default catalog of Salesforce list prices (false).
+    # The UI uses this to surface a "default" badge so the consultant
+    # knows which numbers they still need to verify with the customer.
+    is_override: bool = False
+    # Whether the SKU was detected in the org's actual UserLicense /
+    # PSL inventory (true) or is a catalog-only entry shown for
+    # convenience (false). Org-present SKUs render first in the editor.
+    in_org: bool = False
 
 
 class PriceBookResponse(BaseModel):
@@ -479,23 +489,57 @@ async def get_price_book(
             if name and name not in org_skus:
                 org_skus.append(name)
 
-    merged: Dict[str, int] = {}
-    # Org's actual SKUs first — even with $0 default, so the consultant
-    # immediately sees what the customer is paying for.
-    for name in org_skus:
-        merged[name] = DEFAULT_PRICE_BOOK_CENTS.get(name, 0)
-    # Then fall back to common defaults the org doesn't have on file yet.
-    for name, cost in DEFAULT_PRICE_BOOK_CENTS.items():
-        merged.setdefault(name, cost)
-    # Admin overrides win.
-    merged.update(overrides)
+    def _default_for(name: str) -> int:
+        """Catalog lookup → 0. Substring match handles SKUs the org
+        labels idiosyncratically without us hard-coding every variant."""
+        catalog = _lookup_default_price(name)
+        if catalog is not None:
+            return catalog
+        return DEFAULT_PRICE_BOOK_CENTS.get(name, 0)
 
-    return PriceBookResponse(
-        rows=[
-            PriceBookRow(license_name=k, monthly_cost_cents=v)
-            for k, v in sorted(merged.items())
-        ]
-    )
+    rows: List[PriceBookRow] = []
+    seen: set = set()
+
+    # Org's actual SKUs first — these are the ones the consultant cares
+    # about and should appear at the top of the editor.
+    for name in org_skus:
+        rows.append(PriceBookRow(
+            license_name=name,
+            monthly_cost_cents=overrides.get(name, _default_for(name)),
+            is_override=name in overrides,
+            in_org=True,
+        ))
+        seen.add(name)
+
+    # Then the common-SKU defaults the org doesn't (yet) have, so a fresh
+    # install still sees a reasonable starting list.
+    for name in DEFAULT_PRICE_BOOK_CENTS:
+        if name in seen:
+            continue
+        rows.append(PriceBookRow(
+            license_name=name,
+            monthly_cost_cents=overrides.get(name, _default_for(name)),
+            is_override=name in overrides,
+            in_org=False,
+        ))
+        seen.add(name)
+
+    # Surface any admin overrides for SKUs that aren't in the org or the
+    # default list — we shouldn't drop them silently.
+    for name, cost in overrides.items():
+        if name in seen:
+            continue
+        rows.append(PriceBookRow(
+            license_name=name,
+            monthly_cost_cents=cost,
+            is_override=True,
+            in_org=False,
+        ))
+
+    # Final ordering: org-present first, then alphabetical within each
+    # bucket, so the consultant sees what matters at the top.
+    rows.sort(key=lambda r: (not r.in_org, r.license_name.lower()))
+    return PriceBookResponse(rows=rows)
 
 
 @router.put(

@@ -1270,12 +1270,17 @@ function PriceBookTab({ orgId }: { orgId: string }) {
       </CardHeader>
       <CardContent>
         <p className="text-xs text-gray-500 mb-3">
-          Monthly cost per license SKU in cents. The list is sourced from
-          the org's actual <code>UserLicense</code> and{' '}
-          <code>PermissionSetLicense</code> records on each analysis run,
-          merged with a small fallback list of common SKUs. Override the
-          cost values with the customer's actual contracted prices — those
-          numbers drive every license-savings estimate.
+          Monthly cost per license SKU in cents. SKUs labelled{' '}
+          <span className="font-semibold text-indigo-700 dark:text-indigo-300">In org</span>{' '}
+          are the actual{' '}
+          <code>UserLicense</code> + <code>PermissionSetLicense</code>{' '}
+          records this org owns. Default prices come from a built-in
+          catalog of Salesforce Enterprise list prices (refreshed
+          periodically); rows flagged{' '}
+          <span className="font-semibold text-green-700 dark:text-green-400">Custom</span>{' '}
+          have been overridden by you. Replace the defaults with the
+          customer's actual contracted prices — those numbers drive
+          every license-savings estimate.
         </p>
         {pb.isLoading ? (
           <TableSkeleton rows={4} />
@@ -1284,6 +1289,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
             <thead>
               <tr className="text-left border-b border-gray-200 dark:border-gray-800">
                 <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">License</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Source</th>
                 <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Cost (cents/mo)</th>
                 <th className="py-2 text-xs uppercase tracking-wide text-gray-500">Cost (USD/mo)</th>
                 <th className="py-2"></th>
@@ -1298,6 +1304,33 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                       onChange={e => handleSet(i, 'license_name', e.target.value)}
                       className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
                     />
+                  </td>
+                  <td className="py-1 pr-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      {r.in_org && (
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                          title="Detected in the org's UserLicense / PSL inventory"
+                        >
+                          In org
+                        </span>
+                      )}
+                      {r.is_override ? (
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                          title="You have set this price; it overrides the catalog default"
+                        >
+                          Custom
+                        </span>
+                      ) : (
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                          title="From the built-in Salesforce list-price catalog"
+                        >
+                          Default
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-1 pr-3">
                     <input
