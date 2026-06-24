@@ -1089,3 +1089,204 @@ class EquitySnapshot(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_equity_snapshot_org_time", "organization_id", "snapshot_at"),
     )
+
+
+# ============================================================================
+# Org Analyzer — consulting-grade org-health diagnostics
+# ============================================================================
+#
+# Fourth analysis track alongside Anomaly, Risk, Equity. Surfaces a broad
+# matrix of findings — license waste, configuration bloat, automation
+# hygiene, sharing posture, storage/limit risk, predictive trends — with
+# dollar-impact estimates so a consultant can hand a customer a CFO-ready
+# report after plugging into their org for an hour. Purely additive: no
+# existing service / table / route is modified.
+
+
+class FindingCategory(str, PyEnum):
+    """High-level grouping for org-analyzer findings."""
+    LICENSE_WASTE = "license_waste"
+    CONFIG_BLOAT = "config_bloat"
+    AUTOMATION_HYGIENE = "automation_hygiene"
+    SHARING_POSTURE = "sharing_posture"
+    STORAGE_LIMIT = "storage_limit"
+    DATA_QUALITY = "data_quality"
+    USER_ACTIVITY = "user_activity"
+    PREDICTIVE = "predictive"
+
+
+class FindingSeverity(str, PyEnum):
+    """Severity ladder for org-analyzer findings. Mirrors AnomalySeverity
+    values exactly so the frontend severity badges + colour ramps can be
+    reused without divergence."""
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class OrgAnalysisSnapshot(Base, TimestampMixin):
+    """One row per Org Analyzer run.
+
+    Carries the headline summary (counts per category/severity, total
+    estimated savings, raw /limits JSON) so the dashboard hydrates from
+    a single row + the per-finding drill-down hangs off `findings`.
+    """
+    __tablename__ = "org_analysis_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    findings_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    findings_by_severity: Mapped[dict] = mapped_column(JSON, default=dict)
+    findings_by_category: Mapped[dict] = mapped_column(JSON, default=dict)
+    total_estimated_annual_savings_cents: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Raw /limits payload at snapshot time — drives trend extrapolation
+    # and the storage/API quota dashboards. Stored verbatim so we don't
+    # lose any new SF limit keys when Salesforce adds them.
+    org_limits: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # Free-form headline metrics — per-object record counts, license
+    # utilization%, daily-active-user count, etc. Whatever the analyzer
+    # wants to chart on the trends tab.
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+
+    findings = relationship(
+        "OrgFinding",
+        back_populates="snapshot",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_org_analysis_snapshot_org_time", "organization_id", "snapshot_at"),
+    )
+
+
+class OrgFinding(Base, TimestampMixin):
+    """One row per finding produced by the Org Analyzer.
+
+    Designed to be self-describing for the dashboard + PDF: title, body,
+    severity badge, optional dollar savings, optional Setup deeplink, and
+    a JSON `evidence` blob carrying whatever ids / counts / SOQL hints
+    the consultant needs to follow up in the actual Salesforce org.
+    """
+    __tablename__ = "org_findings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("org_analysis_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    category: Mapped[FindingCategory] = mapped_column(
+        Enum(FindingCategory, native_enum=False, length=30), nullable=False
+    )
+    # Stable string code per rule type (LICENSE_INACTIVE_USER, etc.) so
+    # the frontend can map to icons / docs without re-deriving from the
+    # title. Free-form string, not an enum, so new rules can ship without
+    # a migration.
+    code: Mapped[str] = mapped_column(String(64), nullable=False)
+    severity: Mapped[FindingSeverity] = mapped_column(
+        Enum(FindingSeverity, native_enum=False, length=20), nullable=False
+    )
+
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    recommended_action: Mapped[Optional[str]] = mapped_column(Text)
+
+    affected_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    estimated_annual_savings_cents: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Per-finding evidence — list of {id, label, ...} dicts the dashboard
+    # renders as a sample table. Bounded in size by the service (top 50).
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    # Optional deeplink to Salesforce Setup (e.g. /lightning/setup/ManageUsers/home)
+    sf_setup_deeplink: Mapped[Optional[str]] = mapped_column(String(500))
+
+    snapshot = relationship("OrgAnalysisSnapshot", back_populates="findings")
+
+    __table_args__ = (
+        Index(
+            "ix_org_finding_snapshot_category",
+            "organization_id",
+            "snapshot_id",
+            "category",
+        ),
+        Index("ix_org_finding_severity", "severity"),
+    )
+
+
+class LicensePriceBook(Base, TimestampMixin):
+    """Per-org license SKU → monthly cost. Drives the dollar-impact
+    estimates on every license-waste finding.
+
+    Seeded with sensible defaults on first read so a fresh-install org
+    doesn't get $0 savings everywhere; the consultant overrides with the
+    customer's actual contracted prices via the PUT endpoint.
+    """
+    __tablename__ = "license_price_book"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    license_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    monthly_cost_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_by: Mapped[Optional[str]] = mapped_column(String(255))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id", "license_name", name="uq_price_book_org_license"
+        ),
+    )
+
+
+class OrgAnalyzerRun(Base, TimestampMixin):
+    """Operational log of analyzer runs — useful for debugging long runs
+    and surfacing 'last run failed because X' to the admin without
+    grepping container logs."""
+    __tablename__ = "org_analyzer_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("org_analysis_snapshots.id", ondelete="SET NULL"),
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # running|completed|failed
+    actor_email: Mapped[Optional[str]] = mapped_column(String(255))
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("ix_analyzer_run_org_time", "organization_id", "started_at"),
+    )

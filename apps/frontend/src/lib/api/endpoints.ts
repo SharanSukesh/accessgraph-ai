@@ -63,4 +63,14 @@ export const endpoints = {
   // editor. POST /apply writes through to Salesforce User records.
   reportingGraph: (orgId: string) => `/orgs/${orgId}/reporting-graph`,
   reportingGraphApply: (orgId: string) => `/orgs/${orgId}/reporting-graph/apply`,
+
+  // Org Analyzer — consulting-grade org-health diagnostics + PDF report.
+  orgAnalyzerRun: (orgId: string) => `/orgs/${orgId}/org-analyzer/run`,
+  orgAnalyzerLatest: (orgId: string) => `/orgs/${orgId}/org-analyzer/latest`,
+  orgAnalyzerFindings: (orgId: string) => `/orgs/${orgId}/org-analyzer/findings`,
+  orgAnalyzerFinding: (orgId: string, findingId: string) =>
+    `/orgs/${orgId}/org-analyzer/findings/${findingId}`,
+  orgAnalyzerHistory: (orgId: string) => `/orgs/${orgId}/org-analyzer/history`,
+  orgAnalyzerReportPdf: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.pdf`,
+  orgAnalyzerPriceBook: (orgId: string) => `/orgs/${orgId}/org-analyzer/price-book`,
 } as const

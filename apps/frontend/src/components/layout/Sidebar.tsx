@@ -22,6 +22,7 @@ import {
   Link2,
   Scale,
   GitBranch,
+  Stethoscope,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
@@ -38,6 +39,7 @@ const navigationItems = [
   { name: 'Equity', path: 'equity', icon: Scale },
   { name: 'Graph Explorer', path: 'graph', icon: Network },
   { name: 'Reporting Graph', path: 'reporting-graph', icon: GitBranch },
+  { name: 'Org Analyzer', path: 'org-analyzer', icon: Stethoscope },
 ]
 
 export function Sidebar() {

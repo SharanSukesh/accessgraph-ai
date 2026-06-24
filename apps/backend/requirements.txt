@@ -47,6 +47,12 @@ pandas>=2.2.3
 # Graph Utilities
 networkx==3.2.1
 
+# PDF rendering — used by the Org Analyzer report endpoint. WeasyPrint
+# needs system deps (libcairo2, libpango, libgdk-pixbuf2.0) — added in
+# apps/backend/Dockerfile. Imported lazily inside the PDF service so a
+# missing system dep doesn't break the rest of the analyzer.
+weasyprint>=62.0
+
 # Development
 pytest==7.4.4
 pytest-asyncio==0.23.3

@@ -18,12 +18,14 @@ from app.domain.models import (
     GroupSnapshot,
     ObjectPermissionSnapshot,
     OpportunityShareSnapshot,
+    OrganizationWideDefaultSnapshot,
     PermissionSetAssignmentSnapshot,
     PermissionSetGroupComponentSnapshot,
     PermissionSetGroupSnapshot,
     PermissionSetSnapshot,
     ProfileSnapshot,
     RoleSnapshot,
+    SharingRuleSnapshot,
     UserSnapshot,
 )
 
@@ -723,6 +725,124 @@ class SnapshotPersister:
         logger.info(f"Persisted {count} opportunity team members")
         return count
 
+    async def persist_sharing_rules(
+        self,
+        org_id: str,
+        rules: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist sharing-rule snapshots.
+
+        Salesforce returns one row per criteria/owner-based sharing rule
+        across the standard objects we query in extract_sharing_rules.
+        Tooling API gives us SharedTo.Type but not always the id; we
+        store what's available and leave shared_to_id NULL when missing.
+        """
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for rule_data in rules:
+            result = await self.db.execute(
+                select(SharingRuleSnapshot).where(
+                    SharingRuleSnapshot.organization_id == org_id,
+                    SharingRuleSnapshot.salesforce_id == rule_data["Id"],
+                )
+            )
+            existing = result.scalar_one_or_none()
+            shared_to_type = rule_data.get("SharedToType") or "Unknown"
+            shared_to_id = rule_data.get("SharedToId")
+            rule_name = rule_data.get("Name") or rule_data["Id"]
+            sobject_type = rule_data.get("SobjectType") or "Unknown"
+            rule_type = rule_data.get("RuleType") or "Criteria"
+            access_level = rule_data.get("AccessLevel") or "Read"
+
+            if existing:
+                existing.rule_name = rule_name
+                existing.sobject_type = sobject_type
+                existing.rule_type = rule_type
+                existing.access_level = access_level
+                existing.shared_to_type = shared_to_type
+                existing.shared_to_id = shared_to_id
+                existing.snapshot_date = snapshot_date
+            else:
+                rule = SharingRuleSnapshot(
+                    organization_id=org_id,
+                    salesforce_id=rule_data["Id"],
+                    rule_name=rule_name,
+                    sobject_type=sobject_type,
+                    rule_type=rule_type,
+                    access_level=access_level,
+                    shared_to_type=shared_to_type,
+                    shared_to_id=shared_to_id,
+                    is_active=True,
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(rule)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} sharing rules")
+        return count
+
+    async def persist_organization_wide_defaults(
+        self,
+        org_id: str,
+        owds: List[Dict[str, Any]],
+        sync_job_id: Optional[str] = None,
+    ) -> int:
+        """Persist OWD snapshots (one row per sObject in the OWD table).
+
+        Used by the analyzer's OWD_PUBLIC_ON_SENSITIVE rule and by
+        RecordAccessService for record-level access analysis.
+        """
+        count = 0
+        snapshot_date = datetime.now(timezone.utc)
+
+        for owd_data in owds:
+            sobject_type = owd_data.get("sobject_type") or owd_data.get("SobjectType")
+            if not sobject_type:
+                continue
+            result = await self.db.execute(
+                select(OrganizationWideDefaultSnapshot).where(
+                    OrganizationWideDefaultSnapshot.organization_id == org_id,
+                    OrganizationWideDefaultSnapshot.sobject_type == sobject_type,
+                    OrganizationWideDefaultSnapshot.snapshot_date == snapshot_date,
+                )
+            )
+            existing = result.scalar_one_or_none()
+            sobject_label = owd_data.get("sobject_label") or owd_data.get("SobjectLabel")
+            internal = (
+                owd_data.get("internal_sharing_model")
+                or owd_data.get("InternalSharingModel")
+                or "Private"
+            )
+            external = (
+                owd_data.get("external_sharing_model")
+                or owd_data.get("ExternalSharingModel")
+            )
+
+            if existing:
+                existing.sobject_label = sobject_label
+                existing.internal_sharing_model = internal
+                existing.external_sharing_model = external
+            else:
+                owd = OrganizationWideDefaultSnapshot(
+                    organization_id=org_id,
+                    sobject_type=sobject_type,
+                    sobject_label=sobject_label,
+                    internal_sharing_model=internal,
+                    external_sharing_model=external,
+                    snapshot_date=snapshot_date,
+                )
+                self.db.add(owd)
+
+            count += 1
+
+        await self.db.flush()
+        logger.info(f"Persisted {count} OWD entries")
+        return count
+
     async def persist_all(
         self,
         org_id: str,
@@ -777,6 +897,17 @@ class SnapshotPersister:
         )
         counts["opportunity_team_members"] = await self.persist_opportunity_team_members(
             org_id, data.get("opportunity_team_members", []), sync_job_id
+        )
+        # Previously orphaned: the extractor pulled these but no persister
+        # call existed, so the snapshot tables stayed empty. The Org
+        # Analyzer needs both populated for OWD + sharing-rule findings.
+        counts["sharing_rules"] = await self.persist_sharing_rules(
+            org_id, data.get("sharing_rules", []), sync_job_id
+        )
+        counts["organization_wide_defaults"] = (
+            await self.persist_organization_wide_defaults(
+                org_id, data.get("organization_wide_defaults", []), sync_job_id
+            )
         )
 
         await self.db.commit()

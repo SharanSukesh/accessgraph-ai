@@ -180,6 +180,125 @@ class SalesforceAPIClient:
         return await self.update_user(user_sf_id, fields)
 
     # =========================================================================
+    # Org Analyzer helpers (read-only SF REST/Tooling calls used by the
+    # Org Analyzer service to compute org-health findings).
+    # =========================================================================
+
+    async def get_org_limits(self) -> Dict[str, Any]:
+        """GET /services/data/vXX.0/limits.
+
+        Returns the raw payload — keys like DailyApiRequests, DataStorageMB,
+        FileStorageMB, DailyBulkApiBatches, SingleEmail, MassEmail, etc.
+        Each value is a dict {"Max": int, "Remaining": int}.
+        """
+        url = f"{self.base_url}/limits"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(url, headers=self._get_headers())
+            response.raise_for_status()
+            return response.json()
+
+    async def list_all_sobjects(self) -> List[Dict[str, Any]]:
+        """GET /services/data/vXX.0/sobjects/ — global describe.
+
+        Returns list of {name, label, custom, queryable, createable, ...}
+        for every sObject in the org. Used by the analyzer to enumerate
+        custom objects + decide which ones to count records on.
+        """
+        url = f"{self.base_url}/sobjects/"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(url, headers=self._get_headers())
+            response.raise_for_status()
+            data = response.json()
+            return data.get("sobjects", []) or []
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        reraise=True,
+    )
+    async def query_tooling(self, soql: str) -> List[Dict[str, Any]]:
+        """Generic Tooling API SOQL query with paging.
+
+        The Tooling API uses a separate endpoint but otherwise behaves
+        like the standard /query endpoint. We use it for ApexClass,
+        ApexTrigger, FlowDefinitionView, ValidationRule, etc. — anything
+        the regular query endpoint doesn't expose.
+        """
+        tooling_query_url = f"{self.base_url}/tooling/query"
+        all_records: List[Dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(
+                tooling_query_url,
+                headers=self._get_headers(),
+                params={"q": soql.strip()},
+            )
+            response.raise_for_status()
+            data = response.json()
+            all_records.extend(data.get("records", []) or [])
+            next_url = data.get("nextRecordsUrl")
+            while not data.get("done", True) and next_url:
+                response = await client.get(
+                    f"{self.instance_url}{next_url}",
+                    headers=self._get_headers(),
+                )
+                response.raise_for_status()
+                data = response.json()
+                all_records.extend(data.get("records", []) or [])
+                next_url = data.get("nextRecordsUrl")
+        return all_records
+
+    async def count_sobject(self, sobject_name: str) -> Optional[int]:
+        """SELECT COUNT() FROM <sobject>. Returns None if the COUNT query
+        rejects (object not queryable, no permissions, etc.) so the
+        analyzer can skip rather than fail the whole run."""
+        try:
+            result = await self.query(f"SELECT COUNT() FROM {sobject_name}")
+            return int(result.totalSize or 0)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "COUNT() on %s rejected (%s) — skipping.",
+                sobject_name, e.response.status_code,
+            )
+            return None
+        except Exception as e:
+            logger.warning("COUNT() on %s failed: %s", sobject_name, e)
+            return None
+
+    async def get_login_history(self, since_days: int = 90) -> List[Dict[str, Any]]:
+        """Recent LoginHistory rows for activity analysis.
+
+        Returns rows with Id, UserId, LoginTime, Application, Status. The
+        analyzer rolls these up to find users who haven't used the API in
+        a while but still hold the API Enabled perm.
+        """
+        soql = (
+            "SELECT Id, UserId, LoginTime, Application, Status "
+            "FROM LoginHistory "
+            f"WHERE LoginTime = LAST_N_DAYS:{since_days} "
+            "ORDER BY LoginTime DESC"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "LoginHistory query failed (%s) — skipping API-activity rule.",
+                e.response.status_code,
+            )
+            return []
+
+    async def get_apex_coverage(self) -> List[Dict[str, Any]]:
+        """Per-class Apex code-coverage rollup from the Tooling API."""
+        try:
+            return await self.query_tooling(
+                "SELECT ApexClassOrTriggerId, NumLinesCovered, NumLinesUncovered "
+                "FROM ApexCodeCoverageAggregate"
+            )
+        except Exception as e:
+            logger.warning("ApexCodeCoverageAggregate query failed: %s", e)
+            return []
+
+    # =========================================================================
     # Extraction Methods
     # =========================================================================
 
