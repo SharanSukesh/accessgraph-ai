@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -1169,6 +1170,11 @@ class OrgAnalysisSnapshot(Base, TimestampMixin):
 
     duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
 
+    # Plain-English executive summary composed at snapshot-persist time
+    # so it's deterministic + renderable from a single row. Surfaced on
+    # the Overview tab + PDF cover page.
+    executive_summary: Mapped[Optional[str]] = mapped_column(Text)
+
     findings = relationship(
         "OrgFinding",
         back_populates="snapshot",
@@ -1237,6 +1243,16 @@ class OrgFinding(Base, TimestampMixin):
     ignored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     ignored_by: Mapped[Optional[str]] = mapped_column(String(255))
     ignore_reason: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Resolved state — set by the "Apply fix" Salesforce write-back
+    # endpoint when an actionable finding has been actioned in SF.
+    # Resolved findings hide by default, get a green pill, and stop
+    # contributing to active savings totals.
+    is_resolved: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    resolved_by: Mapped[Optional[str]] = mapped_column(String(255))
 
     snapshot = relationship("OrgAnalysisSnapshot", back_populates="findings")
 
@@ -1313,3 +1329,27 @@ class OrgAnalyzerRun(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_analyzer_run_org_time", "organization_id", "started_at"),
     )
+
+
+class BrandSettings(Base, TimestampMixin):
+    """Per-org branding for the white-labeled Org Analyzer PDF report.
+
+    One row per organization. Logo bytes stored on the row to keep
+    deployment simple — no object-storage dependency. Capped at 256KB
+    by the upload endpoint. accent_hex substitutes the indigo accent
+    across the PDF; defaults preserve the unbranded look when null.
+    """
+    __tablename__ = "brand_settings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    firm_name: Mapped[Optional[str]] = mapped_column(String(255))
+    accent_hex: Mapped[Optional[str]] = mapped_column(String(7))  # "#RRGGBB"
+    logo_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    logo_mime: Mapped[Optional[str]] = mapped_column(String(64))
+    updated_by: Mapped[Optional[str]] = mapped_column(String(255))

@@ -5,20 +5,31 @@ Exposes the consulting-grade org-health analyzer:
 - POST  /orgs/{org_id}/org-analyzer/run                 — kick off a run
 - GET   /orgs/{org_id}/org-analyzer/latest              — latest snapshot summary
 - GET   /orgs/{org_id}/org-analyzer/findings            — paginated findings
+- GET   /orgs/{org_id}/org-analyzer/findings.csv        — CSV export (v1.8)
 - GET   /orgs/{org_id}/org-analyzer/findings/{id}       — single finding
+- POST  /orgs/{org_id}/org-analyzer/findings/{id}/apply-fix  — SF write-back (v1.8)
 - GET   /orgs/{org_id}/org-analyzer/history             — snapshot trend
 - GET   /orgs/{org_id}/org-analyzer/report.pdf          — server-rendered PDF
 - GET   /orgs/{org_id}/org-analyzer/price-book          — read price book
 - PUT   /orgs/{org_id}/org-analyzer/price-book          — write price book
+- GET   /orgs/{org_id}/org-analyzer/brand               — read brand settings (v1.8)
+- PUT   /orgs/{org_id}/org-analyzer/brand               — write brand settings (v1.8)
+- POST  /orgs/{org_id}/org-analyzer/brand/logo          — upload brand logo (v1.8)
+- GET   /orgs/{org_id}/org-analyzer/brand/logo         — fetch logo bytes (v1.8)
 """
 from __future__ import annotations
 
+import csv
 import io
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter, Depends, File, HTTPException, Query, Request, Response,
+    UploadFile, status,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
@@ -27,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, get_current_org
 from app.domain.models import (
+    BrandSettings,
     FindingCategory,
     FindingSeverity,
     LicensePriceBook,
@@ -36,12 +48,11 @@ from app.domain.models import (
 )
 from app.services.org_analyzer import (
     DEFAULT_PRICE_BOOK_CENTS,
-    KNOWN_FREE_SKU_PATTERNS,
     OrgAnalyzerService,
     _is_known_free_sku,
-    _is_paying_org,
     _lookup_default_price,
 )
+from app.services.org_analyzer_fix import APPLY_FIX_SUPPORTED, ApplyFixService
 
 
 logger = logging.getLogger(__name__)
@@ -67,6 +78,14 @@ class FindingResponse(BaseModel):
     ignored_at: Optional[str]
     ignored_by: Optional[str]
     ignore_reason: Optional[str]
+    # v1.8 — "Apply fix" state. is_resolved hides the finding by default
+    # (same convention as is_ignored) and surfaces a green "Resolved"
+    # pill in the UI. has_apply_fix tells the frontend whether to show
+    # the Apply-fix button at all.
+    is_resolved: bool = False
+    resolved_at: Optional[str] = None
+    resolved_by: Optional[str] = None
+    has_apply_fix: bool = False
 
     @classmethod
     def from_orm(cls, f: OrgFinding) -> "FindingResponse":
@@ -86,6 +105,12 @@ class FindingResponse(BaseModel):
             ignored_at=f.ignored_at.isoformat() if getattr(f, "ignored_at", None) else None,
             ignored_by=getattr(f, "ignored_by", None),
             ignore_reason=getattr(f, "ignore_reason", None),
+            is_resolved=bool(getattr(f, "is_resolved", False)),
+            resolved_at=(
+                f.resolved_at.isoformat() if getattr(f, "resolved_at", None) else None
+            ),
+            resolved_by=getattr(f, "resolved_by", None),
+            has_apply_fix=f.code in APPLY_FIX_SUPPORTED,
         )
 
 
@@ -115,6 +140,11 @@ class SnapshotSummary(BaseModel):
     is_sandbox: bool = False
     is_trial: bool = False
     is_paying_org: bool = True
+    # v1.8 — executive summary narrative and delta-vs-prior-snapshot.
+    # executive_summary is None on snapshots from before v1.8; the
+    # frontend hides the Executive Summary card in that case.
+    executive_summary: Optional[str] = None
+    delta: Optional[Dict[str, Any]] = None
 
 
 class FindingsPage(BaseModel):
@@ -257,13 +287,15 @@ async def get_latest_snapshot(
             has_data=False,
         )
 
-    # Compute active-only counts + savings on demand so ignores reflect
-    # in the headline numbers without rewriting the snapshot row.
+    # Compute active-only counts + savings on demand so ignores +
+    # resolved-fixes reflect in the headline numbers without rewriting
+    # the snapshot row.
     active_rows = (await db.execute(
         select(OrgFinding).where(
             OrgFinding.organization_id == org_id,
             OrgFinding.snapshot_id == snap.id,
             OrgFinding.is_ignored.is_(False),
+            OrgFinding.is_resolved.is_(False),
         )
     )).scalars().all()
     active_savings = sum(
@@ -289,6 +321,8 @@ async def get_latest_snapshot(
         is_sandbox=bool(snap_metrics.get("is_sandbox", False)),
         is_trial=bool(snap_metrics.get("is_trial", False)),
         is_paying_org=bool(snap_metrics.get("is_paying_org", True)),
+        executive_summary=snap.executive_summary,
+        delta=snap_metrics.get("delta_vs_prior"),
     )
 
 
@@ -319,7 +353,10 @@ async def list_findings(
         OrgFinding.snapshot_id == snap.id,
     )
     if not include_ignored:
-        q = q.where(OrgFinding.is_ignored.is_(False))
+        q = q.where(
+            OrgFinding.is_ignored.is_(False),
+            OrgFinding.is_resolved.is_(False),
+        )
     if category:
         q = q.where(OrgFinding.category == category)
     if severity:
@@ -347,6 +384,114 @@ async def list_findings(
         snapshot_id=snap.id,
         findings=[FindingResponse.from_orm(f) for f in paged],
     )
+
+
+@router.get("/orgs/{org_id}/org-analyzer/findings.csv")
+async def export_findings_csv(
+    org_id: str,
+    category: Optional[str] = Query(default=None),
+    severity: Optional[str] = Query(default=None),
+    include_ignored: bool = Query(default=False),
+    current_org_id: str = Depends(get_current_org),
+    db: AsyncSession = Depends(get_database),
+) -> StreamingResponse:
+    """CSV export of the latest snapshot's findings.
+
+    Mirrors the filter shape of the JSON /findings endpoint so the
+    frontend can plumb its current filter state directly into the
+    download URL. Streams via StreamingResponse so we don't buffer the
+    whole CSV in memory for huge orgs.
+    """
+    _enforce_same_org(org_id, current_org_id)
+    snap = await _latest_snapshot(db, org_id)
+    if snap is None:
+        # Return an empty CSV with headers so the downloaded file isn't
+        # malformed; consultant-friendly default.
+        empty = io.StringIO()
+        writer = csv.writer(empty)
+        writer.writerow(_csv_columns())
+        return StreamingResponse(
+            iter([empty.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": (
+                    'attachment; filename="org-analyzer-findings-empty.csv"'
+                ),
+            },
+        )
+
+    q = select(OrgFinding).where(
+        OrgFinding.organization_id == org_id,
+        OrgFinding.snapshot_id == snap.id,
+    )
+    if not include_ignored:
+        q = q.where(
+            OrgFinding.is_ignored.is_(False),
+            OrgFinding.is_resolved.is_(False),
+        )
+    if category:
+        q = q.where(OrgFinding.category == category)
+    if severity:
+        q = q.where(OrgFinding.severity == severity)
+
+    rows = list((await db.execute(q)).scalars().all())
+
+    def _stream():
+        buf = io.StringIO()
+        writer = csv.writer(buf, quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(_csv_columns())
+        yield buf.getvalue()
+        for f in rows:
+            buf = io.StringIO()
+            csv.writer(buf, quoting=csv.QUOTE_MINIMAL).writerow(_csv_row(f, snap))
+            yield buf.getvalue()
+
+    filename = (
+        f"org-analyzer-findings-"
+        f"{snap.snapshot_at.strftime('%Y%m%d')}.csv"
+    )
+    return StreamingResponse(
+        _stream(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+def _csv_columns() -> List[str]:
+    return [
+        "finding_id", "snapshot_at", "category", "severity", "code",
+        "title", "description", "recommended_action",
+        "affected_count", "estimated_annual_savings_cents",
+        "is_ignored", "is_resolved",
+    ]
+
+
+def _csv_row(f: OrgFinding, snap: OrgAnalysisSnapshot) -> List[str]:
+    cat = (
+        f.category.value if isinstance(f.category, FindingCategory)
+        else str(f.category)
+    )
+    sev = (
+        f.severity.value if isinstance(f.severity, FindingSeverity)
+        else str(f.severity)
+    )
+    return [
+        f.id,
+        snap.snapshot_at.isoformat(),
+        cat,
+        sev,
+        f.code,
+        f.title or "",
+        (f.description or "").replace("\n", " "),
+        (f.recommended_action or "").replace("\n", " "),
+        str(f.affected_count or 0),
+        ("" if f.estimated_annual_savings_cents is None
+         else str(f.estimated_annual_savings_cents)),
+        "true" if getattr(f, "is_ignored", False) else "false",
+        "true" if getattr(f, "is_resolved", False) else "false",
+    ]
 
 
 @router.get(
@@ -438,6 +583,249 @@ async def unignore_finding(
     row.ignore_reason = None
     await db.commit()
     return FindingResponse.from_orm(row)
+
+
+# ---------------------------------------------------------------- apply-fix
+
+
+class ApplyFixRequest(BaseModel):
+    """Optional payload selecting which sample-row ids to act on. When
+    omitted, the service acts on every sample row in the finding's
+    evidence (useful when the finding has only one target)."""
+    target_user_sf_ids: Optional[List[str]] = None
+
+
+class ApplyFixResponse(BaseModel):
+    finding_id: str
+    code: str
+    succeeded_count: int
+    failed_count: int
+    details: List[Dict[str, Any]]
+    error: Optional[str] = None
+    is_resolved: bool = False
+
+
+@router.post(
+    "/orgs/{org_id}/org-analyzer/findings/{finding_id}/apply-fix",
+    response_model=ApplyFixResponse,
+)
+async def apply_finding_fix(
+    org_id: str,
+    finding_id: str,
+    payload: ApplyFixRequest,
+    request: Request,
+    current_org_id: str = Depends(get_current_org),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> ApplyFixResponse:
+    """Execute the Salesforce write-back implied by a finding.
+
+    Supported codes today: LICENSE_INACTIVE_USER, LICENSE_NEVER_LOGGED_IN
+    (both deactivate the affected User). Other codes return a 200 with
+    a clear `error` field so the UI can show the message instead of
+    rendering a button that does nothing.
+
+    Mirrors ReportingGraphService's authz + audit pattern (ORG_ADMIN
+    gate + AuditLog row per PATCH).
+    """
+    _enforce_same_org(org_id, current_org_id)
+    # Load the finding
+    finding_q = await db.execute(
+        select(OrgFinding).where(
+            OrgFinding.organization_id == org_id,
+            OrgFinding.id == finding_id,
+        )
+    )
+    finding = finding_q.scalar_one_or_none()
+    if finding is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    actor_ip = request.client.host if request.client else None
+
+    service = ApplyFixService(db, org_id)
+    try:
+        result = await service.apply_fix(
+            finding=finding,
+            actor_email=actor_email,
+            actor_ip=actor_ip,
+            target_user_sf_ids=payload.target_user_sf_ids,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    return ApplyFixResponse(
+        finding_id=result.finding_id,
+        code=result.code,
+        succeeded_count=result.succeeded_count,
+        failed_count=result.failed_count,
+        details=result.details,
+        error=result.error,
+        is_resolved=bool(finding.is_resolved),
+    )
+
+
+# ---------------------------------------------------------------- brand
+
+
+class BrandRow(BaseModel):
+    firm_name: Optional[str] = None
+    accent_hex: Optional[str] = Field(default=None, max_length=7)
+    has_logo: bool = False
+
+
+class BrandUpdate(BaseModel):
+    firm_name: Optional[str] = Field(default=None, max_length=255)
+    accent_hex: Optional[str] = Field(default=None, max_length=7)
+
+
+_HEX_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_MAX_LOGO_BYTES = 256 * 1024  # 256KB cap
+_ALLOWED_LOGO_MIMES = {"image/png", "image/jpeg", "image/svg+xml"}
+
+
+def _validate_accent(hex_: Optional[str]) -> Optional[str]:
+    if hex_ is None or hex_ == "":
+        return None
+    if not _HEX_PATTERN.match(hex_):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="accent_hex must be in #RRGGBB form.",
+        )
+    return hex_
+
+
+async def _get_brand_row(db: AsyncSession, org_id: str) -> Optional[BrandSettings]:
+    res = await db.execute(
+        select(BrandSettings).where(BrandSettings.organization_id == org_id)
+    )
+    return res.scalar_one_or_none()
+
+
+@router.get(
+    "/orgs/{org_id}/org-analyzer/brand",
+    response_model=BrandRow,
+)
+async def get_brand(
+    org_id: str,
+    current_org_id: str = Depends(get_current_org),
+    db: AsyncSession = Depends(get_database),
+) -> BrandRow:
+    """Read brand settings (firm name + accent + whether a logo is set).
+
+    The logo bytes themselves come from a separate /brand/logo endpoint
+    so JSON payloads stay small.
+    """
+    _enforce_same_org(org_id, current_org_id)
+    row = await _get_brand_row(db, org_id)
+    if row is None:
+        return BrandRow(firm_name=None, accent_hex=None, has_logo=False)
+    return BrandRow(
+        firm_name=row.firm_name,
+        accent_hex=row.accent_hex,
+        has_logo=bool(row.logo_bytes),
+    )
+
+
+@router.put(
+    "/orgs/{org_id}/org-analyzer/brand",
+    response_model=BrandRow,
+)
+async def update_brand(
+    org_id: str,
+    payload: BrandUpdate,
+    current_org_id: str = Depends(get_current_org),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> BrandRow:
+    """Upsert firm name + accent color. Logo lives at /brand/logo."""
+    _enforce_same_org(org_id, current_org_id)
+    accent = _validate_accent(payload.accent_hex)
+    row = await _get_brand_row(db, org_id)
+    if row is None:
+        row = BrandSettings(
+            organization_id=org_id,
+            firm_name=payload.firm_name,
+            accent_hex=accent,
+            updated_by=actor_email,
+        )
+        db.add(row)
+    else:
+        row.firm_name = payload.firm_name
+        row.accent_hex = accent
+        row.updated_by = actor_email
+    await db.commit()
+    return BrandRow(
+        firm_name=row.firm_name,
+        accent_hex=row.accent_hex,
+        has_logo=bool(row.logo_bytes),
+    )
+
+
+@router.post(
+    "/orgs/{org_id}/org-analyzer/brand/logo",
+    response_model=BrandRow,
+)
+async def upload_brand_logo(
+    org_id: str,
+    file: UploadFile = File(...),
+    current_org_id: str = Depends(get_current_org),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> BrandRow:
+    """Upload the firm logo. Stored as bytes on the brand_settings row
+    (no object-store dep). 256KB max; PNG / JPEG / SVG only."""
+    _enforce_same_org(org_id, current_org_id)
+    if file.content_type not in _ALLOWED_LOGO_MIMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unsupported logo type {file.content_type!r}. Use PNG, "
+                "JPEG, or SVG."
+            ),
+        )
+    data = await file.read()
+    if len(data) > _MAX_LOGO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Logo exceeds the {_MAX_LOGO_BYTES // 1024}KB limit.",
+        )
+
+    row = await _get_brand_row(db, org_id)
+    if row is None:
+        row = BrandSettings(
+            organization_id=org_id,
+            logo_bytes=data,
+            logo_mime=file.content_type,
+            updated_by=actor_email,
+        )
+        db.add(row)
+    else:
+        row.logo_bytes = data
+        row.logo_mime = file.content_type
+        row.updated_by = actor_email
+    await db.commit()
+    return BrandRow(
+        firm_name=row.firm_name,
+        accent_hex=row.accent_hex,
+        has_logo=True,
+    )
+
+
+@router.get("/orgs/{org_id}/org-analyzer/brand/logo")
+async def get_brand_logo(
+    org_id: str,
+    current_org_id: str = Depends(get_current_org),
+    db: AsyncSession = Depends(get_database),
+) -> Response:
+    """Stream the firm logo bytes back. 404 if no logo set."""
+    _enforce_same_org(org_id, current_org_id)
+    row = await _get_brand_row(db, org_id)
+    if not row or not row.logo_bytes:
+        raise HTTPException(status_code=404, detail="No brand logo set.")
+    return Response(
+        content=row.logo_bytes,
+        media_type=row.logo_mime or "application/octet-stream",
+    )
 
 
 @router.get(
@@ -682,7 +1070,9 @@ async def download_report(
     org_name = org.name if org and org.name else "Salesforce Org"
 
     try:
-        from app.services.org_analyzer_pdf import build_report_pdf
+        from app.services.org_analyzer_pdf import (
+            BrandContext, build_report_pdf,
+        )
     except Exception as e:
         logger.exception("PDF library not available: %s", e)
         raise HTTPException(
@@ -690,10 +1080,31 @@ async def download_report(
             detail="PDF generation unavailable. Check server logs.",
         )
 
+    # Optional white-labeling: pull brand settings + encode the logo as
+    # base64 so the PDF can embed it inline (avoids a network fetch
+    # from inside weasyprint).
+    brand_row = await _get_brand_row(db, org_id)
+    brand_ctx: Optional[BrandContext] = None
+    if brand_row is not None and (
+        brand_row.firm_name or brand_row.accent_hex or brand_row.logo_bytes
+    ):
+        import base64
+        logo_b64 = (
+            base64.b64encode(brand_row.logo_bytes).decode("ascii")
+            if brand_row.logo_bytes else None
+        )
+        brand_ctx = BrandContext(
+            firm_name=brand_row.firm_name,
+            accent_hex=brand_row.accent_hex,
+            logo_mime=brand_row.logo_mime,
+            logo_b64=logo_b64,
+        )
+
     pdf_bytes = build_report_pdf(
         org_name=org_name,
         snapshot=snap,
         findings=findings,
+        brand=brand_ctx,
     )
     filename = (
         f"org-analyzer-report-"

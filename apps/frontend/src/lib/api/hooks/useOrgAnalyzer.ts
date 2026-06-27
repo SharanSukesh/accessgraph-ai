@@ -46,6 +46,13 @@ export interface OrgFinding {
   ignored_at: string | null
   ignored_by: string | null
   ignore_reason: string | null
+  // v1.8 — "Apply fix" SF write-back state. has_apply_fix tells the
+  // UI whether to render the button; is_resolved hides the finding by
+  // default like is_ignored does.
+  is_resolved?: boolean
+  resolved_at?: string | null
+  resolved_by?: string | null
+  has_apply_fix?: boolean
 }
 
 export interface SnapshotSummary {
@@ -71,6 +78,31 @@ export interface SnapshotSummary {
   is_sandbox?: boolean
   is_trial?: boolean
   is_paying_org?: boolean
+  // v1.8 — narrative summary + delta-vs-prior-snapshot. Both hide their
+  // cards when missing so old snapshots render cleanly.
+  executive_summary?: string | null
+  delta?: {
+    prior_snapshot_id?: string | null
+    prior_snapshot_at?: string | null
+    new_high_critical?: number | null
+    new_findings_total?: number | null
+  } | null
+}
+
+export interface BrandSettings {
+  firm_name: string | null
+  accent_hex: string | null
+  has_logo: boolean
+}
+
+export interface ApplyFixResponse {
+  finding_id: string
+  code: string
+  succeeded_count: number
+  failed_count: number
+  details: Array<Record<string, any>>
+  error: string | null
+  is_resolved: boolean
 }
 
 export interface FindingsPage {
@@ -282,6 +314,83 @@ export const SEVERITY_COLORS: Record<FindingSeverity, string> = {
   medium: 'bg-amber-500 text-white',
   low: 'bg-yellow-500 text-gray-900',
   info: 'bg-blue-500 text-white',
+}
+
+// ----- v1.8: Apply-fix + brand settings -----
+
+export function useApplyFix(orgId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      findingId,
+      target_user_sf_ids,
+    }: {
+      findingId: string
+      target_user_sf_ids?: string[]
+    }) =>
+      apiClient.post<ApplyFixResponse>(
+        endpoints.orgAnalyzerApplyFix(orgId, findingId),
+        target_user_sf_ids ? { target_user_sf_ids } : {},
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: orgAnalyzerKeys.latest(orgId) })
+      qc.invalidateQueries({
+        queryKey: [...orgAnalyzerKeys.all, 'findings', orgId],
+      })
+    },
+  })
+}
+
+const brandKey = (orgId: string) => [...orgAnalyzerKeys.all, 'brand', orgId] as const
+
+export function useBrandSettings(orgId: string) {
+  return useQuery({
+    queryKey: brandKey(orgId),
+    queryFn: async () =>
+      apiClient.get<BrandSettings>(endpoints.orgAnalyzerBrand(orgId)),
+    enabled: !!orgId,
+  })
+}
+
+export function useUpdateBrandSettings(orgId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: {
+      firm_name?: string | null
+      accent_hex?: string | null
+    }) =>
+      apiClient.put<BrandSettings>(endpoints.orgAnalyzerBrand(orgId), payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: brandKey(orgId) })
+    },
+  })
+}
+
+export function useUploadBrandLogo(orgId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    // multipart/form-data — fetch directly so we don't fight the JSON
+    // shape of apiClient. credentials: include matches the rest of the
+    // app's auth-cookie convention.
+    mutationFn: async (file: File): Promise<BrandSettings> => {
+      const formData = new FormData()
+      formData.append('file', file)
+      const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const res = await fetch(`${base}${endpoints.orgAnalyzerBrandLogo(orgId)}`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Upload failed (${res.status})`)
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: brandKey(orgId) })
+    },
+  })
 }
 
 export function formatMoneyCents(cents: number | null | undefined): string {

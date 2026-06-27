@@ -248,6 +248,148 @@ KNOWN_FREE_SKU_PATTERNS: tuple = (
 )
 
 
+def _format_money_cents(cents: int) -> str:
+    """Compact currency formatting used in the exec summary narrative."""
+    if cents == 0:
+        return "$0"
+    dollars = cents / 100.0
+    if dollars >= 1_000_000:
+        return f"${dollars / 1_000_000:.2f}M"
+    if dollars >= 10_000:
+        return f"${dollars / 1_000:.1f}K"
+    return f"${dollars:,.0f}"
+
+
+_HEALTH_BAND = (
+    (90, "excellent"),
+    (75, "good"),
+    (60, "needs attention"),
+    (40, "concerning"),
+    (0,  "critical"),
+)
+
+
+def _health_band(score: int) -> str:
+    """Map a 0-100 score to a one-word band the exec summary references."""
+    for threshold, label in _HEALTH_BAND:
+        if score >= threshold:
+            return label
+    return "critical"
+
+
+def _compose_executive_summary(
+    ctx: "AnalyzerContext",
+    drafts: List["FindingDraft"],
+    by_sev: Dict[str, int],
+    by_cat: Dict[str, int],
+    total_savings_cents: int,
+    health_score: int,
+    delta: Dict[str, Any],
+    prior_snapshot: Optional["OrgAnalysisSnapshot"],
+) -> str:
+    """Compose a plain-English executive summary for the analyzer report.
+
+    Template-based for v1 (no LLM) so it's deterministic and ships
+    without external API dependencies. The shape: one paragraph
+    covering count + total $, top opportunity, health score band, and
+    a delta sentence if a prior snapshot exists.
+    """
+    n_findings = len(drafts)
+    if n_findings == 0:
+        return (
+            "This org's analyzer run produced zero findings — the analyzer "
+            "did not identify any license waste, configuration bloat, or "
+            "automation-hygiene issues at this time. Re-run after the next "
+            "sync to keep the analysis current."
+        )
+
+    # Edition prefix is the first thing the reader sees so it's clear
+    # this is e.g. a Developer-Edition org and savings are illustrative.
+    if not ctx.is_paying_org:
+        edition_label = (
+            "Sandbox" if ctx.is_sandbox
+            else "Trial" if ctx.is_trial
+            else ctx.org_type or "non-production"
+        )
+        edition_prefix = (
+            f"This {edition_label} Salesforce org "
+        )
+    else:
+        edition_prefix = (
+            f"This {ctx.org_type or 'production'} Salesforce org "
+        )
+
+    # Top opportunity = highest-savings active finding
+    top_finding = max(
+        (d for d in drafts if d.estimated_annual_savings_cents),
+        key=lambda d: d.estimated_annual_savings_cents or 0,
+        default=None,
+    )
+
+    sentences: List[str] = []
+
+    # Sentence 1: count + total savings
+    if total_savings_cents > 0:
+        sentences.append(
+            f"{edition_prefix}has {n_findings} findings totalling "
+            f"{_format_money_cents(total_savings_cents)} of identified "
+            f"annual savings."
+        )
+    else:
+        non_billable_note = (
+            " (savings are not attributed because this is a non-production org)"
+            if not ctx.is_paying_org else ""
+        )
+        sentences.append(
+            f"{edition_prefix}has {n_findings} findings{non_billable_note}."
+        )
+
+    # Sentence 2: top opportunity (+ category context if we have it)
+    if top_finding and top_finding.estimated_annual_savings_cents:
+        top_cat_label: Optional[str] = None
+        if by_cat:
+            top_cat_key = max(by_cat, key=by_cat.get)  # category with most findings
+            top_cat_label = top_cat_key.replace("_", " ")
+        cat_clause = (
+            f" — the {top_cat_label} category contributes the most findings"
+            if top_cat_label else ""
+        )
+        sentences.append(
+            f"The largest single opportunity is "
+            f"{_format_money_cents(top_finding.estimated_annual_savings_cents)}/yr "
+            f"from \"{top_finding.title}\"{cat_clause}."
+        )
+
+    # Sentence 3: severity breakdown
+    crit = by_sev.get("critical", 0)
+    high = by_sev.get("high", 0)
+    if crit or high:
+        sentences.append(
+            f"The Org Health Score of {health_score}/100 is in the "
+            f"\"{_health_band(health_score)}\" band, driven mainly by "
+            f"{crit} Critical and {high} High findings."
+        )
+    else:
+        sentences.append(
+            f"The Org Health Score of {health_score}/100 is in the "
+            f"\"{_health_band(health_score)}\" band; no Critical or High "
+            f"severity findings were detected."
+        )
+
+    # Sentence 4: delta vs prior run (only if there's a prior snapshot
+    # and something actually changed)
+    if prior_snapshot is not None and delta.get("new_high_critical") is not None:
+        new_hc = delta["new_high_critical"]
+        if new_hc:
+            sentences.append(
+                f"{new_hc} new High/Critical findings have emerged since the "
+                f"prior analysis on "
+                f"{prior_snapshot.snapshot_at.strftime('%Y-%m-%d')}."
+            )
+
+    return " ".join(sentences)
+
+
 def _is_known_free_sku(label: str) -> bool:
     """Case-insensitive substring match against the bundled-license list."""
     if not label:
@@ -548,6 +690,51 @@ class OrgAnalyzerService:
         for r in rows:
             merged[r.license_name] = int(r.monthly_cost_cents)
         return merged
+
+    async def _previous_snapshot(self) -> Optional["OrgAnalysisSnapshot"]:
+        """The snapshot immediately prior to the one we're about to write.
+        Drives the executive-summary's net-new-since-last-run claim and
+        the Overview tab's delta chip. Returns None on first run."""
+        from sqlalchemy import desc
+        result = await self.db.execute(
+            select(OrgAnalysisSnapshot)
+            .where(OrgAnalysisSnapshot.organization_id == self.org_id)
+            .order_by(desc(OrgAnalysisSnapshot.snapshot_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _compute_delta(
+        by_sev: Dict[str, int],
+        prior_snapshot: Optional["OrgAnalysisSnapshot"],
+    ) -> Dict[str, Any]:
+        """Diff the current severity counts against the previous snapshot.
+
+        Surfaces as a `+N new High/Critical since <date>` chip on the
+        Overview tab. Returns None values when there's no prior snapshot
+        so the frontend can hide the chip on first run.
+        """
+        if prior_snapshot is None:
+            return {
+                "prior_snapshot_id": None,
+                "prior_snapshot_at": None,
+                "new_high_critical": None,
+                "new_findings_total": None,
+            }
+        prior = prior_snapshot.findings_by_severity or {}
+        # Net new = current - prior for each severity, floored at 0
+        # (resolved/ignored work resolves to a negative; we don't surface
+        # that as "negative new", it just reduces the count).
+        new_hi = max(0, by_sev.get("high", 0) - prior.get("high", 0))
+        new_crit = max(0, by_sev.get("critical", 0) - prior.get("critical", 0))
+        new_total = max(0, sum(by_sev.values()) - sum(prior.values()))
+        return {
+            "prior_snapshot_id": prior_snapshot.id,
+            "prior_snapshot_at": prior_snapshot.snapshot_at.isoformat(),
+            "new_high_critical": new_hi + new_crit,
+            "new_findings_total": new_total,
+        }
 
     @staticmethod
     def _price_for_label(
@@ -2371,6 +2558,23 @@ class OrgAnalyzerService:
             "license_utilization": license_utilization,
         }
 
+        # Compose the executive-summary narrative + delta vs prior snapshot
+        # BEFORE constructing the snapshot row so both bake into the same
+        # write. The PDF + dashboard both read it from the snapshot.
+        prior_snapshot = await self._previous_snapshot()
+        delta = self._compute_delta(by_sev, prior_snapshot)
+        metrics["delta_vs_prior"] = delta
+        exec_summary = _compose_executive_summary(
+            ctx=ctx,
+            drafts=drafts,
+            by_sev=by_sev,
+            by_cat=by_cat,
+            total_savings_cents=total_savings,
+            health_score=health_score,
+            delta=delta,
+            prior_snapshot=prior_snapshot,
+        )
+
         snapshot = OrgAnalysisSnapshot(
             organization_id=self.org_id,
             snapshot_at=started_at,
@@ -2381,6 +2585,7 @@ class OrgAnalyzerService:
             org_limits=ctx.org_limits,
             metrics=metrics,
             duration_ms=int((time.monotonic() - start_ts) * 1000),
+            executive_summary=exec_summary,
         )
         self.db.add(snapshot)
         await self.db.flush()

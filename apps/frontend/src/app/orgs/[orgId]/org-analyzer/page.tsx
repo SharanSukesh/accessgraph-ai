@@ -48,6 +48,8 @@ import {
   CATEGORY_LABELS,
   SEVERITY_LABELS,
   formatMoneyCents,
+  useApplyFix,
+  useBrandSettings,
   useIgnoreFinding,
   useLicensePriceBook,
   useOrgAnalyzerFindings,
@@ -55,13 +57,17 @@ import {
   useOrgAnalyzerLatest,
   useRunOrgAnalyzer,
   useUnignoreFinding,
+  useUpdateBrandSettings,
   useUpdateLicensePriceBook,
+  useUploadBrandLogo,
   type FindingCategory,
   type FindingSeverity,
   type OrgFinding,
   type PriceBookRow,
+  type SnapshotSummary,
 } from '@/lib/api/hooks/useOrgAnalyzer'
 import { endpoints } from '@/lib/api/endpoints'
+import { PageHeader } from '@/components/shared/PageHeader'
 
 type Tab = 'overview' | 'findings' | 'savings' | 'trends' | 'price-book'
 
@@ -125,52 +131,47 @@ export default function OrgAnalyzerPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/40">
-            <Stethoscope className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Org Analyzer
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              License waste, configuration bloat, automation hygiene,
-              security posture, storage risk &mdash; with dollar-impact
-              estimates.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasRun && (
-            <a
-              href={`${API_BASE}${endpoints.orgAnalyzerReportPdf(orgId)}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+      <PageHeader
+        icon={Stethoscope}
+        title="Org Analyzer"
+        subtitle={
+          <>
+            License waste, configuration bloat, automation hygiene,
+            security posture, storage risk &mdash; with dollar-impact
+            estimates.
+          </>
+        }
+        actions={
+          <>
+            {hasRun && (
+              <a
+                href={`${API_BASE}${endpoints.orgAnalyzerReportPdf(orgId)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </a>
+            )}
+            <Button
+              variant="primary"
+              size="md"
+              disabled={run.isPending}
+              onClick={handleRun}
             >
-              <Download className="h-4 w-4" />
-              Download PDF
-            </a>
-          )}
-          <Button
-            variant="primary"
-            size="md"
-            disabled={run.isPending}
-            onClick={handleRun}
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${run.isPending ? 'animate-spin' : ''}`}
-            />
-            {run.isPending
-              ? 'Analyzing…'
-              : hasRun
-                ? 'Re-run analysis'
-                : 'Run analysis'}
-          </Button>
-        </div>
-      </div>
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${run.isPending ? 'animate-spin' : ''}`}
+              />
+              {run.isPending
+                ? 'Analyzing…'
+                : hasRun
+                  ? 'Re-run analysis'
+                  : 'Run analysis'}
+            </Button>
+          </>
+        }
+      />
 
       {/* Toast */}
       {toast && (
@@ -238,7 +239,11 @@ export default function OrgAnalyzerPage() {
           </div>
 
           {tab === 'overview' && (
-            <OverviewTab summary={summary} history={history.data ?? []} />
+            <OverviewTab
+              orgId={orgId}
+              summary={summary}
+              history={history.data ?? []}
+            />
           )}
           {tab === 'findings' && <FindingsTab orgId={orgId} />}
           {tab === 'savings' && <SavingsTab orgId={orgId} />}
@@ -254,7 +259,15 @@ export default function OrgAnalyzerPage() {
 
 // ----------------------------------------------------------- Overview tab
 
-function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
+function OverviewTab({
+  orgId,
+  summary,
+  history,
+}: {
+  orgId: string
+  summary: SnapshotSummary
+  history: any[]
+}) {
   const sevCounts = (summary.findings_by_severity || {}) as Record<string, number>
   const catCounts = (summary.findings_by_category || {}) as Record<string, number>
   const topCategories = Object.entries(catCounts)
@@ -305,43 +318,70 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <StatCard
-          label="Org health score"
-          value={healthScore != null ? `${healthScore}` : '—'}
-          subValue={healthScore != null ? '/ 100' : undefined}
-          icon={Stethoscope}
-          accent={healthAccent}
+      {/* Hero row: Org Health Score becomes the visual anchor of the
+          page. Sits left, with the four secondary stat cards stacked
+          to its right so the score reads first at a glance. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <HeroHealthCard
+          score={healthScore ?? null}
+          rubric={summary.metrics?.org_health_rubric}
         />
-        <StatCard
-          label="Findings"
-          value={activeFindings.toString()}
-          subValue={ignoredCount ? `(+${ignoredCount} ignored)` : undefined}
-          icon={AlertTriangle}
-          accent="text-indigo-600 dark:text-indigo-400"
-        />
-        <StatCard
-          label="Est. annual savings"
-          value={formatMoneyCents(activeSavings)}
-          icon={DollarSign}
-          accent="text-green-600 dark:text-green-400"
-        />
-        <StatCard
-          label="High + Critical"
-          value={(
-            (sevCounts.critical || 0) + (sevCounts.high || 0)
-          ).toString()}
-          icon={AlertCircle}
-          accent="text-red-600 dark:text-red-400"
-        />
-        <StatCard
-          label="Last run"
-          value={snapshotAt}
-          icon={FileText}
-          accent="text-gray-700 dark:text-gray-300"
-          small
-        />
+        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+          <StatCard
+            label="Findings"
+            value={activeFindings.toString()}
+            subValue={ignoredCount ? `(+${ignoredCount} ignored)` : undefined}
+            icon={AlertTriangle}
+            accent="text-indigo-600 dark:text-indigo-400"
+          />
+          <StatCard
+            label="Est. annual savings"
+            value={formatMoneyCents(activeSavings)}
+            icon={DollarSign}
+            accent="text-green-600 dark:text-green-400"
+          />
+          <StatCard
+            label="High + Critical"
+            value={(
+              (sevCounts.critical || 0) + (sevCounts.high || 0)
+            ).toString()}
+            icon={AlertCircle}
+            accent="text-red-600 dark:text-red-400"
+          />
+          <StatCard
+            label="Last run"
+            value={snapshotAt}
+            subValue={
+              summary.delta?.new_high_critical
+                ? `+${summary.delta.new_high_critical} new H/C`
+                : undefined
+            }
+            icon={FileText}
+            accent="text-gray-700 dark:text-gray-300"
+            small
+          />
+        </div>
       </div>
+
+      {/* Executive summary — narrative paragraph composed at run time.
+          Hidden on snapshots from before v1.8 where the field is null. */}
+      {summary.executive_summary && (
+        <Card variant="bordered">
+          <CardContent className="p-4">
+            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">
+              Executive summary
+            </p>
+            <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-200">
+              {summary.executive_summary}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Quick wins — the top-5-by-savings shortlist so the consultant
+          knows where to focus. Reuses the existing findings query. */}
+      <QuickWinsPanel orgId={orgId} />
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card variant="bordered">
@@ -384,6 +424,157 @@ function OverviewTab({ summary, history }: { summary: any; history: any[] }) {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// Hero card for the Org Health Score — visually dominates the
+// Overview tab so the consultant sees the single most important
+// metric at a glance. A coloured ring around the score signals band.
+function HeroHealthCard({
+  score,
+  rubric,
+}: {
+  score: number | null
+  rubric?: Record<string, any>
+}) {
+  const accent =
+    score == null
+      ? { ring: 'text-gray-400', text: 'text-gray-400', band: 'No data' }
+      : score >= 80
+        ? { ring: 'text-green-500', text: 'text-green-600 dark:text-green-400', band: 'Excellent' }
+        : score >= 60
+          ? { ring: 'text-amber-500', text: 'text-amber-600 dark:text-amber-400', band: 'Needs attention' }
+          : { ring: 'text-red-500', text: 'text-red-600 dark:text-red-400', band: 'Critical' }
+  // Build the SVG ring: 0-100 → 0-360deg arc length.
+  const pct = score == null ? 0 : Math.max(0, Math.min(100, score))
+  const radius = 52
+  const circ = 2 * Math.PI * radius
+  const dash = (pct / 100) * circ
+  return (
+    <Card variant="bordered" className="overflow-hidden">
+      <CardContent className="p-6 flex items-center gap-6">
+        <div className="relative flex-shrink-0">
+          <svg className="w-28 h-28 -rotate-90" viewBox="0 0 120 120" aria-hidden>
+            <circle
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="10"
+              className="text-gray-200 dark:text-gray-800"
+            />
+            <circle
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="10"
+              strokeLinecap="round"
+              strokeDasharray={`${dash} ${circ}`}
+              className={accent.ring}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-3xl font-bold ${accent.text}`}>
+              {score == null ? '—' : score}
+            </span>
+          </div>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
+            Org Health Score
+          </p>
+          <p className={`text-lg font-semibold ${accent.text}`}>{accent.band}</p>
+          {rubric && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {rubric.deduction} pts deducted from a starting score of 100,
+              weighted by severity.
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Top-5-by-savings shortlist — gives the consultant a "fix these
+// first" panel right on the Overview tab. Reuses the existing
+// findings query, filters to actionable items, sorts by dollar.
+function QuickWinsPanel({ orgId }: { orgId: string }) {
+  const findings = useOrgAnalyzerFindings(orgId, { limit: 500 })
+  const wins = useMemo(() => {
+    const all = findings.data?.findings ?? []
+    return [...all]
+      .filter(
+        f =>
+          !f.is_ignored
+          && !f.is_resolved
+          && (f.estimated_annual_savings_cents ?? 0) > 0,
+      )
+      .sort(
+        (a, b) =>
+          (b.estimated_annual_savings_cents ?? 0)
+          - (a.estimated_annual_savings_cents ?? 0),
+      )
+      .slice(0, 5)
+  }, [findings.data])
+
+  if (findings.isLoading) {
+    return (
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle>Quick wins</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TableSkeleton rows={4} />
+        </CardContent>
+      </Card>
+    )
+  }
+  if (wins.length === 0) {
+    return null  // No actionable $-bearing findings → don't show the card.
+  }
+  return (
+    <Card variant="bordered">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>Quick wins — top 5 by annual savings</span>
+          <span className="text-xs font-normal text-gray-500">
+            Sorted by estimated $/yr
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ol className="divide-y divide-gray-200 dark:divide-gray-800">
+          {wins.map((f, i) => (
+            <li
+              key={f.id}
+              className="py-2.5 flex items-start gap-3 first:pt-0 last:pb-0"
+            >
+              <span className="text-xs font-mono text-gray-400 w-5 flex-shrink-0 mt-0.5">
+                {i + 1}.
+              </span>
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${severityBadgeClasses(f.severity)} flex-shrink-0 mt-0.5`}
+              >
+                {SEVERITY_LABELS[f.severity]}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{f.title}</p>
+                <p className="text-xs text-gray-500 truncate">
+                  {CATEGORY_LABELS[f.category]}
+                </p>
+              </div>
+              <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
+                {formatMoneyCents(f.estimated_annual_savings_cents)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -493,6 +684,10 @@ function FindingsTab({ orgId }: { orgId: string }) {
   })
   const ignore = useIgnoreFinding(orgId)
   const unignore = useUnignoreFinding(orgId)
+  const applyFix = useApplyFix(orgId)
+  const [fixResult, setFixResult] = useState<
+    { kind: 'success' | 'error' | 'partial'; message: string } | null
+  >(null)
 
   // Keep `selected` in sync with refreshed data — after ignore/unignore
   // the panel should reflect the new is_ignored state.
@@ -515,6 +710,39 @@ function FindingsTab({ orgId }: { orgId: string }) {
   const handleUnignore = async () => {
     if (!refreshedSelected) return
     await unignore.mutateAsync(refreshedSelected.id)
+  }
+
+  const handleApplyFix = async () => {
+    if (!refreshedSelected) return
+    setFixResult(null)
+    try {
+      const result = await applyFix.mutateAsync({
+        findingId: refreshedSelected.id,
+      })
+      if (result.error) {
+        setFixResult({ kind: 'error', message: result.error })
+      } else if (result.failed_count > 0 && result.succeeded_count > 0) {
+        setFixResult({
+          kind: 'partial',
+          message: `Partial: ${result.succeeded_count} succeeded, ${result.failed_count} failed.`,
+        })
+      } else if (result.failed_count > 0) {
+        setFixResult({
+          kind: 'error',
+          message: `All ${result.failed_count} write-backs failed.`,
+        })
+      } else {
+        setFixResult({
+          kind: 'success',
+          message: `Applied fix to ${result.succeeded_count} target${result.succeeded_count === 1 ? '' : 's'} in Salesforce.`,
+        })
+      }
+    } catch (err: any) {
+      setFixResult({
+        kind: 'error',
+        message: err?.data?.detail || err?.message || 'Apply-fix failed.',
+      })
+    }
   }
 
   const filtered = useMemo(() => {
@@ -590,6 +818,21 @@ function FindingsTab({ orgId }: { orgId: string }) {
               />
               Show ignored
             </label>
+            <a
+              href={
+                `${API_BASE}${endpoints.orgAnalyzerFindingsCsv(orgId)}?`
+                + new URLSearchParams({
+                  ...(category ? { category } : {}),
+                  ...(severity ? { severity } : {}),
+                  ...(includeIgnored ? { include_ignored: 'true' } : {}),
+                }).toString()
+              }
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+              title="Download the filtered findings list as CSV"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </a>
           </div>
           {findings.isLoading ? (
             <TableSkeleton rows={6} />
@@ -617,6 +860,12 @@ function FindingsTab({ orgId }: { orgId: string }) {
                       <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
                         <EyeOff className="h-2.5 w-2.5" />
                         Ignored
+                      </span>
+                    )}
+                    {f.is_resolved && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 inline-flex items-center gap-1">
+                        <Check className="h-2.5 w-2.5" />
+                        Resolved
                       </span>
                     )}
                     {f.evidence?.non_billable_org && (
@@ -673,6 +922,12 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     Ignored
                   </span>
                 )}
+                {refreshedSelected.is_resolved && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 inline-flex items-center gap-1">
+                    <Check className="h-2.5 w-2.5" />
+                    Resolved
+                  </span>
+                )}
                 {refreshedSelected.evidence?.non_billable_org && (
                   <span
                     className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
@@ -696,6 +951,58 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     Recommended action
                   </p>
                   <p className="text-xs">{refreshedSelected.recommended_action}</p>
+                </div>
+              )}
+
+              {/* Apply-fix — only shown when the backend reports
+                  has_apply_fix for this code AND the finding isn't
+                  already resolved. Confirmation lives inline via the
+                  button label + toast so we don't add a modal. */}
+              {refreshedSelected.has_apply_fix && !refreshedSelected.is_resolved && (
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded p-2 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                    Apply fix in Salesforce
+                  </p>
+                  <p className="text-[11px] text-indigo-900 dark:text-indigo-100">
+                    This finding can be auto-fixed:{' '}
+                    {refreshedSelected.code === 'LICENSE_INACTIVE_USER'
+                      || refreshedSelected.code === 'LICENSE_NEVER_LOGGED_IN'
+                      ? 'deactivate the affected users (User.IsActive = false). Each PATCH is audit-logged.'
+                      : 'the backend will apply the change.'}
+                  </p>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={applyFix.isPending}
+                    onClick={handleApplyFix}
+                  >
+                    {applyFix.isPending
+                      ? 'Applying…'
+                      : `Apply fix (${refreshedSelected.affected_count} target${refreshedSelected.affected_count === 1 ? '' : 's'})`}
+                  </Button>
+                  {fixResult && (
+                    <p
+                      className={`text-[11px] ${
+                        fixResult.kind === 'success'
+                          ? 'text-green-700 dark:text-green-300'
+                          : fixResult.kind === 'partial'
+                            ? 'text-amber-700 dark:text-amber-300'
+                            : 'text-red-700 dark:text-red-300'
+                      }`}
+                    >
+                      {fixResult.message}
+                    </p>
+                  )}
+                </div>
+              )}
+              {refreshedSelected.is_resolved && refreshedSelected.resolved_at && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2">
+                  <p className="text-xs text-green-800 dark:text-green-200">
+                    <strong>Resolved</strong>{' '}
+                    {refreshedSelected.resolved_by ? `by ${refreshedSelected.resolved_by} ` : ''}
+                    on{' '}
+                    {new Date(refreshedSelected.resolved_at).toLocaleString()}.
+                  </p>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1270,6 +1577,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
   const update = useUpdateLicensePriceBook(orgId)
   const [rows, setRows] = useState<PriceBookRow[] | null>(null)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
+  const [brandOpen, setBrandOpen] = useState(false)
 
   const display = rows ?? pb.data?.rows ?? []
 
@@ -1442,7 +1750,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
             </tbody>
           </table>
         )}
-        <div className="mt-4 flex items-center gap-2">
+        <div className="mt-4 flex items-center gap-2 flex-wrap">
           <Button variant="secondary" size="sm" onClick={handleAdd}>
             <PlayCircle className="h-4 w-4 mr-1.5" /> Add SKU
           </Button>
@@ -1456,6 +1764,13 @@ function PriceBookTab({ orgId }: { orgId: string }) {
               {update.isPending ? 'Saving…' : 'Save price book'}
             </Button>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setBrandOpen(true)}
+          >
+            <Settings2 className="h-4 w-4 mr-1.5" /> Brand settings
+          </Button>
           {savedMessage && (
             <span className="text-xs text-gray-600 dark:text-gray-400">
               <Info className="inline h-3.5 w-3.5 mr-1" />
@@ -1464,6 +1779,174 @@ function PriceBookTab({ orgId }: { orgId: string }) {
           )}
         </div>
       </CardContent>
+      {brandOpen && (
+        <BrandSettingsModal orgId={orgId} onClose={() => setBrandOpen(false)} />
+      )}
     </Card>
+  )
+}
+
+// Brand settings modal — firm name + accent color + logo upload.
+// Renders the white-labeled report by the next PDF download. All UI;
+// no analyzer-logic changes.
+function BrandSettingsModal({
+  orgId,
+  onClose,
+}: {
+  orgId: string
+  onClose: () => void
+}) {
+  const brand = useBrandSettings(orgId)
+  const update = useUpdateBrandSettings(orgId)
+  const upload = useUploadBrandLogo(orgId)
+  const [firmName, setFirmName] = useState('')
+  const [accent, setAccent] = useState('')
+  const [saved, setSaved] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  // Seed local state once data lands. Empty fields => no override.
+  useEffect(() => {
+    if (brand.data) {
+      setFirmName(brand.data.firm_name ?? '')
+      setAccent(brand.data.accent_hex ?? '')
+    }
+  }, [brand.data])
+
+  const handleSave = async () => {
+    setSaved(null)
+    try {
+      await update.mutateAsync({
+        firm_name: firmName || null,
+        accent_hex: accent || null,
+      })
+      setSaved('Brand saved. Next PDF download uses these settings.')
+      setTimeout(() => setSaved(null), 5000)
+    } catch (err: any) {
+      setSaved(`Save failed: ${err?.data?.detail || err?.message || 'unknown'}`)
+    }
+  }
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null)
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      await upload.mutateAsync(file)
+    } catch (err: any) {
+      setUploadError(err?.message || 'Upload failed.')
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Brand settings</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              White-label the PDF report with your firm logo and accent
+              color. Leave blank to use the AccessGraph defaults.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+            aria-label="Close"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 text-sm">
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">
+              Firm name
+            </label>
+            <input
+              value={firmName}
+              onChange={e => setFirmName(e.target.value)}
+              placeholder="e.g. Acme Salesforce Consulting"
+              className="w-full px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">
+              Accent color (#RRGGBB)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                value={accent}
+                onChange={e => setAccent(e.target.value)}
+                placeholder="#1e1b4b"
+                className="flex-1 px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-mono"
+                pattern="^#[0-9A-Fa-f]{6}$"
+              />
+              {accent && /^#[0-9A-Fa-f]{6}$/.test(accent) && (
+                <span
+                  className="w-8 h-8 rounded border border-gray-300 dark:border-gray-700"
+                  style={{ backgroundColor: accent }}
+                  aria-hidden
+                />
+              )}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">
+              Firm logo (PNG / JPEG / SVG, 256KB max)
+            </label>
+            <div className="flex items-center gap-3">
+              {brand.data?.has_logo && (
+                <img
+                  src={`${API_BASE}${endpoints.orgAnalyzerBrandLogo(orgId)}?t=${Date.now()}`}
+                  alt="Current firm logo"
+                  className="h-12 max-w-[120px] object-contain rounded border border-gray-200 dark:border-gray-700 bg-white p-1"
+                />
+              )}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml"
+                onChange={handleUpload}
+                className="text-xs"
+                disabled={upload.isPending}
+              />
+            </div>
+            {upload.isPending && (
+              <p className="text-xs text-gray-500 mt-1">Uploading…</p>
+            )}
+            {uploadError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                {uploadError}
+              </p>
+            )}
+          </div>
+          {saved && (
+            <p className="text-xs text-gray-700 dark:text-gray-300 italic">
+              <Info className="inline h-3.5 w-3.5 mr-1" />
+              {saved}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 mt-6">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Close
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={update.isPending}
+            onClick={handleSave}
+          >
+            {update.isPending ? 'Saving…' : 'Save brand settings'}
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
