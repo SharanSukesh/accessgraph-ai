@@ -33,17 +33,39 @@ import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 
-const navigationItems = [
-  { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
-  { name: 'Users', path: 'users', icon: Users },
-  { name: 'Objects', path: 'objects', icon: Database },
-  { name: 'Fields', path: 'fields', icon: FileText },
-  { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
-  { name: 'Recommendations', path: 'recommendations', icon: CheckCircle },
-  { name: 'Equity', path: 'equity', icon: Scale },
-  { name: 'Graph Explorer', path: 'graph', icon: Network },
-  { name: 'Reporting Graph', path: 'reporting-graph', icon: GitBranch },
-  { name: 'Org Analyzer', path: 'org-analyzer', icon: Stethoscope },
+// Sidebar nav grouped into three semantic sections. Labels render only
+// in the expanded state; collapsed mode shows a hairline divider between
+// groups. Route paths and click behaviour are unchanged from the v1.8
+// flat list — this is purely a visual grouping.
+export const navigationSections: {
+  label: string
+  items: { name: string; path: string; icon: typeof LayoutDashboard }[]
+}[] = [
+  {
+    label: 'EXPLORE',
+    items: [
+      { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
+      { name: 'Users', path: 'users', icon: Users },
+      { name: 'Objects', path: 'objects', icon: Database },
+      { name: 'Fields', path: 'fields', icon: FileText },
+    ],
+  },
+  {
+    label: 'ANALYZE',
+    items: [
+      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
+      { name: 'Recommendations', path: 'recommendations', icon: CheckCircle },
+      { name: 'Equity', path: 'equity', icon: Scale },
+      { name: 'Org Analyzer', path: 'org-analyzer', icon: Stethoscope },
+    ],
+  },
+  {
+    label: 'VISUALIZE',
+    items: [
+      { name: 'Graph Explorer', path: 'graph', icon: Network },
+      { name: 'Reporting Graph', path: 'reporting-graph', icon: GitBranch },
+    ],
+  },
 ]
 
 export function Sidebar() {
@@ -110,10 +132,13 @@ export function Sidebar() {
     wasRunningRef.current = isJobRunning
   }, [isJobRunning, latestJobStatus])
 
-  // Build navigation with current orgId
-  const navigation = navigationItems.map(item => ({
-    ...item,
-    href: `/orgs/${orgId}/${item.path}`
+  // Build navigation with current orgId, preserving the section grouping.
+  const navigation = navigationSections.map(section => ({
+    label: section.label,
+    items: section.items.map(item => ({
+      ...item,
+      href: `/orgs/${orgId}/${item.path}`,
+    })),
   }))
 
   // Handle sync button click. The trigger POST returns instantly because
@@ -186,38 +211,60 @@ export function Sidebar() {
           </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-themed">
-          {navigation.map((item) => {
-            const Icon = item.icon
-            const isActive =
-              pathname === item.href || pathname.startsWith(item.href + '/')
+        {/* Navigation — grouped into semantic sections. Labels appear
+            only when expanded; collapsed mode shows a hairline divider
+            between groups so the visual rhythm survives. */}
+        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-themed">
+          {navigation.map((section, sectionIdx) => (
+            <div
+              key={section.label}
+              className={cn(
+                'space-y-1',
+                sectionIdx > 0 && (
+                  isExpanded
+                    ? 'mt-4'
+                    : 'mt-2 pt-2 border-t border-gray-200/60 dark:border-gray-700/60 mx-3'
+                ),
+              )}
+            >
+              {isExpanded && (
+                <div className="text-[10px] font-semibold tracking-[0.12em] text-gray-400 dark:text-gray-500 uppercase px-4 pt-1 pb-1.5 select-none">
+                  {section.label}
+                </div>
+              )}
+              {section.items.map(item => {
+                const Icon = item.icon
+                const isActive =
+                  pathname === item.href || pathname.startsWith(item.href + '/')
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                      isExpanded ? 'space-x-3 px-4 py-2.5' : 'justify-center p-3',
+                      isActive
+                        ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 ring-1 ring-primary-200 dark:ring-primary-800 shadow-sm'
+                        : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
+                    )}
+                    title={!isExpanded ? item.name : undefined}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    {isExpanded && <span className="whitespace-nowrap">{item.name}</span>}
 
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group',
-                  isExpanded ? 'space-x-3 px-4 py-3' : 'justify-center p-3',
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-400'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                )}
-                title={!isExpanded ? item.name : undefined}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0" />
-                {isExpanded && <span className="whitespace-nowrap">{item.name}</span>}
-
-                {/* Tooltip for collapsed state */}
-                {!isExpanded && (
-                  <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                    {item.name}
-                  </div>
-                )}
-              </Link>
-            )
-          })}
+                    {/* Tooltip for collapsed state — shows section label so
+                        users get context, not just a name. */}
+                    {!isExpanded && (
+                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                        <span className="text-[9px] tracking-wider text-gray-400 mr-1.5">{section.label}</span>
+                        {item.name}
+                      </div>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Footer */}
