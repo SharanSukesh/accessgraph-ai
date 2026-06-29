@@ -7,6 +7,7 @@ import { type ReactNode } from 'react'
 import { type LucideIcon } from 'lucide-react'
 import { Card } from './Card'
 import { cn } from '@/lib/utils/cn'
+import { useCountUp } from '@/lib/hooks/useCountUp'
 
 export interface MetricCardProps {
   title: string
@@ -33,6 +34,18 @@ export function MetricCard({
 }: MetricCardProps) {
   const isClickable = !!onClick
 
+  // v1.9: smooth count-up on first mount for numeric values. Strings
+  // (pre-formatted "$48.2K" / dates / etc.) render verbatim. The hook
+  // bails to the literal target if the user prefers reduced motion.
+  const numericTarget = typeof value === 'number' ? value : NaN
+  const animatedValue = useCountUp(numericTarget, 800)
+  const renderedValue: ReactNode =
+    typeof value === 'number'
+      ? Number.isFinite(animatedValue)
+        ? Math.round(animatedValue).toLocaleString()
+        : value
+      : value
+
   return (
     <Card
       variant="bordered"
@@ -51,8 +64,8 @@ export function MetricCard({
           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
             {title}
           </p>
-          <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white transition-transform duration-200 group-hover:scale-105">
-            {value}
+          <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white transition-transform duration-200 group-hover:scale-105 tabular-nums">
+            {renderedValue}
           </p>
           {change && (
             <div className="mt-2 flex items-center text-sm">
