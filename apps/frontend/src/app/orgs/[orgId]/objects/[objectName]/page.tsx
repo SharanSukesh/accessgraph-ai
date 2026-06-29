@@ -9,6 +9,8 @@ import { use} from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Database, Shield, Users, ChevronLeft, Check, X } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -98,36 +100,26 @@ export default function ObjectDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
-              <Database className="h-6 w-6 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                {objectDetail.label}
-              </h1>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 font-mono">
-                {objectDetail.apiName}
-              </p>
-            </div>
-            {objectDetail.isCustom && (
-              <Badge variant="info" size="sm">
-                Custom
-              </Badge>
-            )}
-          </div>
-        </div>
-      </div>
+      <Breadcrumbs
+        crumbs={[
+          { label: 'Objects', href: `/orgs/${orgId}/objects` },
+          { label: objectDetail.label },
+        ]}
+      />
+      <PageHeader
+        icon={Database}
+        title={objectDetail.label}
+        subtitle={
+          <span className="font-mono text-xs">{objectDetail.apiName}</span>
+        }
+        actions={
+          objectDetail.isCustom && (
+            <Badge variant="info" size="sm">
+              Custom
+            </Badge>
+          )
+        }
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

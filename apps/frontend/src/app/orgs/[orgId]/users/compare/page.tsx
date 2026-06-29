@@ -9,6 +9,8 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ChevronLeft, GitCompare, Plus, X, AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { useUsers } from '@/lib/api/hooks/useUsers'
@@ -48,25 +50,17 @@ export default function UserComparePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <GitCompare className="h-8 w-8" />
-            Compare Users
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Compare permissions and access between multiple users
-          </p>
-        </div>
-      </div>
+      <Breadcrumbs
+        crumbs={[
+          { label: 'Users', href: `/orgs/${orgId}/users` },
+          { label: 'Compare' },
+        ]}
+      />
+      <PageHeader
+        icon={GitCompare}
+        title="Compare Users"
+        subtitle="Compare permissions and access between multiple users"
+      />
 
       {/* User Selection */}
       <Card variant="bordered">

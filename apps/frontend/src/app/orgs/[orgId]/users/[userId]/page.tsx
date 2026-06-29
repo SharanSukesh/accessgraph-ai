@@ -26,6 +26,8 @@ import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
 import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
@@ -87,31 +89,29 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push(`/orgs/${orgId}/users`)}
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              {user.name}
-            </h1>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">{user.email}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {user.riskLevel && <RiskBadge level={user.riskLevel as "low" | "medium" | "high" | "critical"} />}
-          <Badge variant={user.isActive ? 'success' : 'default'}>
-            {user.isActive ? 'Active' : 'Inactive'}
-          </Badge>
-        </div>
-      </div>
+      <Breadcrumbs
+        crumbs={[
+          { label: 'Users', href: `/orgs/${orgId}/users` },
+          { label: user.name },
+        ]}
+      />
+      <PageHeader
+        icon={User}
+        title={user.name}
+        subtitle={user.email}
+        actions={
+          <>
+            {user.riskLevel && (
+              <RiskBadge
+                level={user.riskLevel as 'low' | 'medium' | 'high' | 'critical'}
+              />
+            )}
+            <Badge variant={user.isActive ? 'success' : 'default'}>
+              {user.isActive ? 'Active' : 'Inactive'}
+            </Badge>
+          </>
+        }
+      />
 
       {/* User Info Card */}
       <Card variant="bordered">

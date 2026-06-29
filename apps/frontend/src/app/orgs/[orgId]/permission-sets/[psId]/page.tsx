@@ -14,6 +14,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { ChevronLeft, Shield, Users, Database, AlertTriangle, FileText, Settings, ChevronDown, ChevronRight } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
+import { PageHeader } from '@/components/shared/PageHeader'
+import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -62,27 +64,20 @@ export default function PermissionSetDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-lg ${ps.isMuting ? 'bg-red-100 dark:bg-red-900' : 'bg-purple-100 dark:bg-purple-900'}`}>
-            <Shield className={`h-6 w-6 ${ps.isMuting ? 'text-red-600 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`} />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              {ps.label}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 font-mono">
-              {ps.name}
-            </p>
-          </div>
-          <div className="flex gap-2 ml-4">
+      <Breadcrumbs
+        crumbs={[
+          { label: 'Users', href: `/orgs/${orgId}/users` },
+          { label: ps.label },
+        ]}
+      />
+      <PageHeader
+        icon={Shield}
+        title={ps.label}
+        subtitle={
+          <span className="font-mono text-xs">{ps.name}</span>
+        }
+        actions={
+          <>
             <Badge variant={ps.isMuting ? 'danger' : 'info'} size="sm">
               {ps.type}
             </Badge>
@@ -91,9 +86,9 @@ export default function PermissionSetDetailPage() {
                 Profile-owned
               </Badge>
             )}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {ps.isMuting && (
         <Card variant="bordered" className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950">
