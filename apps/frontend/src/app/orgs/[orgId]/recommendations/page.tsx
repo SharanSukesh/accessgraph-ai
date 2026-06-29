@@ -26,6 +26,7 @@ import { Badge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
 
 export default function RecommendationsPage() {
@@ -106,28 +107,24 @@ export default function RecommendationsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Recommendations
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Review and act on security recommendations
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedIds.size > 0 && (
-            <Badge variant="info">
-              {selectedIds.size} selected
-            </Badge>
-          )}
-          <Button variant="secondary" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={CheckCircle}
+        title="Recommendations"
+        subtitle="Review and act on security recommendations"
+        actions={
+          <>
+            {selectedIds.size > 0 && (
+              <Badge variant="info">
+                {selectedIds.size} selected
+              </Badge>
+            )}
+            <Button variant="secondary" size="sm" onClick={handleExport}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </>
+        }
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

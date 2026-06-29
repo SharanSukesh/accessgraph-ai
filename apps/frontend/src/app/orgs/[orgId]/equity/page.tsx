@@ -28,6 +28,7 @@ import { Badge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
 import {
   useEquityDiagnostic,
   useEquityHistory,
@@ -359,36 +360,31 @@ export default function EquityPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/40">
-            <Scale className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Equity
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              GAEA-driven recommendations to balance access across teams
-            </p>
+      <PageHeader
+        icon={Scale}
+        title="Equity"
+        subtitle={
+          <>
+            GAEA-driven recommendations to balance access across teams
             {hasData && diagnostic?.snapshot_at && (
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+              <span className="block text-xs text-gray-500 dark:text-gray-500 mt-0.5">
                 Last computed {formatTimeAgo(diagnostic.snapshot_at)}
-              </p>
+              </span>
             )}
-          </div>
-        </div>
-        <Button
-          variant="primary"
-          size="md"
-          onClick={handleGenerate}
-          disabled={generateMutation.isPending}
-        >
-          <Sparkles className="h-4 w-4 mr-2" />
-          {generateMutation.isPending ? 'Computing…' : 'Generate recommendations'}
-        </Button>
-      </div>
+          </>
+        }
+        actions={
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleGenerate}
+            disabled={generateMutation.isPending}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            {generateMutation.isPending ? 'Computing…' : 'Generate recommendations'}
+          </Button>
+        }
+      />
 
       {/* Plain-English narration of the snapshot */}
       {narration && (

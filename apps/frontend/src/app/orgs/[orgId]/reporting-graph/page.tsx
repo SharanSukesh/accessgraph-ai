@@ -32,6 +32,7 @@ import edgehandles from 'cytoscape-edgehandles'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import {
@@ -710,37 +711,27 @@ export default function ReportingGraphPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/40">
-            <GitBranch className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Reporting Graph
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Drag from a user to another to set their manager or delegated
-              approver. Save writes back to Salesforce User records.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={pending.length > 0 ? 'info' : 'default'} size="sm">
-            {pending.length} pending {pending.length === 1 ? 'edit' : 'edits'}
-          </Badge>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={pending.length === 0 || apply.isPending}
-            onClick={() => setConfirmOpen(true)}
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {apply.isPending ? 'Saving…' : `Save changes (${pending.length})`}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={GitBranch}
+        title="Reporting Graph"
+        subtitle="Drag from a user to another to set their manager or delegated approver. Save writes back to Salesforce User records."
+        actions={
+          <>
+            <Badge variant={pending.length > 0 ? 'info' : 'default'} size="sm">
+              {pending.length} pending {pending.length === 1 ? 'edit' : 'edits'}
+            </Badge>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={pending.length === 0 || apply.isPending}
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {apply.isPending ? 'Saving…' : `Save changes (${pending.length})`}
+            </Button>
+          </>
+        }
+      />
 
       {/* Tool + edge-mode toolbar. Two independent groups: which CANVAS
           TOOL is active (move vs draw) and, when drawing, which EDGE TYPE

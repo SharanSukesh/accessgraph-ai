@@ -14,6 +14,7 @@ import { Badge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useFields } from '@/lib/api/hooks/useFields'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -65,17 +66,11 @@ export default function FieldsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Salesforce Fields
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Browse fields and analyze field-level security
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="Salesforce Fields"
+        subtitle="Browse fields and analyze field-level security"
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

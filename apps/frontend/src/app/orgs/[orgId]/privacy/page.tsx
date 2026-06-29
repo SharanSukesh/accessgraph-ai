@@ -20,6 +20,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -145,15 +146,11 @@ export default function PrivacyPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Privacy & Data Management
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          GDPR compliance, data retention policies, and privacy controls
-        </p>
-      </div>
+      <PageHeader
+        icon={Shield}
+        title="Privacy & Data Management"
+        subtitle="GDPR compliance, data retention policies, and privacy controls"
+      />
 
       {/* Data Inventory Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

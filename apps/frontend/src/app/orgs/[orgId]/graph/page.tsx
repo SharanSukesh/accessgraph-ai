@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
 import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
 import { GraphLegend } from '@/components/graph/GraphLegend'
@@ -84,18 +85,11 @@ export default function GraphExplorerPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <Network className="h-8 w-8" />
-            Graph Explorer
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Interactive ER-style access visualization - explore users and their permissions
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Network}
+        title="Graph Explorer"
+        subtitle="Interactive ER-style access visualization — explore users and their permissions"
+      />
 
       {/* User Search */}
       <Card variant="bordered">

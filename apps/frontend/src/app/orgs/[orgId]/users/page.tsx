@@ -7,13 +7,14 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Search, Filter, GitCompare } from 'lucide-react'
+import { Search, Filter, GitCompare, Users as UsersIcon } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { RiskBadge, Badge } from '@/components/shared/Badge'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 
 export default function UsersPage() {
@@ -40,22 +41,20 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Users</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Browse and investigate user access
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
-        >
-          <GitCompare className="h-4 w-4 mr-2" />
-          Compare Users
-        </Button>
-      </div>
+      <PageHeader
+        icon={UsersIcon}
+        title="Users"
+        subtitle="Browse and investigate user access"
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
+          >
+            <GitCompare className="h-4 w-4 mr-2" />
+            Compare Users
+          </Button>
+        }
+      />
 
       {/* Filters */}
       <Card variant="bordered">

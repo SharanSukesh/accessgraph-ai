@@ -14,6 +14,7 @@ import { Badge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useObjects } from '@/lib/api/hooks/useObjects'
 
 export default function ObjectsPage() {
@@ -40,17 +41,11 @@ export default function ObjectsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Salesforce Objects
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Browse objects and analyze access patterns
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Database}
+        title="Salesforce Objects"
+        subtitle="Browse objects and analyze access patterns"
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

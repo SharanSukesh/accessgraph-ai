@@ -14,6 +14,7 @@ import { Badge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 
 export default function AnomaliesPage() {
@@ -58,17 +59,11 @@ export default function AnomaliesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Anomalies
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Review detected access anomalies and unusual patterns
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={AlertTriangle}
+        title="Anomalies"
+        subtitle="Review detected access anomalies and unusual patterns"
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

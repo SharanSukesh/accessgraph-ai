@@ -6,11 +6,12 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Users, AlertTriangle, Shield, Database, Sparkles, Info } from 'lucide-react'
+import { Users, AlertTriangle, Shield, Database, Sparkles, Info, LayoutDashboard } from 'lucide-react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { MetricCard } from '@/components/shared/MetricCard'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { PageHeader } from '@/components/shared/PageHeader'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -104,28 +105,23 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Dashboard
-          </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Access health overview for your organization
-          </p>
-        </div>
-        {/* Analyze Access Button */}
-        {(!anomalies?.length && !recommendations?.length) && (
-          <Button
-            variant="primary"
-            onClick={handleAnalyze}
-            disabled={analyzeOrg.isPending}
-          >
-            <Sparkles className="h-4 w-4 mr-2" />
-            {analyzeOrg.isPending ? 'Analyzing...' : 'Analyze Access'}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        icon={LayoutDashboard}
+        title="Dashboard"
+        subtitle="Access health overview for your organization"
+        actions={
+          (!anomalies?.length && !recommendations?.length) && (
+            <Button
+              variant="primary"
+              onClick={handleAnalyze}
+              disabled={analyzeOrg.isPending}
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {analyzeOrg.isPending ? 'Analyzing...' : 'Analyze Access'}
+            </Button>
+          )
+        }
+      />
 
       {/* Sync Status Banner */}
       {latestSync && (
