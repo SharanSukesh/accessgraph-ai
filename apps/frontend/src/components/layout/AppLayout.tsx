@@ -14,6 +14,7 @@
 import { usePathname } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 import { PageTransition } from '@/components/shared/PageTransition'
+import { CommandPalette } from '@/components/shared/CommandPalette'
 
 const PUBLIC_ROUTES = ['/login', '/signup']
 
@@ -34,6 +35,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-y-auto p-6">
         <PageTransition>{children}</PageTransition>
       </main>
+      {/* Cmd-K palette listens globally; renders nothing until ⌘K is
+          pressed or openCommandPalette() is called. */}
+      <CommandPalette />
     </div>
   )
 }

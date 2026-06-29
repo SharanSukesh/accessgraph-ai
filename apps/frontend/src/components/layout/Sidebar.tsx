@@ -25,11 +25,13 @@ import {
   Stethoscope,
   LogOut,
   ChevronUp,
+  Command,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
+import { openCommandPalette } from '@/components/shared/CommandPalette'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 
@@ -327,10 +329,44 @@ export function Sidebar() {
             </div>
           )}
 
+          {/* Quick-search ⌘K — discoverability for the global command
+              palette. Expanded: full row with shortcut hint. Collapsed:
+              icon button with hover tooltip. */}
+          <div className={cn(
+            "p-2 pt-0 border-t border-gray-200 dark:border-gray-700 mt-1",
+            isExpanded ? "" : "flex justify-center",
+          )}>
+            {isExpanded ? (
+              <button
+                onClick={openCommandPalette}
+                className="flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                aria-label="Open command palette"
+              >
+                <Command className="h-5 w-5 flex-shrink-0" />
+                <span className="flex-1 text-left whitespace-nowrap">Quick search</span>
+                <kbd className="text-[10px] font-mono text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5">
+                  ⌘K
+                </kbd>
+              </button>
+            ) : (
+              <button
+                onClick={openCommandPalette}
+                className="p-3 rounded-lg transition-all duration-200 ease-out text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60 relative group"
+                aria-label="Open command palette"
+                title="Quick search (⌘K)"
+              >
+                <Command className="h-5 w-5" />
+                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                  Quick search ⌘K
+                </div>
+              </button>
+            )}
+          </div>
+
           {/* Theme toggle — adopts the row variant when expanded so it
               reads as a labelled action; compact icon-only when collapsed. */}
           <div className={cn(
-            "p-2 pt-0 border-t border-gray-200 dark:border-gray-700 mt-1",
+            "p-2 pt-0",
             isExpanded ? "" : "flex justify-center",
           )}>
             {isExpanded ? (
