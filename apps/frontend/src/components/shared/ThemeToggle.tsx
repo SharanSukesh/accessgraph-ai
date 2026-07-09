@@ -71,13 +71,13 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
       <button
         onClick={toggleTheme}
         className={cn(
-          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3',
+          'grove-rail group flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 relative',
           'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300',
           className,
         )}
         aria-label={label}
       >
-        <Icon className="h-5 w-5 flex-shrink-0" />
+        <Icon className="h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
         <span className="whitespace-nowrap">{label}</span>
       </button>
     )
@@ -88,15 +88,16 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
       onClick={toggleTheme}
       className={cn(
         // Fixed 44×44 to match every other footer button in the collapsed
-        // sidebar. Grove tokens on hover/idle.
-        'flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out relative group',
+        // sidebar. Grove tokens on hover/idle. grove-rail adds the
+        // evergreen left cue on hover to match nav-item language.
+        'grove-rail flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out relative group',
         'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300',
         className,
       )}
       aria-label={label}
       title={label}
     >
-      <Icon className="h-5 w-5" />
+      <Icon className="h-5 w-5 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
     </button>
   )
 }

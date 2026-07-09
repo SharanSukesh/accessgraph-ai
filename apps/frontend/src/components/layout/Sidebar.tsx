@@ -320,14 +320,15 @@ export function Sidebar() {
               className={cn(
                 // Grove — reconnect keeps its warning-adjacent copper tint
                 // (copper is Grove's warm accent, so hover reads as attention
-                // without shouting).
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                // without shouting). grove-rail adds the evergreen left cue
+                // that matches the nav-item language above.
+                'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                 isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-11 h-11',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
               )}
               title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
             >
-              <Link2 className="h-5 w-5 flex-shrink-0" />
+              <Link2 className="h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
               {isExpanded && <span className="whitespace-nowrap">Reconnect to Salesforce</span>}
 
               {/* Tooltip for collapsed state */}
@@ -346,8 +347,9 @@ export function Sidebar() {
               disabled={isSyncing}
               className={cn(
                 // Grove — sync uses the evergreen brand hover, matching
-                // the active-nav language elsewhere.
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                // the active-nav language elsewhere. grove-rail cue on the
+                // left edge matches the nav-item language.
+                'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                 isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-11 h-11',
                 isSyncing
                   ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
@@ -355,7 +357,13 @@ export function Sidebar() {
               )}
               title={!isExpanded ? 'Sync from Salesforce' : undefined}
             >
-              <RefreshCw className={cn("h-5 w-5 flex-shrink-0", isSyncing && "animate-spin")} />
+              <RefreshCw className={cn(
+                "h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out",
+                isSyncing && "animate-spin",
+                // Warm-accent hover only when not actively syncing so the
+                // spin animation stays evergreen (matches brand).
+                !isSyncing && "group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400",
+              )} />
               {isExpanded && <span className="whitespace-nowrap">Sync from Salesforce</span>}
 
               {/* Tooltip for collapsed state */}
@@ -384,10 +392,10 @@ export function Sidebar() {
             {isExpanded ? (
               <button
                 onClick={openCommandPalette}
-                className="flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300"
+                className="grove-rail group flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative"
                 aria-label="Open command palette"
               >
-                <Command className="h-5 w-5 flex-shrink-0" />
+                <Command className="h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
                 <span className="flex-1 text-left whitespace-nowrap">Quick search</span>
                 <kbd className="text-[10px] font-mono text-grove-ink/60 dark:text-grove-ink-dk/60 border border-grove-border dark:border-grove-border-dk bg-grove-canvas/60 dark:bg-grove-canvas-dk/40 rounded px-1.5 py-0.5">
                   ⌘K
@@ -396,11 +404,11 @@ export function Sidebar() {
             ) : (
               <button
                 onClick={openCommandPalette}
-                className="flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
+                className="grove-rail flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
                 aria-label="Open command palette"
                 title="Quick search (⌘K)"
               >
-                <Command className="h-5 w-5" />
+                <Command className="h-5 w-5 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
                 <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
                   Quick search ⌘K
                 </div>
