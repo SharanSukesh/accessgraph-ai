@@ -193,7 +193,10 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 transition-all duration-300 ease-in-out relative z-50",
+        // Grove — sidebar sits on the cream surface with a warm hairline
+        // border. The evergreen ink and copper hint on active nav do the
+        // colour work; the ground stays quiet.
+        "bg-grove-surface dark:bg-grove-surface-dk border-r border-grove-border dark:border-grove-border-dk flex-shrink-0 transition-all duration-300 ease-in-out relative z-50",
         isExpanded ? "w-64" : "w-16"
       )}
       onMouseEnter={() => setIsExpanded(true)}
@@ -201,7 +204,7 @@ export function Sidebar() {
     >
       <div className="flex flex-col h-full">
         {/* Logo */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="p-4 border-b border-grove-border dark:border-grove-border-dk">
           <Link href="/" className="flex items-center group">
             {isExpanded ? (
               <Logo variant="full" size="md" className="transition-all" />
@@ -225,16 +228,21 @@ export function Sidebar() {
                 sectionIdx > 0 && (
                   isExpanded
                     ? 'mt-4'
-                    : 'mt-2 pt-2 border-t border-gray-200/60 dark:border-gray-700/60 mx-3'
+                    // Grove — hairline divider in the Grove border ink,
+                    // slightly warmer than the gray it replaced.
+                    : 'mt-2 pt-2 border-t border-grove-border/70 dark:border-grove-border-dk/70 mx-3'
                 ),
               )}
             >
               {isExpanded && (
-                <div className="text-[10px] font-semibold tracking-[0.12em] text-gray-400 dark:text-gray-500 uppercase px-4 pt-1 pb-1.5 select-none">
+                // Grove — section labels use Grove ink at low emphasis, a
+                // tighter uppercase mono treatment so they read as system
+                // labels, not headings.
+                <div className="text-[10px] font-semibold tracking-[0.14em] text-grove-ink/50 dark:text-grove-ink-dk/45 uppercase px-4 pt-1 pb-1.5 select-none font-mono">
                   {section.label}
                 </div>
               )}
-              {section.items.map(item => {
+              {section.items.map((item, itemIdx) => {
                 const Icon = item.icon
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + '/')
@@ -242,23 +250,45 @@ export function Sidebar() {
                   <Link
                     key={item.name}
                     href={item.href}
+                    // Grove — evergreen rail on the left edge grows in on
+                    // hover / active via .grove-rail. Layered under the
+                    // background pill so the two accents don't fight.
                     className={cn(
-                      'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                      'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                       isExpanded ? 'space-x-3 px-4 py-2.5' : 'justify-center p-3',
                       isActive
-                        ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 ring-1 ring-primary-200 dark:ring-primary-800 shadow-sm'
-                        : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
+                        ? // Active: soft evergreen wash + evergreen ink + copper
+                          // rail cue (rail uses currentColor from text-primary-700).
+                          'is-active bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300 shadow-sm'
+                        : // Idle: warm ink; hover picks up a subtle cream
+                          // wash + evergreen ink so the theme identity flows.
+                          'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300'
                     )}
+                    // Grove — mount slide-in staggered by index. Purely
+                    // visual; no dependency on data or state so it's safe.
+                    style={{
+                      animation: `grove-slide-in 280ms ease-out ${itemIdx * 30 + sectionIdx * 60}ms both`,
+                    }}
                     title={!isExpanded ? item.name : undefined}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <Icon
+                      className={cn(
+                        'h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out',
+                        // Icon gets a tiny scale + copper tint on hover /
+                        // active — Grove's signature warm-accent moment.
+                        isActive
+                          ? 'scale-105'
+                          : 'group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400',
+                      )}
+                    />
                     {isExpanded && <span className="whitespace-nowrap">{item.name}</span>}
 
-                    {/* Tooltip for collapsed state — shows section label so
-                        users get context, not just a name. */}
+                    {/* Tooltip for collapsed state — Grove ink ground with
+                        cream text; section label in the copper accent so it
+                        reads as a system tag, not a heading. */}
                     {!isExpanded && (
-                      <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                        <span className="text-[9px] tracking-wider text-gray-400 mr-1.5">{section.label}</span>
+                      <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
+                        <span className="text-[9px] tracking-wider text-copper-300 dark:text-copper-400 mr-1.5 font-mono">{section.label}</span>
                         {item.name}
                       </div>
                     )}
@@ -270,15 +300,18 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 dark:border-gray-700">
+        <div className="border-t border-grove-border dark:border-grove-border-dk">
           {/* Reconnect Button */}
           <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
             <button
               onClick={handleReconnect}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group',
+                // Grove — reconnect keeps its warning-adjacent copper tint
+                // (copper is Grove's warm accent, so hover reads as attention
+                // without shouting).
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                 isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center p-3',
-                'text-gray-700 hover:bg-amber-50 hover:text-amber-700 dark:text-gray-300 dark:hover:bg-amber-900/20 dark:hover:text-amber-400'
+                'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
               )}
               title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
             >
@@ -287,7 +320,7 @@ export function Sidebar() {
 
               {/* Tooltip for collapsed state */}
               {!isExpanded && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
                   Reconnect to Salesforce
                 </div>
               )}
@@ -300,11 +333,13 @@ export function Sidebar() {
               onClick={handleSync}
               disabled={isSyncing}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group',
+                // Grove — sync uses the evergreen brand hover, matching
+                // the active-nav language elsewhere.
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                 isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center p-3',
                 isSyncing
-                  ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed'
-                  : 'text-gray-700 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-primary-900/20 dark:hover:text-primary-400'
+                  ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
+                  : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
               )}
               title={!isExpanded ? 'Sync from Salesforce' : undefined}
             >
@@ -313,7 +348,7 @@ export function Sidebar() {
 
               {/* Tooltip for collapsed state */}
               {!isExpanded && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
                   Sync from Salesforce
                 </div>
               )}
@@ -323,40 +358,38 @@ export function Sidebar() {
           {/* Sync Message */}
           {isExpanded && syncMessage && (
             <div className="px-4 pb-2">
-              <p className="text-xs text-center whitespace-nowrap text-primary-600 dark:text-primary-400">
+              <p className="text-xs text-center whitespace-nowrap text-primary-700 dark:text-primary-400">
                 {syncMessage}
               </p>
             </div>
           )}
 
-          {/* Quick-search ⌘K — discoverability for the global command
-              palette. Expanded: full row with shortcut hint. Collapsed:
-              icon button with hover tooltip. */}
+          {/* Quick-search ⌘K — Grove-tinted hover, cream kbd with warm ink */}
           <div className={cn(
-            "p-2 pt-0 border-t border-gray-200 dark:border-gray-700 mt-1",
+            "p-2 pt-0 border-t border-grove-border dark:border-grove-border-dk mt-1",
             isExpanded ? "" : "flex justify-center",
           )}>
             {isExpanded ? (
               <button
                 onClick={openCommandPalette}
-                className="flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60"
+                className="flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300"
                 aria-label="Open command palette"
               >
                 <Command className="h-5 w-5 flex-shrink-0" />
                 <span className="flex-1 text-left whitespace-nowrap">Quick search</span>
-                <kbd className="text-[10px] font-mono text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded px-1.5 py-0.5">
+                <kbd className="text-[10px] font-mono text-grove-ink/60 dark:text-grove-ink-dk/60 border border-grove-border dark:border-grove-border-dk bg-grove-canvas/60 dark:bg-grove-canvas-dk/40 rounded px-1.5 py-0.5">
                   ⌘K
                 </kbd>
               </button>
             ) : (
               <button
                 onClick={openCommandPalette}
-                className="p-3 rounded-lg transition-all duration-200 ease-out text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60 relative group"
+                className="p-3 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
                 aria-label="Open command palette"
                 title="Quick search (⌘K)"
               >
                 <Command className="h-5 w-5" />
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
                   Quick search ⌘K
                 </div>
               </button>
@@ -383,7 +416,7 @@ export function Sidebar() {
           <div
             ref={userMenuRef}
             className={cn(
-              "relative p-2 border-t border-gray-200 dark:border-gray-700",
+              "relative p-2 border-t border-grove-border dark:border-grove-border-dk",
               isExpanded ? "" : "flex justify-center",
             )}
           >
@@ -391,32 +424,34 @@ export function Sidebar() {
               type="button"
               onClick={() => isExpanded && setUserMenuOpen(o => !o)}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-150 relative group w-full',
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group w-full',
                 isExpanded ? 'space-x-3 px-3 py-2' : 'justify-center p-2',
-                'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700/60',
+                'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15',
               )}
               title={!isExpanded ? (user?.org_name || 'Account') : undefined}
               aria-expanded={userMenuOpen}
               aria-haspopup="menu"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-sm flex-shrink-0 ring-2 ring-white dark:ring-gray-800">
-                <span className="text-white text-xs font-semibold">{avatarLetter}</span>
+              {/* Grove — avatar tile: evergreen ramp with a copper hint on
+                  hover. Ring in cream keeps it lifted off the surface. */}
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center shadow-sm flex-shrink-0 ring-2 ring-grove-canvas dark:ring-grove-surface-dk transition-shadow group-hover:shadow-grove-lift">
+                <span className="text-grove-canvas text-xs font-semibold font-serif">{avatarLetter}</span>
               </div>
               {isExpanded && (
                 <>
                   <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium truncate">
+                    <p className="text-sm font-medium truncate text-grove-ink dark:text-grove-ink-dk">
                       {user?.org_name || 'Connected'}
                     </p>
                     {user?.org_domain && (
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                      <p className="text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
                         {user.org_domain}
                       </p>
                     )}
                   </div>
                   <ChevronUp
                     className={cn(
-                      'h-4 w-4 text-gray-400 transition-transform flex-shrink-0',
+                      'h-4 w-4 text-grove-ink/45 dark:text-grove-ink-dk/45 transition-transform flex-shrink-0',
                       userMenuOpen ? '' : 'rotate-180',
                     )}
                   />
@@ -425,7 +460,7 @@ export function Sidebar() {
 
               {/* Tooltip for collapsed state */}
               {!isExpanded && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
                   {user?.org_name || 'Account'}
                 </div>
               )}
@@ -435,21 +470,21 @@ export function Sidebar() {
                 relies on the hover-expand to reveal it). Opens UPward
                 so it doesn't get clipped by the page edge. */}
             {isExpanded && userMenuOpen && (
-              <div className="absolute bottom-full left-2 right-2 mb-1 rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 ring-1 ring-black ring-opacity-5 z-50 overflow-hidden">
+              <div className="absolute bottom-full left-2 right-2 mb-1 rounded-md shadow-grove-lift bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk z-50 overflow-hidden">
                 {user && (
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <div className="px-4 py-3 border-b border-grove-border dark:border-grove-border-dk">
+                    <p className="text-[10px] text-grove-ink/50 dark:text-grove-ink-dk/50 uppercase tracking-[0.14em] font-mono">
                       Connected to
                     </p>
                     <p
-                      className="text-sm font-medium text-gray-900 dark:text-white truncate"
+                      className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk truncate mt-0.5"
                       title={user.org_name}
                     >
                       {user.org_name || 'Unknown Org'}
                     </p>
                     {user.org_domain && (
                       <p
-                        className="text-xs text-gray-500 dark:text-gray-400 truncate"
+                        className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 truncate"
                         title={user.org_domain}
                       >
                         {user.org_domain}
@@ -463,7 +498,7 @@ export function Sidebar() {
                     setUserMenuOpen(false)
                     await logout()
                   }}
-                  className="w-full text-left flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="w-full text-left flex items-center px-4 py-2.5 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 dark:hover:bg-copper-900/20 hover:text-copper-700 dark:hover:text-copper-400 transition-colors"
                 >
                   <LogOut className="h-4 w-4 mr-2" />
                   Sign out
@@ -475,8 +510,8 @@ export function Sidebar() {
           {/* Version */}
           {isExpanded && (
             <div className="px-4 py-2">
-              <p className="text-[10px] text-gray-400 dark:text-gray-500 text-center whitespace-nowrap tracking-wider">
-                v0.1.0 • MVP
+              <p className="text-[10px] text-grove-ink/40 dark:text-grove-ink-dk/40 text-center whitespace-nowrap tracking-[0.14em] font-mono uppercase">
+                v0.1.0 · MVP
               </p>
             </div>
           )}
