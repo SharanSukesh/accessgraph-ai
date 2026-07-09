@@ -1,11 +1,40 @@
 /**
- * Animated Background Component
- * Professional gradient animation with animated network nodes
+ * Animated Background — Grove edition.
+ *
+ * A slowly-drifting network of nodes + lines behind the app, plus three
+ * ambient gradient orbs (cream / evergreen / copper) that echo the
+ * palette. Every colour resolves from Grove tokens so a future theme
+ * swap only needs Tailwind. Respects `prefers-reduced-motion`: the
+ * canvas still renders one frame but stops animating.
+ *
+ * Purely presentational. No routing, state, or data touched.
  */
 
 'use client'
 
 import { useEffect, useRef } from 'react'
+
+/* ---------- Grove palette (kept in sync with tailwind.config) ---------- */
+const GROVE = {
+  light: {
+    node:      'rgba(9, 66, 48, 0.42)',   // evergreen brand
+    edge:      (a: number) => `rgba(9, 66, 48, ${a})`,
+    accent:    'rgba(194, 107, 71, 0.55)', // copper — flag a few nodes
+    edgeBase:  0.20,
+    edgeWidth: 1.4,
+  },
+  dark: {
+    node:      'rgba(107, 191, 149, 0.55)', // mint
+    edge:      (a: number) => `rgba(107, 191, 149, ${a})`,
+    accent:    'rgba(216, 121, 74, 0.6)',   // dark copper
+    edgeBase:  0.24,
+    edgeWidth: 1.5,
+  },
+}
+
+/* Every ~7th node is a copper accent — matches Grove's identity, where
+   copper appears sparingly as an accent counterpoint to the evergreen. */
+const COPPER_STRIDE = 7
 
 export function AnimatedBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -13,14 +42,13 @@ export function AnimatedBackground() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Detect dark mode
     const isDarkMode = () => document.documentElement.classList.contains('dark')
+    const reducedMotion =
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
-    // Set canvas size
     const resizeCanvas = () => {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
@@ -28,89 +56,68 @@ export function AnimatedBackground() {
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Network nodes
     const nodes: Array<{
       x: number
       y: number
       vx: number
       vy: number
       radius: number
+      copper: boolean
     }> = []
 
-    // Create nodes - larger for better visibility
-    const nodeCount = 65 // Increased from 50 to 65 for more density
+    const nodeCount = 60
     for (let i = 0; i < nodeCount; i++) {
       nodes.push({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        radius: Math.random() * 3 + 3, // 3-6px for better visibility
+        vx: (Math.random() - 0.5) * 0.28,
+        vy: (Math.random() - 0.5) * 0.28,
+        radius: Math.random() * 2.5 + 2.5, // 2.5–5px — a touch quieter than v1
+        copper: i % COPPER_STRIDE === 0,
       })
     }
 
-    // Animation loop
     let animationId: number
-    const animate = () => {
+    const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
+      const tokens = isDarkMode() ? GROVE.dark : GROVE.light
 
-      // Check current theme
-      const darkMode = isDarkMode()
-
-      // Subtle backdrop tones - the network should fade behind page content,
-      // not compete with it. Light mode is muted but still visible against
-      // the pale gradient orbs; dark mode is slightly bolder since the dark
-      // background absorbs more of the purple.
-      const nodeColor = darkMode
-        ? 'rgba(124, 58, 237, 0.55)'
-        : 'rgba(109, 40, 217, 0.42)'
-
-      const edgeBaseOpacity = darkMode ? 0.28 : 0.24
-      const edgeWidth = darkMode ? 1.5 : 1.6
-
-      // Update and draw nodes
       nodes.forEach((node) => {
-        // Update position
-        node.x += node.vx
-        node.y += node.vy
-
-        // Bounce off edges
-        if (node.x < 0 || node.x > canvas.width) node.vx *= -1
-        if (node.y < 0 || node.y > canvas.height) node.vy *= -1
-
-        // Draw node - adapt to theme
+        if (!reducedMotion) {
+          node.x += node.vx
+          node.y += node.vy
+          if (node.x < 0 || node.x > canvas.width) node.vx *= -1
+          if (node.y < 0 || node.y > canvas.height) node.vy *= -1
+        }
         ctx.beginPath()
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2)
-        ctx.fillStyle = nodeColor
+        ctx.fillStyle = node.copper ? tokens.accent : tokens.node
         ctx.fill()
       })
 
-      // Draw connections - adapt to theme
       nodes.forEach((node, i) => {
         nodes.slice(i + 1).forEach((otherNode) => {
           const dx = node.x - otherNode.x
           const dy = node.y - otherNode.y
           const distance = Math.sqrt(dx * dx + dy * dy)
-
           if (distance < 150) {
+            const opacity = (1 - distance / 150) * tokens.edgeBase
             ctx.beginPath()
             ctx.moveTo(node.x, node.y)
             ctx.lineTo(otherNode.x, otherNode.y)
-            const opacity = (1 - distance / 150) * edgeBaseOpacity
-            const edgeColor = darkMode
-              ? `rgba(124, 58, 237, ${opacity})` // Dark mode
-              : `rgba(109, 40, 217, ${opacity})`  // Light mode: darker
-            ctx.strokeStyle = edgeColor
-            ctx.lineWidth = edgeWidth
+            ctx.strokeStyle = tokens.edge(opacity)
+            ctx.lineWidth = tokens.edgeWidth
             ctx.stroke()
           }
         })
       })
 
-      animationId = requestAnimationFrame(animate)
+      if (!reducedMotion) {
+        animationId = requestAnimationFrame(draw)
+      }
     }
 
-    animate()
+    draw()
 
     return () => {
       window.removeEventListener('resize', resizeCanvas)
@@ -120,16 +127,22 @@ export function AnimatedBackground() {
 
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-      {/* Animated gradient orbs - more visible */}
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-purple-300 dark:bg-purple-800 rounded-full blur-3xl opacity-30 dark:opacity-15 animate-blob" />
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-pink-300 dark:bg-pink-800 rounded-full blur-3xl opacity-30 dark:opacity-15 animate-blob animation-delay-2000" />
-      <div className="absolute bottom-0 left-20 w-[500px] h-[500px] bg-indigo-300 dark:bg-indigo-800 rounded-full blur-3xl opacity-30 dark:opacity-15 animate-blob animation-delay-4000" />
+      {/* Grove ambient orbs — cream / evergreen / copper.
+          Warm evergreen and cream in the corners with a copper wash
+          in the middle-left, echoing the identity's warm-editorial
+          palette. Blur + low opacity keeps them ambient, not decorative. */}
+      <div className="absolute top-0 left-0 w-[520px] h-[520px] rounded-full blur-3xl opacity-40 dark:opacity-20 animate-blob"
+           style={{ background: 'radial-gradient(closest-side, #dae8dd, transparent 70%)' }} />
+      <div className="absolute top-10 right-0 w-[520px] h-[520px] rounded-full blur-3xl opacity-35 dark:opacity-25 animate-blob animation-delay-2000"
+           style={{ background: 'radial-gradient(closest-side, #6bbf95, transparent 70%)' }} />
+      <div className="absolute bottom-0 left-32 w-[500px] h-[500px] rounded-full blur-3xl opacity-30 dark:opacity-20 animate-blob animation-delay-4000"
+           style={{ background: 'radial-gradient(closest-side, #c26b47, transparent 70%)' }} />
 
       {/* Animated network canvas */}
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-      {/* Subtle grid pattern */}
-      <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] dark:opacity-[0.06]" />
+      {/* Subtle grid pattern — same as before, sits over the top. */}
+      <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] dark:opacity-[0.05]" />
     </div>
   )
 }
