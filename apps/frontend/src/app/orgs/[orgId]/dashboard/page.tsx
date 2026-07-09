@@ -192,7 +192,7 @@ export default function DashboardPage() {
             title="Total Users"
             value={totalUsers}
             icon={Users}
-            iconColor="text-primary-700"
+            iconColor="text-primary-700 dark:text-primary-400"
           />
         
         
