@@ -57,52 +57,69 @@ function LoginContent() {
     // context that hides the global -z-10 canvas.
     <div className="min-h-screen flex items-center justify-center">
       <div className="max-w-md w-full px-6 relative z-10">
-        {/* Logo */}
-        <div className="mb-8 text-center">
+        {/* Grove — eyebrow + serif welcome. The eyebrow is a small mono
+            uppercase tag (the identity's system-label voice); the title
+            uses the serif stack so the brand voice reads on first frame. */}
+        <div className="mb-8 text-center" style={{ animation: 'grove-fade-up 400ms ease-out both' }}>
           <div className="flex justify-center mb-6">
             <Logo size="lg" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-copper-600 dark:text-copper-400 mb-3">
+            Access Intelligence · v0.1
+          </p>
+          <h1 className="text-4xl font-serif font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
             Welcome to AccessGraph AI
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Enterprise Access Intelligence for Salesforce
+          <p className="text-grove-ink/70 dark:text-grove-ink-dk/70">
+            Enterprise access intelligence for Salesforce
           </p>
         </div>
 
-        {/* Login Card */}
-        <Card variant="bordered" className="shadow-lg">
+        {/* Login Card — Grove: cream surface, copper brackets on the
+            corners to mark this as the important surface. Fade-up mount. */}
+        <Card
+          variant="bordered"
+          copperBrackets
+          className="shadow-grove-lift"
+          style={{ animation: 'grove-fade-up 500ms ease-out 120ms both' }}
+        >
           <CardHeader>
-            <CardTitle className="text-center">Sign In</CardTitle>
+            <CardTitle className="text-center font-serif tracking-tight text-grove-ink dark:text-grove-ink-dk">
+              Sign In
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Features */}
+            {/* Grove — feature list. Icons live in evergreen tiles with a
+                warm hairline ring. The palette encodes hierarchy: three
+                evergreen tiles carry the same weight, and the copper on
+                the CTA is the single warm-accent moment on the surface. */}
             <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
-                <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
-                  <Network className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <div className="flex items-center gap-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+                <div className="h-10 w-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800 flex items-center justify-center flex-shrink-0">
+                  <Network className="h-5 w-5 text-primary-700 dark:text-primary-400" />
                 </div>
                 <span>User-centric access graph — beyond field-by-field lookup</span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
-                <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="flex items-center gap-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+                <div className="h-10 w-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="h-5 w-5 text-primary-700 dark:text-primary-400" />
                 </div>
                 <span>ML detection of over-privileged users</span>
               </div>
-              <div className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
-                <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center flex-shrink-0">
-                  <Shield className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <div className="flex items-center gap-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+                <div className="h-10 w-10 rounded-lg bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800 flex items-center justify-center flex-shrink-0">
+                  <Shield className="h-5 w-5 text-primary-700 dark:text-primary-400" />
                 </div>
                 <span>AI-generated fixes — not just alerts</span>
               </div>
             </div>
 
-            {/* Login Button */}
+            {/* Grove — CTA in evergreen brand with copper wash on hover.
+                The wash appears via .grove-copper-wash + relative overflow. */}
             <Button
               variant="primary"
               size="lg"
-              className="w-full"
+              className="w-full relative overflow-hidden grove-copper-wash"
               onClick={handleLogin}
             >
               <LogIn className="h-5 w-5 mr-2" />
@@ -111,18 +128,18 @@ function LoginContent() {
 
             {/* Sandbox/scratch toggle. Without this, the OAuth flow defaults to
                 login.salesforce.com which rejects sandbox/scratch credentials. */}
-            <label className="flex items-center justify-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+            <label className="flex items-center justify-center gap-2 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={isSandbox}
                 onChange={(e) => setIsSandbox(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                className="h-4 w-4 rounded border-grove-border dark:border-grove-border-dk text-primary-700 focus:ring-primary-500"
               />
               <span>This is a sandbox or scratch org</span>
             </label>
 
             {/* Info */}
-            <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+            <div className="text-center text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
               <p>
                 By signing in, you'll authorize AccessGraph AI to access your Salesforce
                 organization's permission data.
@@ -131,10 +148,10 @@ function LoginContent() {
           </CardContent>
         </Card>
 
-        {/* Footer */}
-        <div className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        {/* Footer — Grove mono system-label voice */}
+        <div className="mt-8 text-center text-[11px] text-grove-ink/50 dark:text-grove-ink-dk/50 font-mono uppercase tracking-[0.16em]">
           <p>
-            Secured by Salesforce OAuth • Enterprise-Grade Security
+            Secured by Salesforce OAuth · Enterprise-grade
           </p>
         </div>
       </div>
@@ -146,7 +163,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary-600 dark:text-primary-400" />
+        <Loader2 className="h-12 w-12 animate-spin text-primary-700 dark:text-primary-400" />
       </div>
     }>
       <LoginContent />
