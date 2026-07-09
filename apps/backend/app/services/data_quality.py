@@ -56,10 +56,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import (
     DataQualityRun,
     ObjectQualityScore,
-    Organization,
     SalesforceConnection,
 )
-from app.salesforce.client import SalesforceClient
+from app.salesforce.client import SalesforceAPIClient
 
 
 logger = logging.getLogger(__name__)
@@ -168,7 +167,7 @@ class DataQualityService:
         run = await service.run(actor_email="ops@newton.example")
 
     The service is stateless past `db` and `org_id`; construct one per
-    invocation. All Salesforce IO goes through SalesforceClient — no
+    invocation. All Salesforce IO goes through SalesforceAPIClient — no
     direct network calls from this module.
     """
 
@@ -261,8 +260,12 @@ class DataQualityService:
         await self.db.commit()
         await self.db.refresh(run)
         logger.info(
-            "data-quality run %s: %d objects analysed, %d skipped, avg_score=%.1f",
-            run.id, run.objects_analyzed, run.objects_skipped, run.avg_score,
+            "data-quality run %s by %s: %d objects analysed, %d skipped, avg_score=%.1f",
+            run.id,
+            actor_email or "system",
+            run.objects_analyzed,
+            run.objects_skipped,
+            run.avg_score,
         )
         return run
 
@@ -272,7 +275,7 @@ class DataQualityService:
 
     async def _analyze_object(
         self,
-        client: SalesforceClient,
+        client: SalesforceAPIClient,
         object_name: str,
         object_label: str,
         is_custom: bool,
@@ -434,7 +437,7 @@ class DataQualityService:
     # Support
     # ------------------------------------------------------------------
 
-    async def _client(self) -> SalesforceClient:
+    async def _client(self) -> SalesforceAPIClient:
         """Build a live Salesforce client bound to this org's connection."""
         row = await self.db.execute(
             select(SalesforceConnection)
@@ -447,13 +450,13 @@ class DataQualityService:
             raise RuntimeError(
                 f"No Salesforce connection for organization {self.org_id}"
             )
-        return SalesforceClient(
+        return SalesforceAPIClient(
             instance_url=conn.instance_url,
             access_token=conn.access_token,
         )
 
     async def _resolve_analysis_targets(
-        self, client: SalesforceClient
+        self, client: SalesforceAPIClient
     ) -> List[Dict[str, Any]]:
         """Union of the standard business objects + every custom object
         reported by global describe. Skipped objects are filtered out.
