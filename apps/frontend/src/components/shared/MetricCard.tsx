@@ -28,7 +28,7 @@ export function MetricCard({
   value,
   change,
   icon: Icon,
-  iconColor = 'text-primary-600',
+  iconColor = 'text-primary-700 dark:text-primary-400',
   onClick,
   className,
 }: MetricCardProps) {
@@ -51,20 +51,31 @@ export function MetricCard({
       variant="bordered"
       className={cn(
         'p-6 transition-all group relative overflow-hidden',
-        isClickable && 'cursor-pointer hover:shadow-lg hover:border-primary-300 dark:hover:border-primary-600 hover:-translate-y-1',
+        // Grove — cream surface + evergreen shadow-lift on hover; the
+        // hairline border darkens toward evergreen. No purple anywhere.
+        isClickable && 'cursor-pointer hover:shadow-grove-lift hover:border-primary-500/50 dark:hover:border-primary-400/50 hover:-translate-y-1',
         className
       )}
       onClick={onClick}
     >
-      {/* Subtle gradient overlay on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-50/0 via-primary-50/0 to-primary-100/0 dark:from-primary-900/0 dark:via-primary-900/0 dark:to-primary-800/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+      {/* Grove — copper radial wash from the bottom-right. Sits under
+          content and blooms slightly on hover. Warm counterpoint to the
+          evergreen brand without competing with it. */}
+      <div className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+           style={{ background: 'radial-gradient(60% 100% at 100% 100%, rgba(194, 107, 71, 0.10), transparent 65%)' }} />
+      {/* Dark mode uses a slightly warmer copper — the mint brand can
+          otherwise wash the copper toward yellow. */}
+      <div className="hidden dark:block absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+           style={{ background: 'radial-gradient(60% 100% at 100% 100%, rgba(216, 121, 74, 0.14), transparent 65%)' }} />
 
       <div className="flex items-start justify-between relative z-10">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          <p className="text-xs font-medium text-grove-ink/70 dark:text-grove-ink-dk/70 uppercase tracking-[0.08em]">
             {title}
           </p>
-          <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white transition-transform duration-200 group-hover:scale-105 tabular-nums">
+          {/* Grove signature — numerals in the serif stack. tabular-nums
+              keeps the count-up from re-flowing widths. */}
+          <p className="mt-2 text-3xl font-semibold text-grove-ink dark:text-grove-ink-dk transition-transform duration-200 group-hover:scale-105 font-serif tabular-nums tracking-tight">
             {renderedValue}
           </p>
           {change && (
@@ -72,9 +83,9 @@ export function MetricCard({
               <span
                 className={cn(
                   'font-medium',
-                  change.direction === 'up' && 'text-green-600 dark:text-green-400',
-                  change.direction === 'down' && 'text-red-600 dark:text-red-400',
-                  change.direction === 'neutral' && 'text-gray-600 dark:text-gray-400'
+                  change.direction === 'up' && 'text-primary-700 dark:text-primary-400',
+                  change.direction === 'down' && 'text-danger-600 dark:text-danger-500',
+                  change.direction === 'neutral' && 'text-grove-ink/60 dark:text-grove-ink-dk/60'
                 )}
               >
                 {change.direction === 'up' && '↑'}
@@ -83,14 +94,21 @@ export function MetricCard({
                 {' '}
                 {Math.abs(change.value)}%
               </span>
-              <span className="ml-2 text-gray-600 dark:text-gray-400">
+              <span className="ml-2 text-grove-ink/60 dark:text-grove-ink-dk/60">
                 {change.label}
               </span>
             </div>
           )}
         </div>
         {Icon && (
-          <div className={cn('p-3 rounded-lg bg-gray-50 dark:bg-gray-700 transition-all duration-200 group-hover:scale-110 group-hover:shadow-lg', iconColor)}>
+          <div className={cn(
+            // Grove — icon tile uses a subtle copper wash instead of the
+            // old flat gray. Ring in evergreen for definition; icon
+            // itself in evergreen. Scale + rotate on group hover keeps
+            // the existing signature micro-interaction.
+            'p-3 rounded-xl bg-copper-50 dark:bg-copper-900/20 ring-1 ring-copper-200 dark:ring-copper-800 transition-all duration-200 group-hover:scale-110 group-hover:shadow-lg group-hover:ring-copper-500',
+            iconColor
+          )}>
             <Icon className="h-6 w-6 transition-transform duration-200 group-hover:rotate-6" />
           </div>
         )}

@@ -7,35 +7,62 @@ import { forwardRef, type HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils/cn'
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'bordered' | 'elevated'
+  variant?: 'default' | 'bordered' | 'elevated' | 'hero'
   /**
    * Opt-in hover-lift effect (subtle shadow + 1px vertical translate).
    * Standard for clickable cards across the app. Defaults to `false`
    * so existing static cards are not affected.
    */
   interactive?: boolean
+  /**
+   * Grove — decorate the card corners with two copper L-brackets that
+   * push out on hover. Meant for hero / prominent cards; do NOT use
+   * everywhere or the accent loses its meaning.
+   */
+  copperBrackets?: boolean
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant = 'default', interactive = false, ...props }, ref) => {
+  ({ className, variant = 'default', interactive = false, copperBrackets = false, ...props }, ref) => {
+    // Grove — surfaces sit on the warm cream canvas. Instead of stark
+    // white, we lean into the Grove surface token (a light cream, or
+    // deep forest in dark mode). Borders are the warm cream hairline.
     const variants = {
-      default: 'bg-white dark:bg-gray-800 shadow-sm transition-all duration-200 ease-out hover:shadow-md',
-      bordered: 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-200 ease-out hover:border-primary-300 dark:hover:border-primary-700 hover:shadow-lg',
-      elevated: 'bg-white dark:bg-gray-800 shadow-md transition-all duration-200 ease-out hover:shadow-xl hover:scale-[1.01] ring-1 ring-gray-100 dark:ring-gray-700/50',
+      default:
+        'bg-grove-surface dark:bg-grove-surface-dk shadow-sm ' +
+        'transition-all duration-200 ease-out hover:shadow-md',
+      bordered:
+        'bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk shadow-sm ' +
+        'transition-all duration-200 ease-out ' +
+        'hover:border-primary-600 dark:hover:border-primary-400 hover:shadow-grove-lift',
+      elevated:
+        'bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift ring-1 ring-grove-border dark:ring-grove-border-dk ' +
+        'transition-all duration-200 ease-out hover:shadow-grove-hero hover:scale-[1.005]',
+      // Hero — dark evergreen wash + warm cream ink. Used for the Org
+      // Analyzer overview hero, dashboard KPI stack, and other single-
+      // most-important surfaces. Copper wash pulls in via ::before.
+      hero:
+        'bg-primary-700 dark:bg-primary-800 text-grove-canvas ' +
+        'border border-primary-800 dark:border-primary-900 shadow-grove-hero ' +
+        'grove-copper-wash ' +
+        'transition-all duration-240 ease-out hover:shadow-grove-hero',
     }
-    // v1.9: hover-lift convention. 1px translate-y up + a slight shadow
-    // bump. Subtle enough that it doesn't fight `elevated`'s scale.
     const interactiveCls = interactive
-      ? 'cursor-pointer hover:-translate-y-px hover:shadow-md will-change-transform'
+      ? 'cursor-pointer grove-hover-lift will-change-transform'
       : ''
+    const bracketCls = copperBrackets ? 'grove-brackets' : ''
 
     return (
       <div
         ref={ref}
         className={cn(
-          'rounded-xl overflow-hidden',
+          'rounded-xl',
+          // Hero variant needs relative + overflow-hidden so the copper
+          // wash pseudo-element clips to the card shape.
+          variant === 'hero' ? 'relative overflow-hidden' : 'overflow-hidden',
           variants[variant],
           interactiveCls,
+          bracketCls,
           className,
         )}
         {...props}
