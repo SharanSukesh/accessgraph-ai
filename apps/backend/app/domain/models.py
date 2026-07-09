@@ -1353,3 +1353,132 @@ class BrandSettings(Base, TimestampMixin):
     logo_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
     logo_mime: Mapped[Optional[str]] = mapped_column(String(64))
     updated_by: Mapped[Optional[str]] = mapped_column(String(255))
+
+
+# ============================================================================
+# Data Quality — per-object health scoring (Newton feature — additive)
+# ============================================================================
+#
+# Snapshot-per-run pattern, mirroring OrgAnalysisSnapshot. Each run walks
+# a curated set of business objects (Account, Contact, Lead, Opportunity,
+# Case, plus every custom object) and computes:
+#   - completeness  — % of records with required-adjacent fields populated
+#   - duplicate_pct — % of records that collide on Name / Email
+#   - staleness_pct — % of records older than 180d since LastModifiedDate
+# then rolls those into a 0-100 composite score. Sample size is bounded
+# per-object (default 500 records) so a run stays under a minute even on
+# large orgs. All computation lives in app/services/data_quality.py; the
+# snapshots below are pure state — never mutated by analytics.
+
+
+class DataQualityRun(Base, TimestampMixin):
+    """One row per data-quality computation.
+
+    Header row for a run. Object-level scores hang off `object_scores`.
+    Kept append-only so the trends UI can chart score-over-time per
+    object without needing a separate history table.
+    """
+    __tablename__ = "data_quality_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    # Objects analysed on this run. Skipped objects (system-owned, no
+    # LastModifiedDate, or explicitly excluded) don't count against total.
+    objects_analyzed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    objects_skipped: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Composite averages across every analysed object. The dashboard's
+    # top-level KPI ("Org data-quality score") reads from `avg_score`.
+    avg_score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    avg_completeness: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    avg_duplicate_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    avg_staleness_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # Configuration snapshot at run time so historical numbers stay
+    # explainable when the defaults change.
+    sample_size: Mapped[int] = mapped_column(Integer, default=500, nullable=False)
+    staleness_threshold_days: Mapped[int] = mapped_column(
+        Integer, default=180, nullable=False
+    )
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    object_scores = relationship(
+        "ObjectQualityScore",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_data_quality_run_org_time", "organization_id", "snapshot_at"),
+    )
+
+
+class ObjectQualityScore(Base, TimestampMixin):
+    """Per-object data-quality metrics for one run.
+
+    Everything the frontend needs to render the per-object detail card
+    lives on this row. Fields are stored in absolute form (counts +
+    percentages) so downstream code doesn't have to re-divide.
+    """
+    __tablename__ = "object_quality_scores"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("data_quality_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    object_name: Mapped[str] = mapped_column(String(80), nullable=False)  # API name
+    object_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_custom: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Sample scope — what did we actually inspect?
+    record_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    sampled_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Composite score (0-100). Weights: completeness 0.5, dupes 0.3,
+    # staleness 0.2 — see DataQualityService.compute_score.
+    score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # Component scores, all 0-100 for uniform charting.
+    completeness_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    duplicate_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    staleness_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # Supporting counts + evidence samples for the detail card.
+    fields_inspected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    fields_with_gaps: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicate_clusters: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    stale_record_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Free-form evidence — top offenders for each component so the
+    # detail card can show "worst-populated fields", "top duplicate
+    # clusters", "oldest untouched records" without a second query.
+    # Shape: {"gap_fields": [...], "duplicate_examples": [...],
+    #         "stale_examples": [...]}
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("DataQualityRun", back_populates="object_scores")
+
+    __table_args__ = (
+        Index(
+            "ix_obj_quality_org_run_object", "organization_id", "run_id", "object_name"
+        ),
+        UniqueConstraint("run_id", "object_name", name="uq_obj_quality_run_object"),
+    )

@@ -83,4 +83,12 @@ export const endpoints = {
     `/orgs/${orgId}/org-analyzer/findings/${findingId}/apply-fix`,
   orgAnalyzerBrand: (orgId: string) => `/orgs/${orgId}/org-analyzer/brand`,
   orgAnalyzerBrandLogo: (orgId: string) => `/orgs/${orgId}/org-analyzer/brand/logo`,
+
+  // Data Quality — per-object health scoring
+  dataQualityRun: (orgId: string) => `/orgs/${orgId}/data-quality/run`,
+  dataQualityLatest: (orgId: string) => `/orgs/${orgId}/data-quality/latest`,
+  dataQualityObjects: (orgId: string) => `/orgs/${orgId}/data-quality/objects`,
+  dataQualityObject: (orgId: string, objectName: string) =>
+    `/orgs/${orgId}/data-quality/objects/${objectName}`,
+  dataQualityHistory: (orgId: string) => `/orgs/${orgId}/data-quality/history`,
 } as const

@@ -7,7 +7,7 @@
 
 import { use} from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Database, Shield, Users, ChevronLeft, Check, X } from 'lucide-react'
+import { Database, Shield, Users, ChevronLeft, Check, X, Sparkles, AlertTriangle, Copy, Clock } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
@@ -17,6 +17,10 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
+import {
+  useDataQualityObject,
+  type ObjectScore,
+} from '@/lib/api/hooks/useDataQuality'
 
 interface PermissionDetail {
   id: string
@@ -65,6 +69,16 @@ export default function ObjectDetailPage() {
     },
     enabled: !!orgId && !!objectName,
   })
+
+  // Data quality — keyed on apiName because the engine identifies
+  // objects by SF API name (Account, Contact, __c). objectName from
+  // the URL may be an internal id, so we wait for objectDetail before
+  // firing the query.
+  const { data: dqScore, error: dqError } = useDataQualityObject(
+    orgId,
+    objectDetail?.apiName ?? '',
+    { enabled: !!objectDetail?.apiName },
+  )
 
   if (error) {
     return (
@@ -171,6 +185,13 @@ export default function ObjectDetailPage() {
           </div>
         </Card>
       </div>
+
+      {/* Data Quality — score + component breakdown + evidence. Only
+          renders when a run has covered this object. 404 is expected
+          on first visit; the card silently hides in that case. */}
+      {dqScore && !dqError && (
+        <DataQualityCard score={dqScore} />
+      )}
 
       {/* Profiles with Access */}
       {objectDetail.profilesWithAccess.length > 0 && (
@@ -440,4 +461,227 @@ export default function ObjectDetailPage() {
       </Card>
     </div>
   )
+}
+
+// ---------- Data Quality card ----------
+
+/**
+ * Renders the per-object Data Quality breakdown: composite score, the
+ * three component bars (completeness / dupes / staleness), and up to
+ * three evidence lists (worst-populated fields, top duplicate clusters,
+ * oldest records) from the run's evidence blob.
+ *
+ * Presentational only. All computation is server-side; this component
+ * just formats what the API returns.
+ */
+function DataQualityCard({ score }: { score: ObjectScore }) {
+  const composite = Math.round(score.score)
+  const tone = qualityToneClass(score.score)
+
+  return (
+    <Card variant="bordered">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-copper-600 dark:text-copper-400" />
+          Data Quality
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Composite score */}
+          <div className="flex flex-col items-start justify-center border-r-0 lg:border-r border-grove-border dark:border-grove-border-dk pr-0 lg:pr-6">
+            <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+              Composite
+            </p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className={`text-5xl font-bold tabular-nums ${tone}`}>{composite}</span>
+              <span className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">/ 100</span>
+            </div>
+            <p className="mt-2 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+              {score.sampled_count.toLocaleString()} of {score.record_count.toLocaleString()} records sampled
+            </p>
+          </div>
+
+          {/* Components */}
+          <div className="lg:col-span-2 flex flex-col gap-4">
+            <ScoreBar
+              label="Completeness"
+              caption={`${score.fields_with_gaps} of ${score.fields_inspected} fields with gaps`}
+              value={score.completeness_pct}
+              higherIsBetter={true}
+            />
+            <ScoreBar
+              label="Duplicates"
+              caption={
+                score.duplicate_clusters > 0
+                  ? `${score.duplicate_clusters} cluster${
+                      score.duplicate_clusters === 1 ? '' : 's'
+                    } on ${score.evidence?.duplicate_key ?? 'natural key'}`
+                  : 'No duplicate clusters'
+              }
+              value={score.duplicate_pct}
+              higherIsBetter={false}
+            />
+            <ScoreBar
+              label="Staleness"
+              caption={`${score.stale_record_count.toLocaleString()} untouched > threshold`}
+              value={score.staleness_pct}
+              higherIsBetter={false}
+            />
+          </div>
+        </div>
+
+        {/* Evidence — 3 columns showing top offenders per component. */}
+        {(score.evidence?.gap_fields?.length ||
+          score.evidence?.duplicate_examples?.length ||
+          score.evidence?.stale_examples?.length) ? (
+          <div className="mt-6 pt-6 border-t border-grove-border dark:border-grove-border-dk grid grid-cols-1 md:grid-cols-3 gap-6">
+            <EvidenceList
+              icon={AlertTriangle}
+              title="Worst-populated fields"
+              items={
+                score.evidence.gap_fields?.map((g) => ({
+                  primary: g.field,
+                  secondary: `${Math.round(g.missing_pct)}% missing`,
+                })) ?? []
+              }
+              emptyLabel="No gap fields — every required-adjacent field is populated."
+            />
+            <EvidenceList
+              icon={Copy}
+              title="Top duplicate clusters"
+              items={
+                score.evidence.duplicate_examples?.map((d) => ({
+                  primary: d.key,
+                  secondary: `${d.count} records`,
+                })) ?? []
+              }
+              emptyLabel="No duplicate clusters in the sample."
+            />
+            <EvidenceList
+              icon={Clock}
+              title="Oldest records"
+              items={
+                score.evidence.stale_examples?.map((s) => ({
+                  primary: s.id,
+                  secondary: formatDate(s.last_modified),
+                })) ?? []
+              }
+              emptyLabel="No stale records in the sample."
+            />
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ScoreBar({
+  label,
+  caption,
+  value,
+  higherIsBetter,
+}: {
+  label: string
+  caption: string
+  value: number
+  higherIsBetter: boolean
+}) {
+  // For higher-is-better metrics (completeness), bar fill = value.
+  // For lower-is-better (dupes, staleness), fill = value and tone flips.
+  const clamped = Math.max(0, Math.min(100, value))
+  const goodTone =
+    (higherIsBetter && clamped >= 85) || (!higherIsBetter && clamped <= 15)
+  const midTone =
+    (higherIsBetter && clamped >= 65 && clamped < 85) ||
+    (!higherIsBetter && clamped > 15 && clamped <= 35)
+  const barClass = goodTone
+    ? 'bg-primary-500 dark:bg-primary-400'
+    : midTone
+    ? 'bg-copper-500 dark:bg-copper-400'
+    : 'bg-red-500 dark:bg-red-400'
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
+          {label}
+        </span>
+        <span className="text-sm tabular-nums text-grove-ink/70 dark:text-grove-ink-dk/70">
+          {Math.round(clamped)}%
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-grove-border/60 dark:bg-grove-border-dk/60 overflow-hidden">
+        <div
+          className={`h-full ${barClass} transition-[width] duration-500 ease-out`}
+          style={{ width: `${clamped}%` }}
+          aria-hidden
+        />
+      </div>
+      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
+        {caption}
+      </p>
+    </div>
+  )
+}
+
+function EvidenceList({
+  icon: Icon,
+  title,
+  items,
+  emptyLabel,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  items: { primary: string; secondary: string }[]
+  emptyLabel: string
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.08em] text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
+        <Icon className="h-3.5 w-3.5" />
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-grove-ink/45 dark:text-grove-ink-dk/45 italic">
+          {emptyLabel}
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.slice(0, 5).map((item, i) => (
+            <li
+              key={`${item.primary}-${i}`}
+              className="text-xs flex items-baseline justify-between gap-2"
+            >
+              <span className="font-mono truncate text-grove-ink dark:text-grove-ink-dk">
+                {item.primary}
+              </span>
+              <span className="text-grove-ink/55 dark:text-grove-ink-dk/55 whitespace-nowrap">
+                {item.secondary}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function qualityToneClass(score: number): string {
+  if (score >= 85) return 'text-primary-700 dark:text-primary-400'
+  if (score >= 65) return 'text-copper-600 dark:text-copper-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+function formatDate(iso?: string): string {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch {
+    return iso
+  }
 }

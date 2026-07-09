@@ -5,9 +5,9 @@
  * Browse Salesforce objects and their access patterns
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Database, Search, Filter, Shield, AlertTriangle } from 'lucide-react'
+import { Database, Search, Filter, Shield, AlertTriangle, Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
@@ -16,6 +16,12 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { useObjects } from '@/lib/api/hooks/useObjects'
+import {
+  useDataQualityLatest,
+  useDataQualityObjects,
+  useRunDataQuality,
+  type ObjectScore,
+} from '@/lib/api/hooks/useDataQuality'
 
 export default function ObjectsPage() {
   const params = useParams()
@@ -29,6 +35,22 @@ export default function ObjectsPage() {
     search,
     sensitive: sensitiveFilter || undefined,
   })
+
+  // Data-quality overlay — worst-first scores plus the org-wide KPI.
+  // Hydrates on first paint; no-op if the engine has never run.
+  const { data: dqSummary } = useDataQualityLatest(orgId)
+  const { data: dqObjects } = useDataQualityObjects(orgId)
+  const runDq = useRunDataQuality(orgId)
+
+  // Index scores by object apiName so the objects table can pick each
+  // row's score in O(1) inside the render loop.
+  const scoresByApiName = useMemo(() => {
+    const map = new Map<string, ObjectScore>()
+    for (const s of dqObjects?.objects ?? []) {
+      map.set(s.object_name, s)
+    }
+    return map
+  }, [dqObjects])
 
   if (error) {
     return (
@@ -45,10 +67,34 @@ export default function ObjectsPage() {
         icon={Database}
         title="Salesforce Objects"
         subtitle="Browse objects and analyze access patterns"
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => runDq.mutate()}
+            disabled={runDq.isPending}
+            aria-label={
+              dqSummary?.has_data
+                ? 'Re-run data quality analysis'
+                : 'Analyse data quality'
+            }
+          >
+            {runDq.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 mr-2" />
+            )}
+            {runDq.isPending
+              ? 'Analysing…'
+              : dqSummary?.has_data
+              ? 'Re-analyse quality'
+              : 'Analyse quality'}
+          </Button>
+        }
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -112,6 +158,44 @@ export default function ObjectsPage() {
             </div>
             <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900">
               <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+            </div>
+          </div>
+        </Card>
+
+        {/* Data quality KPI — an aggregate view of the per-object scores.
+            "Not analysed" state points the user at the header button. */}
+        <Card variant="bordered" className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                Data Quality
+              </p>
+              {dqSummary?.has_data ? (
+                <>
+                  <p
+                    className={`mt-2 text-3xl font-bold ${qualityToneClass(
+                      dqSummary.avg_score,
+                    )}`}
+                  >
+                    {Math.round(dqSummary.avg_score)}
+                  </p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
+                    {dqSummary.objects_analyzed} objects
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-3xl font-bold text-grove-ink/40 dark:text-grove-ink-dk/40">
+                    —
+                  </p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
+                    Not analysed
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="p-3 rounded-lg bg-copper-100 dark:bg-copper-900/25">
+              <Sparkles className="h-6 w-6 text-copper-600 dark:text-copper-400" />
             </div>
           </div>
         </Card>
@@ -179,6 +263,9 @@ export default function ObjectsPage() {
                       Users with Access
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      Quality
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                       Anomalies
                     </th>
                   </tr>
@@ -223,6 +310,9 @@ export default function ObjectsPage() {
                         {obj.userCount || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <QualityCell score={scoresByApiName.get(obj.apiName)} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         {obj.anomalyCount > 0 ? (
                           <Badge variant="danger" size="sm">
                             {obj.anomalyCount}
@@ -247,4 +337,52 @@ export default function ObjectsPage() {
       </Card>
     </div>
   )
+}
+
+// ---------- Data-quality presentational helpers ----------
+
+/**
+ * Cell for the Quality column. Renders "-" for objects not yet analysed
+ * (e.g. system objects skipped by the engine), and a coloured badge with
+ * the score otherwise. Keeps the row compact — the drill-down lives on
+ * the object detail page.
+ */
+function QualityCell({ score }: { score: ObjectScore | undefined }) {
+  if (!score) {
+    return <span className="text-sm text-grove-ink/40 dark:text-grove-ink-dk/40">—</span>
+  }
+  const rounded = Math.round(score.score)
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ring-1 ${qualityChipClasses(
+        score.score,
+      )}`}
+      title={`Completeness ${Math.round(
+        score.completeness_pct,
+      )}% · Dupes ${Math.round(
+        score.duplicate_pct,
+      )}% · Stale ${Math.round(score.staleness_pct)}%`}
+    >
+      {rounded}
+    </span>
+  )
+}
+
+/**
+ * Map a 0-100 score to a semantic tone. Thresholds intentionally
+ * conservative: an org has to be doing quite well to reach the green
+ * band, so the badge stays actionable — a mid-70s org still shows amber.
+ */
+function qualityToneClass(score: number): string {
+  if (score >= 85) return 'text-primary-700 dark:text-primary-400'
+  if (score >= 65) return 'text-copper-600 dark:text-copper-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+function qualityChipClasses(score: number): string {
+  if (score >= 85)
+    return 'bg-primary-50 text-primary-700 ring-primary-200 dark:bg-primary-900/25 dark:text-primary-300 dark:ring-primary-800'
+  if (score >= 65)
+    return 'bg-copper-50 text-copper-700 ring-copper-200 dark:bg-copper-900/25 dark:text-copper-400 dark:ring-copper-800'
+  return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/25 dark:text-red-400 dark:ring-red-800'
 }

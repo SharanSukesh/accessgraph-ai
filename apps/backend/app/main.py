@@ -136,7 +136,7 @@ async def add_security_headers(request: Request, call_next):
 # Include routers
 from app.api.routes import (
     auth, orgs, users, privacy, package, deeplink,
-    equity, reporting_graph, org_analyzer,
+    equity, reporting_graph, org_analyzer, data_quality,
 )
 
 app.include_router(health.router, tags=["health"])
@@ -149,6 +149,7 @@ app.include_router(deeplink.router, tags=["deeplink"])
 app.include_router(equity.router, tags=["equity"])
 app.include_router(reporting_graph.router, tags=["reporting-graph"])
 app.include_router(org_analyzer.router, tags=["org-analyzer"])
+app.include_router(data_quality.router, tags=["data-quality"])
 
 
 # Global exception handler
