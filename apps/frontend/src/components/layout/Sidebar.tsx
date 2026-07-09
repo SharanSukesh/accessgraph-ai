@@ -219,7 +219,13 @@ export function Sidebar() {
         {/* Navigation — grouped into semantic sections. Labels appear
             only when expanded; collapsed mode shows a hairline divider
             between groups so the visual rhythm survives. */}
-        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-themed">
+        {/* Nav scrollbar is intentionally hidden (Linear / Notion pattern).
+            A visible scrollbar consumes ~6px from the right and shifts
+            every nav icon LEFT of the header logo + footer buttons,
+            breaking sidebar-midline alignment. `.scrollbar-hide` lets
+            scroll still work via mouse / trackpad but the scrollbar
+            itself never occupies layout width. */}
+        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-hide">
           {navigation.map((section, sectionIdx) => (
             <div
               key={section.label}
