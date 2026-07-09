@@ -3,8 +3,8 @@
 /**
  * Permission Set Detail Page
  *
- * Landing page for the "Show Impact in AccessGraph AI" deep link from the
- * AccessGraph Explorer tab in the Salesforce package. Surfaces:
+ * Landing page for the "Show Impact in Newton" deep link from the
+ * Salesforce Explorer tab in the Salesforce package. Surfaces:
  *  - Basic PS info (name, label, type, profile binding)
  *  - Users assigned (direct + via Permission Set Group)
  *  - Object permissions granted
@@ -440,7 +440,7 @@ export default function PermissionSetDetailPage() {
                                   onClick={() => router.push(`/orgs/${orgId}/objects/${encodeURIComponent(objectName)}`)}
                                   className="text-xs text-primary-600 hover:underline"
                                 >
-                                  Open {objectName} in AccessGraph AI →
+                                  Open {objectName} in Newton →
                                 </button>
                               </div>
                             ) : (

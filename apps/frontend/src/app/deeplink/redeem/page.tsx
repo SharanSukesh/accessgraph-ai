@@ -60,7 +60,7 @@ function RedeemContent() {
           } else if (res.status === 401) {
             message = 'This link expired. Click the button in Salesforce again to get a fresh one.'
           } else if (res.status === 404) {
-            message = 'Your org isn\'t connected to AccessGraph AI yet. Sign in to set it up.'
+            message = 'Your org isn\'t connected to Newton yet. Sign in to set it up.'
           }
           if (!cancelled) setState({ kind: 'error', message })
           return
@@ -80,7 +80,7 @@ function RedeemContent() {
         if (!cancelled) {
           setState({
             kind: 'error',
-            message: 'Could not reach AccessGraph AI. Please try again in a moment.',
+            message: 'Could not reach Newton. Please try again in a moment.',
           })
         }
       }
@@ -117,7 +117,7 @@ function RedeemContent() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary-600 mx-auto mb-4" />
-        <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">Opening AccessGraph AI…</p>
+        <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">Opening Newton…</p>
       </div>
     </div>
   )

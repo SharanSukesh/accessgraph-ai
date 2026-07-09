@@ -8,7 +8,7 @@ import { AnimatedBackground } from '@/components/shared/AnimatedBackground'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AccessGraph AI - Enterprise Access Intelligence',
+  title: 'Newton - Enterprise Access Intelligence',
   description: 'Visualize, analyze, and secure your enterprise access landscape',
 }
 

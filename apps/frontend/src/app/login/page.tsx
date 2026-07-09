@@ -68,7 +68,7 @@ function LoginContent() {
             Access Intelligence · v0.1
           </p>
           <h1 className="text-4xl font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
-            Welcome to AccessGraph AI
+            Welcome to Newton
           </h1>
           <p className="text-grove-ink/70 dark:text-grove-ink-dk/70">
             Enterprise access intelligence for Salesforce
@@ -141,7 +141,7 @@ function LoginContent() {
             {/* Info */}
             <div className="text-center text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
               <p>
-                By signing in, you'll authorize AccessGraph AI to access your Salesforce
+                By signing in, you'll authorize Newton to access your Salesforce
                 organization's permission data.
               </p>
             </div>

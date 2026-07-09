@@ -2,7 +2,7 @@
 
 /**
  * Privacy Policy Page
- * GDPR-compliant privacy policy for AccessGraph AI
+ * GDPR-compliant privacy policy for Newton
  */
 
 import { Shield, Database, Lock, Eye, Trash2, FileText } from 'lucide-react'
@@ -20,7 +20,7 @@ export default function PrivacyPolicyPage() {
           Last updated: {new Date().toLocaleDateString()}
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
-          AccessGraph AI is committed to protecting your privacy and complying with GDPR,
+          Newton is committed to protecting your privacy and complying with GDPR,
           CCPA, and other data protection regulations.
         </p>
       </div>
@@ -151,7 +151,7 @@ export default function PrivacyPolicyPage() {
                 <strong>Visualization:</strong> Create access graphs and reports
               </li>
               <li>
-                <strong>Service Delivery:</strong> Maintain and improve the AccessGraph AI
+                <strong>Service Delivery:</strong> Maintain and improve the Newton
                 platform
               </li>
               <li>

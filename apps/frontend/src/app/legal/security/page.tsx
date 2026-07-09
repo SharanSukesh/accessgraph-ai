@@ -30,7 +30,7 @@ export default function SecurityPracticesPage() {
           Last updated: {new Date().toLocaleDateString()}
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
-          Learn how AccessGraph AI protects your data and maintains enterprise-grade security.
+          Learn how Newton protects your data and maintains enterprise-grade security.
         </p>
       </div>
 
@@ -380,7 +380,7 @@ export default function SecurityPracticesPage() {
                       We Only Collect Metadata
                     </p>
                     <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 mt-1">
-                      AccessGraph AI never accesses your actual Salesforce records (Accounts,
+                      Newton never accesses your actual Salesforce records (Accounts,
                       Opportunities, Contacts, etc.). We only sync permission metadata:
                     </p>
                     <ul className="text-sm mt-2 space-y-1">

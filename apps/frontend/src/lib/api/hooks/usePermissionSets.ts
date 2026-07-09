@@ -1,7 +1,7 @@
 /**
  * Permission Set Data Hooks
  * React Query hooks for permission set detail / impact view (used by the
- * AccessGraph Explorer deep-link landing page).
+ * the Salesforce Explorer tab deep-link landing page).
  */
 
 import { useQuery } from '@tanstack/react-query'

@@ -1,4 +1,4 @@
-# AccessGraph AI
+# Newton
 
 > **Enterprise Access Intelligence Platform**
 > Visualize, analyze, and secure your organization's access landscape with AI-powered insights.
@@ -10,7 +10,7 @@
 
 ## 🎯 Overview
 
-**AccessGraph AI** is a modern, production-grade platform for analyzing and visualizing enterprise access patterns. It combines graph database technology, machine learning, and intuitive UI to help security teams:
+**Newton** is a modern, production-grade platform for analyzing and visualizing enterprise access patterns. It combines graph database technology, machine learning, and intuitive UI to help security teams:
 
 - 🕸️ **Visualize** complex access relationships across your organization
 - 🔍 **Detect** anomalous access patterns and security risks
@@ -269,7 +269,7 @@ BACKEND_CORS_ORIGINS=http://localhost:3000
 
 # Frontend
 NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_APP_NAME=AccessGraph AI
+NEXT_PUBLIC_APP_NAME=Newton
 ```
 
 See [`.env.example`](.env.example) for complete list.

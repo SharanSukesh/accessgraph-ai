@@ -46,7 +46,7 @@ export default function DPAPage() {
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Processor</p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  AccessGraph AI (service provider)
+                  Newton (service provider)
                 </p>
               </div>
             </div>
@@ -90,7 +90,7 @@ export default function DPAPage() {
                 the purposes and means of processing Personal Data.
               </li>
               <li>
-                <strong>"Processor"</strong> means AccessGraph AI, which processes Personal
+                <strong>"Processor"</strong> means Newton, which processes Personal
                 Data on behalf of the Controller.
               </li>
               <li>
@@ -173,7 +173,7 @@ export default function DPAPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Salesforce users within the Controller's organization</li>
-                <li>Dashboard users accessing the AccessGraph AI platform</li>
+                <li>Dashboard users accessing the Newton platform</li>
               </ul>
             </div>
           </div>
@@ -576,7 +576,7 @@ export default function DPAPage() {
                 </a>
               </p>
               <p className="mt-2">
-                <strong>Legal Department:</strong> AccessGraph AI, Inc.
+                <strong>Legal Department:</strong> Newton, Inc.
               </p>
             </div>
           </div>

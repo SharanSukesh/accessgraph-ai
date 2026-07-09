@@ -2,7 +2,7 @@
 
 /**
  * Terms of Service Page
- * Legal terms and conditions for AccessGraph AI
+ * Legal terms and conditions for Newton
  */
 
 import { FileText } from 'lucide-react'
@@ -19,7 +19,7 @@ export default function TermsOfServicePage() {
           Last updated: {new Date().toLocaleDateString()}
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
-          Please read these terms carefully before using AccessGraph AI.
+          Please read these terms carefully before using Newton.
         </p>
       </div>
 
@@ -31,7 +31,7 @@ export default function TermsOfServicePage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              By accessing or using AccessGraph AI ("the Service"), you agree to be bound by
+              By accessing or using Newton ("the Service"), you agree to be bound by
               these Terms of Service ("Terms"). If you disagree with any part of these terms,
               you may not access the Service.
             </p>
@@ -48,7 +48,7 @@ export default function TermsOfServicePage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              AccessGraph AI is a Salesforce access analysis and security intelligence
+              Newton is a Salesforce access analysis and security intelligence
               platform that:
             </p>
             <ul className="list-disc pl-6 space-y-1">
@@ -165,7 +165,7 @@ export default function TermsOfServicePage() {
               </h3>
               <p>
                 The Service, including all software, algorithms, documentation, and branding,
-                is owned by AccessGraph AI and protected by copyright, trademark, and other
+                is owned by Newton and protected by copyright, trademark, and other
                 intellectual property laws. You may not copy, modify, or create derivative
                 works without our written permission.
               </p>
@@ -234,7 +234,7 @@ export default function TermsOfServicePage() {
               TO THE MAXIMUM EXTENT PERMITTED BY LAW:
             </p>
             <p>
-              AccessGraph AI shall not be liable for any indirect, incidental, special,
+              Newton shall not be liable for any indirect, incidental, special,
               consequential, or punitive damages, including:
             </p>
             <ul className="list-disc pl-6 space-y-1">
@@ -256,7 +256,7 @@ export default function TermsOfServicePage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              You agree to indemnify and hold harmless AccessGraph AI from any claims,
+              You agree to indemnify and hold harmless Newton from any claims,
               damages, or expenses arising from:
             </p>
             <ul className="list-disc pl-6 space-y-1">
@@ -310,7 +310,7 @@ export default function TermsOfServicePage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              If you installed AccessGraph AI from the Salesforce AppExchange, you also agree
+              If you installed Newton from the Salesforce AppExchange, you also agree
               to Salesforce's{' '}
               <a
                 href="https://appexchange.salesforce.com/appxStore"
@@ -384,7 +384,7 @@ export default function TermsOfServicePage() {
                 </a>
               </p>
               <p className="mt-2">
-                <strong>Legal Department:</strong> AccessGraph AI, Inc.
+                <strong>Legal Department:</strong> Newton, Inc.
               </p>
             </div>
           </div>

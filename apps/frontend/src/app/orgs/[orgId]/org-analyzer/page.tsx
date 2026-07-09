@@ -1851,7 +1851,7 @@ function BrandSettingsModal({
             <h2 className="text-lg font-semibold">Brand settings</h2>
             <p className="text-xs text-grove-ink/55 mt-1">
               White-label the PDF report with your firm logo and accent
-              color. Leave blank to use the AccessGraph defaults.
+              color. Leave blank to use the Newton defaults.
             </p>
           </div>
           <button

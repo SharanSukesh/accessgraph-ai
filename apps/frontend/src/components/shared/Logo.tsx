@@ -1,5 +1,5 @@
 /**
- * AccessGraph Logo — Grove edition.
+ * Newton Logo — Grove edition.
  *
  * Same geometric graph-network mark, retinted to Grove: deep evergreen
  * outer vertices, warm copper center node. The mark reads as a
@@ -88,9 +88,10 @@ export function Logo({ variant = 'full', className = '', size = 'md' }: LogoProp
   return (
     <div className={`flex items-center space-x-3 ${className}`}>
       <LogoIcon />
-      <span className={`font-bold ${textSize}`}>
-        <span className="text-grove-ink dark:text-grove-ink-dk">Access</span>
-        <span className="text-primary-700 dark:text-primary-400">Graph</span>
+      {/* Newton wordmark — one word, evergreen brand. The graph-network
+          icon carries the "connected nodes" idea; the wordmark stays quiet. */}
+      <span className={`font-bold text-primary-700 dark:text-primary-400 tracking-tight ${textSize}`}>
+        Newton
       </span>
     </div>
   )

@@ -50,7 +50,7 @@ export default function OnboardingPage() {
               <Building2 className="h-10 w-10 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
-              Get Started with AccessGraph AI
+              Get Started with Newton
             </h1>
             <p className="text-lg text-grove-ink/65 dark:text-grove-ink-dk/65">
               Connect your Salesforce organization in just a few steps
