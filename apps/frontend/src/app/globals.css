@@ -60,6 +60,47 @@
     @apply bg-grove-canvas dark:bg-grove-canvas-dk text-grove-ink dark:text-grove-ink-dk;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  /* Grove — global scrollbar theming. Every scroll container in the app
+     picks up Grove tones without opting in via a class. Firefox picks
+     up scrollbar-color; WebKit browsers use the ::-webkit-* pseudos.
+     Opt-out is available via `.scrollbar-hide`. */
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(9 66 48 / 0.32) transparent;
+  }
+  html.dark {
+    scrollbar-color: rgb(107 191 149 / 0.35) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(9 66 48 / 0.32); /* Grove evergreen @ 32% */
+    border-radius: 9999px;
+    border: 2px solid transparent;   /* pulls the thumb off the edge */
+    background-clip: content-box;
+    transition: background-color 200ms ease-out;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(9 66 48 / 0.55);
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: rgb(107 191 149 / 0.35); /* Grove mint @ 35% */
+    background-clip: content-box;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(107 191 149 / 0.60);
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @layer utilities {

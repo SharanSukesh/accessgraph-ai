@@ -254,14 +254,13 @@ export function Sidebar() {
                     // hover / active via .grove-rail. Layered under the
                     // background pill so the two accents don't fight.
                     className={cn(
-                      // Grove — only apply the evergreen rail cue when the
-                      // sidebar is expanded; in collapsed mode there's no
-                      // room for a rail without pushing the icon off-centre.
-                      'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                      // Grove — evergreen rail cue on the left edge (active +
+                      // hover). The rail is absolutely positioned so it never
+                      // affects icon centering; the button stays 44×44 in
+                      // collapsed mode so every icon sits at the same X.
+                      'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                       isExpanded
-                        ? 'grove-rail space-x-3 px-4 py-2.5'
-                        // Fixed 44×44 box centred in the sidebar's content
-                        // column so nav icons align with the footer icons.
+                        ? 'space-x-3 px-4 py-2.5'
                         : 'justify-center w-11 h-11 mx-auto',
                       isActive
                         ? // Active: soft evergreen wash + evergreen ink + copper
