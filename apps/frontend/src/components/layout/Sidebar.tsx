@@ -5,7 +5,7 @@
  * Main navigation for the application - Collapsible on hover
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
@@ -227,17 +227,20 @@ export function Sidebar() {
             itself never occupies layout width. */}
         <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-hide">
           {navigation.map((section, sectionIdx) => (
-            <div
-              key={section.label}
+            // Fragment wrapper so the inter-section divider is a sibling
+            // of the section, not a child that would shrink the section's
+            // content column via mx-3 and push its buttons off the
+            // sidebar midline.
+            <Fragment key={section.label}>
+              {sectionIdx > 0 && !isExpanded && (
+                // Grove hairline divider — its own mx-3 insets the line
+                // without affecting the width of the section that follows.
+                <div className="my-2 mx-3 h-px bg-grove-border/70 dark:bg-grove-border-dk/70" />
+              )}
+              <div
               className={cn(
                 'space-y-1',
-                sectionIdx > 0 && (
-                  isExpanded
-                    ? 'mt-4'
-                    // Grove — hairline divider in the Grove border ink,
-                    // slightly warmer than the gray it replaced.
-                    : 'mt-2 pt-2 border-t border-grove-border/70 dark:border-grove-border-dk/70 mx-3'
-                ),
+                sectionIdx > 0 && isExpanded && 'mt-4',
               )}
             >
               {isExpanded && (
@@ -308,6 +311,7 @@ export function Sidebar() {
                 )
               })}
             </div>
+            </Fragment>
           ))}
         </nav>
 
