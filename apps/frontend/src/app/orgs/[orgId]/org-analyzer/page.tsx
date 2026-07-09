@@ -89,8 +89,8 @@ function severityBadgeClasses(s: FindingSeverity): string {
     case 'critical': return 'bg-red-700 text-white'
     case 'high':     return 'bg-red-500 text-white'
     case 'medium':   return 'bg-amber-500 text-white'
-    case 'low':      return 'bg-yellow-500 text-gray-900'
-    case 'info':     return 'bg-blue-500 text-white'
+    case 'low':      return 'bg-yellow-500 text-grove-ink'
+    case 'info':     return 'bg-primary-600 text-grove-canvas'
   }
 }
 
@@ -148,7 +148,7 @@ export default function OrgAnalyzerPage() {
                 href={`${API_BASE}${endpoints.orgAnalyzerReportPdf(orgId)}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-grove-border dark:border-grove-border-dk rounded-md hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
               >
                 <Download className="h-4 w-4" />
                 Download PDF
@@ -201,11 +201,11 @@ export default function OrgAnalyzerPage() {
       {!hasRun && !latest.isLoading && (
         <Card variant="bordered">
           <CardContent className="p-8 text-center">
-            <Sparkles className="h-10 w-10 mx-auto text-indigo-500 mb-3" />
+            <Sparkles className="h-10 w-10 mx-auto text-primary-600 mb-3" />
             <p className="text-base font-medium mb-1">
               No analysis yet
             </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
               Click <strong>Run analysis</strong> to scan this org for
               license waste, configuration bloat, automation hygiene
               issues, and security posture concerns.
@@ -217,7 +217,7 @@ export default function OrgAnalyzerPage() {
       {hasRun && summary && (
         <>
           {/* Tab bar */}
-          <div className="flex border-b border-gray-200 dark:border-gray-800">
+          <div className="flex border-b border-grove-border dark:border-grove-border-dk">
             {TABS.map(t => {
               const Icon = t.icon
               const active = tab === t.id
@@ -227,8 +227,8 @@ export default function OrgAnalyzerPage() {
                   onClick={() => setTab(t.id)}
                   className={`px-4 py-2 text-sm font-medium border-b-2 transition flex items-center gap-2 ${
                     active
-                      ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                      ? 'border-indigo-600 text-primary-700 dark:text-primary-400'
+                      : 'border-transparent text-grove-ink/55 hover:text-grove-ink/85 dark:hover:text-grove-border'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -286,7 +286,7 @@ function OverviewTab({
   const ignoredCount = summary.ignored_findings_count ?? 0
   const healthAccent =
     healthScore == null
-      ? 'text-gray-400'
+      ? 'text-grove-ink/50'
       : healthScore >= 80
         ? 'text-green-600 dark:text-green-400'
         : healthScore >= 60
@@ -332,7 +332,7 @@ function OverviewTab({
             value={activeFindings.toString()}
             subValue={ignoredCount ? `(+${ignoredCount} ignored)` : undefined}
             icon={AlertTriangle}
-            accent="text-indigo-600 dark:text-indigo-400"
+            accent="text-primary-700 dark:text-primary-400"
           />
           <StatCard
             label="Est. annual savings"
@@ -357,7 +357,7 @@ function OverviewTab({
                 : undefined
             }
             icon={FileText}
-            accent="text-gray-700 dark:text-gray-300"
+            accent="text-grove-ink/85 dark:text-grove-ink-dk/85"
             small
           />
         </div>
@@ -368,10 +368,10 @@ function OverviewTab({
       {summary.executive_summary && (
         <Card variant="bordered">
           <CardContent className="p-4">
-            <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">
+            <p className="text-[10px] uppercase tracking-wider text-grove-ink/55 mb-2">
               Executive summary
             </p>
-            <p className="text-sm leading-relaxed text-gray-800 dark:text-gray-200">
+            <p className="text-sm leading-relaxed text-grove-ink dark:text-grove-ink-dk/85">
               {summary.executive_summary}
             </p>
           </CardContent>
@@ -398,7 +398,7 @@ function OverviewTab({
           </CardHeader>
           <CardContent>
             {topCategories.length === 0 ? (
-              <p className="text-sm text-gray-500">No findings.</p>
+              <p className="text-sm text-grove-ink/55">No findings.</p>
             ) : (
               <ul className="space-y-2">
                 {topCategories.map(([cat, count]) => (
@@ -439,7 +439,7 @@ function HeroHealthCard({
 }) {
   const accent =
     score == null
-      ? { ring: 'text-gray-400', text: 'text-gray-400', band: 'No data' }
+      ? { ring: 'text-grove-ink/50', text: 'text-grove-ink/50', band: 'No data' }
       : score >= 80
         ? { ring: 'text-green-500', text: 'text-green-600 dark:text-green-400', band: 'Excellent' }
         : score >= 60
@@ -462,7 +462,7 @@ function HeroHealthCard({
               fill="none"
               stroke="currentColor"
               strokeWidth="10"
-              className="text-gray-200 dark:text-gray-800"
+              className="text-grove-border dark:text-grove-ink-dk/85"
             />
             <circle
               cx="60"
@@ -483,12 +483,12 @@ function HeroHealthCard({
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
+          <p className="text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
             Org Health Score
           </p>
           <p className={`text-lg font-semibold ${accent.text}`}>{accent.band}</p>
           {rubric && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
               {rubric.deduction} pts deducted from a starting score of 100,
               weighted by severity.
             </p>
@@ -541,7 +541,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Quick wins — top 5 by annual savings</span>
-          <span className="text-xs font-normal text-gray-500">
+          <span className="text-xs font-normal text-grove-ink/55">
             Sorted by estimated $/yr
           </span>
         </CardTitle>
@@ -553,7 +553,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
               key={f.id}
               className="py-2.5 flex items-start gap-3 first:pt-0 last:pb-0"
             >
-              <span className="text-xs font-mono text-gray-400 w-5 flex-shrink-0 mt-0.5">
+              <span className="text-xs font-mono text-grove-ink/50 w-5 flex-shrink-0 mt-0.5">
                 {i + 1}.
               </span>
               <span
@@ -563,7 +563,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{f.title}</p>
-                <p className="text-xs text-gray-500 truncate">
+                <p className="text-xs text-grove-ink/55 truncate">
                   {CATEGORY_LABELS[f.category]}
                 </p>
               </div>
@@ -597,13 +597,13 @@ function StatCard({
     <Card variant="bordered">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs uppercase tracking-wide text-gray-500">{label}</span>
+          <span className="text-xs uppercase tracking-wide text-grove-ink/55">{label}</span>
           <Icon className={`h-4 w-4 ${accent}`} />
         </div>
         <p className={`font-bold ${accent} ${small ? 'text-sm' : 'text-2xl'}`}>
           {value}
           {subValue && (
-            <span className="text-xs font-normal text-gray-500 ml-1">{subValue}</span>
+            <span className="text-xs font-normal text-grove-ink/55 ml-1">{subValue}</span>
           )}
         </p>
       </CardContent>
@@ -621,7 +621,7 @@ function SeverityBars({ counts }: { counts: Record<string, number> }) {
         return (
           <div key={s} className="flex items-center gap-2">
             <span className="text-xs w-20">{SEVERITY_LABELS[s]}</span>
-            <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
+            <div className="flex-1 bg-primary-50 dark:bg-primary-900/20 rounded h-2 overflow-hidden">
               <div
                 className={severityBadgeClasses(s)}
                 style={{ width: `${(c / max) * 100}%`, height: '100%' }}
@@ -638,7 +638,7 @@ function SeverityBars({ counts }: { counts: Record<string, number> }) {
 function Sparkline({ points }: { points: any[] }) {
   if (!points || points.length === 0) {
     return (
-      <p className="text-sm text-gray-500 italic">
+      <p className="text-sm text-grove-ink/55 italic">
         More history needed — run analysis again to start charting trends.
       </p>
     )
@@ -773,12 +773,12 @@ function FindingsTab({ orgId }: { orgId: string }) {
         <CardContent>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50" />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search findings…"
-                className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"
+                className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk"
               />
             </div>
             <select
@@ -786,7 +786,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
               onChange={e =>
                 setCategory((e.target.value || null) as FindingCategory | null)
               }
-              className="text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-1.5 px-2"
+              className="text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk py-1.5 px-2"
             >
               <option value="">All categories</option>
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
@@ -800,7 +800,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
               onChange={e =>
                 setSeverity((e.target.value || null) as FindingSeverity | null)
               }
-              className="text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-1.5 px-2"
+              className="text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk py-1.5 px-2"
             >
               <option value="">All severities</option>
               <option value="critical">Critical</option>
@@ -809,12 +809,12 @@ function FindingsTab({ orgId }: { orgId: string }) {
               <option value="low">Low</option>
               <option value="info">Info</option>
             </select>
-            <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={includeIgnored}
                 onChange={e => setIncludeIgnored(e.target.checked)}
-                className="rounded border-gray-300 dark:border-gray-700"
+                className="rounded border-grove-border dark:border-grove-border-dk"
               />
               Show ignored
             </label>
@@ -827,7 +827,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   ...(includeIgnored ? { include_ignored: 'true' } : {}),
                 }).toString()
               }
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded border border-grove-border dark:border-grove-border-dk text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
               title="Download the filtered findings list as CSV"
             >
               <Download className="h-3.5 w-3.5" />
@@ -837,16 +837,16 @@ function FindingsTab({ orgId }: { orgId: string }) {
           {findings.isLoading ? (
             <TableSkeleton rows={6} />
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-gray-500 italic">No findings match.</p>
+            <p className="text-sm text-grove-ink/55 italic">No findings match.</p>
           ) : (
             <ul className="divide-y divide-gray-200 dark:divide-gray-800">
               {filtered.map(f => (
                 <li
                   key={f.id}
                   onClick={() => setSelected(f)}
-                  className={`py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 px-2 -mx-2 rounded ${
+                  className={`py-3 cursor-pointer hover:bg-primary-50/40 dark:hover:bg-primary-900/15/50 px-2 -mx-2 rounded ${
                     refreshedSelected?.id === f.id
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20'
+                      ? 'bg-primary-50 dark:bg-primary-900/20'
                       : ''
                   } ${f.is_ignored ? 'opacity-50' : ''}`}
                 >
@@ -857,7 +857,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                       {SEVERITY_LABELS[f.severity]}
                     </span>
                     {f.is_ignored && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-grove-border/60 dark:bg-grove-border-dk/70 text-grove-ink/70 dark:text-grove-ink-dk/85 inline-flex items-center gap-1">
                         <EyeOff className="h-2.5 w-2.5" />
                         Ignored
                       </span>
@@ -878,7 +878,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{f.title}</p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-xs text-grove-ink/55 truncate">
                         {CATEGORY_LABELS[f.category]} &middot;{' '}
                         {f.affected_count} affected
                         {f.estimated_annual_savings_cents
@@ -886,7 +886,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                           : ''}
                       </p>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-gray-300 flex-shrink-0 mt-1" />
+                    <ArrowRight className="h-4 w-4 text-grove-border flex-shrink-0 mt-1" />
                   </div>
                 </li>
               ))}
@@ -904,7 +904,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
         </CardHeader>
         <CardContent>
           {!refreshedSelected ? (
-            <p className="text-sm text-gray-500 italic">
+            <p className="text-sm text-grove-ink/55 italic">
               Pick a finding from the list to see its evidence, recommended
               action, and Salesforce deeplink.
             </p>
@@ -917,7 +917,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   {SEVERITY_LABELS[refreshedSelected.severity]}
                 </span>
                 {refreshedSelected.is_ignored && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 inline-flex items-center gap-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-grove-border/60 dark:bg-grove-border-dk/70 text-grove-ink/70 dark:text-grove-ink-dk/85 inline-flex items-center gap-1">
                     <EyeOff className="h-2.5 w-2.5" />
                     Ignored
                   </span>
@@ -939,15 +939,15 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     Non-billable
                   </span>
                 )}
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-grove-ink/55">
                   {CATEGORY_LABELS[refreshedSelected.category]}
                 </span>
               </div>
               <h3 className="text-base font-semibold">{refreshedSelected.title}</h3>
-              <p className="text-gray-700 dark:text-gray-300">{refreshedSelected.description}</p>
+              <p className="text-grove-ink/85 dark:text-grove-ink-dk/85">{refreshedSelected.description}</p>
               {refreshedSelected.recommended_action && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mb-1">
+                <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded p-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300 mb-1">
                     Recommended action
                   </p>
                   <p className="text-xs">{refreshedSelected.recommended_action}</p>
@@ -959,11 +959,11 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   already resolved. Confirmation lives inline via the
                   button label + toast so we don't add a modal. */}
               {refreshedSelected.has_apply_fix && !refreshedSelected.is_resolved && (
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded p-2 space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded p-2 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
                     Apply fix in Salesforce
                   </p>
-                  <p className="text-[11px] text-indigo-900 dark:text-indigo-100">
+                  <p className="text-[11px] text-primary-800 dark:text-primary-200">
                     This finding can be auto-fixed:{' '}
                     {refreshedSelected.code === 'LICENSE_INACTIVE_USER'
                       || refreshedSelected.code === 'LICENSE_NEVER_LOGGED_IN'
@@ -1017,7 +1017,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   href={refreshedSelected.sf_setup_deeplink}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
                 >
                   Open in Salesforce Setup
                   <ArrowRight className="h-3 w-3" />
@@ -1029,24 +1029,24 @@ function FindingsTab({ orgId }: { orgId: string }) {
                 />
               )}
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-grove-ink/55 mb-1">
                   Evidence
                 </p>
-                <pre className="text-[10px] bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded p-2 overflow-auto max-h-64">
+                <pre className="text-[10px] bg-grove-canvas dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk rounded p-2 overflow-auto max-h-64">
                   {JSON.stringify(refreshedSelected.evidence, null, 2)}
                 </pre>
               </div>
-              <p className="text-[10px] text-gray-400 font-mono">
+              <p className="text-[10px] text-grove-ink/50 font-mono">
                 Code: {refreshedSelected.code}
               </p>
 
               {/* Ignore controls — let the consultant flag intentional or
                   out-of-scope findings without losing the row. Stays under
                   the evidence so it's a deliberate action, not the default. */}
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-3">
+              <div className="border-t border-grove-border dark:border-grove-border-dk pt-3">
                 {refreshedSelected.is_ignored ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-grove-ink/55">
                       Ignored
                       {refreshedSelected.ignored_by && (
                         <> by <strong>{refreshedSelected.ignored_by}</strong></>
@@ -1073,10 +1073,10 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-gray-500">
+                    <p className="text-xs uppercase tracking-wide text-grove-ink/55">
                       Ignore this finding
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-grove-ink/55">
                       Intentional configuration, out-of-scope, or a known
                       false positive? Ignoring drops it from the report and
                       the savings total. The row is preserved so you can
@@ -1086,7 +1086,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                       value={ignoreReason}
                       onChange={e => setIgnoreReason(e.target.value)}
                       placeholder="Reason (optional)"
-                      className="w-full text-xs rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5"
+                      className="w-full text-xs rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk px-2 py-1.5"
                     />
                     <Button
                       variant="secondary"
@@ -1110,8 +1110,8 @@ function FindingsTab({ orgId }: { orgId: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border border-gray-200 dark:border-gray-800 rounded p-2">
-      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
+    <div className="border border-grove-border dark:border-grove-border-dk rounded p-2">
+      <p className="text-[10px] uppercase tracking-wide text-grove-ink/55">{label}</p>
       <p className="text-sm font-semibold">{value}</p>
     </div>
   )
@@ -1142,7 +1142,7 @@ function CostCalculationCard({ calc }: { calc: any }) {
                 {row.monthly_cents > 0 ? (
                   <> × ${(row.monthly_cents / 100).toFixed(2)}/mo × 12</>
                 ) : (
-                  <span className="text-gray-500 dark:text-gray-400 italic">
+                  <span className="text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
                     {' '}— {row.note ?? 'no monetary impact'}
                   </span>
                 )}
@@ -1247,7 +1247,7 @@ function SavingsTab({ orgId }: { orgId: string }) {
       </CardHeader>
       <CardContent>
         {grouped.length === 0 ? (
-          <p className="text-sm text-gray-500 italic">
+          <p className="text-sm text-grove-ink/55 italic">
             No quantifiable savings yet. License-waste findings (inactive
             users, unused seats, oversized licenses) drive most of this
             number — once those rules fire, the math shows up here.
@@ -1260,21 +1260,21 @@ function SavingsTab({ orgId }: { orgId: string }) {
               return (
                 <li
                   key={cat}
-                  className="border border-gray-200 dark:border-gray-800 rounded"
+                  className="border border-grove-border dark:border-grove-border-dk rounded"
                 >
                   <button
                     onClick={() => toggle(cat)}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded"
+                    className="w-full text-left px-3 py-2 hover:bg-primary-50/40 dark:hover:bg-primary-900/15/50 rounded"
                   >
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="font-medium flex items-center gap-1.5">
                         {isOpen ? (
-                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                          <ChevronDown className="h-4 w-4 text-grove-ink/50" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                          <ChevronRight className="h-4 w-4 text-grove-ink/50" />
                         )}
                         {label}
-                        <span className="text-xs text-gray-500 font-normal">
+                        <span className="text-xs text-grove-ink/55 font-normal">
                           ({slot.rows.length}{' '}
                           {slot.rows.length === 1 ? 'finding' : 'findings'})
                         </span>
@@ -1283,7 +1283,7 @@ function SavingsTab({ orgId }: { orgId: string }) {
                         {formatMoneyCents(slot.total)}
                       </span>
                     </div>
-                    <div className="bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
+                    <div className="bg-primary-50 dark:bg-primary-900/20 rounded h-2 overflow-hidden">
                       <div
                         className="bg-green-500 h-full"
                         style={{ width: `${(slot.total / max) * 100}%` }}
@@ -1291,7 +1291,7 @@ function SavingsTab({ orgId }: { orgId: string }) {
                     </div>
                   </button>
                   {isOpen && (
-                    <ul className="border-t border-gray-200 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-900">
+                    <ul className="border-t border-grove-border dark:border-grove-border-dk divide-y divide-grove-border dark:divide-grove-border-dk">
                       {slot.rows.map(f => (
                         <SavingsBreakdownRow key={f.id} finding={f} />
                       ))}
@@ -1321,14 +1321,14 @@ function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
               {byLicense.map((row, i) => (
                 <li
                   key={i}
-                  className="text-[11px] font-mono text-gray-500 dark:text-gray-400 flex items-baseline justify-between gap-2"
+                  className="text-[11px] font-mono text-grove-ink/55 dark:text-grove-ink-dk/55 flex items-baseline justify-between gap-2"
                 >
                   <span>
                     {row.count} {row.license_name}
                     {row.monthly_cents > 0 ? (
                       <> × ${(row.monthly_cents / 100).toFixed(2)}/mo × 12</>
                     ) : (
-                      <span className="italic text-gray-400">
+                      <span className="italic text-grove-ink/50">
                         {' '}— {row.note ?? 'no monetary impact'}
                       </span>
                     )}
@@ -1342,7 +1342,7 @@ function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
               ))}
             </ul>
           ) : calc?.formula ? (
-            <p className="text-[11px] font-mono text-gray-500 dark:text-gray-400 mt-0.5">
+            <p className="text-[11px] font-mono text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
               {calc.formula}
               {calc.total_annual_cents != null && (
                 <>
@@ -1354,7 +1354,7 @@ function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
               )}
             </p>
           ) : finding.description ? (
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
+            <p className="text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5 line-clamp-2">
               {finding.description}
             </p>
           ) : null}
@@ -1380,7 +1380,7 @@ function TrendsTab({ history, summary }: { history: any[]; summary: any }) {
           </CardHeader>
           <CardContent>
             <Sparkline points={history} />
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-grove-ink/55 mt-2">
               {history.length} snapshot{history.length === 1 ? '' : 's'} on file.
             </p>
           </CardContent>
@@ -1409,7 +1409,7 @@ function TrendsTab({ history, summary }: { history: any[]; summary: any }) {
 function LicenseUtilizationTable({ rows }: { rows: any[] }) {
   if (!rows || rows.length === 0) {
     return (
-      <p className="text-sm text-gray-500 italic">
+      <p className="text-sm text-grove-ink/55 italic">
         License inventory unavailable. Run analysis to fetch UserLicense
         and PermissionSetLicense from the org.
       </p>
@@ -1420,22 +1420,22 @@ function LicenseUtilizationTable({ rows }: { rows: any[] }) {
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-left border-b border-gray-200 dark:border-gray-800">
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">License</th>
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500 text-right">Used</th>
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500 text-right">Total</th>
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500 text-right">Surplus</th>
-          <th className="py-2 text-xs uppercase tracking-wide text-gray-500">Utilisation</th>
+        <tr className="text-left border-b border-grove-border dark:border-grove-border-dk">
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">License</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 text-right">Used</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 text-right">Total</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 text-right">Surplus</th>
+          <th className="py-2 text-xs uppercase tracking-wide text-grove-ink/55">Utilisation</th>
         </tr>
       </thead>
       <tbody>
         {sorted.map((r, i) => {
           const surplus = (r.total ?? 0) - (r.used ?? 0)
           return (
-            <tr key={`${r.developer_key}-${i}`} className="border-b border-gray-100 dark:border-gray-900">
+            <tr key={`${r.developer_key}-${i}`} className="border-b border-grove-border/60 dark:border-grove-border-dk">
               <td className="py-2 pr-3">
                 <div className="text-sm">{r.license_name}</div>
-                <div className="text-[10px] text-gray-500">{r.kind} license</div>
+                <div className="text-[10px] text-grove-ink/55">{r.kind} license</div>
               </td>
               <td className="py-2 pr-3 text-right font-mono text-sm">{r.used}</td>
               <td className="py-2 pr-3 text-right font-mono text-sm">{r.total}</td>
@@ -1446,7 +1446,7 @@ function LicenseUtilizationTable({ rows }: { rows: any[] }) {
               </td>
               <td className="py-2">
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden min-w-[60px]">
+                  <div className="flex-1 bg-primary-50 dark:bg-primary-900/20 rounded h-2 overflow-hidden min-w-[60px]">
                     <div
                       className={
                         r.utilization_pct >= 90
@@ -1513,7 +1513,7 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-gray-500 italic">
+      <p className="text-sm text-grove-ink/55 italic">
         Org limits unavailable. Run analysis to fetch them.
       </p>
     )
@@ -1523,7 +1523,7 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
   return (
     <div>
       {totalAcrossAll === 0 && (
-        <p className="text-xs text-gray-500 italic mb-3">
+        <p className="text-xs text-grove-ink/55 italic mb-3">
           Note: every metric below reports 0% used. For a developer / scratch
           org this is normal &mdash; the bars will populate as the org accrues
           real usage.
@@ -1534,7 +1534,7 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
           <li key={r.key}>
             <div className="flex items-center justify-between text-sm mb-1">
               <span>{r.label}</span>
-              <span className="text-xs font-mono text-gray-500">
+              <span className="text-xs font-mono text-grove-ink/55">
                 {_formatLimit(r.key, r.used)} / {_formatLimit(r.key, r.max)}{' '}
                 <span
                   className={
@@ -1549,14 +1549,14 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
                 </span>
               </span>
             </div>
-            <div className="bg-gray-100 dark:bg-gray-800 rounded h-2 overflow-hidden">
+            <div className="bg-primary-50 dark:bg-primary-900/20 rounded h-2 overflow-hidden">
               <div
                 className={
                   r.usedPct >= 90
                     ? 'bg-red-600 h-full'
                     : r.usedPct >= 75
                       ? 'bg-amber-500 h-full'
-                      : 'bg-indigo-500 h-full'
+                      : 'bg-primary-600 h-full'
                 }
                 style={{
                   width: `${Math.max(r.usedPct, r.used > 0 ? 1 : 0)}%`,
@@ -1629,9 +1629,9 @@ function PriceBookTab({ orgId }: { orgId: string }) {
         <CardTitle>License price book</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-gray-500 mb-3">
+        <p className="text-xs text-grove-ink/55 mb-3">
           Monthly cost per license SKU in cents. SKUs labelled{' '}
-          <span className="font-semibold text-indigo-700 dark:text-indigo-300">In org</span>{' '}
+          <span className="font-semibold text-primary-700 dark:text-primary-300">In org</span>{' '}
           are the actual{' '}
           <code>UserLicense</code> + <code>PermissionSetLicense</code>{' '}
           records this org owns. Default prices come from a built-in
@@ -1650,12 +1650,12 @@ function PriceBookTab({ orgId }: { orgId: string }) {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left border-b border-gray-200 dark:border-gray-800">
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">License</th>
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Source</th>
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Billed?</th>
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-gray-500">Cost (cents/mo)</th>
-                <th className="py-2 text-xs uppercase tracking-wide text-gray-500">Cost (USD/mo)</th>
+              <tr className="text-left border-b border-grove-border dark:border-grove-border-dk">
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">License</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">Source</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">Billed?</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">Cost (cents/mo)</th>
+                <th className="py-2 text-xs uppercase tracking-wide text-grove-ink/55">Cost (USD/mo)</th>
                 <th className="py-2"></th>
               </tr>
             </thead>
@@ -1663,19 +1663,19 @@ function PriceBookTab({ orgId }: { orgId: string }) {
               {display.map((r, i) => {
                 const billed = r.is_billed ?? true
                 return (
-                  <tr key={i} className={`border-b border-gray-100 dark:border-gray-900 ${!billed ? 'bg-gray-50/50 dark:bg-gray-900/30' : ''}`}>
+                  <tr key={i} className={`border-b border-grove-border/60 dark:border-grove-border-dk ${!billed ? 'bg-primary-50/30 dark:bg-primary-900/10' : ''}`}>
                     <td className="py-1 pr-3">
                       <input
                         value={r.license_name}
                         onChange={e => handleSet(i, 'license_name', e.target.value)}
-                        className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+                        className="w-full px-2 py-1 rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk text-sm"
                       />
                     </td>
                     <td className="py-1 pr-3 whitespace-nowrap">
                       <div className="flex items-center gap-1">
                         {r.in_org && (
                           <span
-                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300"
                             title="Detected in the org's UserLicense / PSL inventory"
                           >
                             In org
@@ -1690,7 +1690,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                           </span>
                         ) : (
                           <span
-                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary-50 text-grove-ink/85 dark:bg-primary-900/20 dark:text-grove-ink-dk/70"
                             title="From the built-in Salesforce list-price catalog"
                           >
                             Default
@@ -1706,12 +1706,12 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border transition ${
                           billed
                             ? 'bg-green-50 border-green-300 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300'
-                            : 'bg-gray-100 border-gray-300 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'
+                            : 'bg-primary-50 border-grove-border text-grove-ink/85 dark:bg-primary-900/20 dark:border-grove-border-dk dark:text-grove-ink-dk/70'
                         }`}
                       >
                         <span
                           className={`h-2.5 w-2.5 rounded-full ${
-                            billed ? 'bg-green-500' : 'bg-gray-400'
+                            billed ? 'bg-green-500' : 'bg-grove-ink/40'
                           }`}
                         />
                         {billed ? 'Billed' : 'Bundled'}
@@ -1724,12 +1724,12 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                         value={r.monthly_cost_cents}
                         onChange={e => handleSet(i, 'monthly_cost_cents', e.target.value)}
                         disabled={!billed}
-                        className={`w-32 px-2 py-1 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-mono ${
+                        className={`w-32 px-2 py-1 rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk text-sm font-mono ${
                           !billed ? 'opacity-50' : ''
                         }`}
                       />
                     </td>
-                    <td className="py-1 text-xs text-gray-500 font-mono">
+                    <td className="py-1 text-xs text-grove-ink/55 font-mono">
                       {billed
                         ? `$${(r.monthly_cost_cents / 100).toFixed(2)}`
                         : <span className="italic">bundled — $0</span>
@@ -1738,7 +1738,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                     <td className="py-1 text-right">
                       <button
                         onClick={() => handleDelete(i)}
-                        className="text-gray-400 hover:text-red-600"
+                        className="text-grove-ink/50 hover:text-red-600"
                         title="Remove SKU"
                       >
                         <XIcon className="h-3.5 w-3.5" />
@@ -1772,7 +1772,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
             <Settings2 className="h-4 w-4 mr-1.5" /> Brand settings
           </Button>
           {savedMessage && (
-            <span className="text-xs text-gray-600 dark:text-gray-400">
+            <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
               <Info className="inline h-3.5 w-3.5 mr-1" />
               {savedMessage}
             </span>
@@ -1843,20 +1843,20 @@ function BrandSettingsModal({
       onClick={onClose}
     >
       <div
-        className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full p-6"
+        className="bg-grove-surface dark:bg-grove-canvas-dk rounded-lg shadow-xl max-w-lg w-full p-6"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold">Brand settings</h2>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-grove-ink/55 mt-1">
               White-label the PDF report with your firm logo and accent
               color. Leave blank to use the AccessGraph defaults.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-grove-ink/50 hover:text-grove-ink/70"
             aria-label="Close"
           >
             <XIcon className="h-4 w-4" />
@@ -1865,18 +1865,18 @@ function BrandSettingsModal({
 
         <div className="space-y-4 text-sm">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">
+            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
               Firm name
             </label>
             <input
               value={firmName}
               onChange={e => setFirmName(e.target.value)}
               placeholder="e.g. Acme Salesforce Consulting"
-              className="w-full px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+              className="w-full px-2 py-1.5 rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">
+            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
               Accent color (#RRGGBB)
             </label>
             <div className="flex items-center gap-2">
@@ -1884,12 +1884,12 @@ function BrandSettingsModal({
                 value={accent}
                 onChange={e => setAccent(e.target.value)}
                 placeholder="#1e1b4b"
-                className="flex-1 px-2 py-1.5 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm font-mono"
+                className="flex-1 px-2 py-1.5 rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk text-sm font-mono"
                 pattern="^#[0-9A-Fa-f]{6}$"
               />
               {accent && /^#[0-9A-Fa-f]{6}$/.test(accent) && (
                 <span
-                  className="w-8 h-8 rounded border border-gray-300 dark:border-gray-700"
+                  className="w-8 h-8 rounded border border-grove-border dark:border-grove-border-dk"
                   style={{ backgroundColor: accent }}
                   aria-hidden
                 />
@@ -1897,7 +1897,7 @@ function BrandSettingsModal({
             </div>
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1">
+            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
               Firm logo (PNG / JPEG / SVG, 256KB max)
             </label>
             <div className="flex items-center gap-3">
@@ -1905,7 +1905,7 @@ function BrandSettingsModal({
                 <img
                   src={`${API_BASE}${endpoints.orgAnalyzerBrandLogo(orgId)}?t=${Date.now()}`}
                   alt="Current firm logo"
-                  className="h-12 max-w-[120px] object-contain rounded border border-gray-200 dark:border-gray-700 bg-white p-1"
+                  className="h-12 max-w-[120px] object-contain rounded border border-grove-border dark:border-grove-border-dk bg-white p-1"
                 />
               )}
               <input
@@ -1917,7 +1917,7 @@ function BrandSettingsModal({
               />
             </div>
             {upload.isPending && (
-              <p className="text-xs text-gray-500 mt-1">Uploading…</p>
+              <p className="text-xs text-grove-ink/55 mt-1">Uploading…</p>
             )}
             {uploadError && (
               <p className="text-xs text-red-600 dark:text-red-400 mt-1">
@@ -1926,7 +1926,7 @@ function BrandSettingsModal({
             )}
           </div>
           {saved && (
-            <p className="text-xs text-gray-700 dark:text-gray-300 italic">
+            <p className="text-xs text-grove-ink/85 dark:text-grove-ink-dk/85 italic">
               <Info className="inline h-3.5 w-3.5 mr-1" />
               {saved}
             </p>

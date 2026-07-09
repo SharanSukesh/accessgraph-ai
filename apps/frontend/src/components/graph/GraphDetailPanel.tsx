@@ -96,7 +96,7 @@ export function GraphDetailPanel({
     return (
       <Card variant="bordered" className={className}>
         <CardContent className="py-12 text-center">
-          <div className="text-gray-400 dark:text-gray-600">
+          <div className="text-grove-ink/45 dark:text-grove-ink-dk/45">
             <Database className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p className="text-sm">Select a node or edge to view details</p>
           </div>
@@ -192,10 +192,10 @@ function NodeDetailPanel({
       <CardContent className="space-y-4 max-h-[600px] overflow-y-auto">
         {/* Node ID */}
         <div>
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+          <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
             Node ID
           </div>
-          <div className="text-sm text-gray-900 dark:text-white font-mono bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">
+          <div className="text-sm text-grove-ink dark:text-grove-ink-dk font-mono bg-primary-50/40 dark:bg-primary-900/10 px-2 py-1 rounded">
             {node.id}
           </div>
         </div>
@@ -205,15 +205,15 @@ function NodeDetailPanel({
           <>
             {node.email && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Email
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white">{node.email}</div>
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk">{node.email}</div>
               </div>
             )}
             {node.riskLevel && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Risk Level
                 </div>
                 <RiskBadge level={node.riskLevel} />
@@ -221,23 +221,23 @@ function NodeDetailPanel({
             )}
             {node.profile && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Profile
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white">{node.profile}</div>
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk">{node.profile}</div>
               </div>
             )}
             {node.role && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Role
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white">{node.role}</div>
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk">{node.role}</div>
               </div>
             )}
             {typeof node.isActive !== 'undefined' && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Status
                 </div>
                 <Badge variant={node.isActive ? 'success' : 'default'}>
@@ -253,17 +253,17 @@ function NodeDetailPanel({
           <>
             {node.apiName && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   API Name
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white font-mono">
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk font-mono">
                   {node.apiName}
                 </div>
               </div>
             )}
             {typeof node.isSensitive !== 'undefined' && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Sensitivity
                 </div>
                 <Badge variant={node.isSensitive ? 'warning' : 'default'}>
@@ -279,10 +279,10 @@ function NodeDetailPanel({
           <>
             {node.description && (
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Description
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white">{node.description}</div>
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk">{node.description}</div>
               </div>
             )}
           </>
@@ -291,14 +291,14 @@ function NodeDetailPanel({
         {/* Additional properties */}
         {node.properties && Object.keys(node.properties).length > 0 && (
           <div>
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+            <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
               Additional Properties
             </div>
             <div className="space-y-1 text-xs">
               {Object.entries(node.properties).map(([key, value]) => (
                 <div key={key} className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">{key}:</span>
-                  <span className="text-gray-900 dark:text-white font-mono">
+                  <span className="text-grove-ink/65 dark:text-grove-ink-dk/65">{key}:</span>
+                  <span className="text-grove-ink dark:text-grove-ink-dk font-mono">
                     {String(value)}
                   </span>
                 </div>
@@ -312,14 +312,14 @@ function NodeDetailPanel({
           <>
             {/* Summary */}
             {nodeDetails.summary && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+              <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
+                <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-3">
                   Access Summary
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">Objects</div>
-                    <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+                  <div className="bg-primary-50 dark:bg-primary-900/20 p-3 rounded-lg">
+                    <div className="text-xs text-primary-700 dark:text-primary-400 mb-1">Objects</div>
+                    <div className="text-2xl font-bold text-primary-800 dark:text-primary-200">
                       {nodeDetails.summary.totalObjects}
                     </div>
                   </div>
@@ -335,10 +335,10 @@ function NodeDetailPanel({
 
             {/* Objects Granted Access */}
             {nodeDetails.objectsGranted && nodeDetails.objectsGranted.length > 0 && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
                 <button
                   onClick={() => setShowObjects(!showObjects)}
-                  className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+                  className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
                 >
                   <span className="flex items-center gap-2">
                     <Database className="h-4 w-4" />
@@ -351,9 +351,9 @@ function NodeDetailPanel({
                     {nodeDetails.objectsGranted.map((obj: any) => (
                       <div
                         key={obj.objectName}
-                        className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs"
+                        className="p-2 bg-primary-50/40 dark:bg-primary-900/10 rounded text-xs"
                       >
-                        <div className="font-medium text-gray-900 dark:text-white mb-1">
+                        <div className="font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
                           {obj.objectName}
                         </div>
                         <div className="flex flex-wrap gap-1">
@@ -372,10 +372,10 @@ function NodeDetailPanel({
 
             {/* Fields Granted Access */}
             {nodeDetails.fieldsGranted && nodeDetails.fieldsGranted.length > 0 && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
                 <button
                   onClick={() => setShowFields(!showFields)}
-                  className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+                  className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
                 >
                   <span className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
@@ -388,12 +388,12 @@ function NodeDetailPanel({
                     {nodeDetails.fieldsGranted.map((field: any) => (
                       <div
                         key={field.fieldName}
-                        className="p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs"
+                        className="p-2 bg-primary-50/40 dark:bg-primary-900/10 rounded text-xs"
                       >
-                        <div className="font-medium text-gray-900 dark:text-white">
+                        <div className="font-medium text-grove-ink dark:text-grove-ink-dk">
                           {field.displayName}
                         </div>
-                        <div className="text-gray-500 dark:text-gray-400 text-xs mb-1">
+                        <div className="text-grove-ink/55 dark:text-grove-ink-dk/55 text-xs mb-1">
                           {field.objectName}
                         </div>
                         <div className="flex flex-wrap gap-1">
@@ -412,8 +412,8 @@ function NodeDetailPanel({
 
             {/* Record-Level Access Info */}
             {nodeDetails.recordsInfo && (
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+              <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
+                <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 flex items-center gap-2">
                   <Lock className="h-4 w-4" />
                   Record-Level Access
                 </div>
@@ -432,8 +432,8 @@ function NodeDetailPanel({
 
         {/* Loading state for details */}
         {shouldFetchDetails && detailsLoading && (
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+          <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
+            <div className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-4">
               Loading detailed access information...
             </div>
           </div>
@@ -441,7 +441,7 @@ function NodeDetailPanel({
 
         {/* Error state for details */}
         {shouldFetchDetails && detailsError && (
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
             <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
@@ -455,7 +455,7 @@ function NodeDetailPanel({
 
         {/* Actions */}
         {node.type === NODE_TYPES.USER.value && (
-          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="pt-2 border-t border-grove-border dark:border-grove-border-dk">
             <Button
               size="sm"
               variant="secondary"
@@ -505,22 +505,22 @@ function EdgeDetailPanel({
       <CardContent className="space-y-4">
         {/* Edge ID */}
         <div>
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+          <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
             Edge ID
           </div>
-          <div className="text-sm text-gray-900 dark:text-white font-mono bg-gray-50 dark:bg-gray-800 px-2 py-1 rounded">
+          <div className="text-sm text-grove-ink dark:text-grove-ink-dk font-mono bg-primary-50/40 dark:bg-primary-900/10 px-2 py-1 rounded">
             {edge.id}
           </div>
         </div>
 
         {/* Source and Target */}
         <div>
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+          <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
             Connection
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <div className="text-xs text-gray-500 dark:text-gray-400 w-16">From:</div>
+              <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 w-16">From:</div>
               <button
                 onClick={() => onNavigate?.(edge.source)}
                 className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-mono flex-1 text-left"
@@ -529,7 +529,7 @@ function EdgeDetailPanel({
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <div className="text-xs text-gray-500 dark:text-gray-400 w-16">To:</div>
+              <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 w-16">To:</div>
               <button
                 onClick={() => onNavigate?.(edge.target)}
                 className="text-sm text-primary-600 dark:text-primary-400 hover:underline font-mono flex-1 text-left"
@@ -543,10 +543,10 @@ function EdgeDetailPanel({
         {/* Label */}
         {edge.label && (
           <div>
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
               Label
             </div>
-            <div className="text-sm text-gray-900 dark:text-white">{edge.label}</div>
+            <div className="text-sm text-grove-ink dark:text-grove-ink-dk">{edge.label}</div>
           </div>
         )}
 
@@ -558,7 +558,7 @@ function EdgeDetailPanel({
           EDGE_TYPES.CAN_DELETE.value,
         ] as string[]).includes(edge.type) && (
           <div>
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
               Permission Type
             </div>
             <Badge variant="success">{edgeTypeLabel}</Badge>
@@ -568,14 +568,14 @@ function EdgeDetailPanel({
         {/* Additional properties */}
         {edge.properties && Object.keys(edge.properties).length > 0 && (
           <div>
-            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+            <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
               Additional Properties
             </div>
             <div className="space-y-1 text-xs">
               {Object.entries(edge.properties).map(([key, value]) => (
                 <div key={key} className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">{key}:</span>
-                  <span className="text-gray-900 dark:text-white font-mono">
+                  <span className="text-grove-ink/65 dark:text-grove-ink-dk/65">{key}:</span>
+                  <span className="text-grove-ink dark:text-grove-ink-dk font-mono">
                     {String(value)}
                   </span>
                 </div>

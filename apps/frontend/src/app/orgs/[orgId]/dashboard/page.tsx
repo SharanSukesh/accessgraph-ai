@@ -125,17 +125,17 @@ export default function DashboardPage() {
 
       {/* Sync Status Banner */}
       {latestSync && (
-        <Card variant="bordered" className="bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+        <Card variant="bordered" className="bg-primary-50 dark:bg-primary-900/15 border-primary-200 dark:border-primary-800">
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <StatusBadge status={latestSync.status} />
-                <span className="text-sm text-gray-700 dark:text-gray-300">
+                <span className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                   Last sync: {new Date(latestSync.completed_at || latestSync.started_at).toLocaleString()}
                 </span>
                 {aiAnalysis && (
                   <>
-                    <span className="text-gray-300 dark:text-gray-600">•</span>
+                    <span className="text-grove-border dark:text-grove-ink-dk/85">•</span>
                     <button
                       onClick={() => setShowAnalysisInfo(!showAnalysisInfo)}
                       className="text-sm text-primary-600 dark:text-primary-400 hover:underline flex items-center gap-1"
@@ -148,7 +148,7 @@ export default function DashboardPage() {
                 )}
               </div>
               {latestSync.summary && (
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                   {latestSync.summary.usersProcessed || 0} users processed
                 </span>
               )}
@@ -156,7 +156,7 @@ export default function DashboardPage() {
 
             {/* AI Analysis Details */}
             {showAnalysisInfo && aiAnalysis && (
-              <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+              <div className="mt-3 pt-3 border-t border-primary-200 dark:border-primary-800">
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <Badge variant="info" size="sm">
@@ -174,7 +174,7 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                   {aiAnalysis.analysis_timestamp && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                    <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                       {new Date(aiAnalysis.analysis_timestamp).toLocaleString()}
                     </span>
                   )}
@@ -192,7 +192,7 @@ export default function DashboardPage() {
             title="Total Users"
             value={totalUsers}
             icon={Users}
-            iconColor="text-blue-600"
+            iconColor="text-primary-700"
           />
         
         
@@ -235,27 +235,27 @@ export default function DashboardPage() {
                 {topAnomalies.map((anomaly: any) => (
                   <div
                     key={anomaly.userId}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                    className="flex items-center justify-between p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors cursor-pointer"
                   >
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900 dark:text-white">
+                      <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                         {anomaly.userName}
                       </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                         {anomaly.userEmail}
                       </p>
                       {anomaly.topReasons && anomaly.topReasons.length > 0 && (
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                        <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                           {anomaly.topReasons[0]}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
                           {anomaly.anomalyScore.toFixed(1)}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                           score
                         </p>
                       </div>
@@ -287,14 +287,14 @@ export default function DashboardPage() {
                 {recommendations.slice(0, 5).map((rec: any) => (
                   <div
                     key={rec.id}
-                    className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                    className="p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white text-sm">
+                        <p className="font-medium text-grove-ink dark:text-grove-ink-dk text-sm">
                           {rec.title}
                         </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1">
                           {rec.description}
                         </p>
                       </div>

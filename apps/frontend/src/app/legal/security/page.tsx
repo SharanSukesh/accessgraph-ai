@@ -23,13 +23,13 @@ export default function SecurityPracticesPage() {
     <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk">
           Security Practices
         </h1>
-        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+        <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
           Last updated: {new Date().toLocaleDateString()}
         </p>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
           Learn how AccessGraph AI protects your data and maintains enterprise-grade security.
         </p>
       </div>
@@ -44,10 +44,10 @@ export default function SecurityPracticesPage() {
             <div className="flex items-center space-x-3">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   SOC 2 Type II
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   In progress (targeting Q3 2026)
                 </p>
               </div>
@@ -55,10 +55,10 @@ export default function SecurityPracticesPage() {
             <div className="flex items-center space-x-3">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   GDPR Compliant
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   Full GDPR Article 17 support
                 </p>
               </div>
@@ -66,10 +66,10 @@ export default function SecurityPracticesPage() {
             <div className="flex items-center space-x-3">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   Salesforce Security Review
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   AppExchange security approved
                 </p>
               </div>
@@ -77,10 +77,10 @@ export default function SecurityPracticesPage() {
             <div className="flex items-center space-x-3">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   CCPA Compliant
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   California privacy rights supported
                 </p>
               </div>
@@ -92,13 +92,13 @@ export default function SecurityPracticesPage() {
       {/* Security Architecture */}
       <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             1. Data Encryption
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
-                <Lock className="h-5 w-5 mr-2 text-blue-600" />
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2 flex items-center">
+                <Lock className="h-5 w-5 mr-2 text-primary-700" />
                 Encryption at Rest
               </h3>
               <ul className="list-disc pl-6 space-y-2">
@@ -121,8 +121,8 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
-                <Shield className="h-5 w-5 mr-2 text-blue-600" />
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2 flex items-center">
+                <Shield className="h-5 w-5 mr-2 text-primary-700" />
                 Encryption in Transit
               </h3>
               <ul className="list-disc pl-6 space-y-2">
@@ -145,12 +145,12 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             2. Access Controls
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Role-Based Access Control (RBAC)
               </h3>
               <p>Dashboard users are assigned one of four roles:</p>
@@ -189,7 +189,7 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Granular Permissions
               </h3>
               <p>Each role has fine-grained permissions:</p>
@@ -205,13 +205,13 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             3. Audit Logging
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
-                <FileText className="h-5 w-5 mr-2 text-blue-600" />
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2 flex items-center">
+                <FileText className="h-5 w-5 mr-2 text-primary-700" />
                 Comprehensive Audit Trail
               </h3>
               <p>We log all sensitive operations with the following details:</p>
@@ -238,7 +238,7 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Tracked Actions
               </h3>
               <div className="grid grid-cols-2 gap-2 mt-2">
@@ -260,7 +260,7 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Retention
               </h3>
               <p>
@@ -273,13 +273,13 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             4. Infrastructure Security
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
-                <Server className="h-5 w-5 mr-2 text-blue-600" />
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2 flex items-center">
+                <Server className="h-5 w-5 mr-2 text-primary-700" />
                 Hosting & Infrastructure
               </h3>
               <ul className="list-disc pl-6 space-y-2">
@@ -305,7 +305,7 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Network Security
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -319,12 +319,12 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             5. Application Security
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Security Headers
               </h3>
               <p>All HTTP responses include security headers:</p>
@@ -339,7 +339,7 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Input Validation & Sanitization
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -351,7 +351,7 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Dependency Management
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -364,22 +364,22 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             6. Data Minimization
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <Card
               variant="bordered"
-              className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/10"
+              className="border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/10"
             >
               <CardContent className="py-4">
                 <div className="flex items-start space-x-3">
-                  <Database className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <Database className="h-5 w-5 text-primary-700 mt-0.5" />
                   <div>
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                       We Only Collect Metadata
                     </p>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                    <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 mt-1">
                       AccessGraph AI never accesses your actual Salesforce records (Accounts,
                       Opportunities, Contacts, etc.). We only sync permission metadata:
                     </p>
@@ -389,7 +389,7 @@ export default function SecurityPracticesPage() {
                       <li>• Object and field permissions</li>
                       <li>• Sharing rules and group memberships</li>
                     </ul>
-                    <p className="text-sm text-blue-600 dark:text-blue-400 mt-2 font-medium">
+                    <p className="text-sm text-primary-700 dark:text-primary-400 mt-2 font-medium">
                       No customer data, no record counts, no actual field values.
                     </p>
                   </div>
@@ -398,7 +398,7 @@ export default function SecurityPracticesPage() {
             </Card>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Automatic Data Retention
               </h3>
               <p>We automatically delete old data to minimize storage:</p>
@@ -413,12 +413,12 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             7. Incident Response
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Security Incident Process
               </h3>
               <ol className="list-decimal pl-6 space-y-2">
@@ -448,23 +448,23 @@ export default function SecurityPracticesPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Reporting Security Issues
               </h3>
               <p>
                 If you discover a security vulnerability, please report it to:
               </p>
-              <div className="mt-3 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <div className="mt-3 p-4 bg-primary-50 dark:bg-grove-surface-dk rounded-lg">
                 <p>
                   <strong>Email:</strong>{' '}
                   <a
                     href="mailto:security@accessgraph.ai"
-                    className="text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-primary-700 dark:text-primary-400 hover:underline"
                   >
                     security@accessgraph.ai
                   </a>
                 </p>
-                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                <p className="mt-2 text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   We have a responsible disclosure policy and will acknowledge reports within
                   24 hours.
                 </p>
@@ -474,10 +474,10 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             8. Security Testing
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <ul className="list-disc pl-6 space-y-2">
               <li>
                 <strong>Quarterly Penetration Testing:</strong> Third-party security audits
@@ -500,10 +500,10 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             9. Employee Access
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <ul className="list-disc pl-6 space-y-2">
               <li>
                 <strong>Principle of Least Privilege:</strong> Engineers have minimal access
@@ -526,17 +526,17 @@ export default function SecurityPracticesPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             10. Questions?
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>For security-related questions:</p>
-            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div className="mt-4 p-4 bg-primary-50 dark:bg-grove-surface-dk rounded-lg">
               <p>
                 <strong>Email:</strong>{' '}
                 <a
                   href="mailto:security@accessgraph.ai"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-primary-700 dark:text-primary-400 hover:underline"
                 >
                   security@accessgraph.ai
                 </a>
@@ -551,7 +551,7 @@ export default function SecurityPracticesPage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-12 pt-6 border-t border-grove-border dark:border-grove-border-dk">
         <div className="flex items-center justify-center space-x-6 text-sm">
           <a
             href="/legal/privacy"
@@ -559,14 +559,14 @@ export default function SecurityPracticesPage() {
           >
             Privacy Policy
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/terms"
             className="text-primary-600 dark:text-primary-400 hover:underline"
           >
             Terms of Service
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/dpa"
             className="text-primary-600 dark:text-primary-400 hover:underline"

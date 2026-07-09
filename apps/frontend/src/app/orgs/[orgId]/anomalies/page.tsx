@@ -70,10 +70,10 @@ export default function AnomaliesPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Total Anomalies
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {isLoading ? '...' : anomalies?.length || 0}
               </p>
             </div>
@@ -86,7 +86,7 @@ export default function AnomaliesPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Critical
               </p>
               <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
@@ -101,7 +101,7 @@ export default function AnomaliesPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 High
               </p>
               <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
@@ -116,10 +116,10 @@ export default function AnomaliesPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Affected Users
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {isLoading ? '...' : topUsers?.length || 0}
               </p>
             </div>
@@ -136,13 +136,13 @@ export default function AnomaliesPage() {
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
               <input
                 type="text"
                 placeholder="Search anomalies..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
 
@@ -150,7 +150,7 @@ export default function AnomaliesPage() {
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Severities</option>
               <option value="critical">Critical</option>
@@ -163,7 +163,7 @@ export default function AnomaliesPage() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Types</option>
               <option value="excessive_permissions">Excessive Permissions</option>
@@ -198,7 +198,7 @@ export default function AnomaliesPage() {
                       className={`p-4 border rounded-lg cursor-pointer transition-all ${
                         selectedAnomaly?.id === anomaly.id
                           ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          : 'border-grove-border dark:border-grove-border-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15'
                       }`}
                     >
                       <div className="flex items-start justify-between mb-2">
@@ -209,15 +209,15 @@ export default function AnomaliesPage() {
                               {anomaly.type?.replace(/_/g, ' ')}
                             </Badge>
                           </div>
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          <h3 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
                             {anomaly.title}
                           </h3>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-3">
                         {anomaly.description}
                       </p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex items-center gap-4 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                         {anomaly.userId && (
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
@@ -264,39 +264,39 @@ export default function AnomaliesPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                     Severity
                   </div>
                   <SeverityBadge severity={selectedAnomaly.severity} />
                 </div>
 
                 <div>
-                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                     Type
                   </div>
-                  <div className="text-sm text-gray-900 dark:text-white">
+                  <div className="text-sm text-grove-ink dark:text-grove-ink-dk">
                     {selectedAnomaly.type?.replace(/_/g, ' ')}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                     Description
                   </div>
-                  <div className="text-sm text-gray-900 dark:text-white">
+                  <div className="text-sm text-grove-ink dark:text-grove-ink-dk">
                     {selectedAnomaly.description}
                   </div>
                 </div>
 
                 {selectedAnomaly.details && (
                   <div>
-                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                       Details
                     </div>
-                    <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                    <div className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-1">
                       {Object.entries(selectedAnomaly.details).map(([key, value]) => (
                         <div key={key} className="flex justify-between">
-                          <span className="text-gray-500">{key}:</span>
+                          <span className="text-grove-ink/55">{key}:</span>
                           <span className="font-medium">{String(value)}</span>
                         </div>
                       ))}
@@ -305,7 +305,7 @@ export default function AnomaliesPage() {
                 )}
 
                 {selectedAnomaly.userId && (
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk">
                     <Button
                       size="sm"
                       variant="primary"
@@ -333,17 +333,17 @@ export default function AnomaliesPage() {
                       <button
                         key={user.userId}
                         onClick={() => router.push(`/orgs/${orgId}/users/${user.userId}`)}
-                        className="w-full flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        className="w-full flex items-center justify-between p-3 rounded-lg border border-grove-border dark:border-grove-border-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15 transition-colors"
                       >
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
                             <User className="h-5 w-5 text-red-600 dark:text-red-400" />
                           </div>
                           <div className="text-left">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                               {user.userName}
                             </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                            <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                               {user.anomalyCount} anomalies
                             </div>
                           </div>
@@ -368,11 +368,11 @@ export default function AnomaliesPage() {
           )}
 
           {/* Info Card */}
-          <Card variant="bordered" className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+          <Card variant="bordered" className="bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800">
             <CardContent className="py-4">
               <div className="flex items-start gap-3">
-                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-900 dark:text-blue-300">
+                <Info className="h-5 w-5 text-primary-700 dark:text-primary-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-primary-800 dark:text-primary-300">
                   <p className="font-medium mb-1">About Anomalies</p>
                   <p className="text-xs">
                     Anomalies are automatically detected patterns that deviate from normal

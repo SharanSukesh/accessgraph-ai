@@ -297,8 +297,8 @@ export function GraphVisualization({
     <div className={`relative ${className}`} style={{ height }}>
       {/* Loading overlay */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 z-10">
-          <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+        <div className="absolute inset-0 flex items-center justify-center bg-grove-surface/80 dark:bg-grove-canvas-dk/80 z-10">
+          <div className="flex items-center gap-2 text-grove-ink/65 dark:text-grove-ink-dk/65">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span>Loading graph...</span>
           </div>
@@ -309,7 +309,7 @@ export function GraphVisualization({
       <div
         ref={containerRef}
         data-graph-container
-        className="w-full h-full bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 relative overflow-hidden"
+        className="w-full h-full bg-grove-canvas dark:bg-grove-canvas-dk rounded-lg border border-grove-border dark:border-grove-border-dk relative overflow-hidden"
         style={{
           backgroundImage: `
             linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),

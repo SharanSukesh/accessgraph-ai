@@ -50,12 +50,12 @@ export function ObjectFilterPanel({
 
   return (
     <Card variant="bordered" className={`h-full flex flex-col ${className}`}>
-      <CardHeader className="border-b border-gray-200 dark:border-gray-700">
+      <CardHeader className="border-b border-grove-border dark:border-grove-border-dk">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Database className="h-5 w-5" />
           Objects & Fields
         </CardTitle>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1">
           Select objects to display in the graph
         </p>
       </CardHeader>
@@ -63,18 +63,18 @@ export function ObjectFilterPanel({
       <CardContent className="flex-1 overflow-hidden flex flex-col p-4 space-y-4">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
           <input
             type="text"
             placeholder="Search objects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full pl-10 pr-10 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-grove-ink/50 hover:text-grove-ink/70 dark:hover:text-grove-border"
             >
               <X className="h-4 w-4" />
             </button>
@@ -82,11 +82,11 @@ export function ObjectFilterPanel({
         </div>
 
         {/* Select All Controls */}
-        <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between gap-2 pb-2 border-b border-grove-border dark:border-grove-border-dk">
           <div className="flex items-center gap-2">
             <button
               onClick={allSelected ? onDeselectAll : onSelectAll}
-              className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+              className="flex items-center gap-2 text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               <div
                 className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
@@ -94,7 +94,7 @@ export function ObjectFilterPanel({
                     ? 'bg-primary-500 border-primary-500'
                     : someSelected
                     ? 'bg-primary-500/50 border-primary-500'
-                    : 'border-gray-300 dark:border-gray-600'
+                    : 'border-grove-border dark:border-grove-border-dk'
                 }`}
               >
                 {(allSelected || someSelected) && (
@@ -114,7 +114,7 @@ export function ObjectFilterPanel({
         {/* Object List */}
         <div className="flex-1 overflow-y-auto space-y-1">
           {filteredObjects.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-8 text-grove-ink/55 dark:text-grove-ink-dk/55">
               <Database className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">
                 {searchTerm ? 'No objects found' : 'No objects available'}
@@ -130,24 +130,24 @@ export function ObjectFilterPanel({
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${
                     isSelected
                       ? 'bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800'
-                      : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-750'
+                      : 'bg-primary-50/40 dark:bg-primary-900/10 border border-grove-border dark:border-grove-border-dk hover:bg-primary-50 dark:hover:bg-primary-900/20'
                   }`}
                 >
                   <div
                     className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
                       isSelected
                         ? 'bg-primary-500 border-primary-500'
-                        : 'border-gray-300 dark:border-gray-600'
+                        : 'border-grove-border dark:border-grove-border-dk'
                     }`}
                   >
                     {isSelected && <Check className="h-3 w-3 text-white" />}
                   </div>
                   <div className="flex-1 text-left min-w-0">
-                    <div className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                    <div className="font-medium text-grove-ink dark:text-grove-ink-dk text-sm truncate">
                       {obj.name}
                     </div>
                     {obj.fieldCount > 0 && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                         {obj.fieldCount} field{obj.fieldCount !== 1 ? 's' : ''}
                       </div>
                     )}
@@ -160,7 +160,7 @@ export function ObjectFilterPanel({
 
         {/* Quick Actions */}
         {selectedObjects.length > 0 && (
-          <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="pt-2 border-t border-grove-border dark:border-grove-border-dk">
             <Button
               variant="ghost"
               size="sm"

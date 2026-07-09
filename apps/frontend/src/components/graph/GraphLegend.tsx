@@ -21,7 +21,7 @@ interface LegendItem {
 const nodeLegend: LegendItem[] = [
   {
     label: NODE_TYPES.USER.label,
-    color: 'bg-blue-500',
+    color: 'bg-primary-600',
     shape: 'ellipse',
     description: 'Salesforce users',
   },
@@ -143,14 +143,14 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
           <div className="space-y-3">
             {/* Compact node legend */}
             <div>
-              <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <div className="text-xs font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
                 Nodes
               </div>
               <div className="flex flex-wrap gap-2">
                 {nodeLegend.map((item) => (
                   <div key={item.label} className="flex items-center gap-1.5">
                     <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                    <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
                       {item.label}
                     </span>
                   </div>
@@ -160,14 +160,14 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
 
             {/* Compact edge legend */}
             <div>
-              <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <div className="text-xs font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
                 Relationships
               </div>
               <div className="flex flex-wrap gap-2">
                 {edgeLegend.slice(0, 5).map((item) => (
                   <div key={item.label} className="flex items-center gap-1.5">
                     <div className={`w-6 h-0.5 border-t-2 ${item.color}`} />
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                    <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
                       {item.label}
                     </span>
                   </div>
@@ -190,7 +190,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
         <div>
           <button
             onClick={() => setShowNodes(!showNodes)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+            className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
           >
             <span>Node Types</span>
             {showNodes ? (
@@ -205,11 +205,11 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
                 <div key={item.label} className="flex items-start gap-3">
                   <div className={`mt-0.5 w-4 h-4 rounded-full flex-shrink-0 ${item.color}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                       {item.label}
                     </div>
                     {item.description && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
                         {item.description}
                       </div>
                     )}
@@ -224,7 +224,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
         <div>
           <button
             onClick={() => setShowEdges(!showEdges)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+            className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
           >
             <span>Relationship Types</span>
             {showEdges ? (
@@ -239,11 +239,11 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
                 <div key={item.label} className="flex items-start gap-3">
                   <div className={`mt-1.5 w-8 h-0.5 border-t-2 flex-shrink-0 ${item.color}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                       {item.label}
                     </div>
                     {item.description && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
                         {item.description}
                       </div>
                     )}
@@ -256,28 +256,28 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
 
         {/* Special Indicators */}
         <div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
             Special Indicators
           </div>
           <div className="space-y-2">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-red-300 border-4 border-red-500" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                   Center Node
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
                   Primary focus of the graph (highlighted with red border)
                 </div>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-gray-300 border-4 border-yellow-500" />
+              <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-grove-border border-4 border-yellow-500" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                   Selected Node
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
                   Currently selected node (yellow border)
                 </div>
               </div>
@@ -287,25 +287,25 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
 
         {/* Line Styles */}
         <div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
             Line Styles
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-0.5 bg-gray-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="w-8 h-0.5 bg-grove-ink/40" />
+              <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Solid = Direct relationship
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-0.5 border-t-2 border-dashed border-gray-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="w-8 h-0.5 border-t-2 border-dashed border-grove-ink/40" />
+              <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Dashed = Inheritance
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-0.5 border-t-2 border-dotted border-gray-400" />
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="w-8 h-0.5 border-t-2 border-dotted border-grove-ink/40" />
+              <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Dotted = CRUD permissions
               </span>
             </div>

@@ -118,45 +118,45 @@ export default function UserDetailPage() {
         <CardContent className="py-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="flex items-start gap-3">
-              <User className="h-5 w-5 text-gray-400 mt-0.5" />
+              <User className="h-5 w-5 text-grove-ink/50 mt-0.5" />
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Salesforce User ID
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white font-mono mt-1">
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk font-mono mt-1">
                   {user.salesforceUserId}
                 </div>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Shield className="h-5 w-5 text-gray-400 mt-0.5" />
+              <Shield className="h-5 w-5 text-grove-ink/50 mt-0.5" />
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Profile
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk mt-1">
                   {user.profile || '-'}
                 </div>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Key className="h-5 w-5 text-gray-400 mt-0.5" />
+              <Key className="h-5 w-5 text-grove-ink/50 mt-0.5" />
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Role
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk mt-1">
                   {user.role || '-'}
                 </div>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Calendar className="h-5 w-5 text-gray-400 mt-0.5" />
+              <Calendar className="h-5 w-5 text-grove-ink/50 mt-0.5" />
               <div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Last Login
                 </div>
-                <div className="text-sm text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink dark:text-grove-ink-dk mt-1">
                   {user.lastLoginDate
                     ? new Date(user.lastLoginDate).toLocaleDateString()
                     : '-'}
@@ -214,57 +214,57 @@ export default function UserDetailPage() {
               <CardContent>
                 {riskLoading ? (
                   <div className="animate-pulse space-y-3">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+                    <div className="h-4 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded w-3/4" />
+                    <div className="h-4 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded w-1/2" />
                   </div>
                 ) : risk && risk.score > 0 ? (
                   <div className="space-y-4">
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
                         Overall Risk Score
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                        <div className="text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                           {risk.score}
                         </div>
                         <RiskBadge level={risk.level as "low" | "medium" | "high" | "critical"} />
                       </div>
                       {risk.calculatedAt && (
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                           Calculated {new Date(risk.calculatedAt).toLocaleString()}
                         </div>
                       )}
                     </div>
                     {risk.factors && risk.factors.length > 0 && (
                       <div>
-                        <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <div className="text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-3">
                           Risk Factor Breakdown
                         </div>
                         <div className="space-y-3">
                           {risk.factors.map((factor: any, idx: number) => (
                             <div
                               key={idx}
-                              className="p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
+                              className="p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 border border-grove-border dark:border-grove-border-dk"
                             >
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                                <span className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk capitalize">
                                   {factor.factor?.replace(/_/g, ' ')}
                                 </span>
-                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                                <span className="text-xs font-semibold text-grove-ink/65 dark:text-grove-ink-dk/65">
                                   {(factor.score * factor.weight * 100).toFixed(1)} pts
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                              <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
                                 {factor.description}
                               </div>
                               <div className="flex items-center gap-2 text-xs">
-                                <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                <div className="flex-1 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded-full h-1.5">
                                   <div
                                     className="bg-primary-600 h-1.5 rounded-full transition-all"
                                     style={{ width: `${factor.score * 100}%` }}
                                   />
                                 </div>
-                                <span className="text-gray-500 dark:text-gray-400 min-w-[3rem] text-right">
+                                <span className="text-grove-ink/55 dark:text-grove-ink-dk/55 min-w-[3rem] text-right">
                                   {(factor.score * 100).toFixed(0)}%
                                 </span>
                               </div>
@@ -274,8 +274,8 @@ export default function UserDetailPage() {
                       </div>
                     )}
                     {risk.explanation && (
-                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-line">
+                      <div className="pt-3 border-t border-grove-border dark:border-grove-border-dk">
+                        <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 whitespace-pre-line">
                           {risk.explanation}
                         </div>
                       </div>
@@ -283,7 +283,7 @@ export default function UserDetailPage() {
                   </div>
                 ) : risk && risk.score === 0 ? (
                   <div className="text-center py-8">
-                    <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
                       {risk.explanation || "No risk assessment available yet. The next sync will generate risk scores."}
                     </div>
                   </div>
@@ -304,26 +304,26 @@ export default function UserDetailPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                       Objects Accessible
                     </span>
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <span className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
                       {objectsLoading ? '...' : objectAccess?.length || 0}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                       Fields Accessible
                     </span>
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <span className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
                       {fieldsLoading ? '...' : fieldAccess?.length || 0}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                       Recommendations
                     </span>
-                    <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <span className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
                       {recommendationsLoading ? '...' : recommendations?.length || 0}
                     </span>
                   </div>
@@ -345,32 +345,32 @@ export default function UserDetailPage() {
               ) : objectAccess && objectAccess.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Object
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Read
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Create
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Edit
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Delete
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Sensitivity
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                    <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                       {objectAccess.map((obj: any) => (
-                        <tr key={obj.objectName} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                        <tr key={obj.objectName} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                             {obj.objectLabel || obj.objectName}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -432,32 +432,32 @@ export default function UserDetailPage() {
               ) : fieldAccess && fieldAccess.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Object
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Field
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Read
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Edit
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Sensitivity
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                    <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                       {fieldAccess.map((field: any, idx: number) => (
-                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                        <tr key={idx} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-grove-ink dark:text-grove-ink-dk">
                             {field.objectName}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                             {field.fieldLabel || field.fieldName}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -501,7 +501,7 @@ export default function UserDetailPage() {
                 <Shield className="h-5 w-5" />
                 Record-Level Access
               </CardTitle>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-2">
                 Understand which specific records this user can access based on ownership, role hierarchy, sharing rules, and team assignments
               </p>
             </CardHeader>
@@ -520,8 +520,8 @@ export default function UserDetailPage() {
                 <Card variant="bordered">
                   <CardContent className="py-12 text-center">
                     <div className="animate-pulse">
-                      <div className="h-96 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-                      <p className="mt-4 text-gray-500 dark:text-gray-400">
+                      <div className="h-96 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded-lg" />
+                      <p className="mt-4 text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Loading graph...
                       </p>
                     </div>
@@ -598,27 +598,27 @@ export default function UserDetailPage() {
                   {anomalies.map((anomaly: any) => (
                     <div
                       key={anomaly.id}
-                      className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="p-4 border border-grove-border dark:border-grove-border-dk rounded-lg hover:bg-primary-50/40 dark:hover:bg-primary-900/15 transition-colors"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <SeverityBadge severity={anomaly.severity} />
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                               Anomaly Score: {typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}
                             </span>
                           </div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                          <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
                             Anomalous Access Pattern Detected
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                             Detected {new Date(anomaly.detected_at).toLocaleString()}
                           </div>
                         </div>
                       </div>
                       {anomaly.reasons && anomaly.reasons.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-3">
+                        <div className="mt-3 pt-3 border-t border-grove-border dark:border-grove-border-dk">
+                          <div className="text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-3">
                             🔍 Specific Anomalies Detected
                           </div>
                           <div className="space-y-3">
@@ -630,10 +630,10 @@ export default function UserDetailPage() {
                                 <div className="flex items-start gap-2">
                                   <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
                                   <div className="flex-1">
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                                    <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
                                       {reason}
                                     </div>
-                                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                                    <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
                                       This value is significantly different from peers with the same role, profile, or department.
                                     </div>
                                   </div>
@@ -643,10 +643,10 @@ export default function UserDetailPage() {
                           </div>
                         </div>
                       )}
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div className="text-xs text-gray-500 dark:text-gray-400 space-y-2">
+                      <div className="mt-3 pt-3 border-t border-grove-border dark:border-grove-border-dk">
+                        <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 space-y-2">
                           <div>
-                            <strong className="text-gray-700 dark:text-gray-300">How This Was Detected:</strong>
+                            <strong className="text-grove-ink/85 dark:text-grove-ink-dk/85">How This Was Detected:</strong>
                           </div>
                           <div>
                             <strong>1. Peer Comparison:</strong> We identified users similar to this user by matching:
@@ -700,7 +700,7 @@ export default function UserDetailPage() {
                   {recommendations.map((rec: any) => (
                     <div
                       key={rec.id}
-                      className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="p-4 border border-grove-border dark:border-grove-border-dk rounded-lg hover:bg-primary-50/40 dark:hover:bg-primary-900/15 transition-colors"
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
@@ -710,26 +710,26 @@ export default function UserDetailPage() {
                               {rec.rec_type?.replace(/_/g, ' ')}
                             </Badge>
                           </div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                          <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
                             {rec.title}
                           </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                          <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                             {rec.description}
                           </div>
                         </div>
                       </div>
                       {rec.action && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <div className="mt-3 pt-3 border-t border-grove-border dark:border-grove-border-dk">
+                          <div className="text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-1">
                             Recommended Action
                           </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
                             {rec.action}
                           </div>
                         </div>
                       )}
-                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="mt-3 pt-3 border-t border-grove-border dark:border-grove-border-dk">
+                        <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                           <strong>How recommendations work:</strong> This recommendation was generated based on
                           detected anomalies and security best practices. Recommendations are categorized by type
                           (PSG Migration, Access Review, Permission Removal) and prioritized by severity. They help

@@ -84,13 +84,13 @@ export default function FieldDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Total Users</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">Total Users</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {field.totalUsers}
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-                <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/25">
+                <User className="h-6 w-6 text-primary-700 dark:text-primary-400" />
               </div>
             </div>
           </CardContent>
@@ -100,13 +100,13 @@ export default function FieldDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Profiles</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">Profiles</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {field.totalProfiles}
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900">
-                <Shield className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <div className="p-3 rounded-lg bg-copper-100 dark:bg-copper-900/25">
+                <Shield className="h-6 w-6 text-copper-600 dark:text-copper-400" />
               </div>
             </div>
           </CardContent>
@@ -116,8 +116,8 @@ export default function FieldDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Permission Sets</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">Permission Sets</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {field.totalPermissionSets}
                 </div>
               </div>
@@ -141,23 +141,23 @@ export default function FieldDetailPage() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Profile
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Read
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Edit
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                   {field.profilesWithAccess.map((profile: any) => (
-                    <tr key={profile.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <tr key={profile.id} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                         {profile.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -195,26 +195,26 @@ export default function FieldDetailPage() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Permission Set
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Read
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Edit
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                   {field.permissionSetsWithAccess.map((ps: any) => (
-                    <tr key={ps.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                    <tr key={ps.id} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                      <td className="px-6 py-4 text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                         <div>{ps.label || ps.name}</div>
                         {ps.label && ps.name && ps.label !== ps.name && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                             API Name: {ps.name}
                           </div>
                         )}
@@ -254,32 +254,32 @@ export default function FieldDetailPage() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       User
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Email
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Access Via
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                   {field.usersWithAccess.map((user: any) => (
-                    <tr key={user.salesforceUserId} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <tr key={user.salesforceUserId} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                         {user.name}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                         {user.email}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                         {user.accessVia}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">

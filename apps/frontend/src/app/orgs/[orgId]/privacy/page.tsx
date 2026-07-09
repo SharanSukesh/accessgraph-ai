@@ -154,34 +154,34 @@ export default function PrivacyPage() {
 
       {/* Data Inventory Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card variant="bordered" className="bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+        <Card variant="bordered" className="bg-primary-50 dark:bg-primary-900/15 border-primary-200 dark:border-primary-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Total Records
                 </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {totalRecords.toLocaleString()}
                 </p>
               </div>
-              <Database className="h-8 w-8 text-blue-600" />
+              <Database className="h-8 w-8 text-primary-700" />
             </div>
           </CardContent>
         </Card>
 
-        <Card variant="bordered" className="bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800">
+        <Card variant="bordered" className="bg-copper-50 dark:bg-copper-900/10 border-copper-200 dark:border-copper-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Snapshots
                 </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {totalSnapshots.toLocaleString()}
                 </p>
               </div>
-              <FileText className="h-8 w-8 text-purple-600" />
+              <FileText className="h-8 w-8 text-copper-600" />
             </div>
           </CardContent>
         </Card>
@@ -190,10 +190,10 @@ export default function PrivacyPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Audit Logs
                 </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {(inventory?.audit_logs || 0).toLocaleString()}
                 </p>
               </div>
@@ -206,10 +206,10 @@ export default function PrivacyPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Analysis Data
                 </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {totalAnalysis.toLocaleString()}
                 </p>
               </div>
@@ -226,14 +226,14 @@ export default function PrivacyPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
               <div className="flex items-center space-x-3">
-                <Calendar className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <Calendar className="h-5 w-5 text-grove-ink/65 dark:text-grove-ink-dk/65" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                     Snapshots
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                     User permissions, roles, profiles, sharing rules
                   </p>
                 </div>
@@ -243,14 +243,14 @@ export default function PrivacyPage() {
               </Badge>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
               <div className="flex items-center space-x-3">
-                <Shield className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <Shield className="h-5 w-5 text-grove-ink/65 dark:text-grove-ink-dk/65" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                     Audit Logs
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                     Security and compliance audit trail
                   </p>
                 </div>
@@ -260,14 +260,14 @@ export default function PrivacyPage() {
               </Badge>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
               <div className="flex items-center space-x-3">
-                <Database className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <Database className="h-5 w-5 text-grove-ink/65 dark:text-grove-ink-dk/65" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                     Sync Jobs
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                     Salesforce sync job history
                   </p>
                 </div>
@@ -277,14 +277,14 @@ export default function PrivacyPage() {
               </Badge>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
               <div className="flex items-center space-x-3">
-                <CheckCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <CheckCircle className="h-5 w-5 text-grove-ink/65 dark:text-grove-ink-dk/65" />
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                     Analysis Data
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                     Anomalies, recommendations, risk scores
                   </p>
                 </div>
@@ -303,12 +303,12 @@ export default function PrivacyPage() {
           <CardTitle>Data Management</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
             <div className="flex-1">
-              <p className="font-medium text-gray-900 dark:text-white">
+              <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                 Delete Old Snapshots
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1">
                 Remove snapshots older than {policies?.snapshots_days} days to free up storage
               </p>
             </div>
@@ -325,12 +325,12 @@ export default function PrivacyPage() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="flex items-center justify-between p-4 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
             <div className="flex-1">
-              <p className="font-medium text-gray-900 dark:text-white">
+              <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                 Run All Cleanup Tasks
               </p>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1">
                 Apply retention policies to all data types (snapshots, audit logs, sync jobs, analysis)
               </p>
             </div>
@@ -358,12 +358,12 @@ export default function PrivacyPage() {
               Object.entries(inventory.snapshots).map(([key, value]) => (
                 <div
                   key={key}
-                  className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  className="p-3 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg"
                 >
-                  <p className="text-xs text-gray-600 dark:text-gray-400 uppercase">
+                  <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 uppercase">
                     {key.replace(/_/g, ' ')}
                   </p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+                  <p className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mt-1">
                     {value.toLocaleString()}
                   </p>
                 </div>
@@ -413,7 +413,7 @@ export default function PrivacyPage() {
                 <div>
                   <label
                     htmlFor="delete-confirmation"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                    className="block text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2"
                   >
                     Type <span className="font-mono font-bold">DELETE_ALL_DATA</span> to
                     confirm:
@@ -423,7 +423,7 @@ export default function PrivacyPage() {
                     type="text"
                     value={deleteConfirmation}
                     onChange={(e) => setDeleteConfirmation(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-3 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:outline-none focus:ring-2 focus:ring-red-500"
                     placeholder="DELETE_ALL_DATA"
                   />
                 </div>
@@ -461,7 +461,7 @@ export default function PrivacyPage() {
       </Card>
 
       {/* Legal Links */}
-      <Card variant="bordered" className="bg-gray-50 dark:bg-gray-800/50">
+      <Card variant="bordered" className="bg-primary-50/40 dark:bg-primary-900/10">
         <CardContent className="py-4">
           <div className="flex items-center justify-center space-x-6 text-sm">
             <a
@@ -470,21 +470,21 @@ export default function PrivacyPage() {
             >
               Privacy Policy
             </a>
-            <span className="text-gray-300 dark:text-gray-600">•</span>
+            <span className="text-grove-border dark:text-grove-ink-dk/85">•</span>
             <a
               href="/legal/terms"
               className="text-primary-600 dark:text-primary-400 hover:underline"
             >
               Terms of Service
             </a>
-            <span className="text-gray-300 dark:text-gray-600">•</span>
+            <span className="text-grove-border dark:text-grove-ink-dk/85">•</span>
             <a
               href="/legal/security"
               className="text-primary-600 dark:text-primary-400 hover:underline"
             >
               Security Practices
             </a>
-            <span className="text-gray-300 dark:text-gray-600">•</span>
+            <span className="text-grove-border dark:text-grove-ink-dk/85">•</span>
             <a
               href="/legal/dpa"
               className="text-primary-600 dark:text-primary-400 hover:underline"

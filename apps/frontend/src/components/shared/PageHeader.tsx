@@ -26,15 +26,15 @@ export function PageHeader({
   return (
     <div className="flex items-start justify-between gap-4 flex-wrap">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 flex-shrink-0">
-          <Icon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+        <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800 flex-shrink-0">
+          <Icon className="h-6 w-6 text-primary-700 dark:text-primary-400" />
         </div>
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
+          <h1 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk truncate">
             {title}
           </h1>
           {subtitle && (
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
               {subtitle}
             </p>
           )}

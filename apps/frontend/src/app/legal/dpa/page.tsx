@@ -13,57 +13,57 @@ export default function DPAPage() {
     <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk">
           Data Processing Agreement (DPA)
         </h1>
-        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+        <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
           Last updated: {new Date().toLocaleDateString()}
         </p>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
           This Data Processing Agreement governs the processing of personal data under GDPR
           and other applicable data protection laws.
         </p>
       </div>
 
       {/* DPA Summary */}
-      <Card variant="bordered" className="mb-8 bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800">
+      <Card variant="bordered" className="mb-8 bg-copper-50 dark:bg-copper-900/10 border-copper-200 dark:border-copper-800">
         <CardHeader>
           <CardTitle>DPA Quick Reference</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start space-x-3">
-              <Shield className="h-5 w-5 text-purple-600 mt-0.5" />
+              <Shield className="h-5 w-5 text-copper-600 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Data Controller</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Controller</p>
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   You (the customer organization)
                 </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <Database className="h-5 w-5 text-purple-600 mt-0.5" />
+              <Database className="h-5 w-5 text-copper-600 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Data Processor</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Processor</p>
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   AccessGraph AI (service provider)
                 </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <Globe className="h-5 w-5 text-purple-600 mt-0.5" />
+              <Globe className="h-5 w-5 text-copper-600 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Data Location</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Location</p>
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   US & EU (with Standard Contractual Clauses)
                 </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <FileText className="h-5 w-5 text-purple-600 mt-0.5" />
+              <FileText className="h-5 w-5 text-copper-600 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">Legal Basis</p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Legal Basis</p>
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   GDPR Article 28 (Processing Agreement)
                 </p>
               </div>
@@ -75,10 +75,10 @@ export default function DPAPage() {
       {/* Main Content */}
       <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             1. Definitions
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>For purposes of this DPA:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -110,12 +110,12 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             2. Scope and Subject Matter
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 2.1 Subject Matter
               </h3>
               <p>
@@ -126,7 +126,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 2.2 Duration
               </h3>
               <p>
@@ -136,7 +136,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 2.3 Nature and Purpose
               </h3>
               <p>The Processor processes Personal Data for the following purposes:</p>
@@ -150,7 +150,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 2.4 Types of Personal Data
               </h3>
               <p>The Processor may process the following categories of Personal Data:</p>
@@ -161,14 +161,14 @@ export default function DPAPage() {
                 <li>IP addresses and user agents (for audit logging)</li>
                 <li>Access patterns and usage metadata</li>
               </ul>
-              <p className="mt-2 font-medium text-purple-600 dark:text-purple-400">
+              <p className="mt-2 font-medium text-copper-600 dark:text-copper-400">
                 Note: The Processor does not process actual customer records (Accounts,
                 Opportunities, etc.) - only permission metadata.
               </p>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 2.5 Categories of Data Subjects
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -180,10 +180,10 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             3. Processor Obligations
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>The Processor shall:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -219,17 +219,17 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             4. Security Measures
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               The Processor implements the following technical and organizational measures
               (GDPR Article 32):
             </p>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 4.1 Technical Measures
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -243,7 +243,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 4.2 Organizational Measures
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -259,7 +259,7 @@ export default function DPAPage() {
               For detailed security information, see our{' '}
               <a
                 href="/legal/security"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-primary-700 dark:text-primary-400 hover:underline"
               >
                 Security Practices
               </a>{' '}
@@ -269,12 +269,12 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             5. Sub-processors
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 5.1 General Authorization
               </h3>
               <p>
@@ -284,55 +284,55 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 5.2 Current Sub-processors
               </h3>
-              <div className="mt-2 overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg">
+              <div className="mt-2 overflow-hidden border border-grove-border dark:border-grove-border-dk rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+                  <thead className="bg-primary-50/40 dark:bg-grove-surface-dk">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink/50 uppercase">
                         Sub-processor
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink/50 uppercase">
                         Service
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink/50 uppercase">
                         Location
                       </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     <tr>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
                         Railway
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         Infrastructure hosting
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         US, EU
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
                         PostgreSQL (managed)
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         Database storage
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         US, EU
                       </td>
                     </tr>
                     <tr>
-                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
                         Neo4j AuraDB
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         Graph database
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         US, EU
                       </td>
                     </tr>
@@ -342,7 +342,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 5.3 Notification of Changes
               </h3>
               <p>
@@ -354,7 +354,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 5.4 Sub-processor Obligations
               </h3>
               <p>
@@ -367,10 +367,10 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             6. Data Subject Rights
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               The Processor shall assist the Controller in fulfilling Data Subject rights
               requests under GDPR Articles 15-22:
@@ -411,12 +411,12 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             7. Data Breach Notification
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 7.1 Notification Obligation
               </h3>
               <p>
@@ -427,7 +427,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 7.2 Breach Details
               </h3>
               <p>The notification shall include, at minimum:</p>
@@ -441,7 +441,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 7.3 Cooperation
               </h3>
               <p>
@@ -453,12 +453,12 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             8. International Data Transfers
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 8.1 Transfer Mechanism
               </h3>
               <p>
@@ -469,7 +469,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 8.2 Additional Safeguards
               </h3>
               <ul className="list-disc pl-6 space-y-1">
@@ -483,12 +483,12 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             9. Audits and Inspections
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 9.1 Audit Rights
               </h3>
               <p>
@@ -498,7 +498,7 @@ export default function DPAPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 9.2 Third-Party Audits
               </h3>
               <p>
@@ -511,10 +511,10 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             10. Data Deletion and Return
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               Upon termination of the Service Agreement, the Processor shall, at the
               Controller's choice:
@@ -537,10 +537,10 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             11. Liability and Indemnification
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               Each party's liability under this DPA shall be subject to the limitations of
               liability set forth in the Service Agreement. The Processor shall indemnify the
@@ -551,17 +551,17 @@ export default function DPAPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             12. Contact Information
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>For DPA-related questions or to execute a signed DPA:</p>
-            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div className="mt-4 p-4 bg-primary-50 dark:bg-grove-surface-dk rounded-lg">
               <p>
                 <strong>Email:</strong>{' '}
                 <a
                   href="mailto:dpa@accessgraph.ai"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-primary-700 dark:text-primary-400 hover:underline"
                 >
                   dpa@accessgraph.ai
                 </a>
@@ -570,7 +570,7 @@ export default function DPAPage() {
                 <strong>Data Protection Officer:</strong>{' '}
                 <a
                   href="mailto:dpo@accessgraph.ai"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-primary-700 dark:text-primary-400 hover:underline"
                 >
                   dpo@accessgraph.ai
                 </a>
@@ -584,7 +584,7 @@ export default function DPAPage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-12 pt-6 border-t border-grove-border dark:border-grove-border-dk">
         <div className="flex items-center justify-center space-x-6 text-sm">
           <a
             href="/legal/privacy"
@@ -592,14 +592,14 @@ export default function DPAPage() {
           >
             Privacy Policy
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/terms"
             className="text-primary-600 dark:text-primary-400 hover:underline"
           >
             Terms of Service
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/security"
             className="text-primary-600 dark:text-primary-400 hover:underline"

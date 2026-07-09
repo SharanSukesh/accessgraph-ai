@@ -91,7 +91,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
     return (
       <div className="p-6 text-center">
         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <p className="text-gray-600 dark:text-gray-400">Failed to load record access information</p>
+        <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">Failed to load record access information</p>
       </div>
     )
   }
@@ -118,28 +118,28 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           </CardContent>
         </Card>
 
-        <Card variant="bordered" className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20">
+        <Card variant="bordered" className="bg-gradient-to-br from-copper-50 to-copper-100 dark:from-copper-900/20 dark:to-copper-800/20">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-purple-700 dark:text-purple-300">Role Hierarchy</p>
-                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                <p className="text-sm text-copper-700 dark:text-copper-400">Role Hierarchy</p>
+                <p className="text-2xl font-bold text-copper-800 dark:text-copper-200">
                   {summary.has_role_hierarchy_access ? roleHierarchy.subordinate_count : 0}
                 </p>
               </div>
-              <Users className="h-8 w-8 text-purple-600 dark:text-purple-400" />
+              <Users className="h-8 w-8 text-copper-600 dark:text-copper-400" />
             </div>
           </CardContent>
         </Card>
 
-        <Card variant="bordered" className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
+        <Card variant="bordered" className="bg-gradient-to-br from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-800/20">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-blue-700 dark:text-blue-300">Manual Shares</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{summary.total_manual_shares}</p>
+                <p className="text-sm text-primary-700 dark:text-primary-300">Manual Shares</p>
+                <p className="text-2xl font-bold text-primary-800 dark:text-primary-200">{summary.total_manual_shares}</p>
               </div>
-              <Share2 className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              <Share2 className="h-8 w-8 text-primary-700 dark:text-primary-400" />
             </div>
           </CardContent>
         </Card>
@@ -178,11 +178,11 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
             Records directly owned by this user. These are records where the OwnerId field matches the user's ID.
           </p>
           {summary.total_owned_records === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-8 text-grove-ink/55 dark:text-grove-ink-dk/55">
               <p className="text-sm font-medium">No owned records found</p>
               <p className="text-xs mt-2">This could mean:</p>
               <ul className="text-xs mt-1 space-y-1 text-left max-w-md mx-auto">
@@ -194,9 +194,9 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {Object.entries(ownedRecords).map(([objectType, count]) => (
-                <div key={objectType} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 dark:text-gray-400">{objectType}</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100">{count}</p>
+                <div key={objectType} className="bg-primary-50/40 dark:bg-primary-900/10 rounded-lg p-3">
+                  <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">{objectType}</p>
+                  <p className="text-xl font-bold text-grove-ink dark:text-grove-ink-dk">{count}</p>
                 </div>
               ))}
             </div>
@@ -208,40 +208,40 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-purple-600" />
+            <Users className="h-5 w-5 text-copper-600" />
             Role Hierarchy Access
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
             Access to records owned by users in subordinate roles. Users can see all records owned by anyone below them in the role hierarchy.
           </p>
           {roleHierarchy.has_role ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Badge variant="info">Current Role</Badge>
-                <span className="font-medium text-gray-900 dark:text-gray-100">{roleHierarchy.role_name}</span>
+                <span className="font-medium text-grove-ink dark:text-grove-ink-dk">{roleHierarchy.role_name}</span>
               </div>
               {roleHierarchy.subordinate_count > 0 ? (
                 <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <p className="text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
                     Subordinate Roles ({roleHierarchy.subordinate_count})
                   </p>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {roleHierarchy.subordinate_roles.map((role) => (
-                      <div key={role.role_id} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 py-1 px-2 bg-gray-50 dark:bg-gray-800 rounded">
-                        <div className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                      <div key={role.role_id} className="flex items-center gap-2 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 py-1 px-2 bg-primary-50/40 dark:bg-primary-900/10 rounded">
+                        <div className="h-1.5 w-1.5 rounded-full bg-copper-500" />
                         {role.role_name}
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 dark:text-gray-400">No subordinate roles</p>
+                <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">No subordinate roles</p>
               )}
             </div>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">User does not have a role assigned</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">User does not have a role assigned</p>
           )}
         </CardContent>
       </Card>
@@ -250,38 +250,38 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Share2 className="h-5 w-5 text-blue-600" />
+            <Share2 className="h-5 w-5 text-primary-700" />
             Manual Shares
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
             Records explicitly shared with this user or groups they belong to.
           </p>
           {manualShares.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No manual shares found</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-8">No manual shares found</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10">
                   <tr>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record Type</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record ID</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Access Level</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Shared To</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Record Type</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Record ID</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Access Level</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Shared To</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
                   {manualShares.map((share, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{share.record_type}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{share.record_id}</td>
+                    <tr key={idx} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15/50 transition-colors">
+                      <td className="px-4 py-2 text-grove-ink dark:text-grove-ink-dk">{share.record_type}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">{share.record_id}</td>
                       <td className="px-4 py-2">
                         <Badge variant={share.access_level === 'Edit' ? 'success' : 'info'}>
                           {share.access_level}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{share.shared_to}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">{share.shared_to}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -300,20 +300,20 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
             Access granted through Account Team, Opportunity Team, or Case Team memberships.
           </p>
           {teamAccess.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No team memberships found</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-8">No team memberships found</p>
           ) : (
             <div className="space-y-3">
               {teamAccess.map((team, idx) => (
-                <div key={idx} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                <div key={idx} className="bg-primary-50/40 dark:bg-primary-900/10 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-2">
                     <Badge variant="warning">{team.team_type}</Badge>
-                    {team.role && <span className="text-sm text-gray-600 dark:text-gray-400">{team.role}</span>}
+                    {team.role && <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">{team.role}</span>}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Record: {team.record_id}</p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">Record: {team.record_id}</p>
                   <div className="flex flex-wrap gap-2">
                     <Badge size="sm" variant="info">Account: {team.account_access}</Badge>
                     <Badge size="sm" variant="info">Opportunity: {team.opportunity_access}</Badge>
@@ -335,31 +335,31 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
             Access granted through criteria-based or owner-based sharing rules.
           </p>
           {sharingRules.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No sharing rule grants found</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-8">No sharing rule grants found</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10">
                   <tr>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record Type</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Record ID</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Access Level</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Row Cause</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Record Type</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Record ID</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Access Level</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Row Cause</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
                   {sharingRules.map((rule, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{rule.record_type}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{rule.record_id}</td>
+                    <tr key={idx} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15/50 transition-colors">
+                      <td className="px-4 py-2 text-grove-ink dark:text-grove-ink-dk">{rule.record_type}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">{rule.record_id}</td>
                       <td className="px-4 py-2">
                         <Badge variant="success">{rule.access_level}</Badge>
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-600 dark:text-gray-400">{rule.row_cause}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">{rule.row_cause}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -373,26 +373,26 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-blue-600" />
+            <Building2 className="h-5 w-5 text-primary-700" />
             Organization-Wide Defaults (OWD)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
             Baseline sharing model that defines default access levels for each object type across the organization.
           </p>
           {organizationWideDefaults && organizationWideDefaults.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10">
                   <tr>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Object</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Internal Sharing</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">External Sharing</th>
-                    <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Description</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Object</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Internal Sharing</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">External Sharing</th>
+                    <th className="px-4 py-2 text-left text-grove-ink/85 dark:text-grove-ink-dk/85">Description</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
                   {organizationWideDefaults.map((owd, idx) => {
                     const getSharingModelBadge = (model: string) => {
                       if (model === 'Private') return <Badge variant="danger">Private</Badge>
@@ -411,13 +411,13 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                     }
 
                     return (
-                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                      <tr key={idx} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15/50 transition-colors">
                         <td className="px-4 py-2">
-                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                          <div className="font-medium text-grove-ink dark:text-grove-ink-dk">
                             {owd.sobject_label || owd.sobject_type}
                           </div>
                           {owd.sobject_label && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                            <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 font-mono">
                               {owd.sobject_type}
                             </div>
                           )}
@@ -429,10 +429,10 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                           {owd.external_sharing_model ? (
                             getSharingModelBadge(owd.external_sharing_model)
                           ) : (
-                            <span className="text-gray-400 text-xs">N/A</span>
+                            <span className="text-grove-ink/50 text-xs">N/A</span>
                           )}
                         </td>
-                        <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-2 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                           {getDescription(owd.internal_sharing_model)}
                         </td>
                       </tr>
@@ -442,7 +442,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
               </table>
             </div>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">No OWD settings available</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">No OWD settings available</p>
           )}
         </CardContent>
       </Card>

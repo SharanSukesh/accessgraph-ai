@@ -30,7 +30,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Protected pages - sidebar + main content. No more top navbar; the
   // page itself supplies its own header.
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50/80 dark:bg-gray-900/80">
+    <div className="flex h-screen overflow-hidden bg-grove-canvas/80 dark:bg-grove-canvas-dk/80">
       <Sidebar />
       <main className="flex-1 overflow-y-auto p-6">
         <PageTransition>{children}</PageTransition>

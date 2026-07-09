@@ -106,7 +106,7 @@ export default function PermissionSetDetailPage() {
       {ps.isOwnedByProfile && ps.profile && (
         <Card variant="bordered">
           <CardContent className="py-3">
-            <p className="text-sm text-gray-700 dark:text-gray-300">
+            <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
               This permission set is the auto-generated container for the
               <strong className="mx-1">{ps.profile.name}</strong>
               profile. Customers cannot edit it directly.
@@ -120,17 +120,17 @@ export default function PermissionSetDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Users</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">Users</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalUsers}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-xs text-grove-ink/55 mt-1">
                   {ps.totalDirectAssignments} direct
                   {ps.totalViaPsgAssignments > 0 && ` + ${ps.totalViaPsgAssignments} via PSG`}
                 </div>
               </div>
-              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-                <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/25">
+                <Users className="h-6 w-6 text-primary-700 dark:text-primary-400" />
               </div>
             </div>
           </CardContent>
@@ -140,11 +140,11 @@ export default function PermissionSetDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Objects</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">Objects</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalObjectsGranted}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">CRUD-level grants</div>
+                <div className="text-xs text-grove-ink/55 mt-1">CRUD-level grants</div>
               </div>
               <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
                 <Database className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -157,11 +157,11 @@ export default function PermissionSetDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Fields</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">Fields</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalFieldsGranted}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">Read or Edit FLS</div>
+                <div className="text-xs text-grove-ink/55 mt-1">Read or Edit FLS</div>
               </div>
               <div className="p-3 rounded-lg bg-amber-100 dark:bg-amber-900">
                 <FileText className="h-6 w-6 text-amber-600 dark:text-amber-400" />
@@ -174,14 +174,14 @@ export default function PermissionSetDetailPage() {
           <CardContent className="py-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">System Perms</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">System Perms</div>
+                <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalSystemPermissionsGranted}
                 </div>
-                <div className="text-xs text-gray-500 mt-1">Org-wide privileges</div>
+                <div className="text-xs text-grove-ink/55 mt-1">Org-wide privileges</div>
               </div>
-              <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900">
-                <Settings className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <div className="p-3 rounded-lg bg-copper-100 dark:bg-copper-900/25">
+                <Settings className="h-6 w-6 text-copper-600 dark:text-copper-400" />
               </div>
             </div>
           </CardContent>
@@ -191,9 +191,9 @@ export default function PermissionSetDetailPage() {
       {ps.permissionSetGroups.length > 0 && (
         <Card variant="bordered">
           <CardContent className="py-3">
-            <p className="text-sm text-gray-700 dark:text-gray-300">
+            <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
               <strong>Included in {ps.permissionSetGroups.length} Permission Set Group{ps.permissionSetGroups.length === 1 ? '' : 's'}:</strong>
-              <span className="ml-2 text-gray-600 dark:text-gray-400">
+              <span className="ml-2 text-grove-ink/65 dark:text-grove-ink-dk/65">
                 {ps.permissionSetGroups.map(g => g.label).join(' · ')}
               </span>
             </p>
@@ -211,7 +211,7 @@ export default function PermissionSetDetailPage() {
         </CardHeader>
         <CardContent>
           {ps.totalSystemPermissionsGranted === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 py-4 text-center">
               No high-impact system permissions granted by this PS.
               {' '}
               <span className="text-xs italic">
@@ -222,7 +222,7 @@ export default function PermissionSetDetailPage() {
             <div className="space-y-4">
               {Object.entries(ps.systemPermissions).map(([category, perms]) => (
                 <div key={category}>
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  <h4 className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
                     {category}
                   </h4>
                   <div className="flex flex-wrap gap-2">
@@ -248,7 +248,7 @@ export default function PermissionSetDetailPage() {
                   </div>
                 </div>
               ))}
-              <p className="text-xs text-gray-500 mt-3">
+              <p className="text-xs text-grove-ink/55 mt-3">
                 Showing the curated set of {' '}
                 <a href="https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionset.htm" target="_blank" rel="noopener noreferrer" className="underline">
                   ~30 most-audited PermissionSet flags
@@ -270,28 +270,28 @@ export default function PermissionSetDetailPage() {
         </CardHeader>
         <CardContent>
           {ps.users.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 py-4 text-center">
               No users currently have this permission set assigned.
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <table className="min-w-full divide-y divide-grove-border dark:divide-grove-border-dk">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Assignment</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Name</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Email</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Assignment</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
                   {ps.users.map(u => (
                     <tr
                       key={u.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-900 cursor-pointer"
+                      className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15 cursor-pointer"
                       onClick={() => router.push(`/orgs/${orgId}/users/${u.id}`)}
                     >
-                      <td className="px-3 py-2 text-sm text-gray-900 dark:text-white">{u.name}</td>
-                      <td className="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">{u.email}</td>
+                      <td className="px-3 py-2 text-sm text-grove-ink dark:text-grove-ink-dk">{u.name}</td>
+                      <td className="px-3 py-2 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">{u.email}</td>
                       <td className="px-3 py-2 text-sm">
                         <Badge variant={u.assignmentType === 'direct' ? 'info' : 'default'} size="sm">
                           {u.assignmentType === 'direct' ? 'Direct' : 'via PSG'}
@@ -316,27 +316,27 @@ export default function PermissionSetDetailPage() {
         </CardHeader>
         <CardContent>
           {ps.objectPermissions.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 py-4 text-center">
               This permission set does not grant any object-level permissions.
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <table className="min-w-full divide-y divide-grove-border dark:divide-grove-border-dk">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Object</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">R</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">C</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">E</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">D</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">View All</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Modify All</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Object</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">R</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">C</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">E</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">D</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">View All</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">Modify All</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
                   {ps.objectPermissions.map(op => (
-                    <tr key={op.objectName} className="hover:bg-gray-50 dark:hover:bg-gray-900">
-                      <td className="px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">{op.objectName}</td>
+                    <tr key={op.objectName} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                      <td className="px-3 py-2 text-sm font-mono text-grove-ink dark:text-grove-ink-dk">{op.objectName}</td>
                       <td className="px-3 py-2 text-center text-sm">{op.read ? '✓' : ''}</td>
                       <td className="px-3 py-2 text-center text-sm">{op.create ? '✓' : ''}</td>
                       <td className="px-3 py-2 text-center text-sm">{op.edit ? '✓' : ''}</td>
@@ -364,7 +364,7 @@ export default function PermissionSetDetailPage() {
         </CardHeader>
         <CardContent>
           {ps.objectPermissions.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 py-4 text-center">
               This permission set grants no object-level access, so it provides no field access.
             </p>
           ) : (
@@ -402,15 +402,15 @@ export default function PermissionSetDetailPage() {
                     if (objectPerm.edit) inheritedFlags.push('Edit')
                     if (objectPerm.delete) inheritedFlags.push('Delete')
                     return (
-                      <div key={objectName} className="border border-gray-200 dark:border-gray-700 rounded-md">
+                      <div key={objectName} className="border border-grove-border dark:border-grove-border-dk rounded-md">
                         <button
                           type="button"
                           onClick={() => toggleFieldGroup(objectName)}
-                          className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-900 text-left"
+                          className="w-full px-3 py-2 flex items-center justify-between hover:bg-primary-50/40 dark:hover:bg-primary-900/15 text-left"
                         >
                           <div className="flex items-center gap-2">
-                            {isExpanded ? <ChevronDown className="h-4 w-4 text-gray-500" /> : <ChevronRight className="h-4 w-4 text-gray-500" />}
-                            <span className="font-mono text-sm text-gray-900 dark:text-white">{objectName}</span>
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-grove-ink/55" /> : <ChevronRight className="h-4 w-4 text-grove-ink/55" />}
+                            <span className="font-mono text-sm text-grove-ink dark:text-grove-ink-dk">{objectName}</span>
                           </div>
                           {isInherited ? (
                             <Badge variant="default" size="sm">
@@ -421,15 +421,15 @@ export default function PermissionSetDetailPage() {
                           )}
                         </button>
                         {isExpanded && (
-                          <div className="border-t border-gray-200 dark:border-gray-700">
+                          <div className="border-t border-grove-border dark:border-grove-border-dk">
                             {isInherited ? (
-                              <div className="px-3 py-3 text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                              <div className="px-3 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-2">
                                 <p>
                                   <strong>No field-level security overrides on this object.</strong>
                                   {' '}Every field on <span className="font-mono">{objectName}</span> is accessible to users with this PS via inherited object-level{' '}
                                   <strong>{inheritedFlags.join(' / ') || 'access'}</strong>.
                                 </p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-grove-ink/55">
                                   Salesforce only stores FieldPermission rows when an admin
                                   explicitly grants or revokes access on a specific field.
                                   Standard fields (Id, Name, etc.) cannot have FLS at all
@@ -445,19 +445,19 @@ export default function PermissionSetDetailPage() {
                               </div>
                             ) : (
                               <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                  <thead className="bg-gray-50 dark:bg-gray-900">
+                                <table className="min-w-full divide-y divide-grove-border dark:divide-grove-border-dk">
+                                  <thead className="bg-grove-canvas dark:bg-grove-canvas-dk">
                                     <tr>
-                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Field</th>
-                                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Read</th>
-                                      <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Edit</th>
-                                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase"></th>
+                                      <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Field</th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">Read</th>
+                                      <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">Edit</th>
+                                      <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase"></th>
                                     </tr>
                                   </thead>
-                                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                  <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
                                     {fls!.fields.map(f => (
-                                      <tr key={f.qualifiedId} className="hover:bg-gray-50 dark:hover:bg-gray-900">
-                                        <td className="px-3 py-2 text-sm font-mono text-gray-900 dark:text-white">{f.fieldName}</td>
+                                      <tr key={f.qualifiedId} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                                        <td className="px-3 py-2 text-sm font-mono text-grove-ink dark:text-grove-ink-dk">{f.fieldName}</td>
                                         <td className="px-3 py-2 text-center text-sm">{f.read ? '✓' : ''}</td>
                                         <td className="px-3 py-2 text-center text-sm">{f.edit ? '✓' : ''}</td>
                                         <td className="px-3 py-2 text-right">
@@ -473,7 +473,7 @@ export default function PermissionSetDetailPage() {
                                     ))}
                                   </tbody>
                                 </table>
-                                <p className="px-3 py-2 text-xs text-gray-500 border-t border-gray-200 dark:border-gray-700">
+                                <p className="px-3 py-2 text-xs text-grove-ink/55 border-t border-grove-border dark:border-grove-border-dk">
                                   These are explicit FLS rows. Other fields on{' '}
                                   <span className="font-mono">{objectName}</span> still inherit{' '}
                                   {inheritedFlags.join(' / ') || 'no access'} from the object-level grant above.
@@ -487,7 +487,7 @@ export default function PermissionSetDetailPage() {
                   })
                 })()}
               </div>
-              <p className="text-xs text-gray-500 mt-3">
+              <p className="text-xs text-grove-ink/55 mt-3">
                 <strong>Explicit FLS</strong> = an admin set field-level security on that field.
                 {' '}<strong>Inherited</strong> = field has no FLS row, so access follows the object's
                 CRUD grant above.

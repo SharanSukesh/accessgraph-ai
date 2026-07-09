@@ -737,15 +737,15 @@ export default function ReportingGraphPage() {
           TOOL is active (move vs draw) and, when drawing, which EDGE TYPE
           gets created. Putting both in one row keeps the controls close
           to the canvas so the active mode is hard to miss. */}
-      <div className="flex items-center gap-3 text-sm flex-wrap p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-3 text-sm flex-wrap p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 border border-grove-border dark:border-grove-border-dk">
         {/* Canvas tool toggle */}
-        <div className="flex items-center gap-1 bg-white dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700 p-0.5">
+        <div className="flex items-center gap-1 bg-grove-surface dark:bg-grove-canvas-dk rounded-md border border-grove-border dark:border-grove-border-dk p-0.5">
           <button
             onClick={() => setTool('move')}
             className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${
               tool === 'move'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                ? 'bg-primary-700 text-grove-canvas shadow'
+                : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'
             }`}
             title="Drag node bodies to reposition them"
           >
@@ -757,7 +757,7 @@ export default function ReportingGraphPage() {
             className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${
               tool === 'draw'
                 ? 'bg-green-600 text-white shadow'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'
             }`}
             title="Drag from one node to another to create an edge"
           >
@@ -772,13 +772,13 @@ export default function ReportingGraphPage() {
             tool === 'draw' ? 'opacity-100' : 'opacity-40 pointer-events-none'
           }`}
         >
-          <span className="text-gray-600 dark:text-gray-400 text-xs">Edge type:</span>
+          <span className="text-grove-ink/65 dark:text-grove-ink-dk/65 text-xs">Edge type:</span>
           <button
             onClick={() => setEdgeMode('ManagerId')}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
               edgeMode === 'ManagerId'
-                ? 'bg-indigo-600 text-white shadow'
-                : 'bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                ? 'bg-primary-700 text-grove-canvas shadow'
+                : 'bg-grove-surface dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-grove-surface-dk'
             }`}
           >
             Manager (solid)
@@ -788,14 +788,14 @@ export default function ReportingGraphPage() {
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
               edgeMode === 'DelegatedApproverId'
                 ? 'bg-sky-600 text-white shadow'
-                : 'bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                : 'bg-grove-surface dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-grove-surface-dk'
             }`}
           >
             Delegated approver (dashed)
           </button>
         </div>
 
-        <div className="ml-auto text-xs text-gray-500 max-w-md text-right">
+        <div className="ml-auto text-xs text-grove-ink/55 max-w-md text-right">
           {tool === 'move' ? (
             <>
               <strong>Move mode</strong>: click+drag a node to reposition.
@@ -824,15 +824,15 @@ export default function ReportingGraphPage() {
             <CardTitle>Users ({graph?.nodes.length ?? 0})</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-0">
-            <div className="p-3 sticky top-0 bg-white dark:bg-gray-900 z-10 border-b border-gray-200 dark:border-gray-800">
+            <div className="p-3 sticky top-0 bg-grove-surface dark:bg-grove-canvas-dk z-10 border-b border-grove-border dark:border-grove-border-dk">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50" />
                 <input
                   type="text"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Search users or departments…"
-                  className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800"
+                  className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk"
                 />
               </div>
             </div>
@@ -853,12 +853,12 @@ export default function ReportingGraphPage() {
                     }}
                     className={`w-full text-left px-2 py-1.5 rounded text-sm ${
                       selectedNodeId === n.user_sf_id
-                        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-900 dark:text-indigo-100'
-                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-800 dark:text-primary-200'
+                        : 'hover:bg-primary-50 dark:hover:bg-grove-surface-dk'
                     }`}
                   >
                     <div className="font-medium truncate">{n.name}</div>
-                    <div className="text-xs text-gray-500 truncate">
+                    <div className="text-xs text-grove-ink/55 truncate">
                       {n.department || '—'}
                     </div>
                   </button>
@@ -872,7 +872,7 @@ export default function ReportingGraphPage() {
         <Card variant="bordered" className="col-span-6 overflow-hidden">
           <div
             ref={containerRef}
-            className="w-full h-full bg-gray-50 dark:bg-gray-900"
+            className="w-full h-full bg-grove-canvas dark:bg-grove-canvas-dk"
             style={{ minHeight: '650px' }}
           />
         </Card>
@@ -884,7 +884,7 @@ export default function ReportingGraphPage() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
             {!selectedNode ? (
-              <p className="text-sm text-gray-500 italic">
+              <p className="text-sm text-grove-ink/55 italic">
                 Click a node to inspect.
               </p>
             ) : (
@@ -901,39 +901,39 @@ export default function ReportingGraphPage() {
                   />
                   <p className="text-sm font-semibold flex-1 truncate">{selectedNode.name}</p>
                 </div>
-                <p className="text-xs text-gray-500 font-mono break-all">
+                <p className="text-xs text-grove-ink/55 font-mono break-all">
                   {selectedNode.user_sf_id}
                 </p>
                 <dl className="text-xs space-y-1.5">
                   {selectedNode.title && (
                     <div className="flex gap-1.5">
-                      <dt className="text-gray-500 w-20 flex-shrink-0">Title</dt>
+                      <dt className="text-grove-ink/55 w-20 flex-shrink-0">Title</dt>
                       <dd className="font-medium">{selectedNode.title}</dd>
                     </div>
                   )}
                   <div className="flex gap-1.5">
-                    <dt className="text-gray-500 w-20 flex-shrink-0">Department</dt>
+                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Department</dt>
                     <dd className="font-medium">{selectedNode.department || '—'}</dd>
                   </div>
                   <div className="flex gap-1.5">
-                    <dt className="text-gray-500 w-20 flex-shrink-0">Role</dt>
+                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Role</dt>
                     <dd className="font-medium">
-                      {selectedNode.role_name || <span className="text-gray-400">—</span>}
+                      {selectedNode.role_name || <span className="text-grove-ink/50">—</span>}
                       {selectedNode.role_depth != null && (
-                        <span className="ml-1.5 text-gray-400">
+                        <span className="ml-1.5 text-grove-ink/50">
                           (depth {selectedNode.role_depth})
                         </span>
                       )}
                     </dd>
                   </div>
                   <div className="flex gap-1.5">
-                    <dt className="text-gray-500 w-20 flex-shrink-0">Profile</dt>
+                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Profile</dt>
                     <dd className="font-medium">
-                      {selectedNode.profile_name || <span className="text-gray-400">—</span>}
+                      {selectedNode.profile_name || <span className="text-grove-ink/50">—</span>}
                     </dd>
                   </div>
                   <div className="flex gap-1.5">
-                    <dt className="text-gray-500 w-20 flex-shrink-0">Status</dt>
+                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Status</dt>
                     <dd>
                       <Badge
                         variant={selectedNode.is_active ? 'success' : 'default'}
@@ -951,8 +951,8 @@ export default function ReportingGraphPage() {
                 clear a manager or delegated approver. Mirrors right-click
                 on the canvas edge, but doesn't require finding the edge. */}
             {selectedNode && selectedRelationships && (
-              <div className="border-t border-gray-200 dark:border-gray-800 pt-3 mb-4">
-                <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+              <div className="border-t border-grove-border dark:border-grove-border-dk pt-3 mb-4">
+                <p className="text-xs uppercase tracking-wide text-grove-ink/55 mb-2">
                   Current relationships
                 </p>
                 <ul className="space-y-2">
@@ -972,7 +972,7 @@ export default function ReportingGraphPage() {
                         className="flex items-center gap-2 text-xs"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-gray-500">{label}</p>
+                          <p className="text-grove-ink/55">{label}</p>
                           {pendingAdd ? (
                             <p className="font-medium text-green-700 dark:text-green-400 truncate">
                               → {pendingAdd.target_name || pendingAdd.new_value} (pending)
@@ -982,13 +982,13 @@ export default function ReportingGraphPage() {
                               className={`font-medium truncate ${
                                 markedForRemoval
                                   ? 'line-through text-red-600 dark:text-red-400'
-                                  : 'text-gray-900 dark:text-gray-100'
+                                  : 'text-grove-ink dark:text-grove-ink-dk'
                               }`}
                             >
                               {slot.committed.target_name}
                             </p>
                           ) : (
-                            <p className="italic text-gray-400">None</p>
+                            <p className="italic text-grove-ink/50">None</p>
                           )}
                         </div>
                         {/* Action button:
@@ -1000,7 +1000,7 @@ export default function ReportingGraphPage() {
                           markedForRemoval ? (
                             <button
                               onClick={() => slot.pending && handleRevert(slot.pending)}
-                              className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+                              className="px-2 py-1 text-xs rounded border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
                               title="Undo the pending removal"
                             >
                               Undo
@@ -1031,12 +1031,12 @@ export default function ReportingGraphPage() {
               </div>
             )}
 
-            <div className="border-t border-gray-200 dark:border-gray-800 pt-3">
-              <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+            <div className="border-t border-grove-border dark:border-grove-border-dk pt-3">
+              <p className="text-xs uppercase tracking-wide text-grove-ink/55 mb-2">
                 Pending edits ({pending.length})
               </p>
               {pending.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">
+                <p className="text-xs text-grove-ink/55 italic">
                   No pending edits. Drag between users to add one.
                 </p>
               ) : (
@@ -1064,7 +1064,7 @@ export default function ReportingGraphPage() {
                           {p.kind === 'remove' ? 'Clear' : 'Set'}{' '}
                           {p.field === 'ManagerId' ? 'manager' : 'delegated approver'}
                         </p>
-                        <p className="text-gray-500">
+                        <p className="text-grove-ink/55">
                           {p.source_name || p.user_sf_id}
                           {p.kind !== 'remove' && (
                             <>
@@ -1076,7 +1076,7 @@ export default function ReportingGraphPage() {
                       </div>
                       <button
                         onClick={() => handleRevert(p)}
-                        className="text-gray-400 hover:text-gray-600"
+                        className="text-grove-ink/50 hover:text-grove-ink/70"
                         title="Revert this edit"
                       >
                         <XIcon className="h-3 w-3" />
@@ -1097,7 +1097,7 @@ export default function ReportingGraphPage() {
           onClick={() => setConfirmOpen(false)}
         >
           <div
-            className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full p-6"
+            className="bg-grove-surface dark:bg-grove-canvas-dk rounded-lg shadow-xl max-w-lg w-full p-6"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-start gap-3 mb-4">
@@ -1106,20 +1106,20 @@ export default function ReportingGraphPage() {
                 <h2 className="text-lg font-semibold">
                   Apply {pending.length} {pending.length === 1 ? 'change' : 'changes'} to Salesforce?
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1">
                   This will PATCH the corresponding User records in Salesforce.
                   Audit log entries are written for each successful change.
                   Requires ORG_ADMIN role.
                 </p>
               </div>
             </div>
-            <ul className="max-h-64 overflow-y-auto space-y-1.5 mb-4 text-sm border-t border-b border-gray-200 dark:border-gray-800 py-3">
+            <ul className="max-h-64 overflow-y-auto space-y-1.5 mb-4 text-sm border-t border-b border-grove-border dark:border-grove-border-dk py-3">
               {pending.map(p => (
                 <li
                   key={`${p.user_sf_id}::${p.field}`}
-                  className="text-gray-700 dark:text-gray-300"
+                  className="text-grove-ink/85 dark:text-grove-ink-dk/85"
                 >
-                  <span className="text-gray-500">
+                  <span className="text-grove-ink/55">
                     {p.kind === 'remove' ? 'Clear' : 'Set'} {p.field}:
                   </span>{' '}
                   <strong>{p.source_name || p.user_sf_id}</strong>

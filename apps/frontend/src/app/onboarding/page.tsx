@@ -49,10 +49,10 @@ export default function OnboardingPage() {
             <div className="h-16 w-16 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Building2 className="h-10 w-10 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h1 className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
               Get Started with AccessGraph AI
             </h1>
-            <p className="text-lg text-gray-600 dark:text-gray-400">
+            <p className="text-lg text-grove-ink/65 dark:text-grove-ink-dk/65">
               Connect your Salesforce organization in just a few steps
             </p>
           </div>
@@ -70,7 +70,7 @@ export default function OnboardingPage() {
                         ? 'bg-primary-600 text-white'
                         : idx + 1 === step
                         ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400 ring-4 ring-primary-200 dark:ring-primary-800'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-400'
+                        : 'bg-grove-border/60 dark:bg-grove-border-dk/70 text-grove-ink/50'
                     }`}
                   >
                     {idx + 1 < step ? (
@@ -79,10 +79,10 @@ export default function OnboardingPage() {
                       <span className="font-semibold">{idx + 1}</span>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white text-center">
+                  <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk text-center">
                     {s.title}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center max-w-32">
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 text-center max-w-32">
                     {s.description}
                   </p>
                 </div>
@@ -91,7 +91,7 @@ export default function OnboardingPage() {
                     className={`absolute top-6 left-1/2 w-full h-0.5 -z-10 ${
                       idx + 1 < step
                         ? 'bg-primary-600'
-                        : 'bg-gray-300 dark:bg-gray-700'
+                        : 'bg-grove-border/60 dark:bg-grove-border-dk/70'
                     }`}
                   />
                 )}
@@ -108,15 +108,15 @@ export default function OnboardingPage() {
           <CardContent className="space-y-6">
             {step === 1 && (
               <>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">
                   To get started, we need to connect to your Salesforce organization.
                   This requires OAuth authentication.
                 </p>
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
+                <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4">
+                  <h4 className="font-semibold text-primary-800 dark:text-primary-300 mb-2">
                     What we'll access:
                   </h4>
-                  <ul className="space-y-1 text-sm text-blue-800 dark:text-blue-400">
+                  <ul className="space-y-1 text-sm text-primary-700 dark:text-primary-400">
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4" />
                       User profiles and permission sets
@@ -136,23 +136,23 @@ export default function OnboardingPage() {
 
             {step === 2 && (
               <>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Configure what data you'd like to sync and analyze.
                 </p>
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <label className="flex items-center gap-3 p-3 border border-grove-border dark:border-grove-border-dk rounded-lg cursor-pointer hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
                     <input type="checkbox" defaultChecked className="rounded" />
-                    <span className="text-gray-900 dark:text-white">All Users</span>
+                    <span className="text-grove-ink dark:text-grove-ink-dk">All Users</span>
                   </label>
-                  <label className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <label className="flex items-center gap-3 p-3 border border-grove-border dark:border-grove-border-dk rounded-lg cursor-pointer hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
                     <input type="checkbox" defaultChecked className="rounded" />
-                    <span className="text-gray-900 dark:text-white">
+                    <span className="text-grove-ink dark:text-grove-ink-dk">
                       Profiles & Permission Sets
                     </span>
                   </label>
-                  <label className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <label className="flex items-center gap-3 p-3 border border-grove-border dark:border-grove-border-dk rounded-lg cursor-pointer hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
                     <input type="checkbox" defaultChecked className="rounded" />
-                    <span className="text-gray-900 dark:text-white">Custom Objects</span>
+                    <span className="text-grove-ink dark:text-grove-ink-dk">Custom Objects</span>
                   </label>
                 </div>
               </>
@@ -160,7 +160,7 @@ export default function OnboardingPage() {
 
             {step === 3 && (
               <>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">
                   We're ready to perform the initial analysis of your Salesforce organization.
                   This may take a few minutes.
                 </p>
@@ -231,7 +231,7 @@ export default function OnboardingPage() {
         </div>
 
         {/* Help Text */}
-        <div className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
+        <div className="mt-8 text-center text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 max-w-2xl mx-auto">
           <p>
             Need help? Check out our{' '}
             <a href="#" className="text-primary-600 dark:text-primary-400 hover:underline">

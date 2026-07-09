@@ -64,7 +64,7 @@ export function TabsList({ children, className = '' }: TabsListProps) {
   return (
     <div
       className={cn(
-        'inline-flex h-10 items-center justify-start rounded-lg bg-gray-100 dark:bg-gray-800 p-1',
+        'inline-flex h-10 items-center justify-start rounded-lg bg-grove-canvas dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk p-1',
         className
       )}
       role="tablist"
@@ -102,8 +102,8 @@ export function TabsTrigger({
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
         'disabled:pointer-events-none disabled:opacity-50',
         isActive
-          ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
-          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white',
+          ? 'bg-grove-surface dark:bg-grove-canvas-dk text-primary-700 dark:text-primary-300 shadow-sm'
+          : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:text-grove-ink dark:hover:text-grove-ink-dk',
         className
       )}
     >

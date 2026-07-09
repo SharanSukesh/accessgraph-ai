@@ -13,65 +13,65 @@ export default function PrivacyPolicyPage() {
     <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk">
           Privacy Policy
         </h1>
-        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+        <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
           Last updated: {new Date().toLocaleDateString()}
         </p>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
           AccessGraph AI is committed to protecting your privacy and complying with GDPR,
           CCPA, and other data protection regulations.
         </p>
       </div>
 
       {/* Quick Summary */}
-      <Card variant="bordered" className="mb-8 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+      <Card variant="bordered" className="mb-8 bg-primary-50 dark:bg-primary-900/10 border-primary-200 dark:border-primary-800">
         <CardHeader>
           <CardTitle>Privacy at a Glance</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start space-x-3">
-              <Database className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Database className="h-5 w-5 text-primary-700 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   Metadata Only
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   We never access your actual Salesforce records, only permission metadata
                 </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <Lock className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Lock className="h-5 w-5 text-primary-700 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   Encrypted Storage
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   All sensitive data is encrypted with AES-256 encryption
                 </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <Eye className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Eye className="h-5 w-5 text-primary-700 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   Full Transparency
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   Complete data inventory available in your privacy dashboard
                 </p>
               </div>
             </div>
             <div className="flex items-start space-x-3">
-              <Trash2 className="h-5 w-5 text-blue-600 mt-0.5" />
+              <Trash2 className="h-5 w-5 text-primary-700 mt-0.5" />
               <div>
-                <p className="font-medium text-gray-900 dark:text-white">
+                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
                   Right to Erasure
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
                   Delete all your data anytime with one click (GDPR Article 17)
                 </p>
               </div>
@@ -83,12 +83,12 @@ export default function PrivacyPolicyPage() {
       {/* Main Content */}
       <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             1. Information We Collect
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 1.1 Salesforce Metadata
               </h3>
               <p>
@@ -101,14 +101,14 @@ export default function PrivacyPolicyPage() {
                 <li>Sharing rules and organization-wide defaults</li>
                 <li>Public groups and team memberships</li>
               </ul>
-              <p className="mt-2 font-medium text-blue-600 dark:text-blue-400">
+              <p className="mt-2 font-medium text-primary-700 dark:text-primary-400">
                 Important: We never access or store your actual customer data (Accounts,
                 Opportunities, etc.). We only analyze who can access what.
               </p>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 1.2 Account Information
               </h3>
               <p>We collect basic account information when you sign up:</p>
@@ -120,7 +120,7 @@ export default function PrivacyPolicyPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 1.3 Usage Data
               </h3>
               <p>We automatically collect usage information to improve our service:</p>
@@ -134,10 +134,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             2. How We Use Your Information
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>We use your data exclusively for the following purposes:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -158,17 +158,17 @@ export default function PrivacyPolicyPage() {
                 <strong>Compliance:</strong> Maintain audit logs for security and compliance
               </li>
             </ul>
-            <p className="mt-4 font-medium text-gray-900 dark:text-white">
+            <p className="mt-4 font-medium text-grove-ink dark:text-grove-ink-dk">
               We never sell or share your data with third parties for marketing purposes.
             </p>
           </div>
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             3. Data Security
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               We implement industry-standard security measures to protect your data:
             </p>
@@ -201,10 +201,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             4. Data Retention
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>We automatically delete old data according to these retention policies:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -222,7 +222,7 @@ export default function PrivacyPolicyPage() {
             </ul>
             <p className="mt-4">
               You can manually delete old data or adjust retention periods in your{' '}
-              <a href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+              <a href="/privacy" className="text-primary-700 dark:text-primary-400 hover:underline">
                 Privacy Dashboard
               </a>
               .
@@ -231,10 +231,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             5. Your Rights (GDPR)
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               Under GDPR and similar regulations, you have the following rights:
             </p>
@@ -267,10 +267,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             6. Cookies and Tracking
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>We use minimal cookies for:</p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Authentication (session tokens)</li>
@@ -283,10 +283,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             7. Third-Party Services
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>We use the following third-party services:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -309,10 +309,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             8. International Data Transfers
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               Your data may be processed in data centers located in the United States and
               Europe. We ensure adequate protection through:
@@ -326,10 +326,10 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             9. Changes to This Policy
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               We may update this privacy policy from time to time. We will notify you of
               material changes by:
@@ -343,17 +343,17 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             10. Contact Us
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>For privacy-related questions or to exercise your rights:</p>
-            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div className="mt-4 p-4 bg-primary-50 dark:bg-grove-surface-dk rounded-lg">
               <p>
                 <strong>Email:</strong>{' '}
                 <a
                   href="mailto:privacy@accessgraph.ai"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-primary-700 dark:text-primary-400 hover:underline"
                 >
                   privacy@accessgraph.ai
                 </a>
@@ -371,7 +371,7 @@ export default function PrivacyPolicyPage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-12 pt-6 border-t border-grove-border dark:border-grove-border-dk">
         <div className="flex items-center justify-center space-x-6 text-sm">
           <a
             href="/legal/terms"
@@ -379,14 +379,14 @@ export default function PrivacyPolicyPage() {
           >
             Terms of Service
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/security"
             className="text-primary-600 dark:text-primary-400 hover:underline"
           >
             Security Practices
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/dpa"
             className="text-primary-600 dark:text-primary-400 hover:underline"

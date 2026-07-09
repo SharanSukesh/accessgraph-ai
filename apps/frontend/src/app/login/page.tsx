@@ -67,7 +67,7 @@ function LoginContent() {
           <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-copper-600 dark:text-copper-400 mb-3">
             Access Intelligence · v0.1
           </p>
-          <h1 className="text-4xl font-serif font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
+          <h1 className="text-4xl font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
             Welcome to AccessGraph AI
           </h1>
           <p className="text-grove-ink/70 dark:text-grove-ink-dk/70">
@@ -84,7 +84,7 @@ function LoginContent() {
           style={{ animation: 'grove-fade-up 500ms ease-out 120ms both' }}
         >
           <CardHeader>
-            <CardTitle className="text-center font-serif tracking-tight text-grove-ink dark:text-grove-ink-dk">
+            <CardTitle className="text-center tracking-tight text-grove-ink dark:text-grove-ink-dk">
               Sign In
             </CardTitle>
           </CardHeader>

@@ -75,7 +75,7 @@ export function MetricCard({
           </p>
           {/* Grove signature — numerals in the serif stack. tabular-nums
               keeps the count-up from re-flowing widths. */}
-          <p className="mt-2 text-3xl font-semibold text-grove-ink dark:text-grove-ink-dk transition-transform duration-200 group-hover:scale-105 font-serif tabular-nums tracking-tight">
+          <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk transition-transform duration-200 group-hover:scale-105 tabular-nums tracking-tight">
             {renderedValue}
           </p>
           {change && (

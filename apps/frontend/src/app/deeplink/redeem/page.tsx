@@ -98,10 +98,10 @@ function RedeemContent() {
           <div className="mb-4 flex justify-center">
             <AlertTriangle className="h-12 w-12 text-amber-500" />
           </div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+          <h1 className="text-2xl font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
             We couldn't open that link
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">{state.message}</p>
+          <p className="text-grove-ink/65 dark:text-grove-ink-dk/65 mb-6">{state.message}</p>
           <a
             href="/login"
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary-600 text-white hover:bg-primary-700"
@@ -117,7 +117,7 @@ function RedeemContent() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary-600 mx-auto mb-4" />
-        <p className="text-gray-600 dark:text-gray-400">Opening AccessGraph AI…</p>
+        <p className="text-grove-ink/65 dark:text-grove-ink-dk/65">Opening AccessGraph AI…</p>
       </div>
     </div>
   )

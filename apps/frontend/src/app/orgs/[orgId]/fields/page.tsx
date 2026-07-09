@@ -77,10 +77,10 @@ export default function FieldsPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Total Fields
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {isLoading ? '...' : pagination?.total || 0}
               </p>
             </div>
@@ -93,15 +93,15 @@ export default function FieldsPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Current Page
               </p>
-              <p className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+              <p className="mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
                 {isLoading ? '...' : fields.length}
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-              <Database className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/25">
+              <Database className="h-6 w-6 text-primary-700 dark:text-primary-400" />
             </div>
           </div>
         </Card>
@@ -109,7 +109,7 @@ export default function FieldsPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Pages
               </p>
               <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
@@ -159,7 +159,7 @@ export default function FieldsPage() {
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
               <input
                 type="text"
                 placeholder="Search fields..."
@@ -168,7 +168,7 @@ export default function FieldsPage() {
                   setSearch(e.target.value)
                   setPage(1)
                 }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
 
@@ -181,7 +181,7 @@ export default function FieldsPage() {
                 setObjectFilter(e.target.value)
                 setPage(1)
               }}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent md:w-64"
+              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent md:w-64"
             />
           </div>
         </CardContent>
@@ -198,7 +198,7 @@ export default function FieldsPage() {
               }
             </CardTitle>
             {pagination && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Showing {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
               </div>
             )}
@@ -211,53 +211,53 @@ export default function FieldsPage() {
             <>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                  <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                         Field
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                         Object
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                         API Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                         Properties
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
                         Users
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                  <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                     {fields.map((field: any) => (
                       <tr
                         key={field.id}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+                        className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15 cursor-pointer transition-colors"
                         onClick={() => router.push(`/orgs/${orgId}/fields/${encodeURIComponent(field.id)}`)}
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <FileText className="h-5 w-5 text-gray-400 mr-3" />
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            <FileText className="h-5 w-5 text-grove-ink/50 mr-3" />
+                            <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                               {field.label}
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <Database className="h-4 w-4 text-gray-400" />
-                            <div className="text-sm text-gray-900 dark:text-white">
+                            <Database className="h-4 w-4 text-grove-ink/50" />
+                            <div className="text-sm text-grove-ink dark:text-grove-ink-dk">
                               {field.objectName}
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900 dark:text-white font-mono">
+                          <div className="text-sm text-grove-ink dark:text-grove-ink-dk font-mono">
                             {field.apiName}
                           </div>
                         </td>
@@ -285,7 +285,7 @@ export default function FieldsPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white font-semibold">
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-grove-ink dark:text-grove-ink-dk font-semibold">
                           {field.userCount || 0}
                         </td>
                       </tr>
@@ -296,7 +296,7 @@ export default function FieldsPage() {
 
               {/* Pagination Controls */}
               {pagination && pagination.totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="mt-6 flex items-center justify-between border-t border-grove-border dark:border-grove-border-dk pt-4">
                   <Button
                     variant="ghost"
                     size="sm"

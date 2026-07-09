@@ -26,7 +26,7 @@ export function Breadcrumbs({ crumbs, className }: BreadcrumbsProps) {
     <nav
       aria-label="Breadcrumb"
       className={cn(
-        'flex items-center text-xs text-gray-500 dark:text-gray-400 -mt-2',
+        'flex items-center text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 -mt-2',
         className,
       )}
     >
@@ -40,7 +40,7 @@ export function Breadcrumbs({ crumbs, className }: BreadcrumbsProps) {
             >
               {i > 0 && (
                 <ChevronRight
-                  className="h-3 w-3 text-gray-300 dark:text-gray-600 flex-shrink-0"
+                  className="h-3 w-3 text-grove-border dark:text-grove-border-dk flex-shrink-0"
                   aria-hidden
                 />
               )}
@@ -49,7 +49,7 @@ export function Breadcrumbs({ crumbs, className }: BreadcrumbsProps) {
                   className={cn(
                     'truncate',
                     isLast
-                      ? 'font-semibold text-gray-900 dark:text-gray-100'
+                      ? 'font-semibold text-grove-ink dark:text-grove-ink-dk'
                       : '',
                   )}
                   aria-current={isLast ? 'page' : undefined}

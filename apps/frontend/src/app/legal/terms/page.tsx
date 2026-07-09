@@ -12,13 +12,13 @@ export default function TermsOfServicePage() {
     <div className="max-w-4xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+        <h1 className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk">
           Terms of Service
         </h1>
-        <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+        <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
           Last updated: {new Date().toLocaleDateString()}
         </p>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
+        <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
           Please read these terms carefully before using AccessGraph AI.
         </p>
       </div>
@@ -26,10 +26,10 @@ export default function TermsOfServicePage() {
       {/* Main Content */}
       <div className="prose prose-gray dark:prose-invert max-w-none space-y-8">
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             1. Acceptance of Terms
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               By accessing or using AccessGraph AI ("the Service"), you agree to be bound by
               these Terms of Service ("Terms"). If you disagree with any part of these terms,
@@ -43,10 +43,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             2. Description of Service
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               AccessGraph AI is a Salesforce access analysis and security intelligence
               platform that:
@@ -66,10 +66,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             3. Account Registration
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               To use the Service, you must connect a valid Salesforce organization through
               OAuth authentication. You agree to:
@@ -92,10 +92,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             4. Acceptable Use Policy
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>You agree NOT to:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
@@ -122,15 +122,15 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             5. Data Collection and Privacy
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               The Service collects and processes Salesforce metadata as described in our{' '}
               <a
                 href="/legal/privacy"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-primary-700 dark:text-primary-400 hover:underline"
               >
                 Privacy Policy
               </a>
@@ -147,7 +147,7 @@ export default function TermsOfServicePage() {
                 Agree to our data retention and security practices
               </li>
             </ul>
-            <p className="mt-4 font-medium text-blue-600 dark:text-blue-400">
+            <p className="mt-4 font-medium text-primary-700 dark:text-primary-400">
               Important: We never access your actual customer records (Accounts, Opportunities,
               etc.). We only analyze permission structures.
             </p>
@@ -155,12 +155,12 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             6. Intellectual Property
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 6.1 Our IP
               </h3>
               <p>
@@ -171,7 +171,7 @@ export default function TermsOfServicePage() {
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 6.2 Your Data
               </h3>
               <p>
@@ -183,10 +183,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             7. Service Availability
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               We strive to maintain high availability but do not guarantee uninterrupted
               access. The Service may be unavailable due to:
@@ -201,10 +201,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             8. Warranties and Disclaimers
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p className="uppercase font-semibold">
               THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND.
             </p>
@@ -226,10 +226,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             9. Limitation of Liability
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p className="uppercase font-semibold">
               TO THE MAXIMUM EXTENT PERMITTED BY LAW:
             </p>
@@ -251,10 +251,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             10. Indemnification
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               You agree to indemnify and hold harmless AccessGraph AI from any claims,
               damages, or expenses arising from:
@@ -269,12 +269,12 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             11. Termination
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 11.1 By You
               </h3>
               <p>
@@ -283,7 +283,7 @@ export default function TermsOfServicePage() {
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 11.2 By Us
               </h3>
               <p>
@@ -292,7 +292,7 @@ export default function TermsOfServicePage() {
               </p>
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 11.3 Effect of Termination
               </h3>
               <p>
@@ -305,10 +305,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             12. Salesforce AppExchange Terms
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               If you installed AccessGraph AI from the Salesforce AppExchange, you also agree
               to Salesforce's{' '}
@@ -316,7 +316,7 @@ export default function TermsOfServicePage() {
                 href="https://appexchange.salesforce.com/appxStore"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-primary-700 dark:text-primary-400 hover:underline"
               >
                 AppExchange Terms of Use
               </a>
@@ -330,10 +330,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             13. Governing Law
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               These Terms shall be governed by and construed in accordance with the laws of
               the State of California, United States, without regard to conflict of law
@@ -347,10 +347,10 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             14. Changes to Terms
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
               We may modify these Terms at any time. We will notify you of material changes
               by:
@@ -368,17 +368,17 @@ export default function TermsOfServicePage() {
         </section>
 
         <section>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
             15. Contact Information
           </h2>
-          <div className="text-gray-700 dark:text-gray-300 space-y-4">
+          <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>For questions about these Terms:</p>
-            <div className="mt-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+            <div className="mt-4 p-4 bg-primary-50 dark:bg-grove-surface-dk rounded-lg">
               <p>
                 <strong>Email:</strong>{' '}
                 <a
                   href="mailto:legal@accessgraph.ai"
-                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-primary-700 dark:text-primary-400 hover:underline"
                 >
                   legal@accessgraph.ai
                 </a>
@@ -392,7 +392,7 @@ export default function TermsOfServicePage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="mt-12 pt-6 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-12 pt-6 border-t border-grove-border dark:border-grove-border-dk">
         <div className="flex items-center justify-center space-x-6 text-sm">
           <a
             href="/legal/privacy"
@@ -400,14 +400,14 @@ export default function TermsOfServicePage() {
           >
             Privacy Policy
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/security"
             className="text-primary-600 dark:text-primary-400 hover:underline"
           >
             Security Practices
           </a>
-          <span className="text-gray-300 dark:text-gray-600">•</span>
+          <span className="text-grove-border dark:text-grove-ink/70">•</span>
           <a
             href="/legal/dpa"
             className="text-primary-600 dark:text-primary-400 hover:underline"

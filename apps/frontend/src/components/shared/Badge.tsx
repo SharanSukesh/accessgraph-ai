@@ -21,7 +21,7 @@ export function Badge({
   const baseStyles = 'inline-flex items-center justify-center rounded-full font-semibold shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md'
 
   const variants = {
-    default: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 ring-1 ring-gray-200 dark:ring-gray-600',
+    default: 'bg-grove-canvas text-grove-ink/85 dark:bg-grove-surface-dk dark:text-grove-ink-dk/85 hover:bg-primary-50 dark:hover:bg-primary-900/20 ring-1 ring-grove-border dark:ring-grove-border-dk',
     success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-800',
     warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-800',
     danger: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-800',

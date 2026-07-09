@@ -126,15 +126,15 @@ export default function ObjectDetailPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Total Users with Access
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {objectDetail.totalUsers}
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-              <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/25">
+              <Users className="h-6 w-6 text-primary-700 dark:text-primary-400" />
             </div>
           </div>
         </Card>
@@ -142,10 +142,10 @@ export default function ObjectDetailPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Profiles
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {objectDetail.totalProfiles}
               </p>
             </div>
@@ -158,15 +158,15 @@ export default function ObjectDetailPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Permission Sets
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {objectDetail.totalPermissionSets}
               </p>
             </div>
-            <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900">
-              <Shield className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+            <div className="p-3 rounded-lg bg-copper-100 dark:bg-copper-900/25">
+              <Shield className="h-6 w-6 text-copper-600 dark:text-copper-400" />
             </div>
           </div>
         </Card>
@@ -181,77 +181,77 @@ export default function ObjectDetailPage() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Profile Name
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Read
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Create
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Edit
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Delete
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       View All
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Modify All
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                   {objectDetail.profilesWithAccess.map((profile) => (
-                    <tr key={profile.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    <tr key={profile.id} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                         {profile.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.read ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.create ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.edit ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.delete ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.viewAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.modifyAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                     </tr>
@@ -272,40 +272,40 @@ export default function ObjectDetailPage() {
           <CardContent>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Permission Set Name
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Read
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Create
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Edit
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Delete
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       View All
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Modify All
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                   {objectDetail.permissionSetsWithAccess.map((ps) => (
-                    <tr key={ps.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <tr key={ps.id} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                        <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                           {ps.label || ps.name}
                         </div>
                         {ps.label && ps.name && ps.label !== ps.name && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                             API Name: {ps.name}
                           </div>
                         )}
@@ -314,42 +314,42 @@ export default function ObjectDetailPage() {
                         {ps.read ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.create ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.edit ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.delete ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.viewAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.modifyAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-gray-400 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
                         )}
                       </td>
                     </tr>
@@ -370,24 +370,24 @@ export default function ObjectDetailPage() {
           {objectDetail.usersWithAccess.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       User
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Access Via
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                    <th className="px-6 py-3 text-right text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                   {objectDetail.usersWithAccess.map((user) => (
                     <tr
                       key={user.salesforceUserId}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                      className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -397,10 +397,10 @@ export default function ObjectDetailPage() {
                             </span>
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                               {user.name}
                             </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
+                            <div className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
                               {user.email}
                             </div>
                           </div>
@@ -427,11 +427,11 @@ export default function ObjectDetailPage() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <Users className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+              <Users className="mx-auto h-12 w-12 text-grove-ink/50" />
+              <h3 className="mt-2 text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                 No users with access
               </h3>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
                 No users have access to this object through profiles or permission sets.
               </p>
             </div>

@@ -127,35 +127,35 @@ function UserDisparityDrawer({
       />
       {/* Drawer */}
       <aside
-        className={`fixed right-0 top-0 h-full w-full sm:w-96 bg-white dark:bg-gray-900 shadow-xl z-50 transform transition-transform overflow-y-auto ${
+        className={`fixed right-0 top-0 h-full w-full sm:w-96 bg-grove-surface dark:bg-grove-canvas-dk shadow-xl z-50 transform transition-transform overflow-y-auto ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
               User disparity
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="text-grove-ink/50 hover:text-grove-ink/70 dark:hover:text-grove-border"
             >
               <XIcon className="h-5 w-5" />
             </button>
           </div>
           {!open ? null : isLoading ? (
-            <p className="text-sm text-gray-500">Loading…</p>
+            <p className="text-sm text-grove-ink/55">Loading…</p>
           ) : error ? (
             <p className="text-sm text-red-600">Failed to load user disparity.</p>
           ) : !data ? (
-            <p className="text-sm text-gray-500">No data.</p>
+            <p className="text-sm text-grove-ink/55">No data.</p>
           ) : (
             <div className="space-y-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-500">
+                <p className="text-xs uppercase tracking-wide text-grove-ink/55">
                   Salesforce user
                 </p>
-                <p className="text-sm font-mono text-gray-900 dark:text-white">
+                <p className="text-sm font-mono text-grove-ink dark:text-grove-ink-dk">
                   {data.user_sf_id}
                 </p>
                 {data.is_vip && (
@@ -166,39 +166,39 @@ function UserDisparityDrawer({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-gray-500">Department</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-xs text-grove-ink/55">Department</p>
+                  <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.department || '—'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Distance to nearest VIP</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-xs text-grove-ink/55">Distance to nearest VIP</p>
+                  <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.distance_to_nearest_vip == null
                       ? '∞ (unreachable)'
                       : data.distance_to_nearest_vip.toFixed(2) + ' hops'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">This user's utility</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-xs text-grove-ink/55">This user's utility</p>
+                  <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.inverse_distance_utility.toFixed(3)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">Dept avg</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-xs text-grove-ink/55">Dept avg</p>
+                  <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.department_avg_utility.toFixed(3)}
                   </p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-xs text-gray-500">Org avg (juniors)</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  <p className="text-xs text-grove-ink/55">Org avg (juniors)</p>
+                  <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.org_avg_utility.toFixed(3)}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 italic pt-2 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-grove-ink/55 italic pt-2 border-t border-grove-border dark:border-grove-border-dk">
                 Higher utility = shorter path to a VIP. Lower distance is
                 better. Equity recommendations target users whose utility
                 drags their department's average down.
@@ -367,7 +367,7 @@ export default function EquityPage() {
           <>
             GAEA-driven recommendations to balance access across teams
             {hasData && diagnostic?.snapshot_at && (
-              <span className="block text-xs text-gray-500 dark:text-gray-500 mt-0.5">
+              <span className="block text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
                 Last computed {formatTimeAgo(diagnostic.snapshot_at)}
               </span>
             )}
@@ -388,11 +388,11 @@ export default function EquityPage() {
 
       {/* Plain-English narration of the snapshot */}
       {narration && (
-        <Card variant="bordered" className="border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10">
+        <Card variant="bordered" className="border-primary-200 dark:border-primary-800 bg-primary-50/60 dark:bg-primary-900/15">
           <CardContent className="py-4">
             <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-indigo-900 dark:text-indigo-100">
+              <Info className="h-5 w-5 text-primary-700 dark:text-primary-400 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-primary-800 dark:text-primary-200">
                 {narration}
               </p>
             </div>
@@ -405,36 +405,36 @@ export default function EquityPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 Equity Index
               </p>
-              <p className="mt-2 text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+              <p className="mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
                 {diagnosticLoading
                   ? '…'
                   : hasData
                   ? diagnostic!.equity_index.toFixed(2)
                   : '—'}
               </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+              <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                 1.0 = perfect parity, 0.0 = maximal inequality
               </p>
               {/* Trend sparkline — last 30 snapshots */}
               {history && history.length >= 2 && (
                 <div className="mt-3">
                   <Sparkline points={history} />
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                     Trend across last {history.length} runs
                   </p>
                 </div>
               )}
             </div>
-            <TrendingUp className="h-8 w-8 text-indigo-400 flex-shrink-0" />
+            <TrendingUp className="h-8 w-8 text-primary-400 flex-shrink-0" />
           </div>
         </Card>
 
         <Card variant="bordered" className="p-6">
           <div>
-            <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
               Most disadvantaged
             </p>
             <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
@@ -442,7 +442,7 @@ export default function EquityPage() {
                 ? '…'
                 : diagnostic?.most_disadvantaged_group || '—'}
             </p>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+            <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
               Group with the lowest avg access to VIP nodes
             </p>
           </div>
@@ -451,17 +451,17 @@ export default function EquityPage() {
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                 VIP set size
               </p>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                 {diagnosticLoading ? '…' : diagnostic?.vip_count ?? 0}
               </p>
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+              <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                 Users identified as opportunity/authority nodes
               </p>
             </div>
-            <UsersIcon className="h-8 w-8 text-gray-400" />
+            <UsersIcon className="h-8 w-8 text-grove-ink/50" />
           </div>
         </Card>
       </div>
@@ -487,7 +487,7 @@ export default function EquityPage() {
                 return (
                   <div key={dept}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      <span className="text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 flex items-center gap-2">
                         {dept}
                         {isWorst && (
                           <Badge variant="warning" size="sm">
@@ -495,16 +495,16 @@ export default function EquityPage() {
                           </Badge>
                         )}
                       </span>
-                      <span className="text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                      <span className="text-sm tabular-nums text-grove-ink/65 dark:text-grove-ink-dk/65">
                         {util.toFixed(3)}
                       </span>
                     </div>
-                    <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                    <div className="h-2 rounded-full bg-primary-50 dark:bg-primary-900/20 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${
                           isWorst
                             ? 'bg-orange-500'
-                            : 'bg-indigo-500'
+                            : 'bg-primary-600'
                         }`}
                         style={{ width: `${widthPct}%` }}
                       />
@@ -527,22 +527,22 @@ export default function EquityPage() {
             <div className="grid grid-cols-3 gap-4">
               {Object.entries(diagnostic.edge_type_counts).map(([edge, count]) => (
                 <div key={edge} className="flex justify-between items-baseline">
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+                  <span className="text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 capitalize">
                     {edge.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-sm tabular-nums text-gray-600 dark:text-gray-400">
+                  <span className="text-sm tabular-nums text-grove-ink/65 dark:text-grove-ink-dk/65">
                     {count}
                   </span>
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-xs text-gray-500 dark:text-gray-500">
+            <p className="mt-3 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
               Edges in the heterogeneous user graph the policy operates on.
-              <code className="ml-1 text-indigo-600 dark:text-indigo-400">manages</code>{' '}
+              <code className="ml-1 text-primary-700 dark:text-primary-400">manages</code>{' '}
               edges come from User.ManagerId,{' '}
-              <code className="text-indigo-600 dark:text-indigo-400">role_above</code>{' '}
+              <code className="text-primary-700 dark:text-primary-400">role_above</code>{' '}
               from the role hierarchy,{' '}
-              <code className="text-indigo-600 dark:text-indigo-400">ps_overlap</code>{' '}
+              <code className="text-primary-700 dark:text-primary-400">ps_overlap</code>{' '}
               from shared permission sets.
             </p>
           </CardContent>
@@ -556,7 +556,7 @@ export default function EquityPage() {
             <CardTitle>
               Suggested grants{' '}
               {equityRecs && (
-                <span className="text-sm font-normal text-gray-500">
+                <span className="text-sm font-normal text-grove-ink/55">
                   ({equityRecs.length})
                 </span>
               )}
@@ -585,8 +585,8 @@ export default function EquityPage() {
                     key={rec.id}
                     className={`p-4 border rounded-lg transition ${
                       isInactive
-                        ? 'border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/30 opacity-60'
-                        : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                        ? 'border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-canvas-dk/30 opacity-60'
+                        : 'border-grove-border dark:border-grove-border-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -609,14 +609,14 @@ export default function EquityPage() {
                         </Badge>
                       </div>
                     </div>
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
                       {rec.title}
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1">
                       {rec.description}
                     </p>
                     {rec.rationale && (
-                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-2 italic">
+                      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-2 italic">
                         {rec.rationale}
                       </p>
                     )}
@@ -626,7 +626,7 @@ export default function EquityPage() {
                       {userSfId && (
                         <button
                           onClick={() => setDrawerUserSfId(userSfId)}
-                          className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                          className="text-xs text-primary-700 dark:text-primary-400 hover:underline"
                         >
                           View user disparity
                         </button>
@@ -652,7 +652,7 @@ export default function EquityPage() {
                               ? `Opens user's Permission Set Assignments. Add "${psId}".`
                               : "Opens user's Permission Set Assignments."
                           }
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium border border-grove-border dark:border-grove-border-dk text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 dark:hover:bg-primary-900/20"
                         >
                           <ExternalLink className="h-3 w-3" />
                           Open in Salesforce
@@ -666,7 +666,7 @@ export default function EquityPage() {
                               updateStatus.mutate({ recId: rec.id, status: 'rejected' })
                             }
                             disabled={updateStatus.isPending}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20"
                           >
                             <XIcon className="h-3 w-3" />
                             Dismiss
@@ -676,7 +676,7 @@ export default function EquityPage() {
                               updateStatus.mutate({ recId: rec.id, status: 'applied' })
                             }
                             disabled={updateStatus.isPending}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-primary-700 text-grove-canvas hover:bg-primary-800"
                           >
                             <Check className="h-3 w-3" />
                             Mark applied

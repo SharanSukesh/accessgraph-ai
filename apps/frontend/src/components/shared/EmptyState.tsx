@@ -39,14 +39,14 @@ export function EmptyState({
 
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <div className="rounded-full bg-gray-100 dark:bg-gray-800 p-4 mb-4">
-        <Icon className="h-12 w-12 text-gray-400 dark:text-gray-600" />
+      <div className="rounded-full bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800 p-4 mb-4">
+        <Icon className="h-12 w-12 text-primary-700 dark:text-primary-400" />
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+      <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
         {title}
       </h3>
       {description && (
-        <p className="text-sm text-gray-600 dark:text-gray-400 max-w-md mb-6">
+        <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 max-w-md mb-6">
           {description}
         </p>
       )}

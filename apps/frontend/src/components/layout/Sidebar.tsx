@@ -254,8 +254,15 @@ export function Sidebar() {
                     // hover / active via .grove-rail. Layered under the
                     // background pill so the two accents don't fight.
                     className={cn(
-                      'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                      isExpanded ? 'space-x-3 px-4 py-2.5' : 'justify-center p-3',
+                      // Grove — only apply the evergreen rail cue when the
+                      // sidebar is expanded; in collapsed mode there's no
+                      // room for a rail without pushing the icon off-centre.
+                      'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                      isExpanded
+                        ? 'grove-rail space-x-3 px-4 py-2.5'
+                        // Fixed 44×44 box centred in the sidebar's content
+                        // column so nav icons align with the footer icons.
+                        : 'justify-center w-11 h-11 mx-auto',
                       isActive
                         ? // Active: soft evergreen wash + evergreen ink + copper
                           // rail cue (rail uses currentColor from text-primary-700).
@@ -310,7 +317,7 @@ export function Sidebar() {
                 // (copper is Grove's warm accent, so hover reads as attention
                 // without shouting).
                 'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center p-3',
+                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-11 h-11',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
               )}
               title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
@@ -336,7 +343,7 @@ export function Sidebar() {
                 // Grove — sync uses the evergreen brand hover, matching
                 // the active-nav language elsewhere.
                 'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center p-3',
+                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-11 h-11',
                 isSyncing
                   ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
                   : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
@@ -384,7 +391,7 @@ export function Sidebar() {
             ) : (
               <button
                 onClick={openCommandPalette}
-                className="p-3 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
+                className="flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
                 aria-label="Open command palette"
                 title="Quick search (⌘K)"
               >
@@ -424,8 +431,11 @@ export function Sidebar() {
               type="button"
               onClick={() => isExpanded && setUserMenuOpen(o => !o)}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group w-full',
-                isExpanded ? 'space-x-3 px-3 py-2' : 'justify-center p-2',
+                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                isExpanded
+                  ? 'space-x-3 px-3 py-2 w-full'
+                  // Fixed 44×44 tile — matches every other footer button.
+                  : 'justify-center w-11 h-11',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15',
               )}
               title={!isExpanded ? (user?.org_name || 'Account') : undefined}
@@ -433,9 +443,14 @@ export function Sidebar() {
               aria-haspopup="menu"
             >
               {/* Grove — avatar tile: evergreen ramp with a copper hint on
-                  hover. Ring in cream keeps it lifted off the surface. */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center shadow-sm flex-shrink-0 ring-2 ring-grove-canvas dark:ring-grove-surface-dk transition-shadow group-hover:shadow-grove-lift">
-                <span className="text-grove-canvas text-xs font-semibold font-serif">{avatarLetter}</span>
+                  hover. Ring in cream keeps it lifted off the surface.
+                  Collapsed mode uses a smaller avatar so the tile sits at
+                  the same 44×44 as the other footer icons. */}
+              <div className={cn(
+                "rounded-full bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center shadow-sm flex-shrink-0 ring-2 ring-grove-canvas dark:ring-grove-surface-dk transition-shadow group-hover:shadow-grove-lift",
+                isExpanded ? "w-8 h-8" : "w-7 h-7",
+              )}>
+                <span className="text-grove-canvas text-xs font-semibold">{avatarLetter}</span>
               </div>
               {isExpanded && (
                 <>

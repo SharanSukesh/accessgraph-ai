@@ -103,7 +103,7 @@ export function GraphControls({
               </Button>
             </div>
 
-            <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
+            <div className="h-6 w-px bg-grove-border dark:bg-grove-border-dk" />
 
             {/* Export */}
             <Button
@@ -125,7 +125,7 @@ export function GraphControls({
       <CardContent className="py-4 space-y-4">
         {/* Zoom and View Controls */}
         <div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
             View Controls
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -150,7 +150,7 @@ export function GraphControls({
 
         {/* Layout Options */}
         <div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
             Layout Algorithm
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -193,7 +193,7 @@ export function GraphControls({
         <div>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 hover:text-gray-900 dark:hover:text-white"
+            className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
           >
             <span className="flex items-center gap-2">
               <Filter className="h-4 w-4" />
@@ -207,27 +207,27 @@ export function GraphControls({
           </button>
 
           {showFilters && (
-            <div className="space-y-3 mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+            <div className="space-y-3 mt-3 p-3 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
               {/* Search */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-1">
                   Search Nodes
                 </label>
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-grove-ink/50" />
                   <input
                     type="text"
                     placeholder="Search by name..."
                     value={filters.searchTerm}
                     onChange={(e) => handleFilterChange({ searchTerm: e.target.value })}
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-grove-border dark:border-grove-border-dk rounded bg-grove-surface dark:bg-grove-canvas-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                 </div>
               </div>
 
               {/* Node Type Filter */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-1">
                   Node Types
                 </label>
                 <div className="space-y-1">
@@ -242,9 +242,9 @@ export function GraphControls({
                             : (filters.nodeTypes || []).filter((t) => t !== type.value)
                           handleFilterChange({ nodeTypes: updated })
                         }}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="rounded border-grove-border text-primary-600 focus:ring-primary-500"
                       />
-                      <span className="text-gray-700 dark:text-gray-300">{type.label}</span>
+                      <span className="text-grove-ink/85 dark:text-grove-ink-dk/85">{type.label}</span>
                     </label>
                   ))}
                 </div>
@@ -252,7 +252,7 @@ export function GraphControls({
 
               {/* Edge Type Filter */}
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-1">
                   Relationship Types
                 </label>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
@@ -267,9 +267,9 @@ export function GraphControls({
                             : (filters.edgeTypes || []).filter((t) => t !== type.value)
                           handleFilterChange({ edgeTypes: updated })
                         }}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                        className="rounded border-grove-border text-primary-600 focus:ring-primary-500"
                       />
-                      <span className="text-gray-700 dark:text-gray-300">{type.label}</span>
+                      <span className="text-grove-ink/85 dark:text-grove-ink-dk/85">{type.label}</span>
                     </label>
                   ))}
                 </div>
@@ -292,7 +292,7 @@ export function GraphControls({
 
         {/* Export Options */}
         <div>
-          <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
             Export
           </div>
           <div className="grid grid-cols-2 gap-2">

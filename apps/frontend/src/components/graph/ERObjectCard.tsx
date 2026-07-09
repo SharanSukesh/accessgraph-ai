@@ -50,7 +50,7 @@ export function ERObjectCard({
     <div
       className={`
         er-card-content
-        bg-white dark:bg-gray-800
+        bg-grove-surface dark:bg-grove-surface-dk
         rounded-lg shadow-lg
         border-2 transition-all
         ${
@@ -100,18 +100,18 @@ export function ERObjectCard({
                 <p className="text-emerald-600 dark:text-emerald-400 font-medium">
                   All fields accessible
                 </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
+                <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
                   No field-level security configured. All fields are implicitly accessible based on object-level Read permission.
                 </p>
               </div>
             ) : (
-              <p className="text-gray-500 dark:text-gray-400 italic">
+              <p className="text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
                 No accessible fields
               </p>
             )}
           </div>
         ) : (
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+          <div className="divide-y divide-grove-border dark:divide-grove-border-dk">
             {fields.map((field, index) => {
               const fieldPerms = []
               if (field.canRead) fieldPerms.push('R')
@@ -120,15 +120,15 @@ export function ERObjectCard({
               return (
                 <div
                   key={field.fullName || index}
-                  className="px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                  className="px-4 py-2 hover:bg-primary-50/40 dark:hover:bg-primary-900/20 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                      <span className="text-sm text-gray-900 dark:text-white font-medium truncate">
+                      <span className="text-sm text-grove-ink dark:text-grove-ink-dk font-medium truncate">
                         {field.name}
                       </span>
                       {field.isSystem && (
-                        <span className="text-xs px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex-shrink-0">
+                        <span className="text-xs px-1 py-0.5 rounded bg-grove-border/60 dark:bg-grove-border-dk/70 text-grove-ink/65 dark:text-grove-ink-dk/65 flex-shrink-0">
                           System
                         </span>
                       )}
@@ -141,7 +141,7 @@ export function ERObjectCard({
                             text-xs px-1.5 py-0.5 rounded font-medium
                             ${
                               perm === 'R'
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                                ? 'bg-primary-50 dark:bg-primary-900/25 text-primary-700 dark:text-primary-300'
                                 : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                             }
                           `}
@@ -160,8 +160,8 @@ export function ERObjectCard({
 
       {/* Footer with field count */}
       {fields.length > 0 && (
-        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 rounded-b-lg border-t border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-600 dark:text-gray-400">
+        <div className="px-4 py-2 bg-grove-canvas dark:bg-grove-canvas-dk rounded-b-lg border-t border-grove-border dark:border-grove-border-dk">
+          <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
             {fields.length} field{fields.length !== 1 ? 's' : ''} accessible
           </p>
         </div>

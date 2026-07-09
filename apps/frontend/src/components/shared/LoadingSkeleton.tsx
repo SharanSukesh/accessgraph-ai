@@ -20,7 +20,7 @@ export function Skeleton({ className, variant = 'rect', ...props }: SkeletonProp
   return (
     <div
       className={cn(
-        'animate-pulse bg-gray-200 dark:bg-gray-700',
+        'animate-pulse bg-grove-border/60 dark:bg-grove-border-dk/70',
         variants[variant],
         className
       )}
@@ -34,7 +34,7 @@ export function Skeleton({ className, variant = 'rect', ...props }: SkeletonProp
  */
 export function CardSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 space-y-4">
+    <div className="bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk rounded-lg p-6 space-y-4">
       <Skeleton className="h-6 w-1/3" />
       <Skeleton className="h-4 w-full" />
       <Skeleton className="h-4 w-2/3" />
@@ -66,7 +66,7 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
  */
 export function MetricCardSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6">
+    <div className="bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk rounded-lg p-6">
       <Skeleton className="h-4 w-1/2 mb-4" />
       <Skeleton className="h-8 w-1/3" />
     </div>

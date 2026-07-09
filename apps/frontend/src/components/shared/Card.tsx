@@ -89,7 +89,7 @@ export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadi
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-xl font-semibold text-gray-900 dark:text-white', className)}
+      className={cn('text-xl font-semibold text-grove-ink dark:text-grove-ink-dk', className)}
       {...props}
     />
   )
@@ -103,7 +103,7 @@ export const CardDescription = forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn('text-sm text-gray-600 dark:text-gray-400 mt-1', className)}
+    className={cn('text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mt-1', className)}
     {...props}
   />
 ))

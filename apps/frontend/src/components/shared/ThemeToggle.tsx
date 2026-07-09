@@ -60,7 +60,7 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
     if (variant === 'row') {
       return <div className={cn('h-11', className)} />
     }
-    return <div className={cn('w-9 h-9', className)} />
+    return <div className={cn('w-11 h-11', className)} />
   }
 
   const Icon = darkMode ? Sun : Moon
@@ -71,8 +71,8 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
       <button
         onClick={toggleTheme}
         className={cn(
-          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150 px-4 py-3 space-x-3',
-          'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60',
+          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3',
+          'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300',
           className,
         )}
         aria-label={label}
@@ -87,8 +87,10 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
     <button
       onClick={toggleTheme}
       className={cn(
-        'p-3 rounded-lg transition-all duration-150 relative group',
-        'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60',
+        // Fixed 44×44 to match every other footer button in the collapsed
+        // sidebar. Grove tokens on hover/idle.
+        'flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out relative group',
+        'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300',
         className,
       )}
       aria-label={label}
