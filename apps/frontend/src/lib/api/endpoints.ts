@@ -97,4 +97,12 @@ export const endpoints = {
   changeRiskLatest: (orgId: string) => `/orgs/${orgId}/change-risk/latest`,
   changeRiskEvents: (orgId: string) => `/orgs/${orgId}/change-risk/events`,
   changeRiskHistory: (orgId: string) => `/orgs/${orgId}/change-risk/history`,
+
+  // Managed-package sprawl — AppExchange inventory + usage tiering
+  packageSprawlRun: (orgId: string) => `/orgs/${orgId}/package-sprawl/run`,
+  packageSprawlLatest: (orgId: string) => `/orgs/${orgId}/package-sprawl/latest`,
+  packageSprawlPackages: (orgId: string) =>
+    `/orgs/${orgId}/package-sprawl/packages`,
+  packageSprawlHistory: (orgId: string) =>
+    `/orgs/${orgId}/package-sprawl/history`,
 } as const

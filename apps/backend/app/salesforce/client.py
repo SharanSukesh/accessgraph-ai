@@ -327,6 +327,99 @@ class SalesforceAPIClient:
             )
             return []
 
+    async def extract_installed_packages(self) -> List[Dict[str, Any]]:
+        """InstalledSubscriberPackage via Tooling API.
+
+        Returns every managed package installed in the org, joined with
+        its SubscriberPackage (name, namespace, description) and version
+        metadata (version number, beta / deprecated / managed flags).
+        Powers the Managed-Package Sprawl engine.
+        """
+        soql = (
+            "SELECT Id, "
+            "SubscriberPackage.Id, SubscriberPackage.Name, "
+            "SubscriberPackage.NamespacePrefix, SubscriberPackage.Description, "
+            "SubscriberPackageVersion.Id, SubscriberPackageVersion.Name, "
+            "SubscriberPackageVersion.MajorVersion, "
+            "SubscriberPackageVersion.MinorVersion, "
+            "SubscriberPackageVersion.PatchVersion, "
+            "SubscriberPackageVersion.BuildNumber, "
+            "SubscriberPackageVersion.IsBeta, "
+            "SubscriberPackageVersion.IsDeprecated, "
+            "SubscriberPackageVersion.IsManaged "
+            "FROM InstalledSubscriberPackage"
+        )
+        try:
+            return await self.query_tooling(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "InstalledSubscriberPackage query failed (%s) — "
+                "skipping package-sprawl pull.",
+                e.response.status_code,
+            )
+            return []
+
+    async def extract_package_licenses(self) -> List[Dict[str, Any]]:
+        """PackageLicense (standard SObject) — seat counts per package.
+
+        Not every package has a PackageLicense row — only those with
+        AppExchange license SKUs do. Absence isn't an error; just skip
+        licence enrichment for that package.
+        """
+        soql = (
+            "SELECT Id, NamespacePrefix, Status, AllowedLicenses, "
+            "UsedLicenses, ExpirationDate "
+            "FROM PackageLicense"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "PackageLicense query failed (%s) — package-sprawl runs "
+                "without license enrichment.",
+                e.response.status_code,
+            )
+            return []
+
+    async def count_apex_classes_in_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """`SELECT COUNT() FROM ApexClass WHERE NamespacePrefix = 'x'`
+        via the Tooling API. None on failure so the caller can skip
+        rather than fail the whole run.
+        """
+        try:
+            rows = await self.query_tooling(
+                f"SELECT COUNT() FROM ApexClass WHERE NamespacePrefix = '{namespace}'"
+            )
+            # query_tooling normalises COUNT() into rows; fall back to
+            # a plain query if totalSize is what we want.
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "ApexClass count for namespace=%s failed: %s", namespace, exc
+            )
+            return None
+
+    async def count_flows_in_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """Count flows in the package namespace (Tooling API's
+        FlowDefinitionView). None on failure.
+        """
+        try:
+            rows = await self.query_tooling(
+                "SELECT Id FROM FlowDefinitionView "
+                f"WHERE NamespacePrefix = '{namespace}'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "FlowDefinitionView count for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return None
+
     async def get_apex_coverage(self) -> List[Dict[str, Any]]:
         """Per-class Apex code-coverage rollup from the Tooling API."""
         try:

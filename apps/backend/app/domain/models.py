@@ -1606,3 +1606,147 @@ class ChangeAuditEvent(Base, TimestampMixin):
             "run_id", "sf_event_id", name="uq_change_audit_run_sfid"
         ),
     )
+
+
+# ============================================================================
+# Managed-package sprawl — AppExchange inventory + usage detection
+# ============================================================================
+#
+# Third additive analytics engine in the Newton Phase-1 roadmap.
+# Pulls every managed package installed in the org, counts components
+# per namespace (ApexClass / Flow / CustomObject), joins license usage
+# where available, and tiers each package as Active / Under-used /
+# Unused so consulting engagements can quantify "you're paying for X
+# but nobody's using it". All state hangs off the two tables below;
+# service logic lives in app/services/package_sprawl.py.
+
+
+class PackageSprawlRun(Base, TimestampMixin):
+    """One row per package-sprawl pull.
+
+    Header + rollups so the KPI strip renders from a single row + the
+    per-package drill-down hangs off `packages`.
+    """
+    __tablename__ = "package_sprawl_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    packages_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    packages_active: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    packages_underused: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    packages_unused: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # % of packages that returned any component or licence usage.
+    # Drives the "utilisation" KPI on the dashboard.
+    avg_utilization_pct: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
+
+    # Total licence-seat counts across every analysed package. Rendered
+    # as "N of M seats used" on the summary strip.
+    total_licenses_allowed: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    total_licenses_used: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    packages = relationship(
+        "InstalledPackage",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_package_sprawl_run_org_time", "organization_id", "snapshot_at"),
+    )
+
+
+class InstalledPackage(Base, TimestampMixin):
+    """One row per InstalledSubscriberPackage for this run.
+
+    Everything the frontend needs to render the per-package card lives
+    on this row — component counts, licence data, tier band, evidence
+    JSON. No FK back into SF-owned metadata; the sf_package_id + name
+    are stored verbatim so pulls stay disconnected from the sync.
+    """
+    __tablename__ = "installed_packages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("package_sprawl_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # SF identifiers verbatim so consultants can deep-link back into
+    # Setup ("Installed Packages") without needing our IDs.
+    sf_package_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    sf_version_id: Mapped[Optional[str]] = mapped_column(String(18))
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    namespace_prefix: Mapped[Optional[str]] = mapped_column(String(120))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Version metadata — used to spot deprecated / beta packages that
+    # should probably be uninstalled.
+    version_name: Mapped[Optional[str]] = mapped_column(String(255))
+    version_number: Mapped[Optional[str]] = mapped_column(String(60))
+    is_beta: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_deprecated: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    is_managed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Component counts per namespace. -1 = query not attempted (e.g.
+    # namespace was empty). 0 = queried and returned nothing.
+    apex_class_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    flow_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    custom_object_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Licence data if `PackageLicense` was queryable for this namespace.
+    # None = licence object had no matching row (not all packages have
+    # AppExchange licences).
+    licenses_allowed: Mapped[Optional[int]] = mapped_column(Integer)
+    licenses_used: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Tier classification: 'active' | 'underused' | 'unused'.
+    # Computed by PackageSprawlService — see the scoring rules there.
+    utilization_tier: Mapped[str] = mapped_column(
+        String(16), default="unused", nullable=False
+    )
+
+    # Free-form evidence blob: what pushed the package into its tier,
+    # any related SetupAuditTrail activity, etc. Rendered as tooltip
+    # or drilldown on the frontend.
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("PackageSprawlRun", back_populates="packages")
+
+    __table_args__ = (
+        Index(
+            "ix_installed_package_org_run",
+            "organization_id", "run_id",
+        ),
+        UniqueConstraint(
+            "run_id", "sf_package_id", name="uq_installed_package_run_sfid"
+        ),
+    )
