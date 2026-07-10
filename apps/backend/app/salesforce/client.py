@@ -287,6 +287,46 @@ class SalesforceAPIClient:
             )
             return []
 
+    async def extract_setup_audit_trail(
+        self, since_days: int = 30, limit: int = 5000
+    ) -> List[Dict[str, Any]]:
+        """SetupAuditTrail — every admin-level change SF logs.
+
+        Powers the Change-Risk Radar. Returns rows with:
+          - Id
+          - CreatedDate
+          - CreatedBy.Id / CreatedBy.Username / CreatedBy.Name
+          - Action           — SF's own operation name (e.g. "PermSetAssign")
+          - Section          — coarse category ("Manage Users", "Sharing
+                                Rules", etc.); the primary driver of the
+                                blast-radius score.
+          - Display          — human-readable description of the change
+          - DelegateUser     — if the change was made on behalf of another
+                                admin (SF's assumeUserLogin trail).
+
+        Bounded by `since_days` (default 30) so we don't blow the response
+        payload on chatty orgs. Additionally hard-capped at `limit` so a
+        pathological day (mass profile deploy) still returns a bounded
+        result.
+        """
+        soql = (
+            "SELECT Id, CreatedDate, "
+            "CreatedBy.Id, CreatedBy.Name, CreatedBy.Username, "
+            "Action, Section, Display, DelegateUser "
+            "FROM SetupAuditTrail "
+            f"WHERE CreatedDate = LAST_N_DAYS:{since_days} "
+            "ORDER BY CreatedDate DESC "
+            f"LIMIT {limit}"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "SetupAuditTrail query failed (%s) — skipping change-risk pull.",
+                e.response.status_code,
+            )
+            return []
+
     async def get_apex_coverage(self) -> List[Dict[str, Any]]:
         """Per-class Apex code-coverage rollup from the Tooling API."""
         try:

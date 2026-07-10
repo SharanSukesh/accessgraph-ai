@@ -1482,3 +1482,127 @@ class ObjectQualityScore(Base, TimestampMixin):
         ),
         UniqueConstraint("run_id", "object_name", name="uq_obj_quality_run_object"),
     )
+
+
+# ============================================================================
+# Change-risk radar — SetupAuditTrail ingest + blast-radius scoring
+# ============================================================================
+#
+# Ingest-per-run pattern mirroring DataQualityRun. Each run pulls the
+# org's SetupAuditTrail rows since a configurable cutoff (default 30d)
+# and scores every event by "blast radius" — how broadly the change
+# could affect users / data / access. High-blast events surface at the
+# top of the timeline UI so admins can spot risky changes at a glance.
+# All computation lives in app/services/change_risk_radar.py; the
+# snapshots below are pure state.
+
+
+class ChangeAuditRun(Base, TimestampMixin):
+    """One row per SetupAuditTrail pull.
+
+    Header row; per-event rows hang off `events`. Kept append-only so
+    the frontend can chart event volume + high-blast counts over time
+    without a separate history table.
+    """
+    __tablename__ = "change_audit_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    # Cutoff used for this pull — anything with CreatedDate < since
+    # was excluded. Stored so historical runs stay explainable.
+    since: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    events_ingested: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    high_blast_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unique_actors: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_blast_radius: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # Aggregate rollups so the UI can render the "top 5 sections" and
+    # "top 5 actors" cards without a second query. Shape:
+    #   {"by_section": {"Manage Users": 42, ...},
+    #    "by_actor":   {"admin@acme.com": 17, ...}}
+    rollups: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    events = relationship(
+        "ChangeAuditEvent",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_change_audit_run_org_time", "organization_id", "snapshot_at"),
+    )
+
+
+class ChangeAuditEvent(Base, TimestampMixin):
+    """One row per SetupAuditTrail event pulled on a run.
+
+    Preserves the SF-native shape (created_at, section, display, actor)
+    so consultants can drill in without a second SF call. `blast_radius`
+    is our composite 0-100 score; `blast_tier` classifies it into
+    low / medium / high / critical bands for badge rendering.
+    """
+    __tablename__ = "change_audit_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("change_audit_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Salesforce's own IDs / metadata — kept verbatim so the frontend
+    # can deep-link back into the Setup UI when useful.
+    sf_event_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    created_at_sf: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    actor_id: Mapped[Optional[str]] = mapped_column(String(18))
+    actor_name: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # Categorisation. `section` is SF's own bucket (Manage Users,
+    # Sharing Rules, Metadata Deploy, etc.) — the primary driver of
+    # the base blast-radius score.
+    section: Mapped[Optional[str]] = mapped_column(String(120))
+    action: Mapped[Optional[str]] = mapped_column(String(120))
+    display: Mapped[str] = mapped_column(Text, nullable=False)
+    delegate_user: Mapped[Optional[str]] = mapped_column(String(120))
+
+    # Composite score + band. See app/services/change_risk_radar.py
+    # for the scoring model.
+    blast_radius: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    blast_tier: Mapped[str] = mapped_column(String(16), default="low", nullable=False)
+
+    # Free-form JSON for scorer-emitted rationale (e.g. what triggered
+    # the "+15 delete modifier"). Renders in the timeline drilldown.
+    reasoning: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("ChangeAuditRun", back_populates="events")
+
+    __table_args__ = (
+        Index(
+            "ix_change_audit_event_org_time",
+            "organization_id", "created_at_sf",
+        ),
+        Index(
+            "ix_change_audit_event_run", "run_id",
+        ),
+        UniqueConstraint(
+            "run_id", "sf_event_id", name="uq_change_audit_run_sfid"
+        ),
+    )

@@ -91,4 +91,10 @@ export const endpoints = {
   dataQualityObject: (orgId: string, objectName: string) =>
     `/orgs/${orgId}/data-quality/objects/${objectName}`,
   dataQualityHistory: (orgId: string) => `/orgs/${orgId}/data-quality/history`,
+
+  // Change-risk radar — SetupAuditTrail ingest + blast-radius scoring
+  changeRiskRun: (orgId: string) => `/orgs/${orgId}/change-risk/run`,
+  changeRiskLatest: (orgId: string) => `/orgs/${orgId}/change-risk/latest`,
+  changeRiskEvents: (orgId: string) => `/orgs/${orgId}/change-risk/events`,
+  changeRiskHistory: (orgId: string) => `/orgs/${orgId}/change-risk/history`,
 } as const
