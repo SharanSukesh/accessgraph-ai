@@ -242,23 +242,97 @@ class ChangeRiskRadarService:
                 )
                 continue
 
-        # Rollups for the KPI card. "by_section" and "by_actor" are top-5
-        # tallies; the frontend renders them as small evidence lists.
+        # Rollups for the KPI card + charts. Expanded past the v1
+        # top-5 tallies to include time-series (by_day) for the
+        # activity histogram, tier percentages for the donut chart,
+        # off-hours / weekend counts for the suspicious-timing
+        # callout, and per-actor breakdowns for the risk table.
         section_counter: Counter[str] = Counter(
             e.section for e in scored if e.section
         )
         actor_counter: Counter[str] = Counter(
             e.actor_name for e in scored if e.actor_name
         )
+
+        # Daily histogram — bucket each event by its calendar date in
+        # UTC. Frontend fills gaps for zero-event days so the chart
+        # shows a continuous 30-day timeline.
+        by_day: Counter[str] = Counter(
+            e.created_at_sf.date().isoformat() for e in scored
+        )
+
+        # Off-hours detection — anything outside a conservative 9-to-6
+        # UTC weekday window. Frontend flags each event; here we count
+        # totals for the summary callout.
+        def _is_off_hours(ts: datetime) -> bool:
+            # Weekend (Sat=5, Sun=6) counts regardless of time.
+            if ts.weekday() >= 5:
+                return True
+            # Weekday: outside 09:00-18:00 counts.
+            hour = ts.hour
+            return hour < 9 or hour >= 18
+
+        off_hours_count = sum(
+            1 for e in scored if _is_off_hours(e.created_at_sf)
+        )
+        weekend_count = sum(
+            1 for e in scored if e.created_at_sf.weekday() >= 5
+        )
+
+        # Per-actor detailed rollup — event count, avg blast, max
+        # blast, off-hours count. Sorted by count desc, capped at 10
+        # for the risk table.
+        actor_events: Dict[str, List[float]] = {}
+        actor_off_hours: Counter[str] = Counter()
+        actor_max_tier: Dict[str, str] = {}
+        _tier_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        for e in scored:
+            if not e.actor_name:
+                continue
+            actor_events.setdefault(e.actor_name, []).append(e.blast_radius)
+            if _is_off_hours(e.created_at_sf):
+                actor_off_hours[e.actor_name] += 1
+            prev = actor_max_tier.get(e.actor_name, "low")
+            if _tier_order.get(e.blast_tier, 0) > _tier_order.get(prev, 0):
+                actor_max_tier[e.actor_name] = e.blast_tier
+        top_actors_detailed = sorted(
+            [
+                {
+                    "name": name,
+                    "count": len(vals),
+                    "avg_blast": round(sum(vals) / len(vals), 1),
+                    "max_blast": round(max(vals), 1),
+                    "max_tier": actor_max_tier.get(name, "low"),
+                    "off_hours_count": actor_off_hours.get(name, 0),
+                }
+                for name, vals in actor_events.items()
+            ],
+            key=lambda a: a["count"],
+            reverse=True,
+        )[:10]
+
+        # Tier counts + percentage split for the donut chart.
+        tier_counts = {
+            "critical": sum(1 for e in scored if e.blast_tier == "critical"),
+            "high": sum(1 for e in scored if e.blast_tier == "high"),
+            "medium": sum(1 for e in scored if e.blast_tier == "medium"),
+            "low": sum(1 for e in scored if e.blast_tier == "low"),
+        }
+        total_scored = max(1, len(scored))
+        by_tier_pct = {
+            k: round(v / total_scored * 100.0, 1)
+            for k, v in tier_counts.items()
+        }
+
         rollups = {
             "by_section": dict(section_counter.most_common(5)),
             "by_actor": dict(actor_counter.most_common(5)),
-            "by_tier": {
-                "critical": sum(1 for e in scored if e.blast_tier == "critical"),
-                "high": sum(1 for e in scored if e.blast_tier == "high"),
-                "medium": sum(1 for e in scored if e.blast_tier == "medium"),
-                "low": sum(1 for e in scored if e.blast_tier == "low"),
-            },
+            "by_tier": tier_counts,
+            "by_tier_pct": by_tier_pct,
+            "by_day": dict(by_day),
+            "off_hours_count": off_hours_count,
+            "weekend_count": weekend_count,
+            "top_actors_detailed": top_actors_detailed,
         }
 
         high_blast = sum(1 for e in scored if e.blast_radius >= HIGH_BLAST_THRESHOLD)

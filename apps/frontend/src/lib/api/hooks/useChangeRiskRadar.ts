@@ -50,6 +50,23 @@ export interface ChangeRiskSummary {
     by_section?: Record<string, number>
     by_actor?: Record<string, number>
     by_tier?: Record<BlastTier, number>
+    // Tier distribution as percentages (0-100) — drives the donut chart.
+    by_tier_pct?: Record<BlastTier, number>
+    // Daily event count histogram, keyed by ISO date (YYYY-MM-DD).
+    by_day?: Record<string, number>
+    // Total events that happened outside 9-6 UTC weekdays, or on
+    // weekends. Suspicious-timing callout uses this.
+    off_hours_count?: number
+    weekend_count?: number
+    // Top actors with more detail than the flat by_actor list.
+    top_actors_detailed?: {
+      name: string
+      count: number
+      avg_blast: number
+      max_blast: number
+      max_tier: BlastTier
+      off_hours_count: number
+    }[]
   }
   has_data: boolean
   duration_ms: number | null
