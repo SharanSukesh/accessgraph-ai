@@ -529,7 +529,16 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
           <div className="lg:col-span-2 flex flex-col gap-4">
             <ScoreBar
               label="Completeness"
-              caption={`${score.fields_with_gaps} of ${score.fields_inspected} fields with gaps`}
+              caption={
+                // "fields_with_gaps" counts fields where MORE than
+                // half the sampled records are missing that value —
+                // "field is empty more often than populated". The
+                // Worst-Populated Fields list below shows the top
+                // offenders regardless of that threshold, so the two
+                // numbers can differ. Making the threshold explicit
+                // here removes the ambiguity.
+                `${score.fields_with_gaps} of ${score.fields_inspected} fields majority-empty (>50%)`
+              }
               value={score.completeness_pct}
               higherIsBetter={true}
             />
@@ -561,7 +570,11 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
           <div className="mt-6 pt-6 border-t border-grove-border dark:border-grove-border-dk grid grid-cols-1 md:grid-cols-3 gap-6">
             <EvidenceList
               icon={AlertTriangle}
-              title="Worst-populated fields"
+              // "Top 5 by missing rate" — this list is unfiltered by
+              // the 50% majority-empty threshold used in the
+              // completeness caption. Any field with even 1% missing
+              // can show up here if it's among the top 5.
+              title="Top 5 fields by missing rate"
               items={
                 score.evidence.gap_fields?.map((g) => ({
                   primary: g.field,
