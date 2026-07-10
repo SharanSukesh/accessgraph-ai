@@ -1728,6 +1728,28 @@ class InstalledPackage(Base, TimestampMixin):
     licenses_allowed: Mapped[Optional[int]] = mapped_column(Integer)
     licenses_used: Mapped[Optional[int]] = mapped_column(Integer)
 
+    # Real wiring signals — added v2 to replace shallow inventory
+    # scoring with actual reference / activity detection.
+    #
+    # dependency_count: MetadataComponentDependency rows pointing INTO
+    #   this package's namespace. Non-zero = customer code (Apex / LWC /
+    #   Flow / Validation Rule) actually references package components.
+    # record_count_total: sum of COUNT(*) across every package-brought
+    #   custom object. Non-zero = someone's actually storing data here.
+    # async_job_count: AsyncApexJob rows whose ApexClass sits in the
+    #   package's namespace. Non-zero = the package's Apex is running.
+    # scheduled_job_count: CronTrigger rows for scheduled Apex jobs
+    #   named "<namespace>.<JobName>". Non-zero = the package has
+    #   scheduled jobs still on the books.
+    #
+    # None = the underlying query failed for that signal (missing perms
+    # / no Tooling access). Zero = we successfully queried and got no
+    # rows.
+    dependency_count: Mapped[Optional[int]] = mapped_column(Integer)
+    record_count_total: Mapped[Optional[int]] = mapped_column(Integer)
+    async_job_count: Mapped[Optional[int]] = mapped_column(Integer)
+    scheduled_job_count: Mapped[Optional[int]] = mapped_column(Integer)
+
     # Tier classification: 'active' | 'underused' | 'unused'.
     # Computed by PackageSprawlService — see the scoring rules there.
     utilization_tier: Mapped[str] = mapped_column(

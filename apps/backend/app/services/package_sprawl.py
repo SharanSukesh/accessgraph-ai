@@ -49,15 +49,32 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------
 
 # Cap on how many packages we'll deep-inspect per run. Each package
-# needs 2 Tooling API calls (ApexClass + Flow counts) — 50 packages
-# = 100 API calls, comfortably under the timeout. Increase later if we
-# meet a real 100+-package tenant.
+# now needs up to 6 SF queries (ApexClass + Flow + Deps + AsyncJobs
+# + Scheduled + record-counts-per-custom-object), so 50 packages =
+# ~350 API calls at the outer bound. Comfortably under the timeout
+# on a healthy org but tight enough to warrant the cap.
 MAX_PACKAGES_PER_RUN = 50
 
-# Tier thresholds. Deliberately conservative — a package with a
-# handful of Apex classes and no assigned licences is more likely
-# "vestigial" than "active".
-ACTIVE_MIN_COMPONENTS = 5
+# Per-package record-count query cap. A package with 30 custom
+# objects would fire 30 COUNT() queries; bound them so we don't blow
+# a single package's slice of the run.
+MAX_RECORD_COUNT_QUERIES_PER_PACKAGE = 15
+
+# --- Tier thresholds ---
+#
+# v2 tiering (reference-based). Signals:
+#   dep_count       — MetadataComponentDependency edges into namespace
+#   record_count    — total records across package-brought custom objects
+#   async_job_count — live AsyncApexJob rows in the namespace
+#   scheduled_count — CronTrigger rows for scheduled Apex jobs
+#   licence_seats   — used seats from PackageLicense
+#
+# ACTIVE if ANY of these is truthy — any real wiring signal promotes
+# the package. Inventory counts (Apex / Flow / Object shipped inside
+# the package) are no longer the primary driver; they're a fallback
+# used to distinguish UNDERUSED from UNUSED.
+ACTIVE_MIN_DEPENDENCIES = 1
+ACTIVE_MIN_RECORDS = 1
 ACTIVE_MIN_LICENSES_USED = 1
 
 
@@ -84,6 +101,11 @@ class ScoredPackage:
     custom_object_count: int
     licenses_allowed: Optional[int]
     licenses_used: Optional[int]
+    # v2 wiring signals — None means the query failed for this signal.
+    dependency_count: Optional[int]
+    record_count_total: Optional[int]
+    async_job_count: Optional[int]
+    scheduled_job_count: Optional[int]
     utilization_tier: str
     evidence: Dict[str, Any]
 
@@ -284,6 +306,10 @@ class PackageSprawlService:
                         custom_object_count=p.custom_object_count,
                         licenses_allowed=p.licenses_allowed,
                         licenses_used=p.licenses_used,
+                        dependency_count=p.dependency_count,
+                        record_count_total=p.record_count_total,
+                        async_job_count=p.async_job_count,
+                        scheduled_job_count=p.scheduled_job_count,
                         utilization_tier=p.utilization_tier,
                         evidence=p.evidence,
                     )
@@ -355,10 +381,57 @@ class PackageSprawlService:
             apex_class_count = ac or 0
             fc = await client.count_flows_in_namespace(namespace)
             flow_count = fc or 0
-        custom_object_count = (
-            sum(1 for n in all_object_names if n and n.startswith(f"{namespace}__"))
-            if namespace else 0
+        # List of package-brought custom objects (used for record counts).
+        package_object_names: List[str] = (
+            [n for n in all_object_names if n and n.startswith(f"{namespace}__")]
+            if namespace else []
         )
+        custom_object_count = len(package_object_names)
+
+        # ---- Real wiring signals (v2) ------------------------------
+        # dependency_count — how many customer-owned components
+        # reference something inside this package. THE strongest
+        # active-tier signal.
+        dependency_count: Optional[int] = None
+        top_dependents: List[Dict[str, Any]] = []
+        if namespace:
+            dependency_count = await client.count_metadata_dependencies_by_namespace(
+                namespace
+            )
+            if dependency_count and dependency_count > 0:
+                top_dependents = await client.top_metadata_dependents(
+                    namespace, limit=5
+                )
+
+        # record_count_total — sum of record counts across every
+        # package-brought custom object. Non-zero = someone's storing
+        # data here. Bounded by MAX_RECORD_COUNT_QUERIES_PER_PACKAGE
+        # to keep the per-package slice of the run finite.
+        record_count_total: Optional[int] = None
+        record_counts_by_object: Dict[str, int] = {}
+        objects_for_count = package_object_names[:MAX_RECORD_COUNT_QUERIES_PER_PACKAGE]
+        if objects_for_count:
+            record_count_total = 0
+            for obj_name in objects_for_count:
+                cnt = await client.count_sobject(obj_name)
+                if cnt is not None:
+                    record_counts_by_object[obj_name] = cnt
+                    record_count_total += cnt
+
+        # async_job_count — running / queued Apex batch / queueable /
+        # future jobs from this namespace.
+        async_job_count: Optional[int] = None
+        if namespace:
+            async_job_count = await client.count_async_apex_jobs_by_namespace(
+                namespace
+            )
+
+        # scheduled_job_count — CronTrigger for scheduled Apex.
+        scheduled_job_count: Optional[int] = None
+        if namespace:
+            scheduled_job_count = await client.count_scheduled_apex_by_namespace(
+                namespace
+            )
 
         # License data if the package has an AppExchange licence row.
         lic = licenses_by_namespace.get(namespace) if namespace else None
@@ -378,23 +451,35 @@ class PackageSprawlService:
             if isinstance(used_raw, int):
                 licenses_used = used_raw
 
-        # ---- Tier decision -----------------------------------------
-        # active if (>= ACTIVE_MIN_COMPONENTS components) OR (>= 1 seat used)
-        # unused if (0 components AND (no licence OR 0 seats used))
-        # underused otherwise
+        # ---- Tier decision (v2 — reference-based) -----------------
+        # ACTIVE if any real wiring signal fires:
+        #   - customer code references package components (deps > 0)
+        #   - records exist in package-brought custom objects
+        #   - Apex batch/queueable/future jobs from the namespace are
+        #     currently running
+        #   - scheduled Apex from the namespace is on the books
+        #   - AppExchange licence seats are actually used
+        # UNUSED if none of the above AND no components at all inside
+        # the package. That's a truly abandoned install.
+        # UNDERUSED covers the gap: components exist but nothing is
+        # wired to them — worth investigating.
         total_components = apex_class_count + flow_count + custom_object_count
         licence_seats_used = licenses_used or 0
+        wiring_signals: List[str] = []
+        if (dependency_count or 0) >= ACTIVE_MIN_DEPENDENCIES:
+            wiring_signals.append("dependencies")
+        if (record_count_total or 0) >= ACTIVE_MIN_RECORDS:
+            wiring_signals.append("records")
+        if (async_job_count or 0) >= 1:
+            wiring_signals.append("async_jobs")
+        if (scheduled_job_count or 0) >= 1:
+            wiring_signals.append("scheduled_jobs")
+        if licence_seats_used >= ACTIVE_MIN_LICENSES_USED:
+            wiring_signals.append("licence_seats")
 
-        is_active = (
-            total_components >= ACTIVE_MIN_COMPONENTS
-            or licence_seats_used >= ACTIVE_MIN_LICENSES_USED
-        )
-        is_unused = (
-            total_components == 0 and licence_seats_used == 0
-        )
-        if is_active:
+        if wiring_signals:
             tier = "active"
-        elif is_unused:
+        elif total_components == 0:
             tier = "unused"
         else:
             tier = "underused"
@@ -409,17 +494,25 @@ class PackageSprawlService:
 
         evidence: Dict[str, Any] = {
             "reasoning": {
+                "wiring_signals": wiring_signals,
                 "components": total_components,
                 "components_breakdown": {
                     "apex_class": apex_class_count,
                     "flow": flow_count,
                     "custom_object": custom_object_count,
                 },
+                "dependency_count": dependency_count,
+                "record_count_total": record_count_total,
+                "async_job_count": async_job_count,
+                "scheduled_job_count": scheduled_job_count,
                 "licence_seats_used": licence_seats_used,
                 "licence_seats_allowed": licenses_allowed,
                 "deprecated_penalty": bool(version.get("IsDeprecated")),
                 "final_tier": tier,
             },
+            # Sample-level evidence surfaced on the drill-down.
+            "top_dependents": top_dependents,
+            "record_counts_by_object": record_counts_by_object,
         }
 
         return ScoredPackage(
@@ -438,6 +531,10 @@ class PackageSprawlService:
             custom_object_count=custom_object_count,
             licenses_allowed=licenses_allowed,
             licenses_used=licenses_used,
+            dependency_count=dependency_count,
+            record_count_total=record_count_total,
+            async_job_count=async_job_count,
+            scheduled_job_count=scheduled_job_count,
             utilization_tier=tier,
             evidence=evidence,
         )

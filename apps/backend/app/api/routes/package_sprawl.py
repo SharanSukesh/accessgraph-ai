@@ -67,6 +67,12 @@ class PackageResponse(BaseModel):
     custom_object_count: int
     licenses_allowed: Optional[int]
     licenses_used: Optional[int]
+    # v2 wiring signals — None means the query failed (permissions / no
+    # Tooling access) vs 0 which means we queried and got no rows.
+    dependency_count: Optional[int] = None
+    record_count_total: Optional[int] = None
+    async_job_count: Optional[int] = None
+    scheduled_job_count: Optional[int] = None
     utilization_tier: str
     evidence: Dict[str, Any] = {}
 
@@ -89,6 +95,10 @@ class PackageResponse(BaseModel):
             custom_object_count=row.custom_object_count,
             licenses_allowed=row.licenses_allowed,
             licenses_used=row.licenses_used,
+            dependency_count=row.dependency_count,
+            record_count_total=row.record_count_total,
+            async_job_count=row.async_job_count,
+            scheduled_job_count=row.scheduled_job_count,
             utilization_tier=row.utilization_tier,
             evidence=row.evidence or {},
         )

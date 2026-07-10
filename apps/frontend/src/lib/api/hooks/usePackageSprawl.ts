@@ -36,20 +36,49 @@ export interface InstalledPackage {
   custom_object_count: number
   licenses_allowed: number | null
   licenses_used: number | null
+  // v2 wiring signals — null means the query for that signal failed
+  // (missing permissions / no Tooling API access). 0 means we queried
+  // and got no rows. Any positive number promotes the package to
+  // Active tier automatically.
+  dependency_count: number | null
+  record_count_total: number | null
+  async_job_count: number | null
+  scheduled_job_count: number | null
   utilization_tier: PackageTier
   evidence: {
     reasoning?: {
+      /** Which wiring signals fired for this package. */
+      wiring_signals?: (
+        | 'dependencies'
+        | 'records'
+        | 'async_jobs'
+        | 'scheduled_jobs'
+        | 'licence_seats'
+      )[]
       components?: number
       components_breakdown?: {
         apex_class?: number
         flow?: number
         custom_object?: number
       }
+      dependency_count?: number | null
+      record_count_total?: number | null
+      async_job_count?: number | null
+      scheduled_job_count?: number | null
       licence_seats_used?: number
       licence_seats_allowed?: number | null
       deprecated_penalty?: boolean
       final_tier?: PackageTier
     }
+    /** Top 5 customer-owned components that reference this package. */
+    top_dependents?: {
+      component: string | null
+      component_type: string | null
+      ref_component: string | null
+      ref_type: string | null
+    }[]
+    /** Per-object record counts across package-brought custom objects. */
+    record_counts_by_object?: Record<string, number>
   }
 }
 

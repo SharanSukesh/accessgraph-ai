@@ -384,16 +384,17 @@ class SalesforceAPIClient:
     async def count_apex_classes_in_namespace(
         self, namespace: str
     ) -> Optional[int]:
-        """`SELECT COUNT() FROM ApexClass WHERE NamespacePrefix = 'x'`
-        via the Tooling API. None on failure so the caller can skip
-        rather than fail the whole run.
+        """Number of Apex classes shipped inside the package's namespace.
+        Uses the Tooling API with a `SELECT Id` pattern (not `COUNT()`)
+        because query_tooling normalises to the records array — SF puts
+        the count in totalSize but records[] comes back empty for the
+        COUNT form. Bounded by SF's 2000-row Tooling limit.
         """
         try:
             rows = await self.query_tooling(
-                f"SELECT COUNT() FROM ApexClass WHERE NamespacePrefix = '{namespace}'"
+                "SELECT Id FROM ApexClass "
+                f"WHERE NamespacePrefix = '{namespace}'"
             )
-            # query_tooling normalises COUNT() into rows; fall back to
-            # a plain query if totalSize is what we want.
             return len(rows)
         except Exception as exc:  # noqa: BLE001
             logger.info(
@@ -404,8 +405,8 @@ class SalesforceAPIClient:
     async def count_flows_in_namespace(
         self, namespace: str
     ) -> Optional[int]:
-        """Count flows in the package namespace (Tooling API's
-        FlowDefinitionView). None on failure.
+        """Number of Flows shipped inside the package's namespace
+        (Tooling API's FlowDefinitionView). None on failure.
         """
         try:
             rows = await self.query_tooling(
@@ -416,6 +417,117 @@ class SalesforceAPIClient:
         except Exception as exc:  # noqa: BLE001
             logger.info(
                 "FlowDefinitionView count for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return None
+
+    async def count_metadata_dependencies_by_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """The most important package-sprawl signal — how many
+        customer-owned components reference something inside this
+        package's namespace.
+
+        Queries the Tooling API's `MetadataComponentDependency` view.
+        Each row is one (MetadataComponent → RefMetadataComponent) edge;
+        we filter by RefMetadataComponentNamespace so we count edges
+        pointing INTO the package. Zero rows = customer code is not
+        wired to this package at all.
+        """
+        try:
+            rows = await self.query_tooling(
+                "SELECT Id FROM MetadataComponentDependency "
+                f"WHERE RefMetadataComponentNamespace = '{namespace}'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "MetadataComponentDependency count for namespace=%s "
+                "failed: %s", namespace, exc,
+            )
+            return None
+
+    async def top_metadata_dependents(
+        self, namespace: str, limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """Top-N customer components that reference this package.
+
+        Returns entries like:
+            {"component": "MyClass", "component_type": "ApexClass",
+             "ref_component": "MyPkg.PackageClass",
+             "ref_type": "ApexClass"}
+
+        Empty list on failure or missing permissions. Used by the
+        package card evidence pill so the reader can see which of
+        their own components are load-bearing on the package.
+        """
+        soql = (
+            "SELECT MetadataComponentName, MetadataComponentType, "
+            "RefMetadataComponentName, RefMetadataComponentType "
+            "FROM MetadataComponentDependency "
+            f"WHERE RefMetadataComponentNamespace = '{namespace}' "
+            f"LIMIT {limit}"
+        )
+        try:
+            rows = await self.query_tooling(soql)
+            return [
+                {
+                    "component": r.get("MetadataComponentName"),
+                    "component_type": r.get("MetadataComponentType"),
+                    "ref_component": r.get("RefMetadataComponentName"),
+                    "ref_type": r.get("RefMetadataComponentType"),
+                }
+                for r in rows
+            ]
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "top_metadata_dependents for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return []
+
+    async def count_async_apex_jobs_by_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """Live batch / queueable / future Apex from this package's
+        namespace. Non-zero = the package's code is actually running.
+
+        Filters by `ApexClass.NamespacePrefix` so we don't miscount
+        customer-owned Apex that happens to be running. Uses the
+        standard REST endpoint since AsyncApexJob isn't Tooling.
+        """
+        try:
+            rows = await self.query_all(
+                "SELECT Id FROM AsyncApexJob "
+                f"WHERE ApexClass.NamespacePrefix = '{namespace}'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "AsyncApexJob count for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return None
+
+    async def count_scheduled_apex_by_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """Scheduled Apex from this package's namespace.
+
+        Uses `CronTrigger` and matches on CronJobDetail.Name starting
+        with the namespace prefix — SF names namespaced scheduled
+        jobs "<namespace>.<JobName>" so a LIKE match works. Missing
+        permissions surface as None.
+        """
+        try:
+            rows = await self.query_all(
+                "SELECT Id FROM CronTrigger "
+                f"WHERE CronJobDetail.Name LIKE '{namespace}.%'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "CronTrigger count for namespace=%s failed: %s",
                 namespace, exc,
             )
             return None

@@ -20,6 +20,10 @@ import {
   Cpu,
   Workflow,
   Database,
+  GitBranch,
+  FileStack,
+  Play,
+  CalendarClock,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -176,28 +180,55 @@ export default function PackageSprawlPage() {
                 </div>
                 <div className="flex-1 min-w-0 space-y-2">
                   <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
-                    How &ldquo;used&rdquo; is measured (and what's not measured)
+                    How &ldquo;used&rdquo; is measured
                   </p>
                   <p className="text-xs text-grove-ink/75 dark:text-grove-ink-dk/75 leading-relaxed">
-                    Current tiering uses <strong>package-namespace inventory</strong>{' '}
-                    (counts of Apex classes, Flows, and Custom Objects that ship inside the
-                    package) plus <strong>PackageLicense seat consumption</strong>. That's
-                    a shallow signal: it answers &ldquo;how much stuff came in the box&rdquo;
-                    and &ldquo;how many people the vendor thinks are using it,&rdquo; not
-                    &ldquo;is your customer code actually calling it.&rdquo;
+                    We now score each package on <strong>real wiring signals</strong>{' '}
+                    pulled from Salesforce&rsquo;s Tooling API, not just what shipped in
+                    the box. Any of the four signals coming back positive is enough to
+                    promote a package to <strong>Active</strong>.
                   </p>
+                  <ul className="text-xs text-grove-ink/75 dark:text-grove-ink-dk/75 leading-relaxed space-y-1 pl-4 list-disc marker:text-grove-mint">
+                    <li>
+                      <strong>Dependencies</strong> &mdash; customer components (Apex,
+                      LWCs, Flows, Validation Rules, etc.) that reference something in
+                      the package&rsquo;s namespace, via{' '}
+                      <code className="font-mono text-[11px] text-copper-700 dark:text-copper-400">
+                        MetadataComponentDependency
+                      </code>
+                      .
+                    </li>
+                    <li>
+                      <strong>Records</strong> &mdash; row counts across every custom
+                      object the package brought (bulk-count query per object, capped
+                      per run to protect the timeout budget).
+                    </li>
+                    <li>
+                      <strong>Async jobs</strong> &mdash; batches, queueables, and
+                      futures for the package&rsquo;s Apex classes via{' '}
+                      <code className="font-mono text-[11px]">AsyncApexJob</code>.
+                    </li>
+                    <li>
+                      <strong>Scheduled jobs</strong> &mdash; live{' '}
+                      <code className="font-mono text-[11px]">CronTrigger</code>{' '}
+                      schedules for Apex in the package&rsquo;s namespace.
+                    </li>
+                  </ul>
                   <p className="text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 leading-relaxed">
-                    <strong>Not yet checked:</strong> whether your Apex / LWCs / Flows /
-                    Validation Rules reference package components (via SF's{' '}
-                    <code className="font-mono text-[11px] text-copper-700 dark:text-copper-400">
-                      MetadataComponentDependency
-                    </code>{' '}
-                    Tooling API), whether package-brought custom objects hold records,
-                    whether the package's batch / scheduled Apex is still firing
-                    (<code className="font-mono text-[11px]">AsyncApexJob</code>,{' '}
-                    <code className="font-mono text-[11px]">CronTrigger</code>), or whether
-                    users are actually clicking into package UI. Verify against real code
-                    references before uninstalling anything flagged &ldquo;Unused&rdquo;.
+                    <strong>Licence seats</strong> still count too &mdash; any package
+                    with real assigned seats stays Active even if code references are
+                    thin. A signal chip shown as <em>&ldquo;&mdash;&rdquo;</em> means we
+                    couldn&rsquo;t query it this run (missing Tooling permissions);
+                    that&rsquo;s different from a genuine zero, so treat those packages
+                    with extra caution before uninstalling.
+                  </p>
+                  <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 leading-relaxed">
+                    <strong>Still not covered:</strong> whether users are actively
+                    clicking into package UI (that&rsquo;s{' '}
+                    <code className="font-mono text-[11px]">LightningUsageByPage</code>{' '}
+                    territory). Always spot-check heavily-referenced packages against a
+                    real end-user before uninstalling anything flagged{' '}
+                    <em>Unused</em>.
                   </p>
                 </div>
               </div>
@@ -474,7 +505,18 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
               </p>
             )}
 
-            {/* Component + licence strip */}
+            {/* Wiring signal row — the real drivers of the tier
+                decision. Each chip lights up when the underlying
+                query returned a positive count. Null value = we
+                couldn't query it (permissions / no Tooling); the
+                chip is rendered dimmed with a "—" instead of hidden
+                so the reader can tell the difference between
+                "queried, got zero" and "couldn't query at all". */}
+            <WiringSignalRow pkg={pkg} />
+
+            {/* Package-shipped component strip — the "inventory"
+                signals. Kept as secondary context now that wiring
+                signals drive tiering. */}
             <div className="flex items-center gap-4 flex-wrap pt-1">
               <ComponentPill icon={Cpu} count={pkg.apex_class_count} label="Apex" />
               <ComponentPill icon={Workflow} count={pkg.flow_count} label="Flows" />
@@ -509,6 +551,88 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+// The wiring-signal row is the *why* behind the tier chip. Every
+// package that ships components can look identical on inventory alone;
+// what tells us it's actually load-bearing is whether other things in
+// the org reach into it (MetadataComponentDependency), whether its
+// custom objects hold records, and whether its Apex classes are being
+// scheduled / batched. We surface all four so the reader can see the
+// evidence rather than having to trust the tier chip.
+function WiringSignalRow({ pkg }: { pkg: InstalledPackage }) {
+  return (
+    <div
+      className="flex items-center gap-3 flex-wrap pt-0.5"
+      title="Real wiring signals — any positive count promotes this package to the Active tier."
+    >
+      <SignalChip
+        icon={GitBranch}
+        count={pkg.dependency_count}
+        label="deps"
+        tooltip="Other components in the org that reference something in this package (MetadataComponentDependency)."
+      />
+      <SignalChip
+        icon={FileStack}
+        count={pkg.record_count_total}
+        label="records"
+        tooltip="Total records held across this package's custom objects."
+      />
+      <SignalChip
+        icon={Play}
+        count={pkg.async_job_count}
+        label="async jobs"
+        tooltip="AsyncApexJob rows for Apex classes in this package's namespace (batches, queueables, futures)."
+      />
+      <SignalChip
+        icon={CalendarClock}
+        count={pkg.scheduled_job_count}
+        label="scheduled"
+        tooltip="Active CronTrigger schedules for Apex in this package's namespace."
+      />
+    </div>
+  )
+}
+
+// SignalChip has three distinct states that PackageCard's reader must
+// be able to tell apart at a glance:
+//   - positive count  → mint accent, chip is "on"
+//   - zero            → dim ink, chip is "queried but empty"
+//   - null            → dim + literal "—" for the count, chip is
+//                       "we couldn't check this signal" (missing perm
+//                       or no Tooling access). Never collapse null to
+//                       zero — misreading "no permission" as "no
+//                       activity" is exactly how a real package gets
+//                       flagged as Unused.
+function SignalChip({
+  icon: Icon,
+  count,
+  label,
+  tooltip,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  count: number | null | undefined
+  label: string
+  tooltip: string
+}) {
+  const isNull = count === null || count === undefined
+  const isActive = !isNull && (count ?? 0) > 0
+  const cls = isActive
+    ? 'inline-flex items-center gap-1.5 text-xs text-grove-mint dark:text-grove-mint tabular-nums font-medium'
+    : 'inline-flex items-center gap-1.5 text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 tabular-nums'
+  const value = isNull
+    ? '—'
+    : (count as number).toLocaleString()
+  const resolvedTooltip = isNull
+    ? `${tooltip} — not queried this run (missing permissions or no Tooling access).`
+    : tooltip
+  return (
+    <span className={cls} title={resolvedTooltip}>
+      <Icon className="h-3.5 w-3.5" />
+      {value}
+      <span className="opacity-60">{label}</span>
+    </span>
   )
 }
 
