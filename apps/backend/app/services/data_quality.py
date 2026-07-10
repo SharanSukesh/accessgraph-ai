@@ -270,15 +270,20 @@ class DataQualityService:
             _json.dumps({"skip_reasons": skip_reasons}) if skip_reasons else None
         )
 
+        # Aggregate averages only over objects that HAVE records. Empty
+        # objects are legitimate results (they show up in the Objects
+        # list marked "0 records") but a "perfect quality on nothing"
+        # score would drag the org KPI toward 100 and hide real issues.
+        scored = [r for r in results if r.record_count > 0]
         run = DataQualityRun(
             organization_id=self.org_id,
             snapshot_at=datetime.now(timezone.utc),
             objects_analyzed=len(results),
             objects_skipped=skipped,
-            avg_score=_avg(r.score for r in results),
-            avg_completeness=_avg(r.completeness_pct for r in results),
-            avg_duplicate_pct=_avg(r.duplicate_pct for r in results),
-            avg_staleness_pct=_avg(r.staleness_pct for r in results),
+            avg_score=_avg(r.score for r in scored),
+            avg_completeness=_avg(r.completeness_pct for r in scored),
+            avg_duplicate_pct=_avg(r.duplicate_pct for r in scored),
+            avg_staleness_pct=_avg(r.staleness_pct for r in scored),
             sample_size=self.sample_size,
             staleness_threshold_days=self.staleness_days,
             duration_ms=int((time.monotonic() - started) * 1000),
@@ -312,11 +317,13 @@ class DataQualityService:
         await self.db.commit()
         await self.db.refresh(run)
         logger.info(
-            "data-quality run %s by %s: %d objects analysed, %d skipped "
-            "(reasons=%s), avg_score=%.1f",
+            "data-quality run %s by %s: %d analysed (%d scored, %d empty), "
+            "%d skipped (reasons=%s), avg_score=%.1f",
             run.id,
             actor_email or "system",
             run.objects_analyzed,
+            len(scored),
+            len(results) - len(scored),
             run.objects_skipped,
             skip_reasons or "-",
             run.avg_score,
@@ -379,9 +386,29 @@ class DataQualityService:
             # skip rather than fabricate a score.
             return None, SKIP_COUNT_FAILED
         if record_count == 0:
-            # Empty objects don't get a score. "Perfect quality on zero
-            # records" is meaningless and drags averages toward 100.
-            return None, SKIP_EMPTY
+            # Empty object — return a valid result marked as such so it
+            # still shows up in the Objects list, but score components
+            # are all zero and the aggregation layer excludes it from
+            # the avg_score. The frontend renders "0 records" in place
+            # of a score chip when evidence.status == "empty".
+            return ObjectQualityResult(
+                object_name=object_name,
+                object_label=object_label,
+                is_custom=is_custom,
+                record_count=0,
+                sampled_count=0,
+                completeness_pct=0.0,
+                duplicate_pct=0.0,
+                staleness_pct=0.0,
+                fields_inspected=len(required_names),
+                fields_with_gaps=0,
+                duplicate_clusters=0,
+                stale_record_count=0,
+                evidence={
+                    "status": "empty",
+                    "note": "Object has no records — nothing to score.",
+                },
+            ), None
 
         # ---- Completeness + duplicate sample ------------------------
         dup_key = DUPLICATE_KEY_FIELDS.get(object_name, "Name")

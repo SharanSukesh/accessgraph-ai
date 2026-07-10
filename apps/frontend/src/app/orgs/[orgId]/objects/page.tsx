@@ -52,6 +52,19 @@ export default function ObjectsPage() {
     return map
   }, [dqObjects])
 
+  // Split analysed count into scored (has records) vs empty for the
+  // KPI subtext. Backend excludes empties from avg_score already; the
+  // frontend just needs the two counts to render "N scored · M empty".
+  const { scoredCount, emptyCount } = useMemo(() => {
+    let scored = 0
+    let empty = 0
+    for (const s of dqObjects?.objects ?? []) {
+      if (s.record_count === 0) empty++
+      else scored++
+    }
+    return { scoredCount: scored, emptyCount: empty }
+  }, [dqObjects])
+
   if (error) {
     return (
       <ErrorState
@@ -189,7 +202,8 @@ export default function ObjectsPage() {
                         : undefined
                     }
                   >
-                    {dqSummary.objects_analyzed} analysed
+                    {scoredCount} scored
+                    {emptyCount > 0 && ` · ${emptyCount} empty`}
                     {dqSummary.objects_skipped > 0 &&
                       ` · ${dqSummary.objects_skipped} skipped`}
                   </p>
@@ -361,6 +375,18 @@ export default function ObjectsPage() {
 function QualityCell({ score }: { score: ObjectScore | undefined }) {
   if (!score) {
     return <span className="text-sm text-grove-ink/40 dark:text-grove-ink-dk/40">—</span>
+  }
+  // Empty object — analysed but nothing to score. Show a neutral pill
+  // instead of a fake number so the average KPI stays honest.
+  if (score.record_count === 0) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium tabular-nums ring-1 bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink/60 dark:text-grove-ink-dk/60 ring-grove-border dark:ring-grove-border-dk"
+        title="No records — nothing to score"
+      >
+        0 records
+      </span>
+    )
   }
   const rounded = Math.round(score.score)
   return (

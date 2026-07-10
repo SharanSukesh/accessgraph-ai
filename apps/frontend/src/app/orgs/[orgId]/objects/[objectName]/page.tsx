@@ -477,6 +477,29 @@ export default function ObjectDetailPage() {
 function DataQualityCard({ score }: { score: ObjectScore }) {
   const composite = Math.round(score.score)
   const tone = qualityToneClass(score.score)
+  const isEmpty = score.record_count === 0
+
+  // Empty objects still make it into the analysis (so they appear in
+  // the Objects list), but the score components are all zero. Render
+  // a neutral "no records" panel here instead of showing zeros.
+  if (isEmpty) {
+    return (
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-copper-600 dark:text-copper-400" />
+            Data Quality
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+            This object has no records. There's nothing to score yet — a
+            data quality snapshot will surface here once records exist.
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card variant="bordered">
