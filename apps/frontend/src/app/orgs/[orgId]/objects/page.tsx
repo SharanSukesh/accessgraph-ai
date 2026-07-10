@@ -598,9 +598,13 @@ function DataQualityDiagnostics({ summary, scoredCount, emptyCount }: Diagnostic
                 </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                   <ScopeStat
-                    label="Total sObjects in org"
+                    label="Objects in scope"
                     value={cov.total_sobjects}
-                    hint="Everything Salesforce returns from the global describe — includes system, shadow, and setup objects."
+                    hint={
+                      cov.total_sobjects_raw
+                        ? `Aligned with the "Total Objects" KPI above — distinct sObjects that have permission grants in this org. Salesforce global describe returns ${cov.total_sobjects_raw.toLocaleString()} sObjects total, but ~${(cov.total_sobjects_raw - (cov.total_sobjects ?? 0)).toLocaleString()} of those are Feed / History / Share / ChangeEvent shadows and setup objects — not business data.`
+                        : 'Distinct sObjects with permission grants — the app\'s canonical business-objects filter.'
+                    }
                   />
                   <ScopeStat
                     label="Standard analysed"

@@ -55,6 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
     DataQualityRun,
+    ObjectPermissionSnapshot,
     ObjectQualityScore,
     SalesforceConnection,
 )
@@ -810,23 +811,43 @@ class DataQualityService:
     async def _resolve_analysis_targets(
         self, client: SalesforceAPIClient
     ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-        """Union of the standard business objects + every custom object
-        reported by global describe. Also returns coverage stats
-        (total sobjects, custom available vs. capped, standard missing)
-        so the frontend can explain the scope of the analysis.
+        """Build the list of objects to analyse using the same filter
+        the Objects page uses — distinct sObject types that appear in
+        the org's ObjectPermissionSnapshot. That's the app's canonical
+        "business objects" view (~400 in a typical mid-market tenant),
+        as opposed to the raw global-describe list (~1500 including
+        every Feed / History / Share / ChangeEvent / setup shadow).
+
+        Standard-object priority list is unioned in so CRM canon
+        (Account, Contact, etc.) is always covered even if permission
+        snapshots haven't been ingested for those objects yet.
+
+        Returns (targets, coverage_stats). Coverage explains the
+        filter in numbers the frontend can render.
         """
+        # 1. Load global describe once — used for labels + queryable
+        #    validation. Cheap: one API call, cached in memory.
         all_objects = await client.list_all_sobjects()
         by_name = {o.get("name"): o for o in all_objects if o.get("name")}
-        total_sobjects = len(by_name)
+        total_sobjects_in_describe = len(by_name)
+
+        # 2. Pull the distinct object list the Objects page uses —
+        #    every sObject type that has at least one permission grant
+        #    recorded in this org.
+        perm_rows = await self.db.execute(
+            select(ObjectPermissionSnapshot.sobject_type)
+            .where(ObjectPermissionSnapshot.organization_id == self.org_id)
+            .distinct()
+        )
+        perm_object_names = {row[0] for row in perm_rows.all() if row[0]}
 
         selected: List[Dict[str, Any]] = []
         seen: set = set()
 
-        # Curated standard-object priority list — these get analysed
-        # first regardless of ordering in the global describe response.
-        # Any that come back non-queryable are counted so the
-        # diagnostic banner can tell the user "3 standard objects
-        # weren't licensed / accessible on this org".
+        # 3. Standard-object priority list — always considered, so we
+        #    guarantee CRM canon coverage even if the permission
+        #    snapshot hasn't landed those objects yet. Non-queryable
+        #    (usually a licensing gap) counts toward standard_missing.
         standard_missing = 0
         for name in STANDARD_OBJECTS:
             meta = by_name.get(name)
@@ -842,18 +863,20 @@ class DataQualityService:
                 }
             )
 
-        # Then: any custom object the user hasn't seen yet. Custom is
-        # defined by suffix (`__c`) OR by the `custom` flag in describe
-        # — the latter catches namespaced managed-package objects like
-        # `MyPkg__Widget__c` that still slip past the suffix test.
-        #
-        # Deterministic ordering — sorted() so a large org's coverage
-        # is stable between runs, and cap at MAX_CUSTOM_OBJECTS_PER_RUN
-        # so we don't blow the HTTP timeout on a 400-object tenant.
+        # 4. Custom objects — only from the permission-snapshot set
+        #    (aligns with Objects-page count). Custom is defined by
+        #    __c suffix or the describe `custom` flag; namespaced
+        #    managed-package objects satisfy both. Sorted for
+        #    deterministic coverage between runs.
         custom_candidates: List[Dict[str, Any]] = []
-        for name in sorted(by_name.keys()):
-            meta = by_name[name]
+        for name in sorted(perm_object_names):
             if name in seen:
+                continue
+            meta = by_name.get(name)
+            if meta is None:
+                # In permission snapshot but not in the current
+                # describe response — object was deleted / uninstalled
+                # since the last sync. Skip silently.
                 continue
             is_c = name.endswith("__c") or bool(meta.get("custom"))
             if not is_c:
@@ -862,8 +885,6 @@ class DataQualityService:
                 continue
             if not meta.get("queryable"):
                 continue
-            # History / Share / Feed / ChangeEvent shadow objects also
-            # slip through the __c test on custom objects — skip them.
             if name.endswith(("History", "Share", "Feed", "ChangeEvent", "Tag")):
                 continue
             custom_candidates.append(
@@ -888,7 +909,12 @@ class DataQualityService:
             selected.append(entry)
 
         coverage = {
-            "total_sobjects": total_sobjects,
+            # `total_sobjects` in the banner now means "the Objects
+            # page count" — same denominator the user already sees
+            # elsewhere in the app. The raw describe count is exposed
+            # separately for completeness.
+            "total_sobjects": len(perm_object_names),
+            "total_sobjects_raw": total_sobjects_in_describe,
             "standard_selected": sum(1 for s in selected if not s["custom"]),
             "standard_missing": standard_missing,
             "custom_selected": sum(1 for s in selected if s["custom"]),

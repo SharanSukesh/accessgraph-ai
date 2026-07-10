@@ -63,7 +63,12 @@ export interface DataQualitySummary {
   // Used by the diagnostic banner to explain "22 of 422 analysed"
   // without the user having to check a log.
   coverage: {
+    // Objects with permission grants — same denominator as the
+    // Objects page's "Total Objects" KPI (~400 in a typical org).
     total_sobjects?: number
+    // Raw global-describe count (~1500 including feeds / shadows).
+    // Only shown in the tooltip so power users can see the delta.
+    total_sobjects_raw?: number
     standard_selected?: number
     standard_missing?: number
     custom_selected?: number
