@@ -432,7 +432,11 @@ class DataQualityService:
             logger.info("sample query failed for %s: %s", object_name, exc)
             return None, SKIP_SAMPLE_FAILED
 
-        records = sample_resp.get("records", []) or []
+        # QueryResponse is a Pydantic model — use attribute access, not
+        # .get(). Getting this wrong silently AttributeError'd every
+        # object with records, so only 0-record objects (which return
+        # early before this branch) survived — hence "N objects, all empty".
+        records = sample_resp.records or []
         sampled = len(records)
         if sampled == 0:
             # Count said non-zero but sample returned empty. Can happen
@@ -486,7 +490,7 @@ class DataQualityService:
         )
         try:
             stale_resp = await client.query(stale_soql)
-            stale_count = int(stale_resp.get("totalSize", 0))
+            stale_count = int(stale_resp.totalSize or 0)
         except Exception:  # noqa: BLE001
             stale_count = 0
         staleness_pct = (

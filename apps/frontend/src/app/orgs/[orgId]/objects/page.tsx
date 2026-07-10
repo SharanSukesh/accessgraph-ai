@@ -185,13 +185,23 @@ export default function ObjectsPage() {
               </p>
               {dqSummary?.has_data ? (
                 <>
-                  <p
-                    className={`mt-2 text-3xl font-bold ${qualityToneClass(
-                      dqSummary.avg_score,
-                    )}`}
-                  >
-                    {Math.round(dqSummary.avg_score)}
-                  </p>
+                  {scoredCount > 0 ? (
+                    <p
+                      className={`mt-2 text-3xl font-bold ${qualityToneClass(
+                        dqSummary.avg_score,
+                      )}`}
+                    >
+                      {Math.round(dqSummary.avg_score)}
+                    </p>
+                  ) : (
+                    // A score of 0 out of 100 reads as "terrible", so
+                    // when *nothing* got scored (all objects empty or
+                    // skipped) we render "—" instead. The subtext then
+                    // explains what actually happened.
+                    <p className="mt-2 text-3xl font-bold text-grove-ink/40 dark:text-grove-ink-dk/40">
+                      —
+                    </p>
+                  )}
                   <p
                     className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1"
                     title={
