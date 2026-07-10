@@ -121,10 +121,15 @@
   /* Thin, theme-aware scrollbar used by the sidebar nav (and anywhere
      else we want a discoverable but unobtrusive scrollbar). Grove: deep
      evergreen thumb in light mode, mint thumb in dark. Track is
-     transparent so it disappears against the cream/forest canvas. */
+     transparent so it disappears against the cream/forest canvas.
+     Default: thumb TRANSPARENT — appears only when the ancestor is
+     hovered. Combined with `scrollbar-gutter: stable both-edges` on
+     the scroll container this gives a fully-invisible-at-rest scrollbar
+     that never shifts icon layout when it appears. */
   .scrollbar-themed {
     scrollbar-width: thin; /* Firefox */
-    scrollbar-color: rgb(9 66 48 / 0.28) transparent;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 200ms ease-out;
   }
 
   .scrollbar-themed::-webkit-scrollbar {
@@ -141,23 +146,35 @@
   }
 
   .scrollbar-themed::-webkit-scrollbar-thumb {
-    background-color: rgb(9 66 48 / 0.28); /* Grove evergreen @ 28% */
+    background-color: transparent;   /* invisible at rest */
     border-radius: 9999px;
     transition: background-color 200ms ease-out;
   }
 
+  /* Reveal on hover — either the scroll container itself, or an
+     ancestor `<aside>` (the sidebar). The second selector matters
+     because a user hovering a nav item is really hovering the
+     sidebar, and we want the scrollbar to appear then too. */
+  .scrollbar-themed:hover,
+  aside:hover .scrollbar-themed {
+    scrollbar-color: rgb(9 66 48 / 0.28) transparent;
+  }
+  .scrollbar-themed:hover::-webkit-scrollbar-thumb,
+  aside:hover .scrollbar-themed::-webkit-scrollbar-thumb {
+    background-color: rgb(9 66 48 / 0.28); /* Grove evergreen @ 28% */
+  }
   .scrollbar-themed::-webkit-scrollbar-thumb:hover {
     background-color: rgb(9 66 48 / 0.55);
   }
 
-  .dark .scrollbar-themed {
+  .dark .scrollbar-themed:hover,
+  .dark aside:hover .scrollbar-themed {
     scrollbar-color: rgb(107 191 149 / 0.32) transparent;
   }
-
-  .dark .scrollbar-themed::-webkit-scrollbar-thumb {
+  .dark .scrollbar-themed:hover::-webkit-scrollbar-thumb,
+  .dark aside:hover .scrollbar-themed::-webkit-scrollbar-thumb {
     background-color: rgb(107 191 149 / 0.32); /* Grove mint @ 32% */
   }
-
   .dark .scrollbar-themed::-webkit-scrollbar-thumb:hover {
     background-color: rgb(107 191 149 / 0.65);
   }
