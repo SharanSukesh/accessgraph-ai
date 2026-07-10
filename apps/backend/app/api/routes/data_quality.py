@@ -96,6 +96,11 @@ class RunSummary(BaseModel):
     # without having to parse the error blob itself. Empty dict when
     # no objects were skipped.
     skip_reasons: Dict[str, int] = {}
+    # Coverage stats — total sobjects in the org, how many standard /
+    # custom made the analysis list, and how many custom were dropped
+    # by the per-run cap. Powers the "scope" section of the diagnostic
+    # banner. Empty dict on legacy runs before this field existed.
+    coverage: Dict[str, int] = {}
 
 
 class RunResponse(BaseModel):
@@ -228,20 +233,25 @@ async def get_latest_run(
             duration_ms=None,
             error=None,
         )
-    # The service stashes skip categories in `error` as JSON. Parse
-    # it out so the frontend gets a clean dict without having to know
-    # the storage detail.
+    # The service stashes skip categories AND coverage stats in
+    # `error` as JSON. Parse both out so the frontend gets clean dicts
+    # without having to know the storage detail.
     skip_reasons: Dict[str, int] = {}
+    coverage: Dict[str, int] = {}
     if run.error:
         try:
             import json
             payload = json.loads(run.error)
-            raw = payload.get("skip_reasons", {}) if isinstance(payload, dict) else {}
-            if isinstance(raw, dict):
-                skip_reasons = {str(k): int(v) for k, v in raw.items()}
+            if isinstance(payload, dict):
+                raw_skip = payload.get("skip_reasons", {})
+                if isinstance(raw_skip, dict):
+                    skip_reasons = {str(k): int(v) for k, v in raw_skip.items()}
+                raw_cov = payload.get("coverage", {})
+                if isinstance(raw_cov, dict):
+                    coverage = {str(k): int(v) for k, v in raw_cov.items()}
         except (ValueError, TypeError):
-            # Legacy runs where `error` is a plain string — leave the
-            # dict empty and let the frontend fall back to the raw
+            # Legacy runs where `error` is a plain string — leave both
+            # dicts empty and let the frontend fall back to the raw
             # `error` field for display.
             pass
 
@@ -260,6 +270,7 @@ async def get_latest_run(
         duration_ms=run.duration_ms,
         error=run.error,
         skip_reasons=skip_reasons,
+        coverage=coverage,
     )
 
 

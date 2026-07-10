@@ -68,10 +68,13 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ----------------------------------------------------------------------
 
-# Business objects analysed by default. Widened past the CRM-5 to
-# cover Sales / Service / Marketing / CPQ canon so a mid-market org's
-# dashboard doesn't come out dominated by empty custom objects.
-# Custom objects are added at run-time from global describe.
+# Business objects analysed by default. Full CRM canon — Sales /
+# Service / Marketing / CPQ / activity / content — so a real
+# mid-market org's dashboard covers the shape of the actual business,
+# not just the top-5 records.
+#
+# Custom objects are added at run-time from global describe (see
+# MAX_CUSTOM_OBJECTS_PER_RUN).
 STANDARD_OBJECTS: List[str] = [
     # CRM core
     "Account",
@@ -79,6 +82,10 @@ STANDARD_OBJECTS: List[str] = [
     "Lead",
     "Opportunity",
     "Case",
+    # Activity data — Task / Event drive rep-productivity scoring and
+    # are usually the highest-volume objects in a Sales Cloud org.
+    "Task",
+    "Event",
     # Sales pipeline supporting objects
     "Contract",
     "Order",
@@ -86,6 +93,7 @@ STANDARD_OBJECTS: List[str] = [
     "OpportunityLineItem",
     "OrderItem",
     "QuoteLineItem",
+    "OpportunityContactRole",
     # Marketing
     "Campaign",
     "CampaignMember",
@@ -98,6 +106,14 @@ STANDARD_OBJECTS: List[str] = [
     "Solution",
     "Entitlement",
     "ServiceContract",
+    "CaseComment",
+    "CaseTeamMember",
+    # Content / files — usually high-volume, worth scoring for
+    # completeness and staleness.
+    "ContentDocument",
+    "ContentVersion",
+    # Community / partner
+    "Idea",
 ]
 
 # Objects to explicitly skip even if they show up in the global-describe
@@ -138,11 +154,10 @@ DEFAULT_SAMPLE_SIZE = 500
 # can still end up with 50-100 custom objects. Each object needs 3-4
 # SF API calls (describe + count + sample + stale) which the sync
 # router runs synchronously — hundreds of API calls will exceed the
-# deployment's HTTP timeout and 500 the request. Cap at 25 so a run
-# stays under ~90 seconds even on the slowest tenants; the frontend
-# can page through additional custom objects on subsequent runs
-# once we make the runner async.
-MAX_CUSTOM_OBJECTS_PER_RUN = 25
+# deployment's HTTP timeout and 500 the request. Cap at 50 so a run
+# stays under ~90 seconds even on the slowest tenants while still
+# giving a mid-market org meaningful custom-object coverage.
+MAX_CUSTOM_OBJECTS_PER_RUN = 50
 
 # Records untouched for this many days count as "stale". Chosen to
 # approximately match the SaaS-industry "quarterly touch" convention.
@@ -265,7 +280,7 @@ class DataQualityService:
         # retry-once pattern: catch the 401, refresh the token, rebuild
         # the client, retry. Any other error surfaces as-is.
         try:
-            analysis_targets = await self._resolve_analysis_targets(client)
+            analysis_targets, coverage = await self._resolve_analysis_targets(client)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 logger.warning(
@@ -273,7 +288,7 @@ class DataQualityService:
                 )
                 try:
                     client = await self._refresh_access_token()
-                    analysis_targets = await self._resolve_analysis_targets(client)
+                    analysis_targets, coverage = await self._resolve_analysis_targets(client)
                 except Exception as refresh_exc:
                     logger.exception(
                         "data-quality: token refresh failed for org %s",
@@ -343,9 +358,16 @@ class DataQualityService:
                 skip_reasons["error"] = skip_reasons.get("error", 0) + 1
 
         skipped = sum(skip_reasons.values())
-        skip_error_json = (
-            _json.dumps({"skip_reasons": skip_reasons}) if skip_reasons else None
-        )
+        # Stash BOTH skip reasons and coverage stats in the run's error
+        # column as JSON. The API extracts them into separate response
+        # fields; the frontend diagnostic banner uses coverage to show
+        # "22 of 422 sObjects analysed — 15 standard, 7 custom, 41
+        # custom dropped by cap".
+        error_payload = {
+            "skip_reasons": skip_reasons,
+            "coverage": coverage,
+        }
+        skip_error_json = _json.dumps(error_payload)
 
         # Aggregate averages only over objects that HAVE records. Empty
         # objects are legitimate results (they show up in the Objects
@@ -787,24 +809,29 @@ class DataQualityService:
 
     async def _resolve_analysis_targets(
         self, client: SalesforceAPIClient
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Union of the standard business objects + every custom object
-        reported by global describe. Skipped objects are filtered out.
+        reported by global describe. Also returns coverage stats
+        (total sobjects, custom available vs. capped, standard missing)
+        so the frontend can explain the scope of the analysis.
         """
         all_objects = await client.list_all_sobjects()
         by_name = {o.get("name"): o for o in all_objects if o.get("name")}
+        total_sobjects = len(by_name)
 
         selected: List[Dict[str, Any]] = []
         seen: set = set()
 
         # Curated standard-object priority list — these get analysed
         # first regardless of ordering in the global describe response.
-        # Widened past the CRM-5 to cover Sales, Service, and Marketing
-        # canon so a mid-market SF org's dashboard isn't dominated by
-        # empties.
+        # Any that come back non-queryable are counted so the
+        # diagnostic banner can tell the user "3 standard objects
+        # weren't licensed / accessible on this org".
+        standard_missing = 0
         for name in STANDARD_OBJECTS:
             meta = by_name.get(name)
             if meta is None or not meta.get("queryable"):
+                standard_missing += 1
                 continue
             seen.add(name)
             selected.append(
@@ -847,10 +874,12 @@ class DataQualityService:
                 }
             )
 
-        if len(custom_candidates) > MAX_CUSTOM_OBJECTS_PER_RUN:
+        custom_available = len(custom_candidates)
+        custom_dropped_by_cap = max(0, custom_available - MAX_CUSTOM_OBJECTS_PER_RUN)
+        if custom_dropped_by_cap:
             logger.info(
                 "data-quality: %d custom objects available, capping at %d",
-                len(custom_candidates), MAX_CUSTOM_OBJECTS_PER_RUN,
+                custom_available, MAX_CUSTOM_OBJECTS_PER_RUN,
             )
             custom_candidates = custom_candidates[:MAX_CUSTOM_OBJECTS_PER_RUN]
 
@@ -858,7 +887,16 @@ class DataQualityService:
             seen.add(entry["name"])
             selected.append(entry)
 
-        return selected
+        coverage = {
+            "total_sobjects": total_sobjects,
+            "standard_selected": sum(1 for s in selected if not s["custom"]),
+            "standard_missing": standard_missing,
+            "custom_selected": sum(1 for s in selected if s["custom"]),
+            "custom_available": custom_available,
+            "custom_dropped_by_cap": custom_dropped_by_cap,
+            "custom_cap": MAX_CUSTOM_OBJECTS_PER_RUN,
+        }
+        return selected, coverage
 
     def _build_evidence(
         self,

@@ -262,12 +262,11 @@ export default function ObjectsPage() {
         </Card>
       </div>
 
-      {/* Data quality diagnostics — only when the last run had 0 scored
-          objects, so the user gets a concrete answer to "why is it —?".
-          The banner enumerates skip reasons + tells them which objects
-          were legitimately empty. Hides itself the moment the run
-          produces real scores. */}
-      {dqSummary?.has_data && scoredCount === 0 && (
+      {/* Data quality diagnostics — shows scope of the last run: total
+          sObjects in the org, how many made the analysis list, and the
+          reasons for any skips. Rendered whenever a run has completed
+          so the operator can always understand what's being scored. */}
+      {dqSummary?.has_data && (
         <DataQualityDiagnostics
           summary={dqSummary}
           scoredCount={scoredCount}
@@ -551,28 +550,92 @@ function DataQualityDiagnostics({ summary, scoredCount, emptyCount }: Diagnostic
   const reasons = Object.entries(summary.skip_reasons ?? {})
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1])
+  const cov = summary.coverage ?? {}
+
+  // Banner tone: red when nothing scored (needs action), otherwise a
+  // neutral cream card that's just informational.
+  const isCritical = scoredCount === 0
+  const wrapperClass = isCritical
+    ? 'border-copper-200 dark:border-copper-800 bg-copper-50/40 dark:bg-copper-900/10'
+    : 'border-grove-border dark:border-grove-border-dk'
+  const iconWrapperClass = isCritical
+    ? 'bg-copper-100 dark:bg-copper-900/25'
+    : 'bg-primary-50 dark:bg-primary-900/25'
+  const iconClass = isCritical
+    ? 'text-copper-600 dark:text-copper-400'
+    : 'text-primary-700 dark:text-primary-400'
 
   return (
-    <Card variant="bordered" className="border-copper-200 dark:border-copper-800 bg-copper-50/40 dark:bg-copper-900/10">
+    <Card variant="bordered" className={wrapperClass}>
       <CardContent className="py-5">
         <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-copper-100 dark:bg-copper-900/25 flex-shrink-0">
-            <AlertTriangle className="h-5 w-5 text-copper-600 dark:text-copper-400" />
+          <div className={`p-2 rounded-lg ${iconWrapperClass} flex-shrink-0`}>
+            {isCritical ? (
+              <AlertTriangle className={`h-5 w-5 ${iconClass}`} />
+            ) : (
+              <Sparkles className={`h-5 w-5 ${iconClass}`} />
+            )}
           </div>
-          <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex-1 min-w-0 space-y-4">
             <div>
               <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
-                No objects scored on the last run
+                {isCritical
+                  ? 'No objects scored on the last run'
+                  : 'Scope of the last analysis'}
               </p>
               <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-0.5">
-                {summary.objects_analyzed} object{summary.objects_analyzed === 1 ? '' : 's'} attempted
-                {' · '}
-                {scoredCount} scored
+                {summary.objects_analyzed} attempted · {scoredCount} scored
                 {emptyCount > 0 && ` · ${emptyCount} empty`}
                 {summary.objects_skipped > 0 &&
                   ` · ${summary.objects_skipped} skipped`}
               </p>
             </div>
+
+            {(cov.total_sobjects || cov.standard_selected || cov.custom_selected) && (
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
+                  Coverage
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <ScopeStat
+                    label="Total sObjects in org"
+                    value={cov.total_sobjects}
+                    hint="Everything Salesforce returns from the global describe — includes system, shadow, and setup objects."
+                  />
+                  <ScopeStat
+                    label="Standard analysed"
+                    value={cov.standard_selected}
+                    hint={
+                      cov.standard_missing && cov.standard_missing > 0
+                        ? `${cov.standard_missing} standard object${cov.standard_missing === 1 ? '' : 's'} from the priority list not queryable in this org (usually a licensing gap — Solution / Entitlement / ServiceContract need Service Cloud).`
+                        : 'CRM canon: Account, Contact, Lead, Opportunity, Case, Task, Event, Contract, Order, Quote, Campaign, Product2, and more.'
+                    }
+                  />
+                  <ScopeStat
+                    label="Custom analysed"
+                    value={cov.custom_selected}
+                    hint={
+                      cov.custom_available && cov.custom_available > 0
+                        ? `${cov.custom_available} custom object${cov.custom_available === 1 ? '' : 's'} available after filtering shadows (History / Share / Feed).`
+                        : 'Any object with a __c suffix or `custom` flag, excluding History / Share / Feed shadow objects.'
+                    }
+                  />
+                  <ScopeStat
+                    label={cov.custom_dropped_by_cap && cov.custom_dropped_by_cap > 0 ? 'Dropped by cap' : 'Custom cap'}
+                    value={
+                      cov.custom_dropped_by_cap && cov.custom_dropped_by_cap > 0
+                        ? cov.custom_dropped_by_cap
+                        : cov.custom_cap
+                    }
+                    hint={
+                      cov.custom_dropped_by_cap && cov.custom_dropped_by_cap > 0
+                        ? `Your org has ${cov.custom_available} queryable custom objects — we analyse the first ${cov.custom_cap} alphabetically per run to stay under the HTTP timeout. Re-run to rotate coverage in a future release.`
+                        : `Per-run cap on custom-object analysis (${cov.custom_cap ?? 50}). Prevents very large orgs from timing out the request.`
+                    }
+                  />
+                </div>
+              </div>
+            )}
 
             {reasons.length > 0 && (
               <div>
@@ -613,5 +676,35 @@ function DataQualityDiagnostics({ summary, scoredCount, emptyCount }: Diagnostic
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Small stat tile used in the diagnostic banner. Renders a big
+ * tabular-num value, a mono-uppercase label, and a hover-only hint
+ * so power users can drill into what the number means without
+ * cluttering the banner with long descriptions.
+ */
+function ScopeStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: number | undefined
+  hint: string
+}) {
+  return (
+    <div
+      className="px-3 py-2 rounded-lg bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk"
+      title={hint}
+    >
+      <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+        {label}
+      </p>
+      <p className="text-lg font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk mt-0.5">
+        {typeof value === 'number' ? value : '—'}
+      </p>
+    </div>
   )
 }

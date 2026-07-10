@@ -58,6 +58,19 @@ export interface DataQualitySummary {
   // count_failed, no_last_modified, etc.). Empty when nothing was
   // skipped; populated for diagnostics on low-coverage runs.
   skip_reasons: Record<string, number>
+  // Coverage stats — how many sObjects the org has total vs. how many
+  // we selected for analysis, plus the custom-object cap breakdown.
+  // Used by the diagnostic banner to explain "22 of 422 analysed"
+  // without the user having to check a log.
+  coverage: {
+    total_sobjects?: number
+    standard_selected?: number
+    standard_missing?: number
+    custom_selected?: number
+    custom_available?: number
+    custom_dropped_by_cap?: number
+    custom_cap?: number
+  }
 }
 
 export interface ObjectListResponse {
