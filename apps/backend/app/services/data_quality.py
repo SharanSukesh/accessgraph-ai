@@ -132,6 +132,18 @@ DUPLICATE_KEY_FIELDS: Dict[str, str] = {
 # statistically meaningful without blowing the SOQL response payload.
 DEFAULT_SAMPLE_SIZE = 500
 
+# Cap on how many custom objects we'll analyse in a single run.
+# Salesforce's global describe on a mid-size org can return 400+
+# sObjects; even after filtering shadows (History / Share / Feed) we
+# can still end up with 50-100 custom objects. Each object needs 3-4
+# SF API calls (describe + count + sample + stale) which the sync
+# router runs synchronously — hundreds of API calls will exceed the
+# deployment's HTTP timeout and 500 the request. Cap at 25 so a run
+# stays under ~90 seconds even on the slowest tenants; the frontend
+# can page through additional custom objects on subsequent runs
+# once we make the runner async.
+MAX_CUSTOM_OBJECTS_PER_RUN = 25
+
 # Records untouched for this many days count as "stale". Chosen to
 # approximately match the SaaS-industry "quarterly touch" convention.
 DEFAULT_STALENESS_DAYS = 180
@@ -245,11 +257,21 @@ class DataQualityService:
         # enum below; the frontend surfaces them in a "N objects skipped"
         # tooltip so operators can debug why coverage is low.
         skip_reasons: Dict[str, int] = {}
+        logger.info(
+            "data-quality: analysing %d objects for org %s",
+            len(analysis_targets), self.org_id,
+        )
         for obj in analysis_targets:
+            per_obj_started = time.monotonic()
             try:
                 res, skip_reason = await self._analyze_object(
                     client, obj["name"], obj["label"], obj["custom"], threshold
                 )
+                per_obj_ms = int((time.monotonic() - per_obj_started) * 1000)
+                if per_obj_ms > 5000:
+                    logger.info(
+                        "data-quality: %s took %dms", obj["name"], per_obj_ms
+                    )
                 if res is None:
                     reason = skip_reason or "unknown"
                     skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
@@ -555,7 +577,7 @@ class DataQualityService:
             duplicate_clusters=len(dupe_clusters),
             stale_record_count=stale_count,
             evidence=evidence,
-        )
+        ), None
 
     # ------------------------------------------------------------------
     # Support
@@ -678,7 +700,13 @@ class DataQualityService:
         # defined by suffix (`__c`) OR by the `custom` flag in describe
         # — the latter catches namespaced managed-package objects like
         # `MyPkg__Widget__c` that still slip past the suffix test.
-        for name, meta in by_name.items():
+        #
+        # Deterministic ordering — sorted() so a large org's coverage
+        # is stable between runs, and cap at MAX_CUSTOM_OBJECTS_PER_RUN
+        # so we don't blow the HTTP timeout on a 400-object tenant.
+        custom_candidates: List[Dict[str, Any]] = []
+        for name in sorted(by_name.keys()):
+            meta = by_name[name]
             if name in seen:
                 continue
             is_c = name.endswith("__c") or bool(meta.get("custom"))
@@ -692,14 +720,25 @@ class DataQualityService:
             # slip through the __c test on custom objects — skip them.
             if name.endswith(("History", "Share", "Feed", "ChangeEvent", "Tag")):
                 continue
-            seen.add(name)
-            selected.append(
+            custom_candidates.append(
                 {
                     "name": name,
                     "label": meta.get("label") or name,
                     "custom": True,
                 }
             )
+
+        if len(custom_candidates) > MAX_CUSTOM_OBJECTS_PER_RUN:
+            logger.info(
+                "data-quality: %d custom objects available, capping at %d",
+                len(custom_candidates), MAX_CUSTOM_OBJECTS_PER_RUN,
+            )
+            custom_candidates = custom_candidates[:MAX_CUSTOM_OBJECTS_PER_RUN]
+
+        for entry in custom_candidates:
+            seen.add(entry["name"])
+            selected.append(entry)
+
         return selected
 
     def _build_evidence(
