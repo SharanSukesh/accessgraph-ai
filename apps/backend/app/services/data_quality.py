@@ -247,6 +247,8 @@ class DataQualityService:
         """
         import json as _json
 
+        import httpx  # local import — only needed for 401 detection
+
         started = time.monotonic()
         # Explicit try/except at each stage so we can tell exactly WHERE
         # the run is failing when a 500 leaves the frontend.
@@ -258,8 +260,38 @@ class DataQualityService:
 
         threshold = datetime.now(timezone.utc) - timedelta(days=self.staleness_days)
 
+        # Salesforce access tokens have short TTLs and the first API
+        # call to a stale token 401s. Mirror SalesforceSyncService's
+        # retry-once pattern: catch the 401, refresh the token, rebuild
+        # the client, retry. Any other error surfaces as-is.
         try:
             analysis_targets = await self._resolve_analysis_targets(client)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                logger.warning(
+                    "data-quality: 401 on global describe — refreshing token"
+                )
+                try:
+                    client = await self._refresh_access_token()
+                    analysis_targets = await self._resolve_analysis_targets(client)
+                except Exception as refresh_exc:
+                    logger.exception(
+                        "data-quality: token refresh failed for org %s",
+                        self.org_id,
+                    )
+                    raise RuntimeError(
+                        "Salesforce access token expired and refresh failed. "
+                        "Please reconnect Salesforce from the sidebar."
+                    ) from refresh_exc
+            else:
+                logger.exception(
+                    "data-quality: _resolve_analysis_targets failed for org %s "
+                    "with HTTP %s", self.org_id, exc.response.status_code,
+                )
+                raise RuntimeError(
+                    f"Salesforce global describe returned HTTP "
+                    f"{exc.response.status_code}: {exc}"
+                ) from exc
         except Exception as exc:
             logger.exception(
                 "data-quality: _resolve_analysis_targets failed for org %s",
@@ -701,6 +733,56 @@ class DataQualityService:
         return SalesforceAPIClient(
             instance_url=conn.instance_url,
             access_token=conn.access_token,
+        )
+
+    async def _refresh_access_token(self) -> SalesforceAPIClient:
+        """Refresh the stored OAuth token and return a client with the
+        fresh access_token. Mirrors SalesforceSyncService's refresh
+        path so we hit the same test.salesforce.com fallback for
+        sandboxes / scratch orgs.
+        """
+        from app.salesforce.oauth import SalesforceOAuthClient
+
+        row = await self.db.execute(
+            select(SalesforceConnection)
+            .where(
+                SalesforceConnection.organization_id == self.org_id,
+                SalesforceConnection.is_active.is_(True),
+            )
+        )
+        conn = row.scalar_one_or_none()
+        if conn is None or not conn.refresh_token:
+            raise RuntimeError(
+                f"No refresh_token available for org {self.org_id} — "
+                "user must re-authenticate with Salesforce."
+            )
+
+        instance_url = conn.instance_url or ""
+        is_sandbox = (
+            ".sandbox." in instance_url
+            or ".scratch." in instance_url
+            or instance_url.startswith("https://cs")
+        )
+        login_url = "https://test.salesforce.com" if is_sandbox else None
+        logger.warning(
+            "data-quality: access token expired, refreshing (sandbox=%s)",
+            is_sandbox,
+        )
+
+        oauth_client = SalesforceOAuthClient(login_url=login_url)
+        token_response = await oauth_client.refresh_access_token(
+            conn.refresh_token
+        )
+
+        # Persist the new tokens so the next request uses them.
+        conn.access_token = token_response.access_token
+        conn.instance_url = token_response.instance_url
+        await self.db.commit()
+
+        logger.info("data-quality: access token refreshed")
+        return SalesforceAPIClient(
+            instance_url=token_response.instance_url,
+            access_token=token_response.access_token,
         )
 
     async def _resolve_analysis_targets(
