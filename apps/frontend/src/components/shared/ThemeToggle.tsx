@@ -60,7 +60,7 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
     if (variant === 'row') {
       return <div className={cn('h-11', className)} />
     }
-    return <div className={cn('w-11 h-11', className)} />
+    return <div className={cn('w-10 h-10', className)} />
   }
 
   const Icon = darkMode ? Sun : Moon
@@ -90,7 +90,7 @@ export function ThemeToggle({ variant = 'compact', className }: ThemeToggleProps
         // Fixed 44×44 to match every other footer button in the collapsed
         // sidebar. Grove tokens on hover/idle. grove-rail adds the
         // evergreen left cue on hover to match nav-item language.
-        'grove-rail flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out relative group',
+        'grove-rail flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200 ease-out relative group',
         'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300',
         className,
       )}

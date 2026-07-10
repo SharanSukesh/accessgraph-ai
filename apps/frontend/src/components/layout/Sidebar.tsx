@@ -219,13 +219,16 @@ export function Sidebar() {
         {/* Navigation — grouped into semantic sections. Labels appear
             only when expanded; collapsed mode shows a hairline divider
             between groups so the visual rhythm survives. */}
-        {/* Nav scrollbar is intentionally hidden (Linear / Notion pattern).
-            A visible scrollbar consumes ~6px from the right and shifts
-            every nav icon LEFT of the header logo + footer buttons,
-            breaking sidebar-midline alignment. `.scrollbar-hide` lets
-            scroll still work via mouse / trackpad but the scrollbar
-            itself never occupies layout width. */}
-        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-hide">
+        {/* Nav scrollbar — Grove-themed thin scrollbar so it's visible
+            on short viewports without dominating the sidebar. Uses
+            scrollbar-gutter: stable both-edges to reserve equal space
+            on both sides regardless of whether the scrollbar is
+            actually visible right now, so nav icons stay centred on
+            the sidebar midline in every viewport height. */}
+        <nav
+          className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-themed"
+          style={{ scrollbarGutter: 'stable both-edges' }}
+        >
           {navigation.map((section, sectionIdx) => (
             // Fragment wrapper so the inter-section divider is a sibling
             // of the section, not a child that would shrink the section's
@@ -270,7 +273,7 @@ export function Sidebar() {
                       'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                       isExpanded
                         ? 'space-x-3 px-4 py-2.5'
-                        : 'justify-center w-11 h-11 mx-auto',
+                        : 'justify-center w-10 h-10 mx-auto',
                       isActive
                         ? // Active: soft evergreen wash + evergreen ink + copper
                           // rail cue (rail uses currentColor from text-primary-700).
@@ -327,7 +330,7 @@ export function Sidebar() {
                 // without shouting). grove-rail adds the evergreen left cue
                 // that matches the nav-item language above.
                 'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-11 h-11',
+                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
               )}
               title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
@@ -354,7 +357,7 @@ export function Sidebar() {
                 // the active-nav language elsewhere. grove-rail cue on the
                 // left edge matches the nav-item language.
                 'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-11 h-11',
+                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
                 isSyncing
                   ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
                   : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
@@ -408,7 +411,7 @@ export function Sidebar() {
             ) : (
               <button
                 onClick={openCommandPalette}
-                className="grove-rail flex items-center justify-center w-11 h-11 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
+                className="grove-rail flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
                 aria-label="Open command palette"
                 title="Quick search (⌘K)"
               >
@@ -452,7 +455,7 @@ export function Sidebar() {
                 isExpanded
                   ? 'space-x-3 px-3 py-2 w-full'
                   // Fixed 44×44 tile — matches every other footer button.
-                  : 'justify-center w-11 h-11',
+                  : 'justify-center w-10 h-10',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15',
               )}
               title={!isExpanded ? (user?.org_name || 'Account') : undefined}
