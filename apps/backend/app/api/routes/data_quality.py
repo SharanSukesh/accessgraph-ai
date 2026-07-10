@@ -178,10 +178,17 @@ async def run_data_quality(
     try:
         run = await service.run(actor_email=actor_email)
     except Exception as e:
-        logger.exception("Data-quality run crashed")
+        # Log the traceback server-side + include the exception class
+        # and message in the 500 detail so the browser console shows a
+        # readable diagnostic (not just "500 Internal Server Error").
+        logger.exception("Data-quality run crashed for org %s", org_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Data-quality run failed: {e}",
+            detail={
+                "message": "Data-quality run failed",
+                "error_type": type(e).__name__,
+                "error": str(e),
+            },
         )
     return RunResponse(
         run_id=run.id,

@@ -106,6 +106,32 @@ export default function ObjectsPage() {
         }
       />
 
+      {/* Show the last run error inline so the user doesn't need
+          devtools open to see WHY the analyse call failed. The backend
+          now returns a structured detail: {message, error_type, error}. */}
+      {runDq.isError && (
+        <Card
+          variant="bordered"
+          className="border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-900/10"
+        >
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/25 flex-shrink-0">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                  Analysis failed
+                </p>
+                <p className="text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 mt-1 font-mono break-words">
+                  {formatRunError(runDq.error)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card variant="bordered" className="p-6">
@@ -445,6 +471,32 @@ function qualityChipClasses(score: number): string {
   if (score >= 65)
     return 'bg-copper-50 text-copper-700 ring-copper-200 dark:bg-copper-900/25 dark:text-copper-400 dark:ring-copper-800'
   return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/25 dark:text-red-400 dark:ring-red-800'
+}
+
+/**
+ * Format the error thrown by the run mutation into a single readable
+ * line. The backend now returns a structured detail
+ * `{message, error_type, error}` on 500, but React Query normalises
+ * error shape depending on the API client — we handle the couple of
+ * shapes it actually emits without exploding on any of them.
+ */
+function formatRunError(err: unknown): string {
+  if (!err) return 'Unknown error'
+  const e = err as Record<string, unknown> & { message?: string }
+
+  // Newton API client: { status, errorData: { detail: ... } }
+  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const detail = errorData?.detail as Record<string, unknown> | string | undefined
+
+  if (detail && typeof detail === 'object') {
+    const t = detail.error_type as string | undefined
+    const msg = detail.error as string | undefined
+    if (t && msg) return `${t}: ${msg}`
+    if (msg) return msg
+  }
+  if (typeof detail === 'string') return detail
+  if (e.message) return e.message
+  return JSON.stringify(err)
 }
 
 // ---------- Data-quality diagnostic banner ----------

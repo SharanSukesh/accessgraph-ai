@@ -248,9 +248,26 @@ class DataQualityService:
         import json as _json
 
         started = time.monotonic()
-        client = await self._client()
+        # Explicit try/except at each stage so we can tell exactly WHERE
+        # the run is failing when a 500 leaves the frontend.
+        try:
+            client = await self._client()
+        except Exception as exc:
+            logger.exception("data-quality: _client() failed for org %s", self.org_id)
+            raise RuntimeError(f"Failed to build Salesforce client: {exc}") from exc
+
         threshold = datetime.now(timezone.utc) - timedelta(days=self.staleness_days)
-        analysis_targets = await self._resolve_analysis_targets(client)
+
+        try:
+            analysis_targets = await self._resolve_analysis_targets(client)
+        except Exception as exc:
+            logger.exception(
+                "data-quality: _resolve_analysis_targets failed for org %s",
+                self.org_id,
+            )
+            raise RuntimeError(
+                f"Failed to resolve analysis targets (global describe): {exc}"
+            ) from exc
 
         results: List[ObjectQualityResult] = []
         # skip_reasons: category → count. Categories match _SkipReason
@@ -317,33 +334,53 @@ class DataQualityService:
             duration_ms=int((time.monotonic() - started) * 1000),
             error=skip_error_json,
         )
-        self.db.add(run)
-        await self.db.flush()  # populate run.id before FK'ing the child rows
+        try:
+            self.db.add(run)
+            await self.db.flush()  # populate run.id before FK'ing the child rows
 
-        for r in results:
-            self.db.add(
-                ObjectQualityScore(
-                    organization_id=self.org_id,
-                    run_id=run.id,
-                    object_name=r.object_name,
-                    object_label=r.object_label,
-                    is_custom=r.is_custom,
-                    record_count=r.record_count,
-                    sampled_count=r.sampled_count,
-                    score=r.score,
-                    completeness_pct=r.completeness_pct,
-                    duplicate_pct=r.duplicate_pct,
-                    staleness_pct=r.staleness_pct,
-                    fields_inspected=r.fields_inspected,
-                    fields_with_gaps=r.fields_with_gaps,
-                    duplicate_clusters=r.duplicate_clusters,
-                    stale_record_count=r.stale_record_count,
-                    evidence=r.evidence,
+            for r in results:
+                self.db.add(
+                    ObjectQualityScore(
+                        organization_id=self.org_id,
+                        run_id=run.id,
+                        # Defensive truncation — the SF describe response
+                        # for a managed-package object with a namespaced
+                        # PluralLabel can exceed the column limits.
+                        object_name=(r.object_name or "")[:80],
+                        object_label=(r.object_label or r.object_name or "")[:255],
+                        is_custom=r.is_custom,
+                        record_count=r.record_count,
+                        sampled_count=r.sampled_count,
+                        score=r.score,
+                        completeness_pct=r.completeness_pct,
+                        duplicate_pct=r.duplicate_pct,
+                        staleness_pct=r.staleness_pct,
+                        fields_inspected=r.fields_inspected,
+                        fields_with_gaps=r.fields_with_gaps,
+                        duplicate_clusters=r.duplicate_clusters,
+                        stale_record_count=r.stale_record_count,
+                        evidence=r.evidence,
+                    )
                 )
-            )
 
-        await self.db.commit()
-        await self.db.refresh(run)
+            await self.db.commit()
+            await self.db.refresh(run)
+        except Exception as exc:
+            # If persist blows up, rollback and re-raise with context so
+            # the router surfaces a useful message on the 500 detail.
+            logger.exception(
+                "data-quality: DB persist failed for org %s "
+                "(analysed=%d, skipped=%d)",
+                self.org_id, len(results), skipped,
+            )
+            try:
+                await self.db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            raise RuntimeError(
+                f"Failed to persist data-quality run: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
         logger.info(
             "data-quality run %s by %s: %d analysed (%d scored, %d empty), "
             "%d skipped (reasons=%s), avg_score=%.1f",
