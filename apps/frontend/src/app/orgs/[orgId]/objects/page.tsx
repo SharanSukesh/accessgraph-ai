@@ -97,7 +97,13 @@ export default function ObjectsPage() {
               value={scope}
               onChange={setScope}
               disabled={runDq.isPending}
-              businessCount={dqSummary?.coverage?.total_sobjects}
+              // Business count comes from the live Objects list so it
+              // stays in sync with the "Total Objects" KPI card above
+              // — always fresh, never dependent on when the last data-
+              // quality run happened. All-scope count only exists in
+              // stored coverage after at least one run has hit that
+              // scope; falls back to `?` before then.
+              businessCount={objects?.length}
               allCount={dqSummary?.coverage?.total_sobjects_raw}
             />
             <Button
@@ -828,11 +834,9 @@ function ScopeOption({
       }
     >
       {label}
-      {typeof count === 'number' && (
-        <span className="ml-1 text-grove-ink/50 dark:text-grove-ink-dk/50">
-          ({count.toLocaleString()})
-        </span>
-      )}
+      <span className="ml-1 text-grove-ink/50 dark:text-grove-ink-dk/50">
+        ({typeof count === 'number' ? count.toLocaleString() : '?'})
+      </span>
     </button>
   )
 }
