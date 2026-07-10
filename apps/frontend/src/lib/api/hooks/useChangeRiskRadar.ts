@@ -67,6 +67,48 @@ export interface ChangeRiskSummary {
       max_tier: BlastTier
       off_hours_count: number
     }[]
+
+    // v2 additions — trend / new actor / bursts / component activity.
+
+    /** Previous run's by_day histogram — overlaid on the current run's
+     *  daily activity chart as a thin comparison line. Empty on
+     *  first-visit orgs. */
+    previous_by_day?: Record<string, number>
+
+    /** Actors making changes for the first time in the org's audit
+     *  history. Frontend badges them in the actor risk table + shows
+     *  a summary callout. */
+    new_actors?: string[]
+
+    /** Clusters of >= 3 events from the same (actor, section) inside
+     *  a 5-minute window — collapse mass-deploy chatter into one row. */
+    bursts?: {
+      actor: string
+      section: string
+      event_count: number
+      start: string
+      end: string
+      duration_seconds: number
+      max_blast: number
+      dominant_tier: BlastTier
+      sample_displays: string[]
+    }[]
+
+    /** Direct metadata modifications (LastModifiedDate = LAST_N_DAYS)
+     *  across component types. Answers "which component types are
+     *  being touched most" without SetupAuditTrail Display parsing. */
+    component_activity?: Record<
+      string,
+      {
+        count: number
+        top: {
+          id: string | null
+          name: string | null
+          last_modified: string | null
+          actor: string | null
+        }[]
+      }
+    >
   }
   has_data: boolean
   duration_ms: number | null

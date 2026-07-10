@@ -420,6 +420,128 @@ class SalesforceAPIClient:
             )
             return None
 
+    async def extract_recent_metadata_activity(
+        self, since_days: int = 30, top_per_type: int = 5
+    ) -> Dict[str, Any]:
+        """Recent metadata modifications across component types.
+
+        Returns a dict keyed by component_type ("apex_class",
+        "apex_trigger", "flow", "aura_bundle", "lwc_bundle", "report",
+        "dashboard") with entries like:
+            {"count": 42,
+             "top": [{"id": "...", "name": "...",
+                      "last_modified": "...", "actor": "..."},
+                      ...]}
+
+        Each component type is queried independently — a failure on
+        one doesn't sink the others. Missing keys mean the query
+        failed or the org has zero rows of that type; both are treated
+        as "no signal" by the frontend.
+
+        Powers the Change-Risk Radar's Component Activity chart —
+        answers "which component types are getting touched most" with
+        clean per-type data, avoiding fragile Display-text parsing on
+        SetupAuditTrail.
+        """
+        # (component_type, sobject_or_view, uses_tooling, display_name_field)
+        #
+        # ApexClass / ApexTrigger — regular query works fine
+        # FlowDefinitionView    — Tooling API; MasterLabel is the name
+        # Aura/LightningComponent bundle — Tooling API; DeveloperName
+        # Report / Dashboard    — regular query
+        specs = [
+            ("apex_class",   "ApexClass",                 False, "Name"),
+            ("apex_trigger", "ApexTrigger",               False, "Name"),
+            ("flow",         "FlowDefinitionView",        True,  "MasterLabel"),
+            ("aura_bundle",  "AuraDefinitionBundle",      True,  "DeveloperName"),
+            ("lwc_bundle",   "LightningComponentBundle",  True,  "DeveloperName"),
+            ("report",       "Report",                    False, "Name"),
+            ("dashboard",    "Dashboard",                 False, "Title"),
+        ]
+
+        results: Dict[str, Any] = {}
+        for kind, obj, use_tooling, name_field in specs:
+            # Two queries per type — one for the total count, one for
+            # the top-N modified. Bounded overall by the type list
+            # length (7 * 2 = 14 queries) so the whole activity pull
+            # stays under a second on a healthy org.
+            count = await self._safe_count(
+                obj, since_days, use_tooling=use_tooling
+            )
+            top = await self._safe_top_modified(
+                obj, name_field, since_days, top_per_type,
+                use_tooling=use_tooling,
+            )
+            results[kind] = {"count": count if count is not None else 0,
+                             "top": top}
+        return results
+
+    async def _safe_count(
+        self, sobject: str, since_days: int, *, use_tooling: bool = False
+    ) -> Optional[int]:
+        """`SELECT COUNT() FROM X WHERE LastModifiedDate = LAST_N_DAYS:N`.
+        None on failure so callers can treat missing-signal as zero.
+        """
+        soql = (
+            f"SELECT COUNT() FROM {sobject} "
+            f"WHERE LastModifiedDate = LAST_N_DAYS:{since_days}"
+        )
+        try:
+            if use_tooling:
+                rows = await self.query_tooling(soql)
+                return len(rows)
+            result = await self.query(soql)
+            return int(result.totalSize or 0)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "metadata count %s failed: %s: %s",
+                sobject, type(exc).__name__, exc,
+            )
+            return None
+
+    async def _safe_top_modified(
+        self,
+        sobject: str,
+        name_field: str,
+        since_days: int,
+        limit: int,
+        *,
+        use_tooling: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Return the N most-recently-modified rows with their name +
+        last-modified timestamp + actor. Empty list on failure.
+        """
+        soql = (
+            f"SELECT Id, {name_field}, LastModifiedDate, LastModifiedBy.Name "
+            f"FROM {sobject} "
+            f"WHERE LastModifiedDate = LAST_N_DAYS:{since_days} "
+            f"ORDER BY LastModifiedDate DESC LIMIT {limit}"
+        )
+        try:
+            if use_tooling:
+                rows = await self.query_tooling(soql)
+            else:
+                result = await self.query(soql)
+                rows = list(result.records)
+            out: List[Dict[str, Any]] = []
+            for r in rows:
+                actor_obj = r.get("LastModifiedBy") or {}
+                out.append(
+                    {
+                        "id": r.get("Id"),
+                        "name": r.get(name_field),
+                        "last_modified": r.get("LastModifiedDate"),
+                        "actor": actor_obj.get("Name"),
+                    }
+                )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "metadata top-modified %s failed: %s: %s",
+                sobject, type(exc).__name__, exc,
+            )
+            return []
+
     async def get_apex_coverage(self) -> List[Dict[str, Any]]:
         """Per-class Apex code-coverage rollup from the Tooling API."""
         try:

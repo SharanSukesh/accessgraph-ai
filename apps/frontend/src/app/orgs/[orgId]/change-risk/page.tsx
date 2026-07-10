@@ -26,6 +26,9 @@ import {
   Clock,
   BookOpen,
   MoonStar,
+  UserPlus,
+  Layers,
+  Boxes,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -38,6 +41,7 @@ import {
   TierLegend,
   DailyActivityBars,
   HorizontalBarChart,
+  ComponentActivityChart,
   TIER_COLORS,
   TIER_LABELS,
 } from '@/components/shared/ChangeRiskCharts'
@@ -88,6 +92,13 @@ export default function ChangeRiskPage() {
   }, [])
 
   const actorTable = summary?.rollups?.top_actors_detailed ?? []
+
+  // Set-lookup of first-appearance actors so ActorRiskTable can O(1)
+  // decide whether to render the "New" badge on each row.
+  const newActorsSet = useMemo(
+    () => new Set(summary?.rollups?.new_actors ?? []),
+    [summary?.rollups?.new_actors]
+  )
 
   if (summaryError) {
     return (
@@ -237,7 +248,8 @@ export default function ChangeRiskPage() {
               </CardContent>
             </Card>
 
-            {/* Daily activity histogram */}
+            {/* Daily activity histogram — with optional previous-run
+                trend line overlay (empty on first-visit orgs). */}
             <Card variant="bordered" className="lg:col-span-3">
               <CardContent className="py-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -247,7 +259,9 @@ export default function ChangeRiskPage() {
                     </p>
                     <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
                       Change events per day across the {daysCovered(summary.since)}-day window.
-                      Watch for weekend spikes — they're usually planned deploys, but occasionally aren't.
+                      {Object.keys(summary.rollups?.previous_by_day ?? {}).length > 0 && (
+                        <> The dashed evergreen line overlays the previous run for trend comparison.</>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -255,6 +269,7 @@ export default function ChangeRiskPage() {
                   <DailyActivityBars
                     byDay={summary.rollups?.by_day ?? {}}
                     tierByDay={tierByDay}
+                    previousByDay={summary.rollups?.previous_by_day}
                     days={30}
                   />
                 </div>
@@ -271,6 +286,47 @@ export default function ChangeRiskPage() {
               totalEvents={summary.events_ingested}
             />
           )}
+
+          {/* New-actor callout — surfaces when audits show a first
+              appearance from an actor in the org's known history. */}
+          {(summary.rollups?.new_actors?.length ?? 0) > 0 && (
+            <NewActorsCallout actors={summary.rollups?.new_actors ?? []} />
+          )}
+
+          {/* Change bursts — grouped mass-change clusters. */}
+          {(summary.rollups?.bursts?.length ?? 0) > 0 && (
+            <BurstsSection bursts={summary.rollups?.bursts ?? []} />
+          )}
+
+          {/* Component activity — direct metadata queries answer
+              "which component types are getting touched most." */}
+          {summary.rollups?.component_activity &&
+            Object.keys(summary.rollups.component_activity).length > 0 && (
+              <Card variant="bordered">
+                <CardContent className="py-5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800 flex-shrink-0">
+                      <Layers className="h-5 w-5 text-primary-700 dark:text-primary-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                        Component activity
+                      </p>
+                      <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-0.5">
+                        Metadata modifications per component type in the
+                        last {daysCovered(summary.since)} days. Pulled
+                        directly from each object's <span className="font-mono">LastModifiedDate</span>
+                        {' '}— unlike the audit trail this is unambiguous about
+                        what kind of thing changed. Top-3 modified names appear as pills under each bar.
+                      </p>
+                    </div>
+                  </div>
+                  <ComponentActivityChart
+                    activity={summary.rollups.component_activity}
+                  />
+                </CardContent>
+              </Card>
+            )}
 
           {/* Rollups: top sections (horizontal bar chart) + actor risk table. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -318,6 +374,7 @@ export default function ChangeRiskPage() {
                   onSelect={(name) =>
                     setActor((a) => (a === name ? undefined : name))
                   }
+                  newActors={newActorsSet}
                 />
               </CardContent>
             </Card>
@@ -645,6 +702,166 @@ function OffHoursCallout({
 }
 
 // ============================================================================
+// NewActorsCallout — first-appearance alert
+// ============================================================================
+
+function NewActorsCallout({ actors }: { actors: string[] }) {
+  // First-appearance is a real signal for consulting engagements — a
+  // brand-new admin making changes usually deserves a quick verify.
+  // Copper tone matches the OffHoursCallout so both timing signals
+  // read as "attention" without shouting.
+  return (
+    <Card
+      variant="bordered"
+      className="border-copper-200 dark:border-copper-800 bg-copper-50/40 dark:bg-copper-900/10"
+    >
+      <CardContent className="py-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-copper-100 dark:bg-copper-900/25 flex-shrink-0">
+            <UserPlus className="h-5 w-5 text-copper-600 dark:text-copper-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+              {actors.length} new change agent
+              {actors.length === 1 ? '' : 's'} this window
+            </p>
+            <p className="text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 mt-1 leading-relaxed">
+              These actors made setup changes for the first time (across the
+              last 10 recorded runs). Worth a quick verification — new admin
+              activity often precedes an incident or signals a support
+              engineer impersonating a user.
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-1.5">
+              {actors.slice(0, 8).map((name) => (
+                <li
+                  key={name}
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] bg-grove-surface dark:bg-grove-surface-dk ring-1 ring-copper-200 dark:ring-copper-800"
+                >
+                  <UserPlus className="h-3 w-3 text-copper-600 dark:text-copper-400" />
+                  <span className="text-grove-ink dark:text-grove-ink-dk truncate max-w-[220px]">
+                    {name}
+                  </span>
+                </li>
+              ))}
+              {actors.length > 8 && (
+                <li className="inline-flex items-center px-2 py-0.5 rounded text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">
+                  +{actors.length - 8} more
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================================================
+// BurstsSection — collapsed change-cluster rows
+// ============================================================================
+
+interface BurstRow {
+  actor: string
+  section: string
+  event_count: number
+  start: string
+  end: string
+  duration_seconds: number
+  max_blast: number
+  dominant_tier: BlastTier
+  sample_displays: string[]
+}
+
+function BurstsSection({ bursts }: { bursts: BurstRow[] }) {
+  return (
+    <Card variant="bordered">
+      <CardContent className="py-5">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800 flex-shrink-0">
+            <Boxes className="h-5 w-5 text-primary-700 dark:text-primary-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+              Change bursts
+            </p>
+            <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-0.5">
+              Clusters of 3+ events from the same actor in the same section
+              within a 5-minute window — usually mass profile deploys or
+              batch permission-set grants. Collapsed here so the timeline
+              stays scannable.
+            </p>
+          </div>
+        </div>
+        <ul className="divide-y divide-grove-border dark:divide-grove-border-dk">
+          {bursts.map((b, i) => (
+            <li key={`${b.actor}-${b.start}-${i}`} className="py-3">
+              <div className="flex items-start gap-3">
+                <span
+                  className="mt-1.5 h-2.5 w-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: TIER_COLORS[b.dominant_tier] }}
+                  aria-hidden
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
+                      {b.section}
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300"
+                      title={`${b.event_count} events collapsed`}
+                    >
+                      {b.event_count.toLocaleString()} events
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider"
+                      style={{
+                        backgroundColor: `${TIER_COLORS[b.dominant_tier]}22`,
+                        color: TIER_COLORS[b.dominant_tier],
+                      }}
+                    >
+                      {b.dominant_tier} · max {Math.round(b.max_blast)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+                    <span>by {b.actor}</span>
+                    <span> · </span>
+                    <span>
+                      {formatDateTime(b.start)} → {formatDateTime(b.end)}
+                    </span>
+                    <span> · </span>
+                    <span>
+                      {b.duration_seconds < 60
+                        ? `${b.duration_seconds}s`
+                        : `${Math.round(b.duration_seconds / 60)} min`}{' '}
+                      window
+                    </span>
+                  </div>
+                  {b.sample_displays.length > 0 && (
+                    <ul className="mt-1.5 text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 space-y-0.5 max-w-3xl">
+                      {b.sample_displays.slice(0, 2).map((d, j) => (
+                        <li key={j} className="truncate">
+                          <span className="text-grove-ink/40 dark:text-grove-ink-dk/40">·</span>{' '}
+                          {d}
+                        </li>
+                      ))}
+                      {b.event_count > b.sample_displays.length && (
+                        <li className="text-grove-ink/45 dark:text-grove-ink-dk/45 italic">
+                          + {b.event_count - b.sample_displays.length} more like these
+                        </li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================================================
 // ActorRiskTable — actor breakdown with avg blast + off-hours flag
 // ============================================================================
 
@@ -652,6 +869,7 @@ function ActorRiskTable({
   actors,
   onSelect,
   activeSelection,
+  newActors,
 }: {
   actors: {
     name: string
@@ -663,6 +881,7 @@ function ActorRiskTable({
   }[]
   onSelect: (name: string) => void
   activeSelection?: string
+  newActors?: Set<string>
 }) {
   if (actors.length === 0) {
     return (
@@ -697,8 +916,19 @@ function ActorRiskTable({
                 }
                 title={`Filter timeline to ${a.name}`}
               >
-                <td className="px-3 py-1.5 text-grove-ink dark:text-grove-ink-dk truncate max-w-[180px]">
-                  {a.name}
+                <td className="px-3 py-1.5 text-grove-ink dark:text-grove-ink-dk max-w-[220px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{a.name}</span>
+                    {newActors?.has(a.name) && (
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[9px] font-semibold uppercase tracking-wider bg-copper-100 text-copper-700 dark:bg-copper-900/25 dark:text-copper-400 flex-shrink-0"
+                        title="First time we've seen this actor in the org's audit history"
+                      >
+                        <UserPlus className="h-2.5 w-2.5" />
+                        New
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-1.5 tabular-nums text-right text-grove-ink/85 dark:text-grove-ink-dk/85">
                   {a.count.toLocaleString()}

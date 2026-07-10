@@ -61,6 +61,25 @@ logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
+# Burst detection tuning
+# ----------------------------------------------------------------------
+
+# Two events from the same actor within this many seconds count as
+# part of the same burst. 5 minutes matches SF's own "changed profile
+# X, changed profile X-field Y" chatter — those tend to fall inside a
+# minute of each other during a mass update.
+BURST_WINDOW_SECONDS = 300
+
+# Minimum events to render as a burst on the UI. Anything smaller is
+# just an ordinary event and doesn't need collapsing.
+BURST_MIN_EVENTS = 3
+
+# Top-N bursts returned in the rollup. Cap keeps the payload small
+# and the UI focused on the loudest activity clusters.
+BURST_TOP_N = 8
+
+
+# ----------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------
 
@@ -324,6 +343,38 @@ class ChangeRiskRadarService:
             for k, v in tier_counts.items()
         }
 
+        # Bursts — groups of >= BURST_MIN_EVENTS from the same actor
+        # in the same section landing inside BURST_WINDOW_SECONDS of
+        # each other. Sorted by size desc + capped at BURST_TOP_N.
+        bursts = self._detect_bursts(scored)
+
+        # Compare against the last successful run for this org to
+        # surface "new actor" and previous-daily overlays without a
+        # second frontend fetch.
+        previous_by_day, historical_actor_names = await self._load_previous_run_signals()
+        new_actors = sorted(
+            {
+                e.actor_name for e in scored
+                if e.actor_name and e.actor_name not in historical_actor_names
+            }
+        )
+
+        # Component activity — direct metadata queries answer "which
+        # component types are being touched most". Fires independently
+        # from the audit-trail pull so a failure here doesn't sink the
+        # whole run.
+        try:
+            component_activity = await client.extract_recent_metadata_activity(
+                since_days=self.since_days,
+                top_per_type=5,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "change-risk: component activity pull failed: %s: %s",
+                type(exc).__name__, exc,
+            )
+            component_activity = {}
+
         rollups = {
             "by_section": dict(section_counter.most_common(5)),
             "by_actor": dict(actor_counter.most_common(5)),
@@ -333,6 +384,11 @@ class ChangeRiskRadarService:
             "off_hours_count": off_hours_count,
             "weekend_count": weekend_count,
             "top_actors_detailed": top_actors_detailed,
+            # v2 additions — trend, new actors, bursts, component activity.
+            "previous_by_day": previous_by_day,
+            "new_actors": new_actors,
+            "bursts": bursts,
+            "component_activity": component_activity,
         }
 
         high_blast = sum(1 for e in scored if e.blast_radius >= HIGH_BLAST_THRESHOLD)
@@ -459,6 +515,146 @@ class ChangeRiskRadarService:
             blast_tier=blast_tier,
             reasoning=reasoning,
         )
+
+    # ------------------------------------------------------------------
+    # Rollup helpers
+    # ------------------------------------------------------------------
+
+    def _detect_bursts(
+        self, scored: List[ScoredEvent]
+    ) -> List[Dict[str, Any]]:
+        """Group events into "bursts": >= BURST_MIN_EVENTS from the
+        same (actor, section) landing inside BURST_WINDOW_SECONDS of
+        each other.
+
+        Rationale: a "changed profile" mass update produces dozens of
+        near-simultaneous rows that would otherwise dominate the
+        timeline. Bursts collapse them into one row per cluster with
+        a start / end timestamp + max-blast readout so the timeline
+        stays scannable.
+
+        Sorted by size desc, capped at BURST_TOP_N so the rollup
+        payload stays small.
+        """
+        # Bucket by (actor_name, section), then sweep chronologically.
+        buckets: Dict[str, List[ScoredEvent]] = {}
+        for e in scored:
+            if not e.actor_name or not e.section:
+                continue
+            key = f"{e.actor_name}||{e.section}"
+            buckets.setdefault(key, []).append(e)
+
+        results: List[Dict[str, Any]] = []
+        for key, events in buckets.items():
+            events.sort(key=lambda x: x.created_at_sf)
+            actor_name, section = key.split("||", 1)
+
+            # Sliding-window cluster detection.
+            cluster: List[ScoredEvent] = []
+            for ev in events:
+                if not cluster:
+                    cluster = [ev]
+                    continue
+                gap = (ev.created_at_sf - cluster[-1].created_at_sf).total_seconds()
+                if gap <= BURST_WINDOW_SECONDS:
+                    cluster.append(ev)
+                else:
+                    if len(cluster) >= BURST_MIN_EVENTS:
+                        results.append(
+                            self._burst_payload(cluster, actor_name, section)
+                        )
+                    cluster = [ev]
+            if len(cluster) >= BURST_MIN_EVENTS:
+                results.append(
+                    self._burst_payload(cluster, actor_name, section)
+                )
+
+        results.sort(key=lambda b: b["event_count"], reverse=True)
+        return results[:BURST_TOP_N]
+
+    def _burst_payload(
+        self, cluster: List[ScoredEvent], actor: str, section: str
+    ) -> Dict[str, Any]:
+        max_blast = max(e.blast_radius for e in cluster)
+        tier_counter = Counter(e.blast_tier for e in cluster)
+        return {
+            "actor": actor,
+            "section": section,
+            "event_count": len(cluster),
+            "start": cluster[0].created_at_sf.isoformat(),
+            "end": cluster[-1].created_at_sf.isoformat(),
+            "duration_seconds": int(
+                (cluster[-1].created_at_sf - cluster[0].created_at_sf).total_seconds()
+            ),
+            "max_blast": round(max_blast, 1),
+            "dominant_tier": tier_counter.most_common(1)[0][0],
+            # First 3 event display strings so the UI can preview
+            # what's inside the burst without loading every event.
+            "sample_displays": [e.display[:180] for e in cluster[:3]],
+        }
+
+    async def _load_previous_run_signals(
+        self,
+    ) -> Tuple[Dict[str, int], set]:
+        """Fetch the last non-current run for this org and return:
+          - previous_by_day: the previous run's daily activity histogram
+          - historical_actor_names: the set of actor names we've EVER
+            seen for this org (across all prior runs).
+
+        Called BEFORE the new run is added to the session, so "most
+        recent" here means the most recent *persisted* run — no need
+        for a since-based filter to exclude the current in-flight one.
+
+        On first-visit orgs both come back empty — the frontend
+        gracefully hides the trend overlay + treats everyone as
+        an "existing" actor rather than flooding the callout.
+        """
+        previous_run_stmt = (
+            select(ChangeAuditRun)
+            .where(ChangeAuditRun.organization_id == self.org_id)
+            .order_by(desc(ChangeAuditRun.snapshot_at))
+            .limit(1)
+        )
+        prev_row = (
+            await self.db.execute(previous_run_stmt)
+        ).scalar_one_or_none()
+
+        previous_by_day: Dict[str, int] = {}
+        if prev_row and prev_row.rollups:
+            raw_by_day = prev_row.rollups.get("by_day", {})
+            if isinstance(raw_by_day, dict):
+                previous_by_day = {
+                    str(k): int(v) for k, v in raw_by_day.items()
+                    if isinstance(v, (int, float))
+                }
+
+        # Gather actor names from every prior event, capped
+        # historically at the last 10 runs so this stays fast.
+        history_runs_stmt = (
+            select(ChangeAuditRun.id)
+            .where(ChangeAuditRun.organization_id == self.org_id)
+            .order_by(desc(ChangeAuditRun.snapshot_at))
+            .limit(10)
+        )
+        run_ids = [
+            row[0] for row in
+            (await self.db.execute(history_runs_stmt)).all()
+        ]
+        historical_actor_names: set = set()
+        if run_ids:
+            actor_stmt = (
+                select(ChangeAuditEvent.actor_name)
+                .where(
+                    ChangeAuditEvent.organization_id == self.org_id,
+                    ChangeAuditEvent.run_id.in_(run_ids),
+                )
+                .distinct()
+            )
+            for row in (await self.db.execute(actor_stmt)).all():
+                if row[0]:
+                    historical_actor_names.add(row[0])
+
+        return previous_by_day, historical_actor_names
 
     # ------------------------------------------------------------------
     # Support

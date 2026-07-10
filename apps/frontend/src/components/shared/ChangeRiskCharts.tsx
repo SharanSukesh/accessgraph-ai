@@ -179,6 +179,9 @@ interface DailyActivityBarsProps {
   byDay: Record<string, number>
   /** Optional per-day dominant-tier map, for coloring bars by risk. */
   tierByDay?: Record<string, keyof typeof TIER_COLORS>
+  /** Optional previous-run sparse day → count map. When provided,
+   *  drawn as a thin evergreen line overlay for trend comparison. */
+  previousByDay?: Record<string, number>
   /** How many days back to render. Defaults to 30. */
   days?: number
   /** SVG dimensions. */
@@ -200,6 +203,7 @@ interface DailyActivityBarsProps {
 export function DailyActivityBars({
   byDay,
   tierByDay,
+  previousByDay,
   days = 30,
   width = 640,
   height = 120,
@@ -209,17 +213,30 @@ export function DailyActivityBars({
   const timeline = useMemo(() => {
     const today = new Date()
     today.setUTCHours(0, 0, 0, 0)
-    const items: { date: string; count: number }[] = []
+    const items: { date: string; count: number; prevCount: number }[] = []
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(today)
       d.setUTCDate(today.getUTCDate() - i)
       const iso = d.toISOString().slice(0, 10)
-      items.push({ date: iso, count: byDay[iso] ?? 0 })
+      items.push({
+        date: iso,
+        count: byDay[iso] ?? 0,
+        prevCount: previousByDay?.[iso] ?? 0,
+      })
     }
     return items
-  }, [byDay, days])
+  }, [byDay, previousByDay, days])
 
-  const max = Math.max(1, ...timeline.map((t) => t.count))
+  // Normalise both series against the joint max so the overlay line
+  // and the bars share a vertical scale.
+  const hasPrevious = Boolean(
+    previousByDay && Object.keys(previousByDay).length > 0
+  )
+  const max = Math.max(
+    1,
+    ...timeline.map((t) => t.count),
+    ...(hasPrevious ? timeline.map((t) => t.prevCount) : [0])
+  )
   const barGap = 2
   const totalGap = barGap * (timeline.length - 1)
   const barWidth = (width - totalGap) / timeline.length
@@ -243,6 +260,32 @@ export function DailyActivityBars({
         strokeWidth={1}
         className="stroke-grove-border dark:stroke-grove-border-dk"
       />
+
+      {/* Previous-run trend line — drawn UNDER the bars so bars stay
+          the primary visual anchor. Point-per-day polyline; dashed
+          + semi-transparent so it reads as "context" not "primary". */}
+      {hasPrevious && (
+        <polyline
+          fill="none"
+          stroke={TIER_COLORS.low}
+          strokeWidth={1.5}
+          strokeDasharray="3 3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.55}
+          points={timeline
+            .map((t, i) => {
+              const x = i * (barWidth + barGap) + barWidth / 2
+              const y =
+                chartHeight -
+                (t.prevCount / max) * (chartHeight - 4)
+              return `${x.toFixed(1)},${y.toFixed(1)}`
+            })
+            .join(' ')}
+        >
+          <title>Previous run's activity for comparison</title>
+        </polyline>
+      )}
 
       {timeline.map((t, i) => {
         const barHeight = t.count === 0 ? 2 : (t.count / max) * (chartHeight - 4)
@@ -388,6 +431,151 @@ export function HorizontalBarChart({
         )
       })}
     </ul>
+  )
+}
+
+// ----------------------------------------------------------------------
+// ComponentActivityChart — component-type breakdown
+// ----------------------------------------------------------------------
+
+/** Human-readable label + Grove accent for each component-type key.
+ *  Order matters: primary CRM building blocks (Apex / Flow) first,
+ *  UI (LWC / Aura) middle, user-owned content (Report / Dashboard) last. */
+const COMPONENT_META: {
+  key: string
+  label: string
+  color: string
+}[] = [
+  { key: 'apex_class', label: 'Apex Classes', color: '#094230' }, // primary-700
+  { key: 'apex_trigger', label: 'Apex Triggers', color: '#146b4a' }, // primary-600
+  { key: 'flow', label: 'Flows', color: '#c26b47' }, // copper-500
+  { key: 'aura_bundle', label: 'Aura Bundles', color: '#d97706' }, // amber-600
+  { key: 'lwc_bundle', label: 'LWC Bundles', color: '#a2542f' }, // copper-600
+  { key: 'report', label: 'Reports', color: '#7d3f21' }, // copper-700
+  { key: 'dashboard', label: 'Dashboards', color: '#062e22' }, // primary-800
+]
+
+interface ComponentActivityChartProps {
+  /** Backend's `component_activity` rollup — see the ChangeRiskSummary type. */
+  activity: Record<
+    string,
+    {
+      count: number
+      top: {
+        id: string | null
+        name: string | null
+        last_modified: string | null
+        actor: string | null
+      }[]
+    }
+  >
+  /** Optional callback when a component type is clicked (for future
+   *  drill-down). Currently unused; UI reserves the interaction. */
+  onSelectType?: (type: string) => void
+}
+
+/**
+ * Renders a horizontal bar per component type (Apex / Flow / LWC / etc.)
+ * showing the total-modified count in the window. Below the bars,
+ * lists the top-N modified names for each type as small pills.
+ *
+ * Zero-activity types are collapsed to a muted "0" so users can still
+ * see "we track this, it just didn't move" — an important consulting
+ * signal when a client thinks changes are happening in a place they're
+ * not.
+ */
+export function ComponentActivityChart({
+  activity,
+  onSelectType,
+}: ComponentActivityChartProps) {
+  const rows = COMPONENT_META.map((meta) => {
+    const entry = activity[meta.key]
+    return {
+      ...meta,
+      count: entry?.count ?? 0,
+      top: entry?.top ?? [],
+    }
+  })
+  const max = Math.max(1, ...rows.map((r) => r.count))
+  const hasAny = rows.some((r) => r.count > 0)
+
+  if (!hasAny) {
+    return (
+      <p className="text-xs italic text-grove-ink/45 dark:text-grove-ink-dk/45">
+        No component modifications in the window — either the org's
+        quiet or the API user lacks Tooling API access.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {rows.map((row) => {
+        const dim = row.count === 0
+        const pct = (row.count / max) * 100
+        return (
+          <div key={row.key}>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <button
+                type="button"
+                onClick={() => onSelectType?.(row.key)}
+                disabled={dim || !onSelectType}
+                className={
+                  dim
+                    ? 'text-xs font-medium text-grove-ink/40 dark:text-grove-ink-dk/40 cursor-default'
+                    : 'text-xs font-medium text-grove-ink dark:text-grove-ink-dk text-left'
+                }
+              >
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-sm mr-1.5 align-middle"
+                  style={{ backgroundColor: row.color, opacity: dim ? 0.35 : 1 }}
+                  aria-hidden
+                />
+                {row.label}
+              </button>
+              <span
+                className={
+                  dim
+                    ? 'text-xs tabular-nums text-grove-ink/40 dark:text-grove-ink-dk/40'
+                    : 'text-xs tabular-nums text-grove-ink/85 dark:text-grove-ink-dk/85'
+                }
+              >
+                {row.count.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-grove-border/60 dark:bg-grove-border-dk/60 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-[width] duration-500 ease-out"
+                style={{
+                  width: `${pct}%`,
+                  backgroundColor: row.color,
+                  opacity: dim ? 0.35 : 0.9,
+                }}
+              />
+            </div>
+            {row.top.length > 0 && (
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {row.top.slice(0, 3).map((item) => (
+                  <li
+                    key={item.id ?? item.name ?? Math.random()}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono bg-grove-canvas dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk"
+                    title={
+                      item.actor
+                        ? `${item.name} — last modified by ${item.actor}`
+                        : (item.name ?? undefined)
+                    }
+                  >
+                    <span className="text-grove-ink/85 dark:text-grove-ink-dk/85 truncate max-w-[180px]">
+                      {item.name ?? '(unnamed)'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
