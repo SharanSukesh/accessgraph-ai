@@ -14,7 +14,7 @@
  * palette + typography + SVG conventions).
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
   Radar,
@@ -29,6 +29,9 @@ import {
   UserPlus,
   Layers,
   Boxes,
+  Settings2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -40,6 +43,7 @@ import {
   TierDonut,
   TierLegend,
   DailyActivityBars,
+  HourlyActivityBars,
   HorizontalBarChart,
   ComponentActivityChart,
   TIER_COLORS,
@@ -51,6 +55,7 @@ import {
   useRunChangeRisk,
   type BlastTier,
   type ChangeEvent,
+  type ChangeRiskRunOptions,
 } from '@/lib/api/hooks/useChangeRiskRadar'
 
 export default function ChangeRiskPage() {
@@ -62,6 +67,19 @@ export default function ChangeRiskPage() {
   const [section, setSection] = useState<string | undefined>(undefined)
   const [actor, setActor] = useState<string | undefined>(undefined)
 
+  // Pagination state — 30 events per page, offset advances by 30.
+  const PAGE_SIZE = 30
+  const [page, setPage] = useState(0)
+
+  // Business hours config — persisted per-org in localStorage so
+  // returning users see their preferred timeframe pre-filled. Any
+  // filter change resets pagination so the user doesn't land on an
+  // out-of-range page after narrowing the result set.
+  const [businessConfig, setBusinessConfig] = useBusinessHoursConfig(orgId)
+  useEffect(() => {
+    setPage(0)
+  }, [tier, section, actor])
+
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -71,7 +89,13 @@ export default function ChangeRiskPage() {
     data: eventPage,
     isLoading: eventsLoading,
     error: eventsError,
-  } = useChangeRiskEvents(orgId, { tier, section, actor, limit: 100 })
+  } = useChangeRiskEvents(orgId, {
+    tier,
+    section,
+    actor,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  })
   const runMutation = useRunChangeRisk(orgId)
 
   const hasFilters = Boolean(tier || section || actor)
@@ -120,23 +144,37 @@ export default function ChangeRiskPage() {
             : 'Timeline of Salesforce admin changes, scored by blast radius'
         }
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => runMutation.mutate()}
-            disabled={runMutation.isPending}
-          >
-            {runMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
-            )}
-            {runMutation.isPending
-              ? 'Analysing…'
-              : summary?.has_data
-              ? 'Re-run pull'
-              : 'Run pull'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <BusinessHoursConfigButton
+              config={businessConfig}
+              onSave={setBusinessConfig}
+              disabled={runMutation.isPending}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                runMutation.mutate({
+                  businessHoursStart: businessConfig.start,
+                  businessHoursEnd: businessConfig.end,
+                  businessTimezone: businessConfig.timezone,
+                  businessWeekdays: businessConfig.weekdays,
+                })
+              }
+              disabled={runMutation.isPending}
+            >
+              {runMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {runMutation.isPending
+                ? 'Analysing…'
+                : summary?.has_data
+                ? 'Re-run pull'
+                : 'Run pull'}
+            </Button>
+          </div>
         }
       />
 
@@ -276,6 +314,41 @@ export default function ChangeRiskPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Hourly distribution — 24 bars showing when during the day
+              changes land, with business-hours region shaded so users
+              can eyeball whether their config catches the deploy
+              window they intended. */}
+          {summary.rollups?.by_hour && (
+            <Card variant="bordered">
+              <CardContent className="py-5">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="p-2 rounded-lg bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800 flex-shrink-0">
+                    <Clock className="h-5 w-5 text-primary-700 dark:text-primary-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                      When during the day
+                    </p>
+                    <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-0.5">
+                      Event count per hour of day in{' '}
+                      <strong>{summary.rollups.business_hours_config?.timezone ?? 'UTC'}</strong>.
+                      Shaded region ({formatHour(summary.rollups.business_hours_config?.start ?? 9)}
+                      {' – '}
+                      {formatHour(summary.rollups.business_hours_config?.end ?? 18)})
+                      is your business window; bars outside it count toward off-hours.
+                    </p>
+                  </div>
+                </div>
+                <HourlyActivityBars
+                  byHour={summary.rollups.by_hour}
+                  businessStart={summary.rollups.business_hours_config?.start ?? 9}
+                  businessEnd={summary.rollups.business_hours_config?.end ?? 18}
+                  timezoneLabel={summary.rollups.business_hours_config?.timezone ?? 'UTC'}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Suspicious-timing callout — only surfaces when off-hours
               activity is non-trivial. */}
@@ -478,12 +551,12 @@ export default function ChangeRiskPage() {
                       <TimelineEvent key={e.id} event={e} />
                     ))}
                   </ul>
-                  {eventPage.total > eventPage.events.length && (
-                    <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-3">
-                      Showing {eventPage.events.length} of{' '}
-                      {eventPage.total.toLocaleString()} matching events
-                    </p>
-                  )}
+                  <PaginationBar
+                    total={eventPage.total}
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    onChange={setPage}
+                  />
                 </div>
               ) : (
                 <EmptyState
@@ -1279,4 +1352,392 @@ function isOffHours(iso: string): boolean {
   if (d.getUTCDay() === 0 || d.getUTCDay() === 6) return true
   const hour = d.getUTCHours()
   return hour < 9 || hour >= 18
+}
+
+// ============================================================================
+// Business hours config — per-org localStorage + popover UI
+// ============================================================================
+
+/** Shape of the persisted config. Keys match backend params, in the
+ *  frontend's cased convention. */
+interface BusinessHoursConfig {
+  start: number       // 0-24
+  end: number         // 0-24
+  timezone: string    // IANA name
+  weekdays: number[]  // Python weekday indices (Mon=0, Sun=6)
+}
+
+const DEFAULT_BUSINESS_HOURS: BusinessHoursConfig = {
+  start: 9,
+  end: 18,
+  timezone: 'UTC',
+  weekdays: [0, 1, 2, 3, 4],
+}
+
+// Curated timezone dropdown. Covers most consulting engagements
+// without offering the full IANA list (~500 entries) which would
+// overwhelm the popover. "Detect" resolves the browser's IANA name.
+const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'UTC', label: 'UTC' },
+  { value: 'America/New_York', label: 'Eastern (New York)' },
+  { value: 'America/Chicago', label: 'Central (Chicago)' },
+  { value: 'America/Denver', label: 'Mountain (Denver)' },
+  { value: 'America/Los_Angeles', label: 'Pacific (Los Angeles)' },
+  { value: 'America/Toronto', label: 'Eastern (Toronto)' },
+  { value: 'America/Sao_Paulo', label: 'Brasilia (São Paulo)' },
+  { value: 'Europe/London', label: 'London (GMT/BST)' },
+  { value: 'Europe/Paris', label: 'Central Europe (Paris)' },
+  { value: 'Europe/Berlin', label: 'Central Europe (Berlin)' },
+  { value: 'Asia/Dubai', label: 'Gulf (Dubai)' },
+  { value: 'Asia/Kolkata', label: 'India (Kolkata)' },
+  { value: 'Asia/Singapore', label: 'Singapore' },
+  { value: 'Asia/Tokyo', label: 'Japan (Tokyo)' },
+  { value: 'Australia/Sydney', label: 'Sydney' },
+]
+
+/**
+ * Persisted-per-org business-hours config. On first read we fall back
+ * to the browser's detected timezone so the default matches "what the
+ * user is probably looking at", not literal UTC.
+ */
+function useBusinessHoursConfig(
+  orgId: string,
+): [BusinessHoursConfig, (next: BusinessHoursConfig) => void] {
+  const key = `newton:change-risk:business-hours:${orgId}`
+  const [state, setState] = useState<BusinessHoursConfig>(() => {
+    if (typeof window === 'undefined') return DEFAULT_BUSINESS_HOURS
+    try {
+      const raw = window.localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<BusinessHoursConfig>
+        return {
+          start: clampHour(parsed.start ?? DEFAULT_BUSINESS_HOURS.start),
+          end: clampHour(parsed.end ?? DEFAULT_BUSINESS_HOURS.end),
+          timezone:
+            typeof parsed.timezone === 'string'
+              ? parsed.timezone
+              : detectTimezone(),
+          weekdays:
+            Array.isArray(parsed.weekdays) && parsed.weekdays.length > 0
+              ? parsed.weekdays.filter(
+                  (n) => typeof n === 'number' && n >= 0 && n <= 6,
+                )
+              : DEFAULT_BUSINESS_HOURS.weekdays,
+        }
+      }
+    } catch {
+      // Malformed JSON — fall through to defaults.
+    }
+    return { ...DEFAULT_BUSINESS_HOURS, timezone: detectTimezone() }
+  })
+  const persistedRef = useRef(state)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (persistedRef.current === state) return
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state))
+      persistedRef.current = state
+    } catch {
+      // Storage full / private mode — ignore silently, config is
+      // still valid for this session.
+    }
+  }, [key, state])
+  return [state, setState]
+}
+
+function clampHour(n: number): number {
+  return Math.max(0, Math.min(24, Math.round(n)))
+}
+
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+/** Formats a 0-24 hour as "9am" / "6pm" / "midnight". */
+function formatHour(h: number): string {
+  if (h === 0 || h === 24) return 'midnight'
+  if (h === 12) return 'noon'
+  if (h < 12) return `${h}am`
+  return `${h - 12}pm`
+}
+
+const WEEKDAY_LABELS: { value: number; label: string }[] = [
+  { value: 0, label: 'Mon' },
+  { value: 1, label: 'Tue' },
+  { value: 2, label: 'Wed' },
+  { value: 3, label: 'Thu' },
+  { value: 4, label: 'Fri' },
+  { value: 5, label: 'Sat' },
+  { value: 6, label: 'Sun' },
+]
+
+/**
+ * Popover button that lets the user set business hours + timezone +
+ * business days. Config is applied on the NEXT "Run pull" click; a
+ * hint at the bottom of the popover reminds the user of that.
+ */
+function BusinessHoursConfigButton({
+  config,
+  onSave,
+  disabled,
+}: {
+  config: BusinessHoursConfig
+  onSave: (next: BusinessHoursConfig) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(config)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+
+  // Reset the draft whenever the popover opens so partial edits
+  // don't stick around after closing without a save.
+  useEffect(() => {
+    if (open) setDraft(config)
+  }, [open, config])
+
+  // Click-outside to close.
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e: MouseEvent) => {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  return (
+    <div className="relative" ref={popoverRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-grove-ink/70 dark:text-grove-ink-dk/70 hover:bg-primary-50/40 dark:hover:bg-primary-900/15 border border-grove-border dark:border-grove-border-dk disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Configure business hours + timezone used to classify off-hours activity"
+      >
+        <Settings2 className="h-3.5 w-3.5" />
+        <span>
+          {formatHour(config.start)}–{formatHour(config.end)}{' '}
+          <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">
+            {config.timezone.replace('_', ' ')}
+          </span>
+        </span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-2 z-30 w-80 rounded-lg border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-hero p-4">
+          <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+            Business hours
+          </p>
+          <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 mt-0.5">
+            Sets the window used to classify off-hours activity on the
+            next pull.
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {/* Start / End hour */}
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+                  Start
+                </span>
+                <select
+                  value={draft.start}
+                  onChange={(e) =>
+                    setDraft({ ...draft, start: Number(e.target.value) })
+                  }
+                  className="mt-1 w-full text-xs rounded border border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-canvas-dk px-2 py-1 text-grove-ink dark:text-grove-ink-dk"
+                >
+                  {Array.from({ length: 25 }, (_, h) => (
+                    <option key={h} value={h}>
+                      {formatHour(h)} ({String(h).padStart(2, '0')}:00)
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+                  End
+                </span>
+                <select
+                  value={draft.end}
+                  onChange={(e) =>
+                    setDraft({ ...draft, end: Number(e.target.value) })
+                  }
+                  className="mt-1 w-full text-xs rounded border border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-canvas-dk px-2 py-1 text-grove-ink dark:text-grove-ink-dk"
+                >
+                  {Array.from({ length: 25 }, (_, h) => (
+                    <option key={h} value={h}>
+                      {formatHour(h)} ({String(h).padStart(2, '0')}:00)
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {/* Timezone */}
+            <label className="block">
+              <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+                Timezone
+              </span>
+              <select
+                value={draft.timezone}
+                onChange={(e) =>
+                  setDraft({ ...draft, timezone: e.target.value })
+                }
+                className="mt-1 w-full text-xs rounded border border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-canvas-dk px-2 py-1 text-grove-ink dark:text-grove-ink-dk"
+              >
+                {/* If the browser's detected TZ isn't in our curated
+                    list, still offer it at the top. */}
+                {!TIMEZONE_OPTIONS.some((o) => o.value === detectTimezone()) && (
+                  <option value={detectTimezone()}>
+                    {detectTimezone()} (detected)
+                  </option>
+                )}
+                {TIMEZONE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Business days */}
+            <div>
+              <span className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+                Business days
+              </span>
+              <div className="mt-1 flex gap-1 flex-wrap">
+                {WEEKDAY_LABELS.map((wd) => {
+                  const active = draft.weekdays.includes(wd.value)
+                  return (
+                    <button
+                      key={wd.value}
+                      type="button"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          weekdays: active
+                            ? draft.weekdays.filter((v) => v !== wd.value)
+                            : [...draft.weekdays, wd.value].sort(),
+                        })
+                      }
+                      className={
+                        active
+                          ? 'px-2 py-1 rounded text-[11px] font-medium bg-primary-50 text-primary-700 ring-1 ring-primary-200 dark:bg-primary-900/25 dark:text-primary-300 dark:ring-primary-800'
+                          : 'px-2 py-1 rounded text-[11px] font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 ring-1 ring-grove-border dark:ring-grove-border-dk hover:text-grove-ink dark:hover:text-grove-ink-dk'
+                      }
+                    >
+                      {wd.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55 mt-4 leading-relaxed">
+            Saves per-org in this browser. Applies to the next Run pull.
+          </p>
+
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-xs px-2.5 py-1 rounded text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Validate: ensure end > start (else fall back to +1)
+                const end = draft.end > draft.start ? draft.end : draft.start + 1
+                const weekdays =
+                  draft.weekdays.length > 0
+                    ? draft.weekdays
+                    : DEFAULT_BUSINESS_HOURS.weekdays
+                onSave({ ...draft, end: clampHour(end), weekdays })
+                setOpen(false)
+              }}
+              className="text-xs px-2.5 py-1 rounded bg-primary-700 text-grove-canvas hover:bg-primary-800 dark:bg-primary-600 dark:hover:bg-primary-500"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// PaginationBar — 30-events-per-page controls
+// ============================================================================
+
+function PaginationBar({
+  total,
+  page,
+  pageSize,
+  onChange,
+}: {
+  total: number
+  page: number
+  pageSize: number
+  onChange: (next: number) => void
+}) {
+  if (total <= pageSize) {
+    // Single-page result — omit controls but still show a small
+    // "N events" caption so the counter is always visible.
+    return (
+      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-3">
+        {total.toLocaleString()} matching event{total === 1 ? '' : 's'}
+      </p>
+    )
+  }
+  const totalPages = Math.ceil(total / pageSize)
+  const currentPage = page + 1
+  const firstOnPage = page * pageSize + 1
+  const lastOnPage = Math.min(total, (page + 1) * pageSize)
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 border-t border-grove-border dark:border-grove-border-dk">
+      <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+        Showing{' '}
+        <span className="tabular-nums text-grove-ink dark:text-grove-ink-dk">
+          {firstOnPage.toLocaleString()}–{lastOnPage.toLocaleString()}
+        </span>{' '}
+        of {total.toLocaleString()}
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, page - 1))}
+          disabled={page === 0}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Prev
+        </button>
+        <span className="text-xs tabular-nums text-grove-ink/60 dark:text-grove-ink-dk/60">
+          Page {currentPage} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
+          disabled={currentPage >= totalPages}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  )
 }

@@ -14,7 +14,7 @@
  */
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 // ----------------------------------------------------------------------
 // Palette — reads Grove semantic tones. The four blast tiers each get
@@ -242,7 +242,20 @@ export function DailyActivityBars({
   const barWidth = (width - totalGap) / timeline.length
   const chartHeight = height - 24 // reserve room for x-axis labels
 
+  // Themed tooltip state — replaces the browser's default white
+  // `<title>` popup so hover feedback stays in the Grove theme.
+  // `xPct` is the tooltip's horizontal position as a fraction of the
+  // rendered chart width; because we use a viewBox + preserveAspectRatio
+  // the SVG scales but percentages are stable.
+  const [tip, setTip] = useState<{
+    date: string
+    count: number
+    prevCount: number
+    xPct: number
+  } | null>(null)
+
   return (
+    <div className="relative">
     <svg
       width="100%"
       viewBox={`0 0 ${width} ${height}`}
@@ -300,11 +313,30 @@ export function DailyActivityBars({
             : TIER_COLORS.low
         const opacity = t.count === 0 ? 0.6 : 0.9
 
+        // Hover hit-target — spans the full column so users don't
+        // have to precisely hit a thin bar. Transparent fill so it's
+        // invisible.
+        const hitTargetX = x
+        const hitTargetWidth = barWidth + barGap
+        // Tooltip x anchor as a % of the chart width.
+        const xPct = ((x + barWidth / 2) / width) * 100
+
         return (
           <g
             key={t.date}
-            onMouseEnter={() => onHover?.({ date: t.date, count: t.count })}
-            onMouseLeave={() => onHover?.(null)}
+            onMouseEnter={() => {
+              onHover?.({ date: t.date, count: t.count })
+              setTip({
+                date: t.date,
+                count: t.count,
+                prevCount: t.prevCount,
+                xPct,
+              })
+            }}
+            onMouseLeave={() => {
+              onHover?.(null)
+              setTip(null)
+            }}
           >
             {t.count === 0 && (
               // Zero-day placeholder — a thin cream track so users can
@@ -325,17 +357,18 @@ export function DailyActivityBars({
                 height={barHeight}
                 rx={1.5}
                 style={{ fill, opacity }}
-              >
-                <title>
-                  {new Date(t.date).toLocaleDateString(undefined, {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                  : {t.count} events
-                </title>
-              </rect>
+              />
             )}
+            {/* Invisible column-wide hit target for easier hover.
+                Sits on top so the mouse events fire even when the
+                bar itself is zero-height. */}
+            <rect
+              x={hitTargetX}
+              y={0}
+              width={hitTargetWidth}
+              height={chartHeight}
+              fill="transparent"
+            />
           </g>
         )
       })}
@@ -373,6 +406,238 @@ export function DailyActivityBars({
         )
       })}
     </svg>
+
+    {/* Grove-themed tooltip — sits absolutely inside the wrapper div,
+        anchored by percentage so it tracks the bar even across
+        viewport resizes. Renders both current and previous-run counts
+        when a comparison overlay is active. */}
+    {tip && (
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift px-2.5 py-1.5 text-xs z-20"
+        style={{
+          // Sit above the chart, shifted up so the arrow doesn't
+          // touch the tallest bar. Percentage x anchor keeps position
+          // accurate under responsive scaling.
+          left: `${tip.xPct}%`,
+          top: 0,
+          marginTop: -8,
+        }}
+      >
+        <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+          {new Date(tip.date).toLocaleDateString(undefined, {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </div>
+        <div className="mt-0.5 flex items-baseline gap-1.5">
+          <span className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+            {tip.count.toLocaleString()}
+          </span>
+          <span className="text-[11px] text-grove-ink/65 dark:text-grove-ink-dk/65">
+            event{tip.count === 1 ? '' : 's'}
+          </span>
+        </div>
+        {hasPrevious && (
+          <div className="mt-0.5 text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">
+            Prev run: <span className="tabular-nums">{tip.prevCount}</span>
+          </div>
+        )}
+      </div>
+    )}
+    </div>
+  )
+}
+
+// ----------------------------------------------------------------------
+// HourlyActivityBars — 24-bar chart showing hour-of-day distribution
+// ----------------------------------------------------------------------
+
+interface HourlyActivityBarsProps {
+  /** Sparse hour → count map (backend keys as strings for JSON). */
+  byHour: Record<string, number>
+  /** Business hours start (0-24). Region between start and end is
+   *  shaded as "business hours". */
+  businessStart: number
+  /** Business hours end (0-24). Exclusive. */
+  businessEnd: number
+  /** Timezone label shown in the tooltip and axis caption. */
+  timezoneLabel?: string
+  width?: number
+  height?: number
+}
+
+/**
+ * Renders 24 bars, one per hour of day, showing when changes are
+ * landing in the user's business timezone. Shades the business-hours
+ * region so users can eyeball whether their config actually catches
+ * the deploy window they care about.
+ *
+ * Tooltip is themed to match DailyActivityBars.
+ */
+export function HourlyActivityBars({
+  byHour,
+  businessStart,
+  businessEnd,
+  timezoneLabel,
+  width = 640,
+  height = 110,
+}: HourlyActivityBarsProps) {
+  const hours = useMemo(
+    () =>
+      Array.from({ length: 24 }, (_, h) => ({
+        hour: h,
+        count: byHour[String(h)] ?? 0,
+      })),
+    [byHour],
+  )
+  const max = Math.max(1, ...hours.map((h) => h.count))
+  const barGap = 3
+  const totalGap = barGap * (hours.length - 1)
+  const barWidth = (width - totalGap) / hours.length
+  const chartHeight = height - 22
+
+  // Business-hours shading — from start hour to end hour.
+  const startX =
+    businessStart >= 0 && businessStart <= 24
+      ? businessStart * (barWidth + barGap) - barGap / 2
+      : 0
+  const endX =
+    businessEnd >= 0 && businessEnd <= 24
+      ? businessEnd * (barWidth + barGap) - barGap / 2
+      : width
+  const shadeWidth = Math.max(0, endX - startX)
+
+  const [tip, setTip] = useState<{ hour: number; count: number; xPct: number } | null>(
+    null,
+  )
+
+  return (
+    <div className="relative">
+      <svg
+        width="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Hourly activity distribution"
+        preserveAspectRatio="xMidYMid meet"
+        className="block"
+      >
+        {/* Business-hours shading region — soft evergreen band so
+            the eye can distinguish "in-window" from "off-hours" at
+            a glance. Renders under the bars. */}
+        {shadeWidth > 0 && (
+          <rect
+            x={startX}
+            y={0}
+            width={shadeWidth}
+            height={chartHeight}
+            className="fill-primary-50 dark:fill-primary-900/25"
+            opacity={0.7}
+          />
+        )}
+        {/* Zero baseline */}
+        <line
+          x1={0}
+          y1={chartHeight}
+          x2={width}
+          y2={chartHeight}
+          strokeWidth={1}
+          className="stroke-grove-border dark:stroke-grove-border-dk"
+        />
+        {hours.map((h) => {
+          const barHeight = h.count === 0 ? 2 : (h.count / max) * (chartHeight - 4)
+          const x = h.hour * (barWidth + barGap)
+          const y = chartHeight - barHeight
+          const inBusiness = h.hour >= businessStart && h.hour < businessEnd
+          // In-window bars stay evergreen; off-hours bars use the
+          // copper accent so the tone reinforces the shading region.
+          const fill = h.count === 0
+            ? 'transparent'
+            : inBusiness
+            ? TIER_COLORS.low
+            : TIER_COLORS.high
+          const xPct = ((x + barWidth / 2) / width) * 100
+          return (
+            <g
+              key={h.hour}
+              onMouseEnter={() =>
+                setTip({ hour: h.hour, count: h.count, xPct })
+              }
+              onMouseLeave={() => setTip(null)}
+            >
+              {h.count === 0 && (
+                <rect
+                  x={x}
+                  y={chartHeight - 2}
+                  width={barWidth}
+                  height={2}
+                  className="fill-grove-border dark:fill-grove-border-dk"
+                />
+              )}
+              {h.count > 0 && (
+                <rect
+                  x={x}
+                  y={y}
+                  width={barWidth}
+                  height={barHeight}
+                  rx={1.5}
+                  style={{ fill, opacity: 0.9 }}
+                />
+              )}
+              {/* Column-wide hover hit target */}
+              <rect
+                x={x}
+                y={0}
+                width={barWidth + barGap}
+                height={chartHeight}
+                fill="transparent"
+              />
+            </g>
+          )
+        })}
+        {/* Sparse x-axis labels — 0, 6, 12, 18, 23 */}
+        {[0, 6, 12, 18, 23].map((h) => {
+          const x = h * (barWidth + barGap) + barWidth / 2
+          return (
+            <text
+              key={`hlabel-${h}`}
+              x={x}
+              y={height - 4}
+              textAnchor="middle"
+              className="fill-grove-ink/55 dark:fill-grove-ink-dk/55"
+              style={{
+                fontSize: 10,
+                fontFamily: 'ui-monospace, monospace',
+                letterSpacing: '0.06em',
+              }}
+            >
+              {String(h).padStart(2, '0')}:00
+            </text>
+          )
+        })}
+      </svg>
+      {tip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift px-2.5 py-1.5 text-xs z-20"
+          style={{ left: `${tip.xPct}%`, top: 0, marginTop: -8 }}
+        >
+          <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-grove-ink/55 dark:text-grove-ink-dk/55">
+            {String(tip.hour).padStart(2, '0')}:00 – {String((tip.hour + 1) % 24).padStart(2, '0')}:00
+            {timezoneLabel && ` (${timezoneLabel})`}
+          </div>
+          <div className="mt-0.5 flex items-baseline gap-1.5">
+            <span className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+              {tip.count.toLocaleString()}
+            </span>
+            <span className="text-[11px] text-grove-ink/65 dark:text-grove-ink-dk/65">
+              event{tip.count === 1 ? '' : 's'}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 

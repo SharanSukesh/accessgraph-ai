@@ -109,6 +109,18 @@ export interface ChangeRiskSummary {
         }[]
       }
     >
+
+    /** Event count per hour of day (0-23) in the run's business
+     *  timezone. Drives the hourly-distribution chart. */
+    by_hour?: Record<string, number>
+
+    /** Business-hours config the run used to classify off-hours. */
+    business_hours_config?: {
+      start: number
+      end: number
+      timezone: string
+      weekdays: number[]
+    }
   }
   has_data: boolean
   duration_ms: number | null
@@ -213,15 +225,50 @@ export function useChangeRiskHistory(orgId: string) {
 // ============================================================================
 
 /**
- * Kick off a new SetupAuditTrail pull. Optional `sinceDays` picks how
- * far back to go — defaults to 30 on the backend if omitted.
+ * Options for kicking off a new SetupAuditTrail pull. All fields
+ * optional — backend applies sensible defaults for anything omitted.
+ */
+export interface ChangeRiskRunOptions {
+  sinceDays?: number
+  businessHoursStart?: number
+  businessHoursEnd?: number
+  businessTimezone?: string
+  /** Python weekday indices — Mon=0, Sun=6. */
+  businessWeekdays?: number[]
+}
+
+/**
+ * Kick off a new SetupAuditTrail pull with an optional business-hours
+ * configuration. Backend uses the config to classify off-hours events
+ * and persists it on the run so the summary can show which config
+ * produced the numbers.
  */
 export function useRunChangeRisk(orgId: string) {
   const queryClient = useQueryClient()
-  return useMutation<ChangeRiskRunResponse, unknown, number | void>({
-    mutationFn: (sinceDays) => {
-      const qs =
-        typeof sinceDays === 'number' ? `?since_days=${sinceDays}` : ''
+  return useMutation<ChangeRiskRunResponse, unknown, ChangeRiskRunOptions | void>({
+    mutationFn: (opts) => {
+      const params = new URLSearchParams()
+      if (opts) {
+        if (typeof opts.sinceDays === 'number') {
+          params.set('since_days', String(opts.sinceDays))
+        }
+        if (typeof opts.businessHoursStart === 'number') {
+          params.set('business_hours_start', String(opts.businessHoursStart))
+        }
+        if (typeof opts.businessHoursEnd === 'number') {
+          params.set('business_hours_end', String(opts.businessHoursEnd))
+        }
+        if (opts.businessTimezone) {
+          params.set('business_timezone', opts.businessTimezone)
+        }
+        if (opts.businessWeekdays && opts.businessWeekdays.length > 0) {
+          params.set(
+            'business_weekdays',
+            opts.businessWeekdays.slice().sort().join(','),
+          )
+        }
+      }
+      const qs = params.toString() ? `?${params.toString()}` : ''
       return apiClient.post(`${endpoints.changeRiskRun(orgId)}${qs}`)
     },
     onSuccess: () => {

@@ -45,6 +45,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -178,11 +179,37 @@ class ChangeRiskRadarService:
         *,
         since_days: int = DEFAULT_SINCE_DAYS,
         max_events: int = DEFAULT_MAX_EVENTS,
+        business_hours_start: int = 9,
+        business_hours_end: int = 18,
+        business_timezone: str = "UTC",
+        business_weekdays: Optional[List[int]] = None,
     ) -> None:
         self.db = db
         self.org_id = org_id
         self.since_days = since_days
         self.max_events = min(max_events, MAX_EVENTS_PER_RUN)
+        # Business-hours window used to classify off-hours activity.
+        # Bounds clamped to [0, 24] so client-side glitches can't
+        # corrupt persisted stats.
+        self.business_hours_start = max(0, min(24, business_hours_start))
+        self.business_hours_end = max(0, min(24, business_hours_end))
+        # Default working days: Mon-Fri (0-4) using Python's weekday()
+        # semantics. Empty list falls back to weekdays.
+        self.business_weekdays = (
+            business_weekdays if business_weekdays else [0, 1, 2, 3, 4]
+        )
+        # Fall back to UTC if a bogus TZ string comes through — never
+        # error out on a config issue that shouldn't sink the run.
+        try:
+            self._tz = ZoneInfo(business_timezone)
+            self.business_timezone = business_timezone
+        except ZoneInfoNotFoundError:
+            self._tz = ZoneInfo("UTC")
+            self.business_timezone = "UTC"
+            logger.warning(
+                "change-risk: invalid timezone %r, falling back to UTC",
+                business_timezone,
+            )
 
     # ------------------------------------------------------------------
     # Public entrypoint
@@ -280,22 +307,33 @@ class ChangeRiskRadarService:
             e.created_at_sf.date().isoformat() for e in scored
         )
 
-        # Off-hours detection — anything outside a conservative 9-to-6
-        # UTC weekday window. Frontend flags each event; here we count
-        # totals for the summary callout.
+        # Off-hours detection — evaluated in the user's business
+        # timezone, not UTC. A "3am UTC" event may actually be 10pm
+        # Eastern (off-hours) or 12noon Tokyo (business hours), and the
+        # config makes both interpretations first-class. Weekend
+        # classification also uses the local weekday.
+        def _local_weekday(ts: datetime) -> int:
+            return ts.astimezone(self._tz).weekday()
+
+        def _local_hour(ts: datetime) -> int:
+            return ts.astimezone(self._tz).hour
+
         def _is_off_hours(ts: datetime) -> bool:
-            # Weekend (Sat=5, Sun=6) counts regardless of time.
-            if ts.weekday() >= 5:
+            # Non-business day (typically weekend) counts regardless of time.
+            if _local_weekday(ts) not in self.business_weekdays:
                 return True
-            # Weekday: outside 09:00-18:00 counts.
-            hour = ts.hour
-            return hour < 9 or hour >= 18
+            # Business day: check hour window.
+            hour = _local_hour(ts)
+            return hour < self.business_hours_start or hour >= self.business_hours_end
 
         off_hours_count = sum(
             1 for e in scored if _is_off_hours(e.created_at_sf)
         )
+        # "Weekend" is Sat/Sun in the user's local timezone by default.
+        # Consistent with the off-hours definition above so the two
+        # numbers reconcile: weekend_count <= off_hours_count.
         weekend_count = sum(
-            1 for e in scored if e.created_at_sf.weekday() >= 5
+            1 for e in scored if _local_weekday(e.created_at_sf) >= 5
         )
 
         # Per-actor detailed rollup — event count, avg blast, max
@@ -375,12 +413,32 @@ class ChangeRiskRadarService:
             )
             component_activity = {}
 
+        # Hourly distribution in the LOCAL timezone — powers the
+        # "when during the day" chart. 24 buckets so the frontend can
+        # simply iterate 0..23 and pluck. Missing keys treated as 0
+        # client-side.
+        by_hour: Dict[str, int] = {str(h): 0 for h in range(24)}
+        for e in scored:
+            by_hour[str(_local_hour(e.created_at_sf))] += 1
+
+        # Persist the effective business-hours config on the run so
+        # the frontend can render "Off-hours = outside 9am-6pm Eastern"
+        # rather than a numeric-only readout. Also lets a returning
+        # user see which config produced a given historical run.
+        business_hours_config = {
+            "start": self.business_hours_start,
+            "end": self.business_hours_end,
+            "timezone": self.business_timezone,
+            "weekdays": self.business_weekdays,
+        }
+
         rollups = {
             "by_section": dict(section_counter.most_common(5)),
             "by_actor": dict(actor_counter.most_common(5)),
             "by_tier": tier_counts,
             "by_tier_pct": by_tier_pct,
             "by_day": dict(by_day),
+            "by_hour": by_hour,
             "off_hours_count": off_hours_count,
             "weekend_count": weekend_count,
             "top_actors_detailed": top_actors_detailed,
@@ -389,6 +447,7 @@ class ChangeRiskRadarService:
             "new_actors": new_actors,
             "bursts": bursts,
             "component_activity": component_activity,
+            "business_hours_config": business_hours_config,
         }
 
         high_blast = sum(1 for e in scored if e.blast_radius >= HIGH_BLAST_THRESHOLD)

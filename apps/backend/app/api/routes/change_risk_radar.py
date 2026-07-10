@@ -135,6 +135,29 @@ async def run_change_risk(
                     "Clamped to [1, 180] since SF caps the audit trail "
                     "retention at 180 days on most editions.",
     ),
+    business_hours_start: int = Query(
+        9, ge=0, le=24,
+        description="Hour of day (in the business timezone) that "
+                    "starts the business-hours window. Off-hours = "
+                    "everything before this hour.",
+    ),
+    business_hours_end: int = Query(
+        18, ge=0, le=24,
+        description="Hour of day (in the business timezone) that "
+                    "ends the business-hours window. Off-hours = "
+                    "everything at/after this hour.",
+    ),
+    business_timezone: str = Query(
+        "UTC",
+        description="IANA timezone name for the business hours (e.g. "
+                    "'America/New_York', 'Europe/London'). Unknown "
+                    "TZs silently fall back to UTC.",
+    ),
+    business_weekdays: str = Query(
+        "0,1,2,3,4",
+        description="Comma-separated Python weekday indices "
+                    "(Mon=0, Sun=6) that count as business days.",
+    ),
     current_org_id: str = Depends(get_current_org),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
@@ -145,7 +168,30 @@ async def run_change_risk(
     the async background pattern the sync-job uses.
     """
     _enforce_same_org(org_id, current_org_id)
-    service = ChangeRiskRadarService(db, org_id, since_days=since_days)
+
+    # Parse the weekday list defensively — any junk falls back to
+    # weekdays. Bounded to 0-6 so a mischievous client can't confuse
+    # the weekday() checks downstream.
+    try:
+        weekdays = sorted({
+            int(x)
+            for x in business_weekdays.split(",")
+            if x.strip().isdigit() and 0 <= int(x) <= 6
+        })
+        if not weekdays:
+            weekdays = [0, 1, 2, 3, 4]
+    except (ValueError, AttributeError):
+        weekdays = [0, 1, 2, 3, 4]
+
+    service = ChangeRiskRadarService(
+        db,
+        org_id,
+        since_days=since_days,
+        business_hours_start=business_hours_start,
+        business_hours_end=business_hours_end,
+        business_timezone=business_timezone,
+        business_weekdays=weekdays,
+    )
     try:
         run = await service.run(actor_email=actor_email)
     except Exception as e:
