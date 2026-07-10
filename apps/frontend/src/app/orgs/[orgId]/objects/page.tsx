@@ -5,7 +5,7 @@
  * Browse Salesforce objects and their access patterns
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Database, Search, Filter, Shield, AlertTriangle, Sparkles, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
@@ -20,6 +20,7 @@ import {
   useDataQualityLatest,
   useDataQualityObjects,
   useRunDataQuality,
+  type DataQualityScope,
   type ObjectScore,
 } from '@/lib/api/hooks/useDataQuality'
 
@@ -41,6 +42,16 @@ export default function ObjectsPage() {
   const { data: dqSummary } = useDataQualityLatest(orgId)
   const { data: dqObjects } = useDataQualityObjects(orgId)
   const runDq = useRunDataQuality(orgId)
+
+  // Scope the user picked in the toggle. Defaults to whatever the
+  // last run used so re-hitting the button repeats the same scope.
+  // Falls back to 'business' on first visit / no prior runs.
+  const [scope, setScope] = useState<DataQualityScope>('business')
+  useEffect(() => {
+    if (dqSummary?.coverage?.scope) {
+      setScope(dqSummary.coverage.scope)
+    }
+  }, [dqSummary?.coverage?.scope])
 
   // Index scores by object apiName so the objects table can pick each
   // row's score in O(1) inside the render loop.
@@ -81,28 +92,37 @@ export default function ObjectsPage() {
         title="Salesforce Objects"
         subtitle="Browse objects and analyze access patterns"
         actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => runDq.mutate()}
-            disabled={runDq.isPending}
-            aria-label={
-              dqSummary?.has_data
-                ? 'Re-run data quality analysis'
-                : 'Analyse data quality'
-            }
-          >
-            {runDq.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4 mr-2" />
-            )}
-            {runDq.isPending
-              ? 'Analysing…'
-              : dqSummary?.has_data
-              ? 'Re-analyse quality'
-              : 'Analyse quality'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <ScopeToggle
+              value={scope}
+              onChange={setScope}
+              disabled={runDq.isPending}
+              businessCount={dqSummary?.coverage?.total_sobjects}
+              allCount={dqSummary?.coverage?.total_sobjects_raw}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => runDq.mutate(scope)}
+              disabled={runDq.isPending}
+              aria-label={
+                dqSummary?.has_data
+                  ? 'Re-run data quality analysis'
+                  : 'Analyse data quality'
+              }
+            >
+              {runDq.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {runDq.isPending
+                ? 'Analysing…'
+                : dqSummary?.has_data
+                ? 'Re-analyse quality'
+                : 'Analyse quality'}
+            </Button>
+          </div>
         }
       />
 
@@ -578,11 +598,29 @@ function DataQualityDiagnostics({ summary, scoredCount, emptyCount }: Diagnostic
           </div>
           <div className="flex-1 min-w-0 space-y-4">
             <div>
-              <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
-                {isCritical
-                  ? 'No objects scored on the last run'
-                  : 'Scope of the last analysis'}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                  {isCritical
+                    ? 'No objects scored on the last run'
+                    : 'Scope of the last analysis'}
+                </p>
+                {cov.scope && (
+                  <span
+                    className={
+                      cov.scope === 'all'
+                        ? 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-copper-100 text-copper-700 dark:bg-copper-900/25 dark:text-copper-400'
+                        : 'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300'
+                    }
+                    title={
+                      cov.scope === 'all'
+                        ? 'Ran against the raw global-describe pool (all queryable non-shadow objects).'
+                        : 'Ran against the permission-scoped object list (same filter as the Objects page).'
+                    }
+                  >
+                    {cov.scope === 'all' ? 'All objects' : 'Business objects'}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-0.5">
                 {summary.objects_analyzed} attempted · {scoredCount} scored
                 {emptyCount > 0 && ` · ${emptyCount} empty`}
@@ -710,5 +748,91 @@ function ScopeStat({
         {typeof value === 'number' ? value : '—'}
       </p>
     </div>
+  )
+}
+
+/**
+ * Segmented toggle for the analysis scope — sits next to the
+ * Re-analyse button. Business (default) scans the permission-scoped
+ * pool; All widens to every queryable non-shadow sObject.
+ *
+ * Shows the object count for each mode inline so the user can see
+ * the cost of the choice before clicking.
+ */
+function ScopeToggle({
+  value,
+  onChange,
+  disabled,
+  businessCount,
+  allCount,
+}: {
+  value: DataQualityScope
+  onChange: (next: DataQualityScope) => void
+  disabled?: boolean
+  businessCount?: number
+  allCount?: number
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Analysis scope"
+      className="inline-flex items-center rounded-lg border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk p-0.5"
+    >
+      <ScopeOption
+        active={value === 'business'}
+        onClick={() => onChange('business')}
+        disabled={disabled}
+        label="Business"
+        count={businessCount}
+        title="Analyse only the objects that have permission grants in this org (~400 in a typical tenant). Same filter the Objects list uses."
+      />
+      <ScopeOption
+        active={value === 'all'}
+        onClick={() => onChange('all')}
+        disabled={disabled}
+        label="All"
+        count={allCount}
+        title="Analyse every queryable object from Salesforce global describe (~1500 in a big org), excluding Feed / History / Share / ChangeEvent shadows. Runs longer and higher per-run cap on non-standard objects."
+      />
+    </div>
+  )
+}
+
+function ScopeOption({
+  active,
+  onClick,
+  disabled,
+  label,
+  count,
+  title,
+}: {
+  active: boolean
+  onClick: () => void
+  disabled?: boolean
+  label: string
+  count?: number
+  title: string
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={
+        active
+          ? 'px-2.5 py-1 rounded-md text-xs font-medium tabular-nums bg-primary-100 text-primary-800 dark:bg-primary-900/40 dark:text-primary-200 ring-1 ring-primary-200 dark:ring-primary-800 transition-colors'
+          : 'px-2.5 py-1 rounded-md text-xs font-medium tabular-nums text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+      }
+    >
+      {label}
+      {typeof count === 'number' && (
+        <span className="ml-1 text-grove-ink/50 dark:text-grove-ink-dk/50">
+          ({count.toLocaleString()})
+        </span>
+      )}
+    </button>
   )
 }

@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -166,6 +166,16 @@ async def _scores_for_run(
 )
 async def run_data_quality(
     org_id: str,
+    scope: str = Query(
+        "business",
+        pattern="^(business|all)$",
+        description=(
+            "Analysis scope. 'business' (default) uses the same "
+            "permission-scoped object list as the Objects page. "
+            "'all' widens to every queryable, non-shadow object from "
+            "global describe (with a higher per-run cap)."
+        ),
+    ),
     current_org_id: str = Depends(get_current_org),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
@@ -181,7 +191,7 @@ async def run_data_quality(
     _enforce_same_org(org_id, current_org_id)
     service = DataQualityService(db, org_id)
     try:
-        run = await service.run(actor_email=actor_email)
+        run = await service.run(actor_email=actor_email, scope=scope)
     except Exception as e:
         # Log the traceback server-side + include the exception class
         # and message in the 500 detail so the browser console shows a

@@ -149,16 +149,32 @@ DUPLICATE_KEY_FIELDS: Dict[str, str] = {
 # statistically meaningful without blowing the SOQL response payload.
 DEFAULT_SAMPLE_SIZE = 500
 
-# Cap on how many custom objects we'll analyse in a single run.
+# Cap on how many non-standard objects we'll analyse in a single run.
 # Salesforce's global describe on a mid-size org can return 400+
 # sObjects; even after filtering shadows (History / Share / Feed) we
 # can still end up with 50-100 custom objects. Each object needs 3-4
 # SF API calls (describe + count + sample + stale) which the sync
 # router runs synchronously — hundreds of API calls will exceed the
-# deployment's HTTP timeout and 500 the request. Cap at 50 so a run
-# stays under ~90 seconds even on the slowest tenants while still
-# giving a mid-market org meaningful custom-object coverage.
+# deployment's HTTP timeout and 500 the request.
+#
+# Two caps depending on scope:
+#   - business: 50 custom objects (drawn from ObjectPermissionSnapshot)
+#   - all:      100 non-standard objects (drawn from global describe)
+#
+# The higher cap for 'all' is a compromise — it gives users who opt
+# into a wider scan meaningful coverage without pushing runtime past
+# ~90 seconds. Objects that get dropped are surfaced in the coverage
+# stats so the user knows what's not analysed.
 MAX_CUSTOM_OBJECTS_PER_RUN = 50
+MAX_CUSTOM_OBJECTS_PER_RUN_ALL_SCOPE = 100
+
+# Scope of the analysis. "business" (default) uses the same filter
+# as the Objects page — sObjects with permission grants in this org.
+# "all" widens the pool to every queryable, non-shadow object from
+# global describe, capped at MAX_CUSTOM_OBJECTS_PER_RUN_ALL_SCOPE.
+SCOPE_BUSINESS = "business"
+SCOPE_ALL = "all"
+VALID_SCOPES = {SCOPE_BUSINESS, SCOPE_ALL}
 
 # Records untouched for this many days count as "stale". Chosen to
 # approximately match the SaaS-industry "quarterly touch" convention.
@@ -251,9 +267,21 @@ class DataQualityService:
     # Public entrypoint
     # ------------------------------------------------------------------
 
-    async def run(self, *, actor_email: Optional[str] = None) -> DataQualityRun:
+    async def run(
+        self,
+        *,
+        actor_email: Optional[str] = None,
+        scope: str = SCOPE_BUSINESS,
+    ) -> DataQualityRun:
         """Full data-quality pass. Persists a DataQualityRun row + one
         ObjectQualityScore per analysed object. Returns the run row.
+
+        `scope` controls the candidate pool for non-standard objects:
+          - "business" (default) uses the same filter as the Objects
+            page (sObjects with permission grants — ~400 in a typical
+            org). Custom cap: 50.
+          - "all" uses the raw global-describe list minus shadows and
+            setup prefixes (~1000+ in a big org). Custom cap: 100.
 
         Silently skips objects that error mid-way (network hiccup, SOQL
         parse error on a custom field, etc.) — those get logged but the
@@ -264,6 +292,11 @@ class DataQualityService:
         import json as _json
 
         import httpx  # local import — only needed for 401 detection
+
+        if scope not in VALID_SCOPES:
+            raise ValueError(
+                f"Invalid scope {scope!r}. Expected one of {sorted(VALID_SCOPES)}."
+            )
 
         started = time.monotonic()
         # Explicit try/except at each stage so we can tell exactly WHERE
@@ -281,7 +314,9 @@ class DataQualityService:
         # retry-once pattern: catch the 401, refresh the token, rebuild
         # the client, retry. Any other error surfaces as-is.
         try:
-            analysis_targets, coverage = await self._resolve_analysis_targets(client)
+            analysis_targets, coverage = await self._resolve_analysis_targets(
+                client, scope=scope
+            )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 logger.warning(
@@ -289,7 +324,9 @@ class DataQualityService:
                 )
                 try:
                     client = await self._refresh_access_token()
-                    analysis_targets, coverage = await self._resolve_analysis_targets(client)
+                    analysis_targets, coverage = await self._resolve_analysis_targets(
+                        client, scope=scope
+                    )
                 except Exception as refresh_exc:
                     logger.exception(
                         "data-quality: token refresh failed for org %s",
@@ -840,21 +877,28 @@ class DataQualityService:
         )
 
     async def _resolve_analysis_targets(
-        self, client: SalesforceAPIClient
+        self,
+        client: SalesforceAPIClient,
+        *,
+        scope: str = SCOPE_BUSINESS,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-        """Build the list of objects to analyse using the same filter
-        the Objects page uses — distinct sObject types that appear in
-        the org's ObjectPermissionSnapshot. That's the app's canonical
-        "business objects" view (~400 in a typical mid-market tenant),
-        as opposed to the raw global-describe list (~1500 including
-        every Feed / History / Share / ChangeEvent / setup shadow).
+        """Build the list of objects to analyse. Two scopes:
 
-        Standard-object priority list is unioned in so CRM canon
-        (Account, Contact, etc.) is always covered even if permission
-        snapshots haven't been ingested for those objects yet.
+          - "business" (default): uses the same filter as the Objects
+            page — distinct sObject types with permission grants
+            (~400 in a typical tenant). Cap: 50 non-standard.
+          - "all": uses the raw global-describe list minus shadow
+            objects (History / Share / Feed / ChangeEvent / Tag) and
+            setup prefixes. Cap: 100 non-standard so the wider scan
+            still fits under the HTTP timeout.
+
+        Standard-object priority list is unioned in either way so CRM
+        canon (Account, Contact, etc.) is always covered even if
+        permission snapshots haven't been ingested for those objects.
 
         Returns (targets, coverage_stats). Coverage explains the
-        filter in numbers the frontend can render.
+        filter — including which scope drove the pool — in numbers
+        the frontend can render.
         """
         # 1. Load global describe once — used for labels + queryable
         #    validation. Cheap: one API call, cached in memory.
@@ -864,7 +908,8 @@ class DataQualityService:
 
         # 2. Pull the distinct object list the Objects page uses —
         #    every sObject type that has at least one permission grant
-        #    recorded in this org.
+        #    recorded in this org. Always fetched (used for the
+        #    "Objects in scope" KPI even when scope='all').
         perm_rows = await self.db.execute(
             select(ObjectPermissionSnapshot.sobject_type)
             .where(ObjectPermissionSnapshot.organization_id == self.org_id)
@@ -872,10 +917,19 @@ class DataQualityService:
         )
         perm_object_names = {row[0] for row in perm_rows.all() if row[0]}
 
+        # 3. Pick the candidate pool for non-standard objects based on
+        #    scope. Business = permission snapshot; All = global describe.
+        if scope == SCOPE_ALL:
+            candidate_names = set(by_name.keys())
+            custom_cap = MAX_CUSTOM_OBJECTS_PER_RUN_ALL_SCOPE
+        else:
+            candidate_names = perm_object_names
+            custom_cap = MAX_CUSTOM_OBJECTS_PER_RUN
+
         selected: List[Dict[str, Any]] = []
         seen: set = set()
 
-        # 3. Standard-object priority list — always considered, so we
+        # 4. Standard-object priority list — always considered, so we
         #    guarantee CRM canon coverage even if the permission
         #    snapshot hasn't landed those objects yet. Non-queryable
         #    (usually a licensing gap) counts toward standard_missing.
@@ -894,13 +948,14 @@ class DataQualityService:
                 }
             )
 
-        # 4. Custom objects — only from the permission-snapshot set
-        #    (aligns with Objects-page count). Custom is defined by
-        #    __c suffix or the describe `custom` flag; namespaced
-        #    managed-package objects satisfy both. Sorted for
-        #    deterministic coverage between runs.
+        # 5. Non-standard candidates — drawn from the scope-selected
+        #    pool. For 'business' this includes custom objects only.
+        #    For 'all' it also includes non-whitelist standard objects
+        #    (e.g. Note, ContentDocument, User) — anything queryable
+        #    that isn't a Feed / History / Share / ChangeEvent / setup
+        #    shadow. Sorted alphabetically for deterministic coverage.
         custom_candidates: List[Dict[str, Any]] = []
-        for name in sorted(perm_object_names):
+        for name in sorted(candidate_names):
             if name in seen:
                 continue
             meta = by_name.get(name)
@@ -910,7 +965,9 @@ class DataQualityService:
                 # since the last sync. Skip silently.
                 continue
             is_c = name.endswith("__c") or bool(meta.get("custom"))
-            if not is_c:
+            # Business scope: only custom.
+            # All scope: any non-standard, non-shadow object.
+            if scope == SCOPE_BUSINESS and not is_c:
                 continue
             if any(name.startswith(p) for p in SKIP_OBJECT_PREFIXES):
                 continue
@@ -922,28 +979,36 @@ class DataQualityService:
                 {
                     "name": name,
                     "label": meta.get("label") or name,
-                    "custom": True,
+                    # In 'all' scope some non-custom-suffix objects
+                    # will be picked (Note, ContentDocument, Idea). We
+                    # tag by SF's own `custom` flag so the UI stays
+                    # honest about what it's showing.
+                    "custom": is_c,
                 }
             )
 
         custom_available = len(custom_candidates)
-        custom_dropped_by_cap = max(0, custom_available - MAX_CUSTOM_OBJECTS_PER_RUN)
+        custom_dropped_by_cap = max(0, custom_available - custom_cap)
         if custom_dropped_by_cap:
             logger.info(
-                "data-quality: %d custom objects available, capping at %d",
-                custom_available, MAX_CUSTOM_OBJECTS_PER_RUN,
+                "data-quality: %d non-standard objects available in scope=%s, "
+                "capping at %d",
+                custom_available, scope, custom_cap,
             )
-            custom_candidates = custom_candidates[:MAX_CUSTOM_OBJECTS_PER_RUN]
+            custom_candidates = custom_candidates[:custom_cap]
 
         for entry in custom_candidates:
             seen.add(entry["name"])
             selected.append(entry)
 
         coverage = {
+            # Which scope drove this run. Consumed by the frontend to
+            # render the active scope in the coverage banner.
+            "scope": scope,
             # `total_sobjects` in the banner now means "the Objects
             # page count" — same denominator the user already sees
             # elsewhere in the app. The raw describe count is exposed
-            # separately for completeness.
+            # separately for the 'all' scope KPI.
             "total_sobjects": len(perm_object_names),
             "total_sobjects_raw": total_sobjects_in_describe,
             "standard_selected": sum(1 for s in selected if not s["custom"]),
@@ -951,7 +1016,7 @@ class DataQualityService:
             "custom_selected": sum(1 for s in selected if s["custom"]),
             "custom_available": custom_available,
             "custom_dropped_by_cap": custom_dropped_by_cap,
-            "custom_cap": MAX_CUSTOM_OBJECTS_PER_RUN,
+            "custom_cap": custom_cap,
         }
         return selected, coverage
 

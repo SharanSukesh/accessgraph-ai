@@ -68,6 +68,8 @@ export interface DataQualitySummary {
   // Used by the diagnostic banner to explain "22 of 422 analysed"
   // without the user having to check a log.
   coverage: {
+    // Which scope was picked for this run.
+    scope?: DataQualityScope
     // Objects with permission grants — same denominator as the
     // Objects page's "Total Objects" KPI (~400 in a typical org).
     total_sobjects?: number
@@ -192,13 +194,28 @@ export function useDataQualityHistory(orgId: string) {
 // ============================================================================
 
 /**
+ * Analysis scope. "business" uses the permission-snapshot filter
+ * (~400 objects on a typical org). "all" uses the raw global-describe
+ * pool with shadow objects filtered out (~1000+ on a big org).
+ */
+export type DataQualityScope = 'business' | 'all'
+
+/**
  * Trigger a new run. On success, invalidates the latest / objects /
- * history queries so the UI hydrates from the fresh snapshot.
+ * history queries so the UI hydrates from the fresh snapshot. Accepts
+ * an optional `scope` — defaults to 'business' if omitted.
  */
 export function useRunDataQuality(orgId: string) {
   const queryClient = useQueryClient()
-  return useMutation<RunResponse>({
-    mutationFn: () => apiClient.post(endpoints.dataQualityRun(orgId)),
+  return useMutation<RunResponse, unknown, DataQualityScope | void>({
+    mutationFn: (scope) => {
+      const s: DataQualityScope = scope ?? 'business'
+      // Append scope as a query-string param so it survives the
+      // apiClient's fetch wrapper without needing a body.
+      return apiClient.post(
+        `${endpoints.dataQualityRun(orgId)}?scope=${s}`,
+      )
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: dataQualityKeys.all })
     },
