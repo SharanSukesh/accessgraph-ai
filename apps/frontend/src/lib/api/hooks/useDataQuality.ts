@@ -31,7 +31,12 @@ export interface ObjectScore {
   duplicate_clusters: number
   stale_record_count: number
   evidence?: {
-    gap_fields?: { field: string; missing_pct: number }[]
+    gap_fields?: {
+      field: string
+      missing_pct: number
+      is_custom?: boolean
+      is_required?: boolean
+    }[]
     duplicate_key?: string
     duplicate_examples?: { key: string; count: number }[]
     stale_examples?: { id: string; last_modified: string }[]

@@ -499,6 +499,16 @@ class DataQualityService:
         if not required:
             return None, SKIP_NO_INSPECTABLE_FIELDS
         required_names = [f["name"] for f in required]
+        # Keep a flat metadata map so the evidence builder can tag each
+        # gap entry with is_custom / is_required without re-scanning the
+        # full describe response.
+        field_meta_by_name: Dict[str, Dict[str, bool]] = {
+            f["name"]: {
+                "is_custom": bool(f.get("custom")),
+                "is_required": not bool(f.get("nillable")),
+            }
+            for f in required
+        }
 
         try:
             record_count = await client.count_sobject(object_name)
@@ -642,6 +652,7 @@ class DataQualityService:
             evidence = self._build_evidence(
                 per_field_gap=per_field_gap,
                 required_names=required_names,
+                field_meta_by_name=field_meta_by_name,
                 sampled=sampled,
                 dupe_clusters=dupe_clusters,
                 dup_key=dup_key,
@@ -720,25 +731,45 @@ class DataQualityService:
 
         inspectable = [f for f in fields if is_inspectable(f)]
 
-        # Tier 1 — strong signal: SF's own "must populate on create"
-        tier1 = [f for f in inspectable if not f.get("nillable")]
-        if tier1:
-            return tier1[:20]
+        # Combined completeness pool: SF-required fields UNION every
+        # custom field. Data-quality's core consulting story is "you
+        # created these custom fields and half of them are empty" —
+        # so custom fields always get scored, alongside standard
+        # required fields.
+        #
+        # Previous behaviour (custom-only fallback fired only when NO
+        # required fields existed) meant Account.Name / Contact.LastName
+        # etc. always monopolised the top slots and buried every
+        # Account.Custom_Segment__c gap invisible.
+        required = [f for f in inspectable if not f.get("nillable")]
+        custom = [f for f in inspectable if f.get("custom")]
 
-        # Tier 2 — custom fields the admin defined intentionally
-        tier2 = [f for f in inspectable if f.get("custom")]
-        if tier2:
-            return tier2[:20]
+        # Deduplicate by name — a custom required field appears in both
+        # sets. Preserve required-first ordering so the top of the list
+        # still reflects "must-have" fields.
+        seen_names: set = set()
+        combined: List[Dict[str, Any]] = []
+        for f in required + custom:
+            name = f.get("name") or ""
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            combined.append(f)
 
-        # Tier 3 — broadest: any inspectable field. Catches standard
-        # objects where every field is technically nillable in the
-        # describe response. Order by "text-like" first so we don't
-        # score a bunch of relationship IDs.
+        # Cap at 25 (up from 20) since the SELECT list now covers two
+        # concerns instead of one; SOQL length stays well under limits.
+        if combined:
+            return combined[:25]
+
+        # Fallback: any inspectable field. Catches standard objects
+        # where every field is technically nillable in describe AND
+        # there are no custom fields at all. Text-like first so we
+        # don't score a bunch of relationship IDs.
         text_first = sorted(
             inspectable,
             key=lambda f: 0 if f.get("type") in ("string", "textarea", "picklist", "email", "phone") else 1,
         )
-        return text_first[:20]
+        return text_first[:25]
 
     async def _client(self) -> SalesforceAPIClient:
         """Build a live Salesforce client bound to this org's connection."""
@@ -929,6 +960,7 @@ class DataQualityService:
         *,
         per_field_gap: Dict[str, int],
         required_names: List[str],
+        field_meta_by_name: Dict[str, Dict[str, bool]],
         sampled: int,
         dupe_clusters: List[Tuple[str, int]],
         dup_key: str,
@@ -936,9 +968,13 @@ class DataQualityService:
         staleness_threshold: datetime,
     ) -> Dict[str, Any]:
         """Pack up the top offenders per component into a JSON payload
-        the frontend can render without a second query.
+        the frontend can render without a second query. Each gap entry
+        is tagged with is_custom / is_required so the UI can badge the
+        field's classification alongside its missing-percent.
         """
-        # Top 5 fields with the largest population gap.
+        # Top 5 fields with the largest population gap. Each carries
+        # the classification tags so the UI can render "Custom" /
+        # "Required" badges without a second describe call.
         top_gaps = sorted(
             (
                 {
@@ -946,6 +982,8 @@ class DataQualityService:
                     "missing_pct": round(
                         (per_field_gap.get(name, 0) / sampled) * 100.0, 1
                     ) if sampled else 0.0,
+                    "is_custom": field_meta_by_name.get(name, {}).get("is_custom", False),
+                    "is_required": field_meta_by_name.get(name, {}).get("is_required", False),
                 }
                 for name in required_names
             ),

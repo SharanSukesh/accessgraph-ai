@@ -566,9 +566,17 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
                 score.evidence.gap_fields?.map((g) => ({
                   primary: g.field,
                   secondary: `${Math.round(g.missing_pct)}% missing`,
+                  // Tag each row with Custom / Required so the reader
+                  // can immediately see which gaps are custom-field
+                  // hygiene issues vs. standard-field gaps.
+                  badge: g.is_custom
+                    ? { label: 'Custom', tone: 'copper' as const }
+                    : g.is_required
+                    ? { label: 'Required', tone: 'primary' as const }
+                    : undefined,
                 })) ?? []
               }
-              emptyLabel="No gap fields — every required-adjacent field is populated."
+              emptyLabel="No gap fields — every scored field is populated."
             />
             <EvidenceList
               icon={Copy}
@@ -648,6 +656,12 @@ function ScoreBar({
   )
 }
 
+type EvidenceItem = {
+  primary: string
+  secondary: string
+  badge?: { label: string; tone: 'copper' | 'primary' }
+}
+
 function EvidenceList({
   icon: Icon,
   title,
@@ -656,7 +670,7 @@ function EvidenceList({
 }: {
   icon: React.ComponentType<{ className?: string }>
   title: string
-  items: { primary: string; secondary: string }[]
+  items: EvidenceItem[]
   emptyLabel: string
 }) {
   return (
@@ -676,8 +690,21 @@ function EvidenceList({
               key={`${item.primary}-${i}`}
               className="text-xs flex items-baseline justify-between gap-2"
             >
-              <span className="font-mono truncate text-grove-ink dark:text-grove-ink-dk">
-                {item.primary}
+              <span className="min-w-0 flex items-baseline gap-1.5">
+                <span className="font-mono truncate text-grove-ink dark:text-grove-ink-dk">
+                  {item.primary}
+                </span>
+                {item.badge && (
+                  <span
+                    className={
+                      item.badge.tone === 'copper'
+                        ? 'inline-flex items-center px-1.5 py-0 rounded text-[9px] font-semibold uppercase tracking-wider bg-copper-100 text-copper-700 dark:bg-copper-900/25 dark:text-copper-400 whitespace-nowrap flex-shrink-0'
+                        : 'inline-flex items-center px-1.5 py-0 rounded text-[9px] font-semibold uppercase tracking-wider bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300 whitespace-nowrap flex-shrink-0'
+                    }
+                  >
+                    {item.badge.label}
+                  </span>
+                )}
               </span>
               <span className="text-grove-ink/55 dark:text-grove-ink-dk/55 whitespace-nowrap">
                 {item.secondary}
