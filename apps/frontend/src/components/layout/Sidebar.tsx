@@ -219,16 +219,13 @@ export function Sidebar() {
         {/* Navigation — grouped into semantic sections. Labels appear
             only when expanded; collapsed mode shows a hairline divider
             between groups so the visual rhythm survives. */}
-        {/* Nav scrollbar — Grove-themed thin scrollbar so it's visible
-            on short viewports without dominating the sidebar. Uses
-            scrollbar-gutter: stable both-edges to reserve equal space
-            on both sides regardless of whether the scrollbar is
-            actually visible right now, so nav icons stay centred on
-            the sidebar midline in every viewport height. */}
-        <nav
-          className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-themed"
-          style={{ scrollbarGutter: 'stable both-edges' }}
-        >
+        {/* Nav scrollbar — Grove-themed thin scrollbar that only paints
+            on hover (see .scrollbar-themed in globals.css). At rest the
+            scrollbar is fully transparent, so nav icons align with the
+            footer buttons at X=32 (sidebar midline). No scrollbar-gutter
+            here — reserving gutter would shift the nav content column
+            4px right of the footer column and break icon alignment. */}
+        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-themed">
           {navigation.map((section, sectionIdx) => (
             // Fragment wrapper so the inter-section divider is a sibling
             // of the section, not a child that would shrink the section's

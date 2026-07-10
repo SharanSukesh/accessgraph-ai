@@ -429,7 +429,14 @@ class DataQualityService:
         try:
             sample_resp = await client.query(soql)
         except Exception as exc:  # noqa: BLE001
-            logger.info("sample query failed for %s: %s", object_name, exc)
+            # Log the SOQL so operators can debug MALFORMED_QUERY /
+            # INVALID_FIELD failures without a rebuild. Truncate the
+            # SOQL to 200 chars so a very wide SELECT list doesn't
+            # spam the log.
+            logger.info(
+                "sample query failed for %s: %s | soql=%s",
+                object_name, exc, soql[:200],
+            )
             return None, SKIP_SAMPLE_FAILED
 
         # QueryResponse is a Pydantic model — use attribute access, not
@@ -544,6 +551,14 @@ class DataQualityService:
             "LastReferencedDate", "LastViewedDate",
         }
 
+        # Field types that CAN'T be directly queried in SOQL — putting
+        # any of these in the SELECT clause makes the whole query fail
+        # with MALFORMED_QUERY, silently killing the entire object's
+        # sample. Compound fields (address/location) must be accessed
+        # via their subfields (BillingStreet etc.); base64 is binary
+        # content that can't round-trip through JSON.
+        UNQUERYABLE_TYPES = {"address", "location", "base64"}
+
         def is_inspectable(f: Dict[str, Any]) -> bool:
             name = f.get("name") or ""
             if name in SYSTEM_FIELDS:
@@ -556,6 +571,9 @@ class DataQualityService:
                 return False
             # Encrypted fields return masks in queries — skip.
             if f.get("encrypted"):
+                return False
+            # Compound + binary types blow up MALFORMED_QUERY.
+            if (f.get("type") or "").lower() in UNQUERYABLE_TYPES:
                 return False
             return True
 

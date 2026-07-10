@@ -91,6 +91,11 @@ class RunSummary(BaseModel):
     has_data: bool
     duration_ms: Optional[int]
     error: Optional[str]
+    # Skip-reason breakdown extracted from the run's `error` JSON so
+    # the frontend can render "N skipped: 3 sample_failed, 2 count_failed…"
+    # without having to parse the error blob itself. Empty dict when
+    # no objects were skipped.
+    skip_reasons: Dict[str, int] = {}
 
 
 class RunResponse(BaseModel):
@@ -216,6 +221,23 @@ async def get_latest_run(
             duration_ms=None,
             error=None,
         )
+    # The service stashes skip categories in `error` as JSON. Parse
+    # it out so the frontend gets a clean dict without having to know
+    # the storage detail.
+    skip_reasons: Dict[str, int] = {}
+    if run.error:
+        try:
+            import json
+            payload = json.loads(run.error)
+            raw = payload.get("skip_reasons", {}) if isinstance(payload, dict) else {}
+            if isinstance(raw, dict):
+                skip_reasons = {str(k): int(v) for k, v in raw.items()}
+        except (ValueError, TypeError):
+            # Legacy runs where `error` is a plain string — leave the
+            # dict empty and let the frontend fall back to the raw
+            # `error` field for display.
+            pass
+
     return RunSummary(
         run_id=run.id,
         snapshot_at=run.snapshot_at.isoformat(),
@@ -230,6 +252,7 @@ async def get_latest_run(
         has_data=True,
         duration_ms=run.duration_ms,
         error=run.error,
+        skip_reasons=skip_reasons,
     )
 
 

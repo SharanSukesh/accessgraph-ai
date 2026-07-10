@@ -236,6 +236,19 @@ export default function ObjectsPage() {
         </Card>
       </div>
 
+      {/* Data quality diagnostics — only when the last run had 0 scored
+          objects, so the user gets a concrete answer to "why is it —?".
+          The banner enumerates skip reasons + tells them which objects
+          were legitimately empty. Hides itself the moment the run
+          produces real scores. */}
+      {dqSummary?.has_data && scoredCount === 0 && (
+        <DataQualityDiagnostics
+          summary={dqSummary}
+          scoredCount={scoredCount}
+          emptyCount={emptyCount}
+        />
+      )}
+
       {/* Filters */}
       <Card variant="bordered">
         <CardContent className="py-4">
@@ -432,4 +445,121 @@ function qualityChipClasses(score: number): string {
   if (score >= 65)
     return 'bg-copper-50 text-copper-700 ring-copper-200 dark:bg-copper-900/25 dark:text-copper-400 dark:ring-copper-800'
   return 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/25 dark:text-red-400 dark:ring-red-800'
+}
+
+// ---------- Data-quality diagnostic banner ----------
+//
+// Renders only when the last run produced zero scored objects. Shows
+// the skip-reason breakdown so operators can see exactly WHY the score
+// came out empty (permission, malformed query, no records, etc.) with
+// a plain-English gloss for each category.
+
+interface DiagnosticProps {
+  summary: import('@/lib/api/hooks/useDataQuality').DataQualitySummary
+  scoredCount: number
+  emptyCount: number
+}
+
+const SKIP_REASON_LABELS: Record<string, { title: string; hint: string }> = {
+  describe_failed: {
+    title: 'Describe failed',
+    hint: 'Salesforce refused the describe call — usually a permission gap on the connected user.',
+  },
+  no_last_modified: {
+    title: 'No LastModifiedDate',
+    hint: "The object has no LastModifiedDate field — can't compute staleness.",
+  },
+  no_inspectable_fields: {
+    title: 'No inspectable fields',
+    hint: "The object has no fields we can score for completeness (all calculated / auto-number / encrypted).",
+  },
+  count_failed: {
+    title: 'Record count failed',
+    hint: 'The `SELECT COUNT()` query returned an error — usually FLS or object-level permission.',
+  },
+  empty: {
+    title: 'Empty object',
+    hint: 'The object has zero records — nothing to score against yet.',
+  },
+  sample_failed: {
+    title: 'Sample query failed',
+    hint: 'The sample SOQL rejected — usually a MALFORMED_QUERY on a compound / restricted field. Check the server log for the failing SOQL.',
+  },
+  sample_empty: {
+    title: 'Sample returned empty',
+    hint: 'Count said N > 0 but sample came back with no rows — usually row-level sharing filtering everything out.',
+  },
+  error: {
+    title: 'Unexpected error',
+    hint: 'The analysis crashed on this object. Check the server log for the traceback.',
+  },
+}
+
+function DataQualityDiagnostics({ summary, scoredCount, emptyCount }: DiagnosticProps) {
+  const reasons = Object.entries(summary.skip_reasons ?? {})
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])
+
+  return (
+    <Card variant="bordered" className="border-copper-200 dark:border-copper-800 bg-copper-50/40 dark:bg-copper-900/10">
+      <CardContent className="py-5">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-copper-100 dark:bg-copper-900/25 flex-shrink-0">
+            <AlertTriangle className="h-5 w-5 text-copper-600 dark:text-copper-400" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                No objects scored on the last run
+              </p>
+              <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mt-0.5">
+                {summary.objects_analyzed} object{summary.objects_analyzed === 1 ? '' : 's'} attempted
+                {' · '}
+                {scoredCount} scored
+                {emptyCount > 0 && ` · ${emptyCount} empty`}
+                {summary.objects_skipped > 0 &&
+                  ` · ${summary.objects_skipped} skipped`}
+              </p>
+            </div>
+
+            {reasons.length > 0 && (
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
+                  Skip reasons
+                </p>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {reasons.map(([reason, count]) => {
+                    const label = SKIP_REASON_LABELS[reason] ?? {
+                      title: reason,
+                      hint: '',
+                    }
+                    return (
+                      <li
+                        key={reason}
+                        className="flex items-start gap-2 px-3 py-2 rounded-lg bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk"
+                      >
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-copper-100 dark:bg-copper-900/25 text-copper-700 dark:text-copper-400 text-xs font-semibold tabular-nums flex-shrink-0">
+                          {count}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-grove-ink dark:text-grove-ink-dk">
+                            {label.title}
+                          </p>
+                          {label.hint && (
+                            <p className="text-[11px] text-grove-ink/60 dark:text-grove-ink-dk/60 mt-0.5">
+                              {label.hint}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }

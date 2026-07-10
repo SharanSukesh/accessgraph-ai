@@ -54,6 +54,10 @@ export interface DataQualitySummary {
   has_data: boolean
   duration_ms: number | null
   error: string | null
+  // Backend groups per-object skips by category (sample_failed,
+  // count_failed, no_last_modified, etc.). Empty when nothing was
+  // skipped; populated for diagnostics on low-coverage runs.
+  skip_reasons: Record<string, number>
 }
 
 export interface ObjectListResponse {
