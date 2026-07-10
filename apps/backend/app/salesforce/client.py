@@ -421,6 +421,65 @@ class SalesforceAPIClient:
             )
             return None
 
+    async def count_lightning_components_in_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """Number of LWCs (`LightningComponentBundle`) shipped inside
+        the package's namespace. None on failure — same SELECT Id
+        pattern as the other namespace counts.
+        """
+        try:
+            rows = await self.query_tooling(
+                "SELECT Id FROM LightningComponentBundle "
+                f"WHERE NamespacePrefix = '{namespace}'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "LightningComponentBundle count for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return None
+
+    async def count_aura_bundles_in_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """Number of Aura bundles (`AuraDefinitionBundle`) shipped
+        inside the package's namespace.
+        """
+        try:
+            rows = await self.query_tooling(
+                "SELECT Id FROM AuraDefinitionBundle "
+                f"WHERE NamespacePrefix = '{namespace}'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "AuraDefinitionBundle count for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return None
+
+    async def count_apex_triggers_in_namespace(
+        self, namespace: str
+    ) -> Optional[int]:
+        """Number of Apex triggers (`ApexTrigger`) shipped inside the
+        package's namespace. Kept separate from ApexClass because
+        triggers surface a different risk profile in the detail card.
+        """
+        try:
+            rows = await self.query_tooling(
+                "SELECT Id FROM ApexTrigger "
+                f"WHERE NamespacePrefix = '{namespace}'"
+            )
+            return len(rows)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "ApexTrigger count for namespace=%s failed: %s",
+                namespace, exc,
+            )
+            return None
+
     async def count_metadata_dependencies_by_namespace(
         self, namespace: str
     ) -> Optional[int]:

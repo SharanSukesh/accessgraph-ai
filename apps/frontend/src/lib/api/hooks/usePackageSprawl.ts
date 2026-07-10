@@ -58,7 +58,10 @@ export interface InstalledPackage {
       components?: number
       components_breakdown?: {
         apex_class?: number
+        apex_trigger?: number | null
         flow?: number
+        lwc?: number | null
+        aura?: number | null
         custom_object?: number
       }
       dependency_count?: number | null

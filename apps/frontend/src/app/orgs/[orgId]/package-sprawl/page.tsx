@@ -24,6 +24,10 @@ import {
   FileStack,
   Play,
   CalendarClock,
+  ChevronDown,
+  Zap,
+  Layers,
+  Component,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -459,10 +463,25 @@ function tierChipClasses(tier: PackageTier, active: boolean): string {
 function PackageCard({ pkg }: { pkg: InstalledPackage }) {
   const totalComponents =
     pkg.apex_class_count + pkg.flow_count + pkg.custom_object_count
+  // The entire header area is a toggle. We deliberately don't
+  // preserve the expanded state across runs — the list is usually
+  // "unused first" and users open a card only long enough to decide
+  // uninstall / keep, then move on.
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <Card variant="bordered">
       <CardContent className="py-4">
+        {/* Header: full-width click target. Using a real <button>
+            keeps keyboard + a11y semantics for free; the visual
+            styling is entirely on the inner div, so it still reads
+            as a card, not a button. */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-grove-mint focus-visible:ring-offset-2 focus-visible:ring-offset-grove-canvas dark:focus-visible:ring-offset-grove-canvas-dk rounded-md"
+        >
         <div className="flex items-start gap-3">
           <TierDot tier={pkg.utilization_tier} />
           <div className="flex-1 min-w-0 space-y-2">
@@ -481,6 +500,12 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
                   Beta
                 </span>
               )}
+              {/* Chevron sits at the far end of the title row. Rotates
+                  180° on expand — no separate icon swap needed. */}
+              <ChevronDown
+                className={`ml-auto h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                aria-hidden
+              />
             </div>
             <div className="flex items-center gap-2 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 flex-wrap">
               {pkg.namespace_prefix && (
@@ -549,8 +574,338 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
             </div>
           </div>
         </div>
+        </button>
+
+        {/* Detail drawer — only mounted when expanded so the closed-
+            state DOM stays cheap on lists of 50+ packages. */}
+        {expanded && <PackageDetail pkg={pkg} />}
       </CardContent>
     </Card>
+  )
+}
+
+// PackageDetail is the "click to open" panel. Sections are opt-in:
+// if the underlying evidence isn't there (no deps, no records, no
+// licence), that section is skipped entirely so the panel doesn't
+// pad out with empty scaffolding.
+function PackageDetail({ pkg }: { pkg: InstalledPackage }) {
+  const breakdown = pkg.evidence?.reasoning?.components_breakdown ?? {}
+  const dependents = pkg.evidence?.top_dependents ?? []
+  const recordCounts = pkg.evidence?.record_counts_by_object ?? {}
+  const wiringSignals = pkg.evidence?.reasoning?.wiring_signals ?? []
+
+  const hasComponentDetails =
+    (breakdown.apex_class ?? 0) > 0 ||
+    (breakdown.apex_trigger ?? 0) > 0 ||
+    (breakdown.flow ?? 0) > 0 ||
+    (breakdown.lwc ?? 0) > 0 ||
+    (breakdown.aura ?? 0) > 0 ||
+    (breakdown.custom_object ?? 0) > 0 ||
+    // If all counts are null / zero we still want the block to render
+    // *something* so the user knows the query happened. But if every
+    // field is undefined (older run before v3), hide the section.
+    breakdown.apex_trigger !== undefined ||
+    breakdown.lwc !== undefined ||
+    breakdown.aura !== undefined
+
+  const recordEntries = Object.entries(recordCounts).sort(
+    ([, a], [, b]) => b - a,
+  )
+
+  const hasRuntimeSignals =
+    (pkg.async_job_count ?? 0) > 0 ||
+    (pkg.scheduled_job_count ?? 0) > 0
+
+  return (
+    <div className="mt-4 pt-4 border-t border-grove-ink/10 dark:border-grove-ink-dk/10 space-y-6">
+      <DetailWhereUsed pkg={pkg} dependents={dependents} />
+      {hasComponentDetails && <DetailComponentsShipped breakdown={breakdown} />}
+      {recordEntries.length > 0 && (
+        <DetailRecordCounts entries={recordEntries} />
+      )}
+      {hasRuntimeSignals && <DetailRuntimeActivity pkg={pkg} />}
+      {typeof pkg.licenses_allowed === 'number' && (
+        <DetailLicensing pkg={pkg} />
+      )}
+      {wiringSignals.length === 0 && (
+        <p className="text-xs italic text-grove-ink/50 dark:text-grove-ink-dk/50">
+          No wiring signals fired for this package. Nothing in the org
+          references it, no records live on its objects, and no jobs run
+          from it — this is the profile of an install that can be safely
+          uninstalled after a change-window notice.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// "Where it's used" — the big one. If we have dependents we
+// group them by MetadataComponentType so consultants can scan by
+// category (all the Apex references together, all the Flow refs
+// together, etc.). Falls back to graceful messages when the
+// dependents list is empty for a good reason (permissions vs zero).
+function DetailWhereUsed({
+  pkg,
+  dependents,
+}: {
+  pkg: InstalledPackage
+  dependents: NonNullable<InstalledPackage['evidence']['top_dependents']>
+}) {
+  const depCount = pkg.dependency_count
+  const grouped = dependents.reduce<Record<string, typeof dependents>>(
+    (acc, d) => {
+      const key = d.component_type ?? 'Other'
+      acc[key] = acc[key] ?? []
+      acc[key].push(d)
+      return acc
+    },
+    {},
+  )
+  const typeKeys = Object.keys(grouped).sort()
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-2">
+        <GitBranch className="h-4 w-4 text-grove-mint" />
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
+          Where it's used
+        </h4>
+        {typeof depCount === 'number' && (
+          <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 tabular-nums">
+            {depCount.toLocaleString()} customer component{depCount === 1 ? '' : 's'} reference this package
+          </span>
+        )}
+      </div>
+      {depCount === null || depCount === undefined ? (
+        <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
+          MetadataComponentDependency wasn't queryable this run (missing
+          Tooling permissions). We can't tell whether this package is
+          referenced by any of your components.
+        </p>
+      ) : depCount === 0 ? (
+        <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
+          No customer components reference this package. Nothing in your
+          Apex, LWCs, Flows, Validation Rules, or layouts touches its
+          namespace.
+        </p>
+      ) : dependents.length === 0 ? (
+        <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
+          {depCount.toLocaleString()} references detected but the sample
+          list came back empty — likely a permission gap on the
+          MetadataComponent lookup. Aggregate count is still valid.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {typeKeys.map((typeKey) => (
+            <div key={typeKey}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+                  {typeKey}
+                </span>
+                <span className="text-[10px] font-mono text-grove-ink/40 dark:text-grove-ink-dk/40 tabular-nums">
+                  {grouped[typeKey].length}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {grouped[typeKey].map((d, i) => (
+                  <span
+                    key={`${d.component}-${i}`}
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15"
+                    title={
+                      d.ref_component
+                        ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
+                        : `${d.component} references this package`
+                    }
+                  >
+                    {d.component ?? '(unknown)'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+          {typeof depCount === 'number' && depCount > dependents.length && (
+            <p className="text-[11px] italic text-grove-ink/45 dark:text-grove-ink-dk/45">
+              Showing the top {dependents.length.toLocaleString()} of{' '}
+              {depCount.toLocaleString()} references — the rest follow
+              the same pattern.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// "What's inside" — the full shipped-component breakdown. Now that
+// we query LWC / Aura / Trigger counts separately, this is the
+// grid the client actually asked for.
+function DetailComponentsShipped({
+  breakdown,
+}: {
+  breakdown: NonNullable<
+    InstalledPackage['evidence']['reasoning']
+  >['components_breakdown']
+}) {
+  const cells: Array<{
+    label: string
+    count: number | null | undefined
+    icon: React.ComponentType<{ className?: string }>
+  }> = [
+    { label: 'Apex classes', count: breakdown?.apex_class ?? 0, icon: Cpu },
+    { label: 'Apex triggers', count: breakdown?.apex_trigger, icon: Zap },
+    { label: 'Flows', count: breakdown?.flow ?? 0, icon: Workflow },
+    { label: 'LWCs', count: breakdown?.lwc, icon: Component },
+    { label: 'Aura bundles', count: breakdown?.aura, icon: Layers },
+    { label: 'Custom objects', count: breakdown?.custom_object ?? 0, icon: Database },
+  ]
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-2">
+        <Boxes className="h-4 w-4 text-grove-mint" />
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
+          What's inside
+        </h4>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {cells.map(({ label, count, icon: Icon }) => {
+          const isNull = count === null || count === undefined
+          const isEmpty = !isNull && count === 0
+          const cls = isNull || isEmpty
+            ? 'flex items-center gap-2 px-2.5 py-2 rounded-md bg-grove-canvas/50 dark:bg-grove-canvas-dk/20 text-grove-ink/40 dark:text-grove-ink-dk/40'
+            : 'flex items-center gap-2 px-2.5 py-2 rounded-md bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/90 dark:text-grove-ink-dk/90 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15'
+          return (
+            <div
+              key={label}
+              className={cls}
+              title={
+                isNull
+                  ? `${label}: not queried this run (missing Tooling access).`
+                  : `${count?.toLocaleString()} ${label} shipped in this package.`
+              }
+            >
+              <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="text-sm font-semibold tabular-nums">
+                {isNull ? '—' : count?.toLocaleString()}
+              </span>
+              <span className="text-[11px] opacity-80">{label}</span>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+// "Records held" — per-object row counts across the package's
+// custom objects. Sorted descending so the biggest tables are top-
+// of-list.
+function DetailRecordCounts({
+  entries,
+}: {
+  entries: [string, number][]
+}) {
+  const total = entries.reduce((sum, [, n]) => sum + n, 0)
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-2">
+        <FileStack className="h-4 w-4 text-grove-mint" />
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
+          Records held
+        </h4>
+        <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 tabular-nums">
+          {total.toLocaleString()} total across {entries.length} object
+          {entries.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      <div className="space-y-1">
+        {entries.map(([obj, count]) => (
+          <div
+            key={obj}
+            className="flex items-center gap-3 text-xs"
+            title={`${count.toLocaleString()} rows in ${obj}`}
+          >
+            <code className="font-mono text-grove-ink/75 dark:text-grove-ink-dk/75 truncate flex-1">
+              {obj}
+            </code>
+            <span className="tabular-nums font-semibold text-grove-ink dark:text-grove-ink-dk">
+              {count.toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+// "Runtime activity" — async / scheduled Apex from the namespace.
+// Only shown when at least one fires; the wiring row on the closed
+// card already surfaces the count.
+function DetailRuntimeActivity({ pkg }: { pkg: InstalledPackage }) {
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-2">
+        <Play className="h-4 w-4 text-grove-mint" />
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
+          Runtime activity
+        </h4>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center gap-2 px-2.5 py-2 rounded-md bg-grove-canvas dark:bg-grove-canvas-dk/40 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15">
+          <Play className="h-3.5 w-3.5 text-grove-mint" />
+          <span className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+            {(pkg.async_job_count ?? 0).toLocaleString()}
+          </span>
+          <span className="text-[11px] text-grove-ink/70 dark:text-grove-ink-dk/70">
+            async Apex jobs (batches / queueables / futures)
+          </span>
+        </div>
+        <div className="flex items-center gap-2 px-2.5 py-2 rounded-md bg-grove-canvas dark:bg-grove-canvas-dk/40 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15">
+          <CalendarClock className="h-3.5 w-3.5 text-grove-mint" />
+          <span className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+            {(pkg.scheduled_job_count ?? 0).toLocaleString()}
+          </span>
+          <span className="text-[11px] text-grove-ink/70 dark:text-grove-ink-dk/70">
+            live CronTrigger schedules
+          </span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function DetailLicensing({ pkg }: { pkg: InstalledPackage }) {
+  const allowed = pkg.licenses_allowed
+  const used = pkg.licenses_used ?? 0
+  const unlimited = typeof allowed === 'number' && allowed < 0
+  const pct =
+    !unlimited && typeof allowed === 'number' && allowed > 0
+      ? Math.round((used / allowed) * 100)
+      : null
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-2">
+        <Users className="h-4 w-4 text-grove-mint" />
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
+          Licensing
+        </h4>
+      </div>
+      <div className="flex items-center gap-3 flex-wrap text-xs text-grove-ink/85 dark:text-grove-ink-dk/85">
+        <span className="tabular-nums">
+          <strong>{used.toLocaleString()}</strong>{' '}
+          {unlimited
+            ? 'seats assigned · unlimited allowed'
+            : `of ${allowed?.toLocaleString()} seats assigned`}
+        </span>
+        {pct !== null && (
+          <>
+            <span className="text-grove-ink/40 dark:text-grove-ink-dk/40">·</span>
+            <span className="tabular-nums font-semibold text-grove-mint">
+              {pct}%
+            </span>
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 

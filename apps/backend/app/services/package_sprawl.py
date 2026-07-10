@@ -373,14 +373,28 @@ class PackageSprawlService:
             version_number = ".".join(parts)
 
         # Component counts. None from the SF client == query failed;
-        # treat as 0 so the tier calc still works.
+        # treat as 0 so the tier calc still works. lwc / aura / trigger
+        # counts are extra colour for the expandable detail card — they
+        # don't feed the tier decision (dependency_count is stronger),
+        # so they live in the evidence blob rather than as promoted
+        # columns.
         apex_class_count = 0
         flow_count = 0
+        lwc_count: Optional[int] = None
+        aura_count: Optional[int] = None
+        apex_trigger_count: Optional[int] = None
         if namespace:
             ac = await client.count_apex_classes_in_namespace(namespace)
             apex_class_count = ac or 0
             fc = await client.count_flows_in_namespace(namespace)
             flow_count = fc or 0
+            lwc_count = await client.count_lightning_components_in_namespace(
+                namespace
+            )
+            aura_count = await client.count_aura_bundles_in_namespace(namespace)
+            apex_trigger_count = await client.count_apex_triggers_in_namespace(
+                namespace
+            )
         # List of package-brought custom objects (used for record counts).
         package_object_names: List[str] = (
             [n for n in all_object_names if n and n.startswith(f"{namespace}__")]
@@ -399,8 +413,12 @@ class PackageSprawlService:
                 namespace
             )
             if dependency_count and dependency_count > 0:
+                # 50-row cap. The card still only surfaces 5 by default;
+                # the expandable detail view uses the rest so the reader
+                # can see the full picture of *where* the package is
+                # actually used without another round-trip.
                 top_dependents = await client.top_metadata_dependents(
-                    namespace, limit=5
+                    namespace, limit=50
                 )
 
         # record_count_total — sum of record counts across every
@@ -498,7 +516,10 @@ class PackageSprawlService:
                 "components": total_components,
                 "components_breakdown": {
                     "apex_class": apex_class_count,
+                    "apex_trigger": apex_trigger_count,
                     "flow": flow_count,
+                    "lwc": lwc_count,
+                    "aura": aura_count,
                     "custom_object": custom_object_count,
                 },
                 "dependency_count": dependency_count,
