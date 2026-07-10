@@ -14,7 +14,7 @@
  */
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 // ----------------------------------------------------------------------
 // Palette — reads Grove semantic tones. The four blast tiers each get
@@ -244,18 +244,20 @@ export function DailyActivityBars({
 
   // Themed tooltip state — replaces the browser's default white
   // `<title>` popup so hover feedback stays in the Grove theme.
-  // `xPct` is the tooltip's horizontal position as a fraction of the
-  // rendered chart width; because we use a viewBox + preserveAspectRatio
-  // the SVG scales but percentages are stable.
+  // We store absolute pixel offsets (x/y) relative to the wrapper
+  // div so the tooltip appears NEAR THE CURSOR rather than at the
+  // top of the chart. Empty state = tooltip hidden.
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
   const [tip, setTip] = useState<{
     date: string
     count: number
     prevCount: number
-    xPct: number
+    x: number
+    y: number
   } | null>(null)
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
     <svg
       width="100%"
       viewBox={`0 0 ${width} ${height}`}
@@ -318,21 +320,31 @@ export function DailyActivityBars({
         // invisible.
         const hitTargetX = x
         const hitTargetWidth = barWidth + barGap
-        // Tooltip x anchor as a % of the chart width.
-        const xPct = ((x + barWidth / 2) / width) * 100
+
+        // Compute cursor position relative to the wrapper div so
+        // the tooltip appears near where the user is pointing —
+        // not pinned to the top of the chart. Called on both
+        // enter and move so the tooltip follows the cursor.
+        const updateTip = (evt: React.MouseEvent) => {
+          const rect = wrapperRef.current?.getBoundingClientRect()
+          if (!rect) return
+          setTip({
+            date: t.date,
+            count: t.count,
+            prevCount: t.prevCount,
+            x: evt.clientX - rect.left,
+            y: evt.clientY - rect.top,
+          })
+        }
 
         return (
           <g
             key={t.date}
-            onMouseEnter={() => {
+            onMouseEnter={(evt) => {
               onHover?.({ date: t.date, count: t.count })
-              setTip({
-                date: t.date,
-                count: t.count,
-                prevCount: t.prevCount,
-                xPct,
-              })
+              updateTip(evt)
             }}
+            onMouseMove={updateTip}
             onMouseLeave={() => {
               onHover?.(null)
               setTip(null)
@@ -407,21 +419,25 @@ export function DailyActivityBars({
       })}
     </svg>
 
-    {/* Grove-themed tooltip — sits absolutely inside the wrapper div,
-        anchored by percentage so it tracks the bar even across
-        viewport resizes. Renders both current and previous-run counts
-        when a comparison overlay is active. */}
+    {/* Grove-themed tooltip — follows the cursor position (x/y in
+        wrapper-relative pixels). Sits ABOVE the cursor with a small
+        gap so it doesn't obscure the point being hovered, and is
+        centred horizontally on it. When close to the top of the
+        chart, the tooltip flips below the cursor so it doesn't get
+        clipped by the parent Card. */}
     {tip && (
       <div
         role="tooltip"
-        className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift px-2.5 py-1.5 text-xs z-20"
+        className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift px-2.5 py-1.5 text-xs z-20"
         style={{
-          // Sit above the chart, shifted up so the arrow doesn't
-          // touch the tallest bar. Percentage x anchor keeps position
-          // accurate under responsive scaling.
-          left: `${tip.xPct}%`,
-          top: 0,
-          marginTop: -8,
+          left: tip.x,
+          // 12px gap. Flip below cursor when top < 60px so the
+          // tooltip stays fully inside the card on tall bars.
+          top: tip.y < 60 ? tip.y + 12 : tip.y - 12,
+          transform:
+            tip.y < 60
+              ? 'translateX(-50%)'
+              : 'translateX(-50%) translateY(-100%)',
         }}
       >
         <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-grove-ink/55 dark:text-grove-ink-dk/55">
@@ -509,12 +525,13 @@ export function HourlyActivityBars({
       : width
   const shadeWidth = Math.max(0, endX - startX)
 
-  const [tip, setTip] = useState<{ hour: number; count: number; xPct: number } | null>(
-    null,
-  )
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const [tip, setTip] = useState<
+    { hour: number; count: number; x: number; y: number } | null
+  >(null)
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <svg
         width="100%"
         viewBox={`0 0 ${width} ${height}`}
@@ -557,13 +574,24 @@ export function HourlyActivityBars({
             : inBusiness
             ? TIER_COLORS.low
             : TIER_COLORS.high
-          const xPct = ((x + barWidth / 2) / width) * 100
+
+          // Same cursor-following pattern as the daily chart.
+          const updateTip = (evt: React.MouseEvent) => {
+            const rect = wrapperRef.current?.getBoundingClientRect()
+            if (!rect) return
+            setTip({
+              hour: h.hour,
+              count: h.count,
+              x: evt.clientX - rect.left,
+              y: evt.clientY - rect.top,
+            })
+          }
+
           return (
             <g
               key={h.hour}
-              onMouseEnter={() =>
-                setTip({ hour: h.hour, count: h.count, xPct })
-              }
+              onMouseEnter={updateTip}
+              onMouseMove={updateTip}
               onMouseLeave={() => setTip(null)}
             >
               {h.count === 0 && (
@@ -620,8 +648,15 @@ export function HourlyActivityBars({
       {tip && (
         <div
           role="tooltip"
-          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift px-2.5 py-1.5 text-xs z-20"
-          style={{ left: `${tip.xPct}%`, top: 0, marginTop: -8 }}
+          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift px-2.5 py-1.5 text-xs z-20"
+          style={{
+            left: tip.x,
+            top: tip.y < 60 ? tip.y + 12 : tip.y - 12,
+            transform:
+              tip.y < 60
+                ? 'translateX(-50%)'
+                : 'translateX(-50%) translateY(-100%)',
+          }}
         >
           <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-grove-ink/55 dark:text-grove-ink-dk/55">
             {String(tip.hour).padStart(2, '0')}:00 – {String((tip.hour + 1) % 24).padStart(2, '0')}:00
