@@ -259,9 +259,15 @@ class DataQualityService:
                     continue
                 results.append(res)
             except Exception as exc:  # noqa: BLE001 — one object's failure shouldn't sink the run
+                # exc_info=True includes the full traceback so we can
+                # actually diagnose what's crashing without a code drop.
+                # Also stash the exception class + message on a
+                # dynamic dict keyed by class so recurring errors are
+                # visible in the log without repeating tracebacks.
                 logger.warning(
-                    "data-quality analysis failed for %s: %s",
-                    obj["name"], exc,
+                    "data-quality analysis failed for %s: %s: %s",
+                    obj["name"], type(exc).__name__, exc,
+                    exc_info=True,
                 )
                 skip_reasons["error"] = skip_reasons.get("error", 0) + 1
 
@@ -380,7 +386,18 @@ class DataQualityService:
             return None, SKIP_NO_INSPECTABLE_FIELDS
         required_names = [f["name"] for f in required]
 
-        record_count = await client.count_sobject(object_name)
+        try:
+            record_count = await client.count_sobject(object_name)
+        except Exception as exc:  # noqa: BLE001
+            # count_sobject only catches HTTPStatusError internally;
+            # a JSONDecodeError / Pydantic validation error / connection
+            # reset can slip past and would blow up here as an
+            # "Unexpected error" in the aggregate. Categorise them.
+            logger.info(
+                "count_sobject raised for %s: %s: %s",
+                object_name, type(exc).__name__, exc,
+            )
+            return None, SKIP_COUNT_FAILED
         if record_count is None:
             # count failed (permission denied, object not queryable) —
             # skip rather than fabricate a score.
@@ -504,15 +521,25 @@ class DataQualityService:
             (stale_count / record_count) * 100.0 if record_count else 0.0
         )
 
-        evidence = self._build_evidence(
-            per_field_gap=per_field_gap,
-            required_names=required_names,
-            sampled=sampled,
-            dupe_clusters=dupe_clusters,
-            dup_key=dup_key,
-            records=records,
-            staleness_threshold=staleness_threshold,
-        )
+        # Evidence is presentational — a failure here shouldn't sink
+        # the whole object. We already have valid completeness / dup /
+        # staleness numbers; just drop the drilldown on error.
+        try:
+            evidence = self._build_evidence(
+                per_field_gap=per_field_gap,
+                required_names=required_names,
+                sampled=sampled,
+                dupe_clusters=dupe_clusters,
+                dup_key=dup_key,
+                records=records,
+                staleness_threshold=staleness_threshold,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "_build_evidence failed for %s: %s: %s",
+                object_name, type(exc).__name__, exc,
+            )
+            evidence = {"note": "Evidence build failed — see server log."}
 
         return ObjectQualityResult(
             object_name=object_name,
