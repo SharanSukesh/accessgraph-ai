@@ -143,23 +143,66 @@ export default function PackageSprawlPage() {
               value={summary.packages_active}
               icon={Sparkles}
               tone="primary"
-              hint="Packages with real component activity (>=5 components) or at least one licence seat used."
+              hint="Package's namespace contains >= 5 Apex/Flow/Object components OR at least one licence seat is used. Currently a shallow signal — see the note below the KPI strip for detail."
             />
             <TierKpi
               label="Under-used"
               value={summary.packages_underused}
               icon={AlertTriangle}
               tone="copper"
-              hint="Some components installed but low activity + few / no licences used. Candidate for right-sizing."
+              hint="Some components installed (1-4) but no licence usage. Warrants a manual check — could be genuinely light-use or could be surface inventory hiding real dependency."
             />
             <TierKpi
               label="Unused"
               value={summary.packages_unused}
               icon={Boxes}
               tone="danger"
-              hint="Zero components and zero licences used. Prime uninstall candidate."
+              hint="Zero components in the namespace AND zero licence seats used. Strong uninstall candidate — but verify against actual code references before pulling the trigger."
             />
           </div>
+
+          {/* Methodology caveat — surfaces the honest limitations of
+              the current scoring so consultants don't act on it as
+              gospel. Placed between the KPIs and the license roll-up
+              so it's above-the-fold on any mid-sized viewport. */}
+          <Card
+            variant="bordered"
+            className="border-copper-200 dark:border-copper-800 bg-copper-50/40 dark:bg-copper-900/10"
+          >
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-copper-100 dark:bg-copper-900/25 flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-copper-600 dark:text-copper-400" />
+                </div>
+                <div className="flex-1 min-w-0 space-y-2">
+                  <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                    How &ldquo;used&rdquo; is measured (and what's not measured)
+                  </p>
+                  <p className="text-xs text-grove-ink/75 dark:text-grove-ink-dk/75 leading-relaxed">
+                    Current tiering uses <strong>package-namespace inventory</strong>{' '}
+                    (counts of Apex classes, Flows, and Custom Objects that ship inside the
+                    package) plus <strong>PackageLicense seat consumption</strong>. That's
+                    a shallow signal: it answers &ldquo;how much stuff came in the box&rdquo;
+                    and &ldquo;how many people the vendor thinks are using it,&rdquo; not
+                    &ldquo;is your customer code actually calling it.&rdquo;
+                  </p>
+                  <p className="text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 leading-relaxed">
+                    <strong>Not yet checked:</strong> whether your Apex / LWCs / Flows /
+                    Validation Rules reference package components (via SF's{' '}
+                    <code className="font-mono text-[11px] text-copper-700 dark:text-copper-400">
+                      MetadataComponentDependency
+                    </code>{' '}
+                    Tooling API), whether package-brought custom objects hold records,
+                    whether the package's batch / scheduled Apex is still firing
+                    (<code className="font-mono text-[11px]">AsyncApexJob</code>,{' '}
+                    <code className="font-mono text-[11px]">CronTrigger</code>), or whether
+                    users are actually clicking into package UI. Verify against real code
+                    references before uninstalling anything flagged &ldquo;Unused&rdquo;.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Licence roll-up (only if any packages have licence rows) */}
           {summary.total_licenses_allowed > 0 && (
@@ -443,9 +486,19 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
               {typeof pkg.licenses_allowed === 'number' && (
                 <span className="inline-flex items-center gap-1.5 text-xs text-grove-ink/70 dark:text-grove-ink-dk/70">
                   <Users className="h-3.5 w-3.5" />
-                  <span className="tabular-nums">
-                    {pkg.licenses_used ?? 0} / {pkg.licenses_allowed} seats
-                  </span>
+                  {/* Salesforce returns -1 on PackageLicense.AllowedLicenses
+                      to mean "unlimited seats". Render that as text rather
+                      than a bogus negative number. Non-negative values
+                      render as the usual "used / allowed seats" fraction. */}
+                  {pkg.licenses_allowed < 0 ? (
+                    <span className="tabular-nums">
+                      {pkg.licenses_used ?? 0} used · unlimited seats
+                    </span>
+                  ) : (
+                    <span className="tabular-nums">
+                      {pkg.licenses_used ?? 0} / {pkg.licenses_allowed} seats
+                    </span>
+                  )}
                 </span>
               )}
               <span className="ml-auto text-[10px] font-mono uppercase tracking-wider text-grove-ink/50 dark:text-grove-ink-dk/50">

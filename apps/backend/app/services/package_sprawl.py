@@ -227,11 +227,18 @@ class PackageSprawlService:
                     exc_info=True,
                 )
 
-        # Rollups for the KPI strip.
+        # Rollups for the KPI strip. Salesforce returns -1 on
+        # PackageLicense.AllowedLicenses when the allowance is
+        # "unlimited"; exclude those from the seat aggregate so the
+        # KPI stays a meaningful "used of allowed" ratio.
         active = sum(1 for p in scored if p.utilization_tier == "active")
         underused = sum(1 for p in scored if p.utilization_tier == "underused")
         unused = sum(1 for p in scored if p.utilization_tier == "unused")
-        total_allowed = sum(p.licenses_allowed or 0 for p in scored)
+        total_allowed = sum(
+            (p.licenses_allowed or 0)
+            for p in scored
+            if p.licenses_allowed is not None and p.licenses_allowed >= 0
+        )
         total_used = sum(p.licenses_used or 0 for p in scored)
         utilization_pct = (
             (len([p for p in scored if p.utilization_tier != "unused"])
@@ -360,8 +367,12 @@ class PackageSprawlService:
         if lic:
             allowed_raw = lic.get("AllowedLicenses")
             used_raw = lic.get("UsedLicenses")
-            # SF returns "Unlimited" (string) for unlimited licences.
-            # Store None so the frontend can render "Unlimited" itself.
+            # Salesforce returns -1 on AllowedLicenses to mean
+            # "unlimited seats" (not the string "Unlimited" as older
+            # docs suggested). We preserve the -1 so the frontend can
+            # render it as "unlimited" rather than a bogus fraction,
+            # and the aggregate roll-up excludes -1 from the total-
+            # allowed sum.
             if isinstance(allowed_raw, int):
                 licenses_allowed = allowed_raw
             if isinstance(used_raw, int):
