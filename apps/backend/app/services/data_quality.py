@@ -68,14 +68,36 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ----------------------------------------------------------------------
 
-# Business objects analysed by default. Custom objects (name endswith
-# __c) are added at run-time from global describe.
+# Business objects analysed by default. Widened past the CRM-5 to
+# cover Sales / Service / Marketing / CPQ canon so a mid-market org's
+# dashboard doesn't come out dominated by empty custom objects.
+# Custom objects are added at run-time from global describe.
 STANDARD_OBJECTS: List[str] = [
+    # CRM core
     "Account",
     "Contact",
     "Lead",
     "Opportunity",
     "Case",
+    # Sales pipeline supporting objects
+    "Contract",
+    "Order",
+    "Quote",
+    "OpportunityLineItem",
+    "OrderItem",
+    "QuoteLineItem",
+    # Marketing
+    "Campaign",
+    "CampaignMember",
+    # Catalog
+    "Product2",
+    "Pricebook2",
+    "PricebookEntry",
+    "Asset",
+    # Service
+    "Solution",
+    "Entitlement",
+    "ServiceContract",
 ]
 
 # Objects to explicitly skip even if they show up in the global-describe
@@ -119,6 +141,19 @@ DEFAULT_STALENESS_DAYS = 180
 WEIGHT_COMPLETENESS = 0.5
 WEIGHT_DUPLICATES = 0.3
 WEIGHT_STALENESS = 0.2
+
+
+# Skip reason categories. Surfaced in the run's `error` JSON so the
+# frontend can render a "N objects skipped — see why" tooltip. Kept as
+# plain strings (not an Enum) so historical rows stay JSON-round-trippable
+# without a lookup step.
+SKIP_DESCRIBE_FAILED = "describe_failed"
+SKIP_NO_LAST_MODIFIED = "no_last_modified"
+SKIP_NO_INSPECTABLE_FIELDS = "no_inspectable_fields"
+SKIP_COUNT_FAILED = "count_failed"
+SKIP_EMPTY = "empty"
+SKIP_SAMPLE_FAILED = "sample_failed"
+SKIP_SAMPLE_EMPTY = "sample_empty"
 
 
 # ----------------------------------------------------------------------
@@ -194,22 +229,33 @@ class DataQualityService:
 
         Silently skips objects that error mid-way (network hiccup, SOQL
         parse error on a custom field, etc.) — those get logged but the
-        rest of the run still lands.
+        rest of the run still lands. Per-reason skip counts are stored
+        in the run's `error` field as JSON so operators can see WHY
+        the analysed-count came out low without a fresh code drop.
         """
+        import json as _json
+
         started = time.monotonic()
         client = await self._client()
         threshold = datetime.now(timezone.utc) - timedelta(days=self.staleness_days)
         analysis_targets = await self._resolve_analysis_targets(client)
 
         results: List[ObjectQualityResult] = []
-        skipped = 0
+        # skip_reasons: category → count. Categories match _SkipReason
+        # enum below; the frontend surfaces them in a "N objects skipped"
+        # tooltip so operators can debug why coverage is low.
+        skip_reasons: Dict[str, int] = {}
         for obj in analysis_targets:
             try:
-                res = await self._analyze_object(
+                res, skip_reason = await self._analyze_object(
                     client, obj["name"], obj["label"], obj["custom"], threshold
                 )
                 if res is None:
-                    skipped += 1
+                    reason = skip_reason or "unknown"
+                    skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
+                    logger.info(
+                        "data-quality: skipped %s — %s", obj["name"], reason
+                    )
                     continue
                 results.append(res)
             except Exception as exc:  # noqa: BLE001 — one object's failure shouldn't sink the run
@@ -217,7 +263,12 @@ class DataQualityService:
                     "data-quality analysis failed for %s: %s",
                     obj["name"], exc,
                 )
-                skipped += 1
+                skip_reasons["error"] = skip_reasons.get("error", 0) + 1
+
+        skipped = sum(skip_reasons.values())
+        skip_error_json = (
+            _json.dumps({"skip_reasons": skip_reasons}) if skip_reasons else None
+        )
 
         run = DataQualityRun(
             organization_id=self.org_id,
@@ -231,6 +282,7 @@ class DataQualityService:
             sample_size=self.sample_size,
             staleness_threshold_days=self.staleness_days,
             duration_ms=int((time.monotonic() - started) * 1000),
+            error=skip_error_json,
         )
         self.db.add(run)
         await self.db.flush()  # populate run.id before FK'ing the child rows
@@ -260,11 +312,13 @@ class DataQualityService:
         await self.db.commit()
         await self.db.refresh(run)
         logger.info(
-            "data-quality run %s by %s: %d objects analysed, %d skipped, avg_score=%.1f",
+            "data-quality run %s by %s: %d objects analysed, %d skipped "
+            "(reasons=%s), avg_score=%.1f",
             run.id,
             actor_email or "system",
             run.objects_analyzed,
             run.objects_skipped,
+            skip_reasons or "-",
             run.avg_score,
         )
         return run
@@ -280,61 +334,65 @@ class DataQualityService:
         object_label: str,
         is_custom: bool,
         staleness_threshold: datetime,
-    ) -> Optional[ObjectQualityResult]:
-        """Analyse a single object. Returns None if the object should
-        be skipped (no LastModifiedDate, no createable fields, etc.).
+    ) -> Tuple[Optional[ObjectQualityResult], Optional[str]]:
+        """Analyse a single object. Returns (result, skip_reason).
+
+        Returns (None, reason) when the object should be skipped. The
+        reason is one of the SKIP_* constants and is aggregated across
+        the run so operators can see WHY coverage came out low.
         """
-        describe = await client.describe_object(object_name)
-        fields = describe.get("fields", [])
+        try:
+            describe = await client.describe_object(object_name)
+        except Exception as exc:  # noqa: BLE001
+            logger.info("describe failed for %s: %s", object_name, exc)
+            return None, SKIP_DESCRIBE_FAILED
+
+        fields = describe.get("fields", []) or []
         if not any(f.get("name") == "LastModifiedDate" for f in fields):
-            return None
+            return None, SKIP_NO_LAST_MODIFIED
 
-        # Pick the fields we'll inspect for completeness. Rule: fields
-        # that are createable and non-nillable — SF's own view of what
-        # a record MUST have. If none exist (rare), fall back to any
-        # createable + custom field so we still return a score.
-        required = [
-            f for f in fields
-            if f.get("createable") and not f.get("nillable") and not f.get("calculated")
-        ]
+        # Pick the fields we'll inspect for completeness. Layered
+        # fallback so we always find something to score against, even
+        # on objects with no obviously-required fields.
+        #
+        #   1. createable + non-nillable + non-calculated + non-auto —
+        #      SF's own view of "must-populate on insert". These are
+        #      the strongest signal but many objects have zero of them
+        #      because SF marks most fields nillable.
+        #   2. any createable + custom + non-calculated — for custom
+        #      objects the admin defined; usually intentional.
+        #   3. any createable + non-calculated — broadest net. Catches
+        #      standard objects where every field is technically
+        #      nillable (Account past Name, Contact past LastName, etc.)
+        #
+        # The fallback matters: previously the strict step-1 filter
+        # skipped most standard objects that lacked a step-1 hit, so
+        # only 1 object survived the whole pipeline.
+        required = self._pick_completeness_fields(fields)
         if not required:
-            required = [
-                f for f in fields
-                if f.get("createable") and f.get("custom") and not f.get("calculated")
-            ]
-        # Cap at 20 to keep the SOQL length + response size reasonable.
-        required = required[:20]
-        if not required:
-            return None
-
+            return None, SKIP_NO_INSPECTABLE_FIELDS
         required_names = [f["name"] for f in required]
+
         record_count = await client.count_sobject(object_name)
         if record_count is None:
-            record_count = 0
+            # count failed (permission denied, object not queryable) —
+            # skip rather than fabricate a score.
+            return None, SKIP_COUNT_FAILED
         if record_count == 0:
-            # Empty object — perfect score by convention. Better than
-            # penalising something the org hasn't started using.
-            return ObjectQualityResult(
-                object_name=object_name,
-                object_label=object_label,
-                is_custom=is_custom,
-                record_count=0,
-                sampled_count=0,
-                completeness_pct=100.0,
-                duplicate_pct=0.0,
-                staleness_pct=0.0,
-                fields_inspected=len(required_names),
-                fields_with_gaps=0,
-                duplicate_clusters=0,
-                stale_record_count=0,
-                evidence={"note": "Empty object — no records to score."},
-            )
+            # Empty objects don't get a score. "Perfect quality on zero
+            # records" is meaningless and drags averages toward 100.
+            return None, SKIP_EMPTY
 
         # ---- Completeness + duplicate sample ------------------------
         dup_key = DUPLICATE_KEY_FIELDS.get(object_name, "Name")
+        # Make sure dup_key is actually queryable on this object.
+        has_dup_key = any(f.get("name") == dup_key for f in fields)
         select_fields = ["Id"] + required_names
-        if dup_key not in select_fields:
+        if has_dup_key and dup_key not in select_fields:
             select_fields.append(dup_key)
+        elif not has_dup_key:
+            # Fall back so we don't blow up on custom objects without Name.
+            dup_key = "Id"
 
         soql = (
             f"SELECT {', '.join(select_fields)} FROM {object_name} "
@@ -344,14 +402,15 @@ class DataQualityService:
         try:
             sample_resp = await client.query(soql)
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "sample query failed for %s (%s) — falling back to Id-only",
-                object_name, exc,
-            )
-            return None
+            logger.info("sample query failed for %s: %s", object_name, exc)
+            return None, SKIP_SAMPLE_FAILED
 
-        records = sample_resp.get("records", [])
+        records = sample_resp.get("records", []) or []
         sampled = len(records)
+        if sampled == 0:
+            # Count said non-zero but sample returned empty. Can happen
+            # with permission filtering (record-level sharing). Skip.
+            return None, SKIP_SAMPLE_EMPTY
 
         # Completeness — for each required field, what fraction of the
         # sample has a non-null value.
@@ -437,6 +496,60 @@ class DataQualityService:
     # Support
     # ------------------------------------------------------------------
 
+    def _pick_completeness_fields(
+        self, fields: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Choose which fields we'll score completeness against.
+
+        Three tiers, tried in order — first tier that returns a
+        non-empty list wins. Cap at 20 fields to keep SOQL length
+        reasonable and evidence blobs bounded.
+        """
+        # Fields we NEVER want to inspect regardless of tier: system
+        # audit fields (populated by SF, meaningless for "data quality")
+        # and encrypted/hidden fields (can't read anyway).
+        SYSTEM_FIELDS = {
+            "Id", "IsDeleted", "SystemModstamp", "LastActivityDate",
+            "LastReferencedDate", "LastViewedDate",
+        }
+
+        def is_inspectable(f: Dict[str, Any]) -> bool:
+            name = f.get("name") or ""
+            if name in SYSTEM_FIELDS:
+                return False
+            if f.get("calculated"):
+                return False
+            if f.get("autoNumber"):
+                return False
+            if not f.get("createable"):
+                return False
+            # Encrypted fields return masks in queries — skip.
+            if f.get("encrypted"):
+                return False
+            return True
+
+        inspectable = [f for f in fields if is_inspectable(f)]
+
+        # Tier 1 — strong signal: SF's own "must populate on create"
+        tier1 = [f for f in inspectable if not f.get("nillable")]
+        if tier1:
+            return tier1[:20]
+
+        # Tier 2 — custom fields the admin defined intentionally
+        tier2 = [f for f in inspectable if f.get("custom")]
+        if tier2:
+            return tier2[:20]
+
+        # Tier 3 — broadest: any inspectable field. Catches standard
+        # objects where every field is technically nillable in the
+        # describe response. Order by "text-like" first so we don't
+        # score a bunch of relationship IDs.
+        text_first = sorted(
+            inspectable,
+            key=lambda f: 0 if f.get("type") in ("string", "textarea", "picklist", "email", "phone") else 1,
+        )
+        return text_first[:20]
+
     async def _client(self) -> SalesforceAPIClient:
         """Build a live Salesforce client bound to this org's connection."""
         row = await self.db.execute(
@@ -465,11 +578,18 @@ class DataQualityService:
         by_name = {o.get("name"): o for o in all_objects if o.get("name")}
 
         selected: List[Dict[str, Any]] = []
-        # Standard business objects — take label from describe when present
+        seen: set = set()
+
+        # Curated standard-object priority list — these get analysed
+        # first regardless of ordering in the global describe response.
+        # Widened past the CRM-5 to cover Sales, Service, and Marketing
+        # canon so a mid-market SF org's dashboard isn't dominated by
+        # empties.
         for name in STANDARD_OBJECTS:
             meta = by_name.get(name)
-            if meta is None:
+            if meta is None or not meta.get("queryable"):
                 continue
+            seen.add(name)
             selected.append(
                 {
                     "name": name,
@@ -478,14 +598,25 @@ class DataQualityService:
                 }
             )
 
-        # Custom objects — anything ending __c that isn't setup-adjacent.
+        # Then: any custom object the user hasn't seen yet. Custom is
+        # defined by suffix (`__c`) OR by the `custom` flag in describe
+        # — the latter catches namespaced managed-package objects like
+        # `MyPkg__Widget__c` that still slip past the suffix test.
         for name, meta in by_name.items():
-            if not name.endswith("__c"):
+            if name in seen:
+                continue
+            is_c = name.endswith("__c") or bool(meta.get("custom"))
+            if not is_c:
                 continue
             if any(name.startswith(p) for p in SKIP_OBJECT_PREFIXES):
                 continue
             if not meta.get("queryable"):
                 continue
+            # History / Share / Feed / ChangeEvent shadow objects also
+            # slip through the __c test on custom objects — skip them.
+            if name.endswith(("History", "Share", "Feed", "ChangeEvent", "Tag")):
+                continue
+            seen.add(name)
             selected.append(
                 {
                     "name": name,

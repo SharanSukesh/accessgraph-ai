@@ -179,8 +179,19 @@ export default function ObjectsPage() {
                   >
                     {Math.round(dqSummary.avg_score)}
                   </p>
-                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
-                    {dqSummary.objects_analyzed} objects
+                  <p
+                    className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1"
+                    title={
+                      dqSummary.objects_skipped > 0
+                        ? `${dqSummary.objects_skipped} object${
+                            dqSummary.objects_skipped === 1 ? '' : 's'
+                          } skipped — see server log for reasons`
+                        : undefined
+                    }
+                  >
+                    {dqSummary.objects_analyzed} analysed
+                    {dqSummary.objects_skipped > 0 &&
+                      ` · ${dqSummary.objects_skipped} skipped`}
                   </p>
                 </>
               ) : (
