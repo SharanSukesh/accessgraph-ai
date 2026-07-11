@@ -349,15 +349,15 @@ class SalesforceAPIClient:
             "SubscriberPackageVersion.IsManaged "
             "FROM InstalledSubscriberPackage"
         )
-        try:
-            return await self.query_tooling(soql)
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "InstalledSubscriberPackage query failed (%s) — "
-                "skipping package-sprawl pull.",
-                e.response.status_code,
-            )
-            return []
+        # Deliberately DO NOT catch HTTPStatusError here. The run()
+        # entrypoint has a 401-specific handler that refreshes the
+        # access token and retries; catching HTTPStatusError inline
+        # here would swallow the 401 and silently return [] — leaving
+        # the caller convinced the org has zero installed packages
+        # when the real problem is an expired token. Other HTTP
+        # errors (400, 403, 500) also propagate so run() surfaces
+        # them as a red error banner rather than a mystery empty state.
+        return await self.query_tooling(soql)
 
     async def extract_package_licenses(self) -> List[Dict[str, Any]]:
         """PackageLicense (standard SObject) — seat counts per package.
