@@ -228,14 +228,22 @@ class PackageSprawlService:
 
         # 4. Cap total packages analysed to keep runtime bounded.
         capped = raw_packages[: self.max_packages]
-        if len(raw_packages) > self.max_packages:
-            logger.info(
-                "package-sprawl: %d packages available, analysing top %d",
-                len(raw_packages), self.max_packages,
-            )
+        # WARNING level so it always shows in the default Railway
+        # log stream. A run producing 0 scored packages when SF
+        # returned > 0 raw packages is the exact signature of the
+        # regression this line helps diagnose.
+        logger.warning(
+            "package-sprawl: org=%s extracted %d packages from SF, "
+            "analysing top %d",
+            self.org_id, len(raw_packages), len(capped),
+        )
 
         scored: List[ScoredPackage] = []
         for raw in capped:
+            pkg_name_for_log = (
+                (raw.get("SubscriberPackage") or {}).get("Name")
+                or "(unnamed)"
+            )
             try:
                 pkg = await self._analyse_package(
                     client, raw, licenses_by_namespace, all_object_names
@@ -243,11 +251,32 @@ class PackageSprawlService:
                 if pkg:
                     scored.append(pkg)
             except Exception as exc:  # noqa: BLE001
+                # If per-package analysis blows up (a new Tooling
+                # query rejected by the org, an unexpected response
+                # shape, whatever), still persist a stub for that
+                # package rather than dropping it entirely. Silent
+                # drops make the whole page look empty even when SF
+                # returned real installs — which is a confusing
+                # regression compared to "the package appears with
+                # unknown signals".
                 logger.warning(
-                    "package-sprawl: failed to analyse package %s: %s",
-                    (raw.get("SubscriberPackage") or {}).get("Name"), exc,
+                    "package-sprawl: failed to analyse package %s: %s "
+                    "— persisting stub so it still appears in the list.",
+                    pkg_name_for_log, exc,
                     exc_info=True,
                 )
+                try:
+                    stub = self._build_stub_from_raw(raw, str(exc))
+                    if stub:
+                        scored.append(stub)
+                except Exception:  # noqa: BLE001
+                    # A stub build failing means we can't even
+                    # identify the package — nothing safe to persist.
+                    # Log once at exception level and move on.
+                    logger.exception(
+                        "package-sprawl: stub build also failed for %s",
+                        pkg_name_for_log,
+                    )
 
         # Rollups for the KPI strip. Salesforce returns -1 on
         # PackageLicense.AllowedLicenses when the allowance is
@@ -266,6 +295,12 @@ class PackageSprawlService:
             (len([p for p in scored if p.utilization_tier != "unused"])
              / len(scored) * 100.0)
             if scored else 0.0
+        )
+
+        logger.warning(
+            "package-sprawl: org=%s scored %d packages "
+            "(active=%d underused=%d unused=%d)",
+            self.org_id, len(scored), active, underused, unused,
         )
 
         run = PackageSprawlRun(
@@ -342,6 +377,65 @@ class PackageSprawlService:
     # ------------------------------------------------------------------
     # Per-package analysis
     # ------------------------------------------------------------------
+
+    def _build_stub_from_raw(
+        self, raw: Dict[str, Any], error_reason: str
+    ) -> Optional[ScoredPackage]:
+        """Build a minimum-viable ScoredPackage from just the identity
+        fields (name, namespace, version) when the enrichment pipeline
+        blew up. The package still appears in the UI with wiring
+        signals as None so the user can see it exists — much better
+        than silent drops leaving the whole page empty.
+        """
+        subscriber = raw.get("SubscriberPackage") or {}
+        version = raw.get("SubscriberPackageVersion") or {}
+        sf_package_id = subscriber.get("Id") or ""
+        if not sf_package_id:
+            return None
+        major = version.get("MajorVersion")
+        minor = version.get("MinorVersion")
+        patch = version.get("PatchVersion")
+        version_number: Optional[str] = None
+        if major is not None and minor is not None:
+            parts = [str(major), str(minor)]
+            if patch is not None:
+                parts.append(str(patch))
+            version_number = ".".join(parts)
+        return ScoredPackage(
+            sf_package_id=sf_package_id,
+            sf_version_id=version.get("Id") or None,
+            name=subscriber.get("Name") or "Unnamed package",
+            namespace_prefix=subscriber.get("NamespacePrefix") or None,
+            description=subscriber.get("Description") or None,
+            version_name=version.get("Name") or None,
+            version_number=version_number,
+            is_beta=bool(version.get("IsBeta")),
+            is_deprecated=bool(version.get("IsDeprecated")),
+            is_managed=bool(version.get("IsManaged", True)),
+            apex_class_count=0,
+            flow_count=0,
+            custom_object_count=0,
+            licenses_allowed=None,
+            licenses_used=None,
+            dependency_count=None,
+            record_count_total=None,
+            async_job_count=None,
+            scheduled_job_count=None,
+            # Underused rather than Unused: signals are unknown, not
+            # confirmed-empty. This keeps a real install from getting
+            # mis-flagged for uninstall just because enrichment failed.
+            utilization_tier="underused",
+            evidence={
+                "reasoning": {
+                    "wiring_signals": [],
+                    "final_tier": "underused",
+                    "stub_reason": error_reason,
+                },
+                "top_dependents": [],
+                "supplemental_dependents_count": 0,
+                "record_counts_by_object": {},
+            },
+        )
 
     async def _analyse_package(
         self,
