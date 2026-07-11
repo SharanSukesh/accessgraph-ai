@@ -430,11 +430,30 @@ class PackageSprawlService:
         # can distinguish them from primary index hits, but they DO
         # promote to Active tier — a real reference is a real reference
         # regardless of which pass caught it.
+        #
+        # Belt-and-suspenders exception handling: the SF client method
+        # already swallows failures, but a bad field name / SOQL shape
+        # in an org we haven't tested against would produce a Python
+        # error INSIDE the client method between the try and the
+        # except (e.g., AttributeError chasing an unexpected response
+        # shape). That outer try here guarantees a supplemental-pass
+        # failure never tanks the per-package analysis — the whole
+        # run would come back with 0 packages if it did.
         supplemental_dependents: List[Dict[str, Any]] = []
         if namespace:
-            supplemental_dependents = (
-                await client.find_supplemental_customtab_references(namespace)
-            )
+            try:
+                supplemental_dependents = (
+                    await client.find_supplemental_customtab_references(
+                        namespace
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.info(
+                    "Supplemental CustomTab pass raised for namespace=%s: "
+                    "%s — continuing without supplemental hits.",
+                    namespace, exc,
+                )
+                supplemental_dependents = []
             if supplemental_dependents:
                 top_dependents = top_dependents + supplemental_dependents
 
