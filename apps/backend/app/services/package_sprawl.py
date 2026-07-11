@@ -535,8 +535,10 @@ class PackageSprawlService:
         # run would come back with 0 packages if it did.
         supplemental_dependents: List[Dict[str, Any]] = []
         if namespace:
+            # Pass 1: direct CustomTab -> LWC edges. Catches the
+            # "Custom Tab of type Lightning Component" case.
             try:
-                supplemental_dependents = (
+                supplemental_dependents.extend(
                     await client.find_supplemental_customtab_references(
                         namespace
                     )
@@ -544,11 +546,32 @@ class PackageSprawlService:
             except Exception as exc:  # noqa: BLE001
                 logger.info(
                     "Supplemental CustomTab pass raised for namespace=%s: "
-                    "%s — continuing without supplemental hits.",
+                    "%s — continuing without those hits.",
                     namespace, exc,
                 )
-                supplemental_dependents = []
+            # Pass 2: FlexiPage metadata sweep. Catches Lightning App
+            # Pages, Home Pages, and Record Pages whose layout JSON
+            # references a component in the target namespace. This
+            # covers the most common case a customer surfaces a
+            # managed-package LWC — drag it into App Builder — which
+            # MetadataComponentDependency misses on beta 2GP packages.
+            try:
+                supplemental_dependents.extend(
+                    await client.find_supplemental_flexipage_references(
+                        namespace
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.info(
+                    "Supplemental FlexiPage pass raised for namespace=%s: "
+                    "%s — continuing without those hits.",
+                    namespace, exc,
+                )
             if supplemental_dependents:
+                logger.warning(
+                    "package-sprawl: %d supplemental hits for %s",
+                    len(supplemental_dependents), namespace,
+                )
                 top_dependents = top_dependents + supplemental_dependents
 
         # record_count_total — sum of record counts across every

@@ -659,9 +659,7 @@ function DetailWhereUsed({
   // originate from a direct CustomTab -> LWC lookup — they're real
   // references the primary index missed.
   const primaryHits = dependents.filter((d) => !d.source)
-  const supplementalHits = dependents.filter(
-    (d) => d.source === 'customtab_lwc',
-  )
+  const supplementalHits = dependents.filter((d) => !!d.source)
   const totalUsage =
     typeof depCount === 'number'
       ? depCount + supplementalCount
@@ -777,25 +775,27 @@ function DetailWhereUsed({
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {grouped[typeKey].map((d, i) => {
-                  const isSupplemental = d.source === 'customtab_lwc'
+                  const isSupplemental = !!d.source
                   const cls = isSupplemental
                     ? 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-mint/10 dark:bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30'
                     : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15'
+                  const tooltip =
+                    d.source === 'customtab_lwc'
+                      ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component ?? '?'}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
+                      : d.source === 'flexipage'
+                      ? `FlexiPage "${d.component}" hosts a component from this package's namespace. Caught by our supplemental FlexiPage metadata sweep — Lightning App / Home / Record Pages built in App Builder often aren't in MetadataComponentDependency for beta packages.`
+                      : d.ref_component
+                      ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
+                      : `${d.component} references this package`
                   return (
                     <span
                       key={`${d.component}-${i}`}
                       className={cls}
-                      title={
-                        isSupplemental
-                          ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
-                          : d.ref_component
-                          ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
-                          : `${d.component} references this package`
-                      }
+                      title={tooltip}
                     >
                       {isSupplemental && (
                         <span className="text-[9px] uppercase tracking-wider opacity-70">
-                          ⇢ LWC
+                          {d.source === 'flexipage' ? '⇢ Page' : '⇢ LWC'}
                         </span>
                       )}
                       {d.component ?? '(unknown)'}

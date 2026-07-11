@@ -620,6 +620,92 @@ class SalesforceAPIClient:
             )
             return []
 
+    async def find_supplemental_flexipage_references(
+        self, namespace: str
+    ) -> List[Dict[str, Any]]:
+        """Second supplemental pass: walk FlexiPage metadata to find
+        Lightning App Pages / Home Pages / Record Pages that host a
+        component from the target namespace.
+
+        Why: the most common way a customer surfaces a managed
+        package's LWC is via App Builder — drag the component onto
+        an App Page, then either point a Custom Tab of type
+        "Lightning Page" at that App Page, or use it as a Home Page
+        / Record Page. In all three cases the reference lives inside
+        the FlexiPage's Metadata JSON as a componentName like
+        `accessgraphai:MyComponent` or `accessgraphai__MyComponent`.
+
+        Approach: pull FlexiPages the customer owns (namespace prefix
+        != the target), fetch each one's Metadata field, and check
+        the serialised JSON for occurrences of the namespace prefix
+        with either a `:` or `__` separator. This is a substring
+        match against a serialised dict — cheap, and it doesn't
+        require knowing the full FlexiPage schema.
+
+        Bounded to first 300 FlexiPages per run to protect the
+        timeout budget. Empty list on any failure.
+        """
+        import json as _json
+
+        try:
+            page_rows = await self.query_tooling(
+                "SELECT Id, DeveloperName, EntityDefinitionId, Type "
+                "FROM FlexiPage "
+                f"WHERE NamespacePrefix != '{namespace}'"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "FlexiPage list for supplemental pass (namespace=%s) "
+                "failed: %s", namespace, exc,
+            )
+            return []
+
+        # Match either "accessgraphai:" (LWC/Aura reference form) or
+        # "accessgraphai__" (metadata API form). Both patterns show
+        # up depending on how App Builder serialised the layout.
+        marker_colon = f"{namespace}:"
+        marker_us = f"{namespace}__"
+
+        hits: List[Dict[str, Any]] = []
+        pages_to_check = page_rows[:300]
+        for row in pages_to_check:
+            page_id = row.get("Id")
+            if not page_id:
+                continue
+            # Metadata is a compound field — Tooling requires fetching
+            # it per-record. Guard each iteration so one bad page
+            # doesn't kill the sweep.
+            try:
+                detail_rows = await self.query_tooling(
+                    "SELECT Metadata FROM FlexiPage "
+                    f"WHERE Id = '{page_id}'"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "FlexiPage %s Metadata fetch failed: %s",
+                    page_id, exc,
+                )
+                continue
+            if not detail_rows:
+                continue
+            metadata = detail_rows[0].get("Metadata")
+            if metadata is None:
+                continue
+            try:
+                serialised = _json.dumps(metadata)
+            except Exception:  # noqa: BLE001
+                continue
+            if marker_colon not in serialised and marker_us not in serialised:
+                continue
+            hits.append({
+                "component": row.get("DeveloperName"),
+                "component_type": f"FlexiPage ({row.get('Type') or '?'})",
+                "ref_component": None,
+                "ref_type": "LightningComponentBundle",
+                "source": "flexipage",
+            })
+        return hits
+
     async def count_async_apex_jobs_by_namespace(
         self, namespace: str
     ) -> Optional[int]:

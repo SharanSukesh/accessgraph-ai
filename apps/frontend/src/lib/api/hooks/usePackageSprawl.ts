@@ -75,16 +75,25 @@ export interface InstalledPackage {
       final_tier?: PackageTier
     }
     /** Customer-owned components that reference this package.
-     *  Blended: primary hits (MetadataComponentDependency, no `source`
-     *  field) + supplemental hits from CustomTab → LWC lookup
-     *  (`source: 'customtab_lwc'`) so beta 2GP packages the primary
-     *  index misses still surface here. */
+     *  Blended from three sources:
+     *   - Primary hits from `MetadataComponentDependency` (no `source`
+     *     tag — this is Salesforce's official dependency index).
+     *   - Supplemental hits from a direct CustomTab -> LWC lookup
+     *     (`source: 'customtab_lwc'`) — catches direct Lightning
+     *     Component tabs.
+     *   - Supplemental hits from a FlexiPage metadata sweep
+     *     (`source: 'flexipage'`) — catches Lightning App / Home /
+     *     Record Pages built in App Builder that host a component
+     *     from the target namespace. This is the *most common* way
+     *     a customer surfaces a managed-package LWC, and the one
+     *     `MetadataComponentDependency` misses hardest on beta 2GP
+     *     packages. */
     top_dependents?: {
       component: string | null
       component_type: string | null
       ref_component: string | null
       ref_type: string | null
-      source?: 'customtab_lwc'
+      source?: 'customtab_lwc' | 'flexipage'
     }[]
     /** Number of supplemental hits (subset of top_dependents.length
      *  where source === 'customtab_lwc'). Handy for the UI to show a
