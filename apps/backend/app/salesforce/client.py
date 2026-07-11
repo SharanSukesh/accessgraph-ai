@@ -632,49 +632,81 @@ class SalesforceAPIClient:
         an App Page, then either point a Custom Tab of type
         "Lightning Page" at that App Page, or use it as a Home Page
         / Record Page. In all three cases the reference lives inside
-        the FlexiPage's Metadata JSON as a componentName like
-        `accessgraphai:MyComponent` or `accessgraphai__MyComponent`.
+        the FlexiPage's Metadata JSON.
 
-        Approach: pull FlexiPages the customer owns (namespace prefix
-        != the target), fetch each one's Metadata field, and check
-        the serialised JSON for occurrences of the namespace prefix
-        with either a `:` or `__` separator. This is a substring
-        match against a serialised dict — cheap, and it doesn't
-        require knowing the full FlexiPage schema.
+        Approach: pull every FlexiPage in the org (customer or
+        managed — Python filter afterwards, safer than SOQL != on
+        NamespacePrefix which has null-handling quirks), fetch each
+        one's Metadata field, and substring-match the serialised
+        JSON for occurrences of the namespace. We check three
+        markers (colon, underscore, bare) to cover the different
+        forms App Builder writes namespaced component references
+        depending on API version and Aura vs LWC hosting.
 
         Bounded to first 300 FlexiPages per run to protect the
-        timeout budget. Empty list on any failure.
+        timeout budget. Empty list on any structural failure — each
+        per-page fetch is separately guarded so one bad page
+        doesn't kill the sweep.
         """
         import json as _json
 
         try:
             page_rows = await self.query_tooling(
-                "SELECT Id, DeveloperName, EntityDefinitionId, Type "
-                "FROM FlexiPage "
-                f"WHERE NamespacePrefix != '{namespace}'"
+                "SELECT Id, DeveloperName, EntityDefinitionId, "
+                "NamespacePrefix, Type FROM FlexiPage"
             )
         except Exception as exc:  # noqa: BLE001
-            logger.info(
+            logger.warning(
                 "FlexiPage list for supplemental pass (namespace=%s) "
-                "failed: %s", namespace, exc,
+                "failed: %s — no FlexiPage hits will be reported.",
+                namespace, exc,
             )
             return []
 
-        # Match either "accessgraphai:" (LWC/Aura reference form) or
-        # "accessgraphai__" (metadata API form). Both patterns show
-        # up depending on how App Builder serialised the layout.
-        marker_colon = f"{namespace}:"
-        marker_us = f"{namespace}__"
+        # Filter in Python: exclude FlexiPages that live in the
+        # package's own namespace (that's the package hosting its
+        # own components — not customer usage).
+        customer_pages = [
+            r for r in page_rows
+            if (r.get("NamespacePrefix") or "") != namespace
+        ]
+        pages_to_check = customer_pages[:300]
+
+        # WARNING-level so it shows in Railway's default log stream
+        # and we can diagnose why hits do or don't fire.
+        logger.warning(
+            "package-sprawl: FlexiPage sweep for namespace=%s — "
+            "%d total FlexiPages, %d customer-owned to scan",
+            namespace, len(page_rows), len(pages_to_check),
+        )
+
+        # Markers cover the three common serialisation forms:
+        #   - "accessgraphai:MyLWC"   (LWC / Aura reference)
+        #   - "accessgraphai__MyLWC"  (Apex-style / metadata API)
+        #   - "accessgraphai"         (bare — fallback, some
+        #                              serialisers store namespace
+        #                              separately from component)
+        markers = (
+            f"{namespace}:",
+            f"{namespace}__",
+        )
+        # Use the bare namespace as a fallback ONLY on FlexiPages
+        # where a specific-marker check missed. Avoids counting a
+        # rich-text mention of the namespace name in a description
+        # as a component reference on real matches, but preserves
+        # detection when the JSON serialiser uses a different
+        # component-reference syntax.
+        bare_marker = namespace
 
         hits: List[Dict[str, Any]] = []
-        pages_to_check = page_rows[:300]
+        pages_with_metadata = 0
+        pages_matched_specific = 0
+        pages_matched_bare_only = 0
+
         for row in pages_to_check:
             page_id = row.get("Id")
             if not page_id:
                 continue
-            # Metadata is a compound field — Tooling requires fetching
-            # it per-record. Guard each iteration so one bad page
-            # doesn't kill the sweep.
             try:
                 detail_rows = await self.query_tooling(
                     "SELECT Metadata FROM FlexiPage "
@@ -691,11 +723,17 @@ class SalesforceAPIClient:
             metadata = detail_rows[0].get("Metadata")
             if metadata is None:
                 continue
+            pages_with_metadata += 1
             try:
                 serialised = _json.dumps(metadata)
             except Exception:  # noqa: BLE001
                 continue
-            if marker_colon not in serialised and marker_us not in serialised:
+            specific_hit = any(m in serialised for m in markers)
+            if specific_hit:
+                pages_matched_specific += 1
+            elif bare_marker in serialised:
+                pages_matched_bare_only += 1
+            else:
                 continue
             hits.append({
                 "component": row.get("DeveloperName"),
@@ -704,6 +742,14 @@ class SalesforceAPIClient:
                 "ref_type": "LightningComponentBundle",
                 "source": "flexipage",
             })
+
+        logger.warning(
+            "package-sprawl: FlexiPage sweep for namespace=%s — "
+            "%d with Metadata, %d specific-marker matches, "
+            "%d bare-marker fallback matches",
+            namespace, pages_with_metadata,
+            pages_matched_specific, pages_matched_bare_only,
+        )
         return hits
 
     async def count_async_apex_jobs_by_namespace(

@@ -714,7 +714,11 @@ function DetailWhereUsed({
             <code className="font-mono text-[11px] not-italic">
               CustomTab
             </code>{' '}
-            pass.
+            +{' '}
+            <code className="font-mono text-[11px] not-italic">
+              FlexiPage
+            </code>{' '}
+            metadata sweeps.
           </p>
           {/* MetadataComponentDependency is Salesforce's official
               dependency index, but it has documented gaps: beta 2GP
