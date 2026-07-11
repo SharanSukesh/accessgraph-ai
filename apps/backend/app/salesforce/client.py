@@ -584,37 +584,47 @@ class SalesforceAPIClient:
             )
             if not bundle_rows:
                 return []
-            bundle_map: Dict[str, str] = {
-                r.get("Id"): (r.get("DeveloperName") or "?")
+            # Normalise bundle DeveloperNames for case-insensitive
+            # substring matching against tab DeveloperNames. LWC
+            # bundle names typically look like "accessGraphAIMain",
+            # and Custom Tab DeveloperNames typically match or embed
+            # the LWC name (users usually name the tab after the
+            # component). CustomTab in Tooling API doesn't expose a
+            # queryable `LightningComponentBundleId` in current API
+            # versions (v62 responds 400), so this name-heuristic is
+            # the best we can do without falling back to Metadata API.
+            bundle_names_normalised: Dict[str, str] = {
+                (r.get("DeveloperName") or "").lower(): r.get("DeveloperName") or "?"
                 for r in bundle_rows
-                if r.get("Id")
+                if r.get("DeveloperName")
             }
-            # SOQL IN clauses cap at 200 literal ids on Tooling. If
-            # a package ships more than that, we sample the first 200
-            # — good enough for detection since a single hit already
-            # proves the package is wired.
-            bundle_ids = list(bundle_map.keys())[:200]
-            if not bundle_ids:
+            if not bundle_names_normalised:
                 return []
-            ids_clause = ",".join(f"'{bid}'" for bid in bundle_ids)
+            # Pull every Lightning Component tab in the org with only
+            # safe base fields (Id, Name, DeveloperName, Type,
+            # NamespacePrefix). We do the LWC correlation in Python.
             try:
                 tab_rows = await self.query_tooling(
-                    "SELECT Id, Name, LightningComponentBundleId, "
-                    "NamespacePrefix FROM CustomTab "
-                    f"WHERE LightningComponentBundleId IN ({ids_clause})"
+                    "SELECT Id, Name, DeveloperName, NamespacePrefix, "
+                    "Type FROM CustomTab"
                 )
             except Exception as tab_exc:  # noqa: BLE001
                 logger.warning(
-                    "package-sprawl: CustomTab query rejected for "
-                    "namespace=%s (field may not exist on this SF "
-                    "API version): %s",
+                    "package-sprawl: base CustomTab query rejected "
+                    "for namespace=%s: %s",
                     namespace, tab_exc,
                 )
                 return []
+            # Log the distribution of tab Types so we can see whether
+            # LightningComponent tabs even exist in this org.
+            type_counts: Dict[str, int] = {}
+            for r in tab_rows:
+                t = str(r.get("Type") or "?")
+                type_counts[t] = type_counts.get(t, 0) + 1
             logger.warning(
                 "package-sprawl: CustomTab sweep for namespace=%s — "
-                "%d tabs point at package LWCs",
-                namespace, len(tab_rows),
+                "%d total tabs, Type breakdown: %s",
+                namespace, len(tab_rows), type_counts,
             )
             hits: List[Dict[str, Any]] = []
             for r in tab_rows:
@@ -623,14 +633,42 @@ class SalesforceAPIClient:
                 # — that's internal wiring, not customer usage.
                 if tab_namespace == namespace:
                     continue
-                bundle_id = r.get("LightningComponentBundleId")
+                tab_dev_name = (r.get("DeveloperName") or "").lower()
+                tab_type = str(r.get("Type") or "")
+                # Only correlate for Lightning Component tabs (SF
+                # returns this Type value in different casings across
+                # API versions — we accept both).
+                if tab_type.lower() not in (
+                    "lightningcomponent",
+                    "lwc",
+                    "lightning_component",
+                ):
+                    continue
+                if not tab_dev_name:
+                    continue
+                # Match if a bundle's normalised name is a substring
+                # of the tab's DeveloperName, or vice versa. That
+                # covers "MyTab hosts myLwc" (tab named after the
+                # LWC) and "myLwcTab hosts myLwc" (tab with suffix).
+                matched_bundle: Optional[str] = None
+                for bnorm, bname in bundle_names_normalised.items():
+                    if bnorm in tab_dev_name or tab_dev_name in bnorm:
+                        matched_bundle = bname
+                        break
+                if not matched_bundle:
+                    continue
                 hits.append({
-                    "component": r.get("Name"),
+                    "component": r.get("Name") or r.get("DeveloperName"),
                     "component_type": "CustomTab",
-                    "ref_component": bundle_map.get(bundle_id, "?"),
+                    "ref_component": matched_bundle,
                     "ref_type": "LightningComponentBundle",
                     "source": "customtab_lwc",
                 })
+            logger.warning(
+                "package-sprawl: CustomTab sweep for namespace=%s — "
+                "%d name-heuristic hits",
+                namespace, len(hits),
+            )
             return hits
         except Exception as exc:  # noqa: BLE001
             logger.warning(
