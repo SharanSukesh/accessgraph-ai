@@ -545,6 +545,81 @@ class SalesforceAPIClient:
             )
             return []
 
+    async def find_supplemental_customtab_references(
+        self, namespace: str
+    ) -> List[Dict[str, Any]]:
+        """Supplemental dependency detection: catches CustomTab → LWC
+        edges that Salesforce's `MetadataComponentDependency` index
+        sometimes misses.
+
+        Real-world scenario this catches: a customer creates a Custom
+        App with a Custom Tab of type "Lightning Component" pointing at
+        an LWC from a managed package. That's a real, load-bearing
+        reference — the package's LWC is being displayed in the org —
+        but it's frequently absent from MetadataComponentDependency,
+        especially for beta 2GP managed packages.
+
+        Approach: query LWC bundles in the target namespace, then
+        query CustomTab records whose LightningComponentBundleId
+        points at those bundles. Exclude tabs from the same namespace
+        (that's the package hosting its own components, not a
+        customer reference).
+
+        Returns entries in the same shape as `top_metadata_dependents`
+        with an added `source: "customtab_lwc"` tag so the UI can
+        badge them as coming from the supplemental pass rather than
+        the primary dependency index. Empty list on any failure —
+        this is best-effort supplementary detection, never the source
+        of truth.
+        """
+        try:
+            bundle_rows = await self.query_tooling(
+                "SELECT Id, DeveloperName FROM LightningComponentBundle "
+                f"WHERE NamespacePrefix = '{namespace}'"
+            )
+            if not bundle_rows:
+                return []
+            bundle_map: Dict[str, str] = {
+                r.get("Id"): (r.get("DeveloperName") or "?")
+                for r in bundle_rows
+                if r.get("Id")
+            }
+            # SOQL IN clauses cap at 200 literal ids on Tooling. If
+            # a package ships more than that, we sample the first 200
+            # — good enough for detection since a single hit already
+            # proves the package is wired.
+            bundle_ids = list(bundle_map.keys())[:200]
+            if not bundle_ids:
+                return []
+            ids_clause = ",".join(f"'{bid}'" for bid in bundle_ids)
+            tab_rows = await self.query_tooling(
+                "SELECT Id, Name, LightningComponentBundleId, "
+                "NamespacePrefix FROM CustomTab "
+                f"WHERE LightningComponentBundleId IN ({ids_clause})"
+            )
+            hits: List[Dict[str, Any]] = []
+            for r in tab_rows:
+                tab_namespace = r.get("NamespacePrefix") or ""
+                # Skip tabs that live in the package's own namespace
+                # — that's internal wiring, not customer usage.
+                if tab_namespace == namespace:
+                    continue
+                bundle_id = r.get("LightningComponentBundleId")
+                hits.append({
+                    "component": r.get("Name"),
+                    "component_type": "CustomTab",
+                    "ref_component": bundle_map.get(bundle_id, "?"),
+                    "ref_type": "LightningComponentBundle",
+                    "source": "customtab_lwc",
+                })
+            return hits
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "Supplemental CustomTab dep search for namespace=%s "
+                "failed: %s", namespace, exc,
+            )
+            return []
+
     async def count_async_apex_jobs_by_namespace(
         self, namespace: str
     ) -> Optional[int]:

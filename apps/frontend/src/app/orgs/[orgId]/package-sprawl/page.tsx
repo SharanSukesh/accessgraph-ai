@@ -326,7 +326,7 @@ export default function PackageSprawlPage() {
               </CardContent>
             </Card>
           ) : pkgPage && pkgPage.packages.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
               {pkgPage.packages.map((pkg) => (
                 <PackageCard key={pkg.id} pkg={pkg} />
               ))}
@@ -652,6 +652,20 @@ function DetailWhereUsed({
   dependents: NonNullable<InstalledPackage['evidence']['top_dependents']>
 }) {
   const depCount = pkg.dependency_count
+  const supplementalCount =
+    pkg.evidence?.supplemental_dependents_count ?? 0
+  // Primary hits come from MetadataComponentDependency (no source
+  // tag). Supplemental hits carry source="customtab_lwc" and
+  // originate from a direct CustomTab -> LWC lookup — they're real
+  // references the primary index missed.
+  const primaryHits = dependents.filter((d) => !d.source)
+  const supplementalHits = dependents.filter(
+    (d) => d.source === 'customtab_lwc',
+  )
+  const totalUsage =
+    typeof depCount === 'number'
+      ? depCount + supplementalCount
+      : supplementalCount
   const grouped = dependents.reduce<Record<string, typeof dependents>>(
     (acc, d) => {
       const key = d.component_type ?? 'Other'
@@ -665,14 +679,22 @@ function DetailWhereUsed({
 
   return (
     <section>
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <GitBranch className="h-4 w-4 text-grove-mint" />
         <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
           Where it's used
         </h4>
-        {typeof depCount === 'number' && (
+        {totalUsage > 0 && (
           <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 tabular-nums">
-            {depCount.toLocaleString()} customer component{depCount === 1 ? '' : 's'} reference this package
+            {totalUsage.toLocaleString()} customer component{totalUsage === 1 ? '' : 's'} reference this package
+          </span>
+        )}
+        {supplementalCount > 0 && (
+          <span
+            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30"
+            title="Includes CustomTab -> LWC references caught by our supplemental pass — Salesforce's MetadataComponentDependency index missed these."
+          >
+            +{supplementalCount} supplemental
           </span>
         )}
       </div>
@@ -682,12 +704,59 @@ function DetailWhereUsed({
           Tooling permissions). We can't tell whether this package is
           referenced by any of your components.
         </p>
-      ) : depCount === 0 ? (
-        <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
-          No customer components reference this package. Nothing in your
-          Apex, LWCs, Flows, Validation Rules, or layouts touches its
-          namespace.
-        </p>
+      ) : depCount === 0 && supplementalHits.length === 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
+            No customer components reference this package according to
+            Salesforce&rsquo;s{' '}
+            <code className="font-mono text-[11px] not-italic">
+              MetadataComponentDependency
+            </code>{' '}
+            index or our supplemental{' '}
+            <code className="font-mono text-[11px] not-italic">
+              CustomTab
+            </code>{' '}
+            pass.
+          </p>
+          {/* MetadataComponentDependency is Salesforce's official
+              dependency index, but it has documented gaps: beta 2GP
+              managed packages, tab / FlexiPage-mediated LWC hosting,
+              Reports / Dashboards, and some CustomField refs are not
+              always indexed. Beta packages are the worst offender —
+              call that out specifically since the reader is more
+              likely to be looking at a genuinely-used-but-underindexed
+              install. */}
+          <div className="text-[11px] leading-relaxed text-grove-ink/60 dark:text-grove-ink-dk/60 border-l-2 border-copper-300 dark:border-copper-700 pl-3">
+            <strong>Verify before uninstalling.</strong>{' '}
+            {pkg.is_beta ? (
+              <>
+                This package is <strong>beta</strong>, and
+                Salesforce&rsquo;s dependency index is <em>especially</em>{' '}
+                patchy for beta 2GP packages. Custom Tabs hosting an LWC
+                from the package, Lightning App Pages / Home Pages /
+                FlexiPages, and Reports referencing package objects
+                often aren&rsquo;t indexed. Cross-check via SF Setup:{' '}
+                <strong>Setup &rarr; App Manager</strong> and{' '}
+                <strong>Setup &rarr; Tabs</strong> — look for any tab
+                or app referencing components in the{' '}
+                <code className="font-mono text-[11px] not-italic">
+                  {pkg.namespace_prefix ?? '?'}
+                </code>{' '}
+                namespace before flagging as unused.
+              </>
+            ) : (
+              <>
+                MetadataComponentDependency has documented gaps: Reports,
+                Dashboards, some CustomField refs, and certain
+                FlexiPage-mediated component hosting aren&rsquo;t always
+                indexed. If this package still ships meaningful code,
+                cross-check via SF Setup&rsquo;s built-in{' '}
+                <strong>&ldquo;Where is this used?&rdquo;</strong> view
+                on individual components before uninstalling.
+              </>
+            )}
+          </div>
+        </div>
       ) : dependents.length === 0 ? (
         <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
           {depCount.toLocaleString()} references detected but the sample
@@ -707,27 +776,40 @@ function DetailWhereUsed({
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {grouped[typeKey].map((d, i) => (
-                  <span
-                    key={`${d.component}-${i}`}
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15"
-                    title={
-                      d.ref_component
-                        ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
-                        : `${d.component} references this package`
-                    }
-                  >
-                    {d.component ?? '(unknown)'}
-                  </span>
-                ))}
+                {grouped[typeKey].map((d, i) => {
+                  const isSupplemental = d.source === 'customtab_lwc'
+                  const cls = isSupplemental
+                    ? 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-mint/10 dark:bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30'
+                    : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15'
+                  return (
+                    <span
+                      key={`${d.component}-${i}`}
+                      className={cls}
+                      title={
+                        isSupplemental
+                          ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
+                          : d.ref_component
+                          ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
+                          : `${d.component} references this package`
+                      }
+                    >
+                      {isSupplemental && (
+                        <span className="text-[9px] uppercase tracking-wider opacity-70">
+                          ⇢ LWC
+                        </span>
+                      )}
+                      {d.component ?? '(unknown)'}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           ))}
-          {typeof depCount === 'number' && depCount > dependents.length && (
+          {typeof depCount === 'number' && depCount > primaryHits.length && (
             <p className="text-[11px] italic text-grove-ink/45 dark:text-grove-ink-dk/45">
-              Showing the top {dependents.length.toLocaleString()} of{' '}
-              {depCount.toLocaleString()} references — the rest follow
-              the same pattern.
+              Showing the top {primaryHits.length.toLocaleString()} of{' '}
+              {depCount.toLocaleString()} primary-index references —
+              the rest follow the same pattern.
             </p>
           )}
         </div>

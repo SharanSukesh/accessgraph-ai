@@ -50,6 +50,7 @@ export interface InstalledPackage {
       /** Which wiring signals fired for this package. */
       wiring_signals?: (
         | 'dependencies'
+        | 'supplemental_deps'
         | 'records'
         | 'async_jobs'
         | 'scheduled_jobs'
@@ -73,13 +74,23 @@ export interface InstalledPackage {
       deprecated_penalty?: boolean
       final_tier?: PackageTier
     }
-    /** Top 5 customer-owned components that reference this package. */
+    /** Customer-owned components that reference this package.
+     *  Blended: primary hits (MetadataComponentDependency, no `source`
+     *  field) + supplemental hits from CustomTab → LWC lookup
+     *  (`source: 'customtab_lwc'`) so beta 2GP packages the primary
+     *  index misses still surface here. */
     top_dependents?: {
       component: string | null
       component_type: string | null
       ref_component: string | null
       ref_type: string | null
+      source?: 'customtab_lwc'
     }[]
+    /** Number of supplemental hits (subset of top_dependents.length
+     *  where source === 'customtab_lwc'). Handy for the UI to show a
+     *  "found via supplemental pass" note when the primary index
+     *  returned 0. */
+    supplemental_dependents_count?: number
     /** Per-object record counts across package-brought custom objects. */
     record_counts_by_object?: Record<string, number>
   }

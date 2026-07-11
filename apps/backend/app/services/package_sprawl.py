@@ -421,6 +421,23 @@ class PackageSprawlService:
                     namespace, limit=50
                 )
 
+        # Supplemental dependency detection — MetadataComponentDependency
+        # has documented coverage gaps (beta 2GP packages especially;
+        # also CustomTab / FlexiPage / Report edges). We backstop with a
+        # direct CustomTab → LWC lookup so a customer app whose tab
+        # displays a managed-package LWC doesn't get mis-flagged as
+        # Unused. Hits are tagged with source="customtab_lwc" so the UI
+        # can distinguish them from primary index hits, but they DO
+        # promote to Active tier — a real reference is a real reference
+        # regardless of which pass caught it.
+        supplemental_dependents: List[Dict[str, Any]] = []
+        if namespace:
+            supplemental_dependents = (
+                await client.find_supplemental_customtab_references(namespace)
+            )
+            if supplemental_dependents:
+                top_dependents = top_dependents + supplemental_dependents
+
         # record_count_total — sum of record counts across every
         # package-brought custom object. Non-zero = someone's storing
         # data here. Bounded by MAX_RECORD_COUNT_QUERIES_PER_PACKAGE
@@ -486,6 +503,10 @@ class PackageSprawlService:
         wiring_signals: List[str] = []
         if (dependency_count or 0) >= ACTIVE_MIN_DEPENDENCIES:
             wiring_signals.append("dependencies")
+        # Supplemental customtab hits are worth their own signal —
+        # they're proof-of-usage in a form the primary index missed.
+        if supplemental_dependents:
+            wiring_signals.append("supplemental_deps")
         if (record_count_total or 0) >= ACTIVE_MIN_RECORDS:
             wiring_signals.append("records")
         if (async_job_count or 0) >= 1:
@@ -533,6 +554,7 @@ class PackageSprawlService:
             },
             # Sample-level evidence surfaced on the drill-down.
             "top_dependents": top_dependents,
+            "supplemental_dependents_count": len(supplemental_dependents),
             "record_counts_by_object": record_counts_by_object,
         }
 
