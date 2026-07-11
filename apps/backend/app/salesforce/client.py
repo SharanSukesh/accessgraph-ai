@@ -577,6 +577,11 @@ class SalesforceAPIClient:
                 "SELECT Id, DeveloperName FROM LightningComponentBundle "
                 f"WHERE NamespacePrefix = '{namespace}'"
             )
+            logger.warning(
+                "package-sprawl: CustomTab sweep for namespace=%s — "
+                "queryable LWC bundles in package: %d",
+                namespace, len(bundle_rows),
+            )
             if not bundle_rows:
                 return []
             bundle_map: Dict[str, str] = {
@@ -592,10 +597,24 @@ class SalesforceAPIClient:
             if not bundle_ids:
                 return []
             ids_clause = ",".join(f"'{bid}'" for bid in bundle_ids)
-            tab_rows = await self.query_tooling(
-                "SELECT Id, Name, LightningComponentBundleId, "
-                "NamespacePrefix FROM CustomTab "
-                f"WHERE LightningComponentBundleId IN ({ids_clause})"
+            try:
+                tab_rows = await self.query_tooling(
+                    "SELECT Id, Name, LightningComponentBundleId, "
+                    "NamespacePrefix FROM CustomTab "
+                    f"WHERE LightningComponentBundleId IN ({ids_clause})"
+                )
+            except Exception as tab_exc:  # noqa: BLE001
+                logger.warning(
+                    "package-sprawl: CustomTab query rejected for "
+                    "namespace=%s (field may not exist on this SF "
+                    "API version): %s",
+                    namespace, tab_exc,
+                )
+                return []
+            logger.warning(
+                "package-sprawl: CustomTab sweep for namespace=%s — "
+                "%d tabs point at package LWCs",
+                namespace, len(tab_rows),
             )
             hits: List[Dict[str, Any]] = []
             for r in tab_rows:
@@ -614,9 +633,10 @@ class SalesforceAPIClient:
                 })
             return hits
         except Exception as exc:  # noqa: BLE001
-            logger.info(
-                "Supplemental CustomTab dep search for namespace=%s "
-                "failed: %s", namespace, exc,
+            logger.warning(
+                "package-sprawl: CustomTab sweep for namespace=%s "
+                "raised at outer scope: %s",
+                namespace, exc,
             )
             return []
 
@@ -702,6 +722,7 @@ class SalesforceAPIClient:
         pages_with_metadata = 0
         pages_matched_specific = 0
         pages_matched_bare_only = 0
+        debug_sample_logged = False
 
         for row in pages_to_check:
             page_id = row.get("Id")
@@ -728,6 +749,21 @@ class SalesforceAPIClient:
                 serialised = _json.dumps(metadata)
             except Exception:  # noqa: BLE001
                 continue
+            # DIAGNOSTIC: log a sample of the actual Metadata JSON
+            # once per run so we can see what SF is returning. If the
+            # structure doesn't include the namespace in any recognisable
+            # form, we know substring matching is a dead end and we
+            # need a different data source (Metadata API, or querying
+            # FlexiPageComponentInstance directly). Truncated to 1500
+            # chars so a huge Home Page layout doesn't blow up the log.
+            if not debug_sample_logged:
+                sample = serialised[:1500]
+                logger.warning(
+                    "package-sprawl: sample FlexiPage Metadata "
+                    "(namespace=%s, page=%s): %s",
+                    namespace, row.get("DeveloperName"), sample,
+                )
+                debug_sample_logged = True
             specific_hit = any(m in serialised for m in markers)
             if specific_hit:
                 pages_matched_specific += 1
