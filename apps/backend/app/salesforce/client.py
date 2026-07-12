@@ -634,55 +634,82 @@ class SalesforceAPIClient:
                 "%d tabs via %s",
                 namespace, len(tab_rows), tab_source_used,
             )
-            # Normalise the namespace: strip whitespace and any
-            # non-alphanumeric characters, lowercase. So "AccessGraph
-            # AI" (as it'd appear in a tab Label) collapses to
-            # "accessgraphai" — matching the namespace exactly.
-            # Only use this heuristic for namespaces >= 5 chars so
-            # short namespaces like "abc" don't false-positive.
+            # Normalisation: strip whitespace + any non-alphanumeric
+            # characters, lowercase. So "AccessGraph_AI_Equity"
+            # collapses to "accessgraphaiequity" and lines up
+            # for substring matching against bundle names and the
+            # package namespace.
             def _alnum_lower(s: str) -> str:
                 return "".join(c.lower() for c in s if c.isalnum())
 
             namespace_norm = _alnum_lower(namespace)
+
+            # Rebuild the bundle name lookup with proper alnum
+            # normalisation (the original just lowercased, which
+            # left underscores in — meaning "access_graph_explorer"
+            # wouldn't match "explorer"). Also captures the ORIGINAL
+            # DeveloperName for display in the hit's ref_component.
+            bundle_names_by_alnum: Dict[str, str] = {}
+            for r in bundle_rows:
+                dev_name = r.get("DeveloperName") or ""
+                if not dev_name:
+                    continue
+                bnorm = _alnum_lower(dev_name)
+                if len(bnorm) >= 4:  # skip too-short bundle names
+                    bundle_names_by_alnum[bnorm] = dev_name
+
+            # Log the actual bundle names we'll be matching against,
+            # so a future debug pass can see whether the LWC names
+            # in the package line up with the tabs the org has.
+            logger.warning(
+                "package-sprawl: CustomTab sweep for namespace=%s — "
+                "bundle names to match: %s",
+                namespace, list(bundle_names_by_alnum.values()),
+            )
+
             hits: List[Dict[str, Any]] = []
             seen_tab_ids: set = set()
-            bundle_names_display = list(bundle_names_normalised.values())
             for r in tab_rows:
                 tab_id = r.get("Id")
                 if tab_id in seen_tab_ids:
                     continue
-                tab_name = (r.get("Name") or "").lower()
-                tab_label = (r.get("Label") or "").lower()
-                if not tab_name and not tab_label:
+                tab_name_raw = r.get("Name") or ""
+                tab_label_raw = r.get("Label") or ""
+                tab_name_norm = _alnum_lower(tab_name_raw)
+                tab_label_norm = _alnum_lower(tab_label_raw)
+                if not tab_name_norm and not tab_label_norm:
                     continue
 
                 # Pass 1: bundle DeveloperName ↔ tab Name/Label
-                # substring match. This catches "MyLwcTab" hosting
-                # "myLwc" and similar name-followed-through cases.
+                # substring match, BIDIRECTIONAL.
+                #
+                # Both directions matter:
+                #   - bundle name substring OF tab name catches
+                #     "MyLwcTab" hosting "MyLwc"
+                #   - tab name substring OF bundle name catches
+                #     "Equity" tab hosting "accessGraphEquity" bundle
+                # Minimum length 4 on both sides to prevent tiny
+                # tokens matching everything.
                 matched_bundle: Optional[str] = None
                 match_reason = ""
-                for bnorm, bname in bundle_names_normalised.items():
-                    if not bnorm:
-                        continue
-                    if (
-                        bnorm in tab_name
-                        or bnorm in tab_label
-                        or tab_name == bnorm
-                        or tab_label == bnorm
-                    ):
-                        matched_bundle = bname
-                        match_reason = "bundle-name overlap"
+                for bnorm, bname in bundle_names_by_alnum.items():
+                    for candidate in (tab_name_norm, tab_label_norm):
+                        if len(candidate) < 4:
+                            continue
+                        if bnorm in candidate or candidate in bnorm:
+                            matched_bundle = bname
+                            match_reason = "bundle-name overlap"
+                            break
+                    if matched_bundle:
                         break
 
                 # Pass 2 (only if pass 1 missed): normalised
-                # namespace substring/equality. Catches the far more
-                # common case where a user labels their custom tab
-                # after the *app* — e.g. "AccessGraph AI" tab
-                # displaying accessgraphai's LWCs. Only runs for
-                # namespaces >= 5 chars to control false positives.
+                # namespace substring/equality. Catches the case
+                # where a user labels their custom tab after the
+                # *app* — e.g. "AccessGraph_AI_Dashboard" tab that
+                # hosts an accessgraphai LWC but doesn't share a
+                # substring with any LWC bundle name.
                 if matched_bundle is None and len(namespace_norm) >= 5:
-                    tab_name_norm = _alnum_lower(tab_name)
-                    tab_label_norm = _alnum_lower(tab_label)
                     for candidate in (tab_name_norm, tab_label_norm):
                         if not candidate:
                             continue
@@ -695,9 +722,10 @@ class SalesforceAPIClient:
                             )
                         ):
                             matched_bundle = (
-                                bundle_names_display[0]
-                                if bundle_names_display
-                                else "?"
+                                next(
+                                    iter(bundle_names_by_alnum.values()),
+                                    "?",
+                                )
                             )
                             match_reason = "namespace-in-tab-name overlap"
                             break
@@ -706,7 +734,7 @@ class SalesforceAPIClient:
                     continue
                 seen_tab_ids.add(tab_id)
                 hits.append({
-                    "component": r.get("Label") or r.get("Name"),
+                    "component": tab_label_raw or tab_name_raw,
                     "component_type": f"CustomTab ({match_reason})",
                     "ref_component": matched_bundle,
                     "ref_type": "LightningComponentBundle",
