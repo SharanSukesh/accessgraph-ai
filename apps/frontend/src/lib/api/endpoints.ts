@@ -108,6 +108,13 @@ export const endpoints = {
   packageSprawlHistory: (orgId: string) =>
     `/orgs/${orgId}/package-sprawl/history`,
 
+  // Report & Dashboard sprawl — inventory + tier scoring
+  reportSprawlRun: (orgId: string) => `/orgs/${orgId}/report-sprawl/run`,
+  reportSprawlLatest: (orgId: string) => `/orgs/${orgId}/report-sprawl/latest`,
+  reportSprawlItems: (orgId: string) => `/orgs/${orgId}/report-sprawl/items`,
+  reportSprawlHistory: (orgId: string) =>
+    `/orgs/${orgId}/report-sprawl/history`,
+
   // Restructure Studio — GAEA Optimal Org Restructure
   restructureRun: (orgId: string) => `/orgs/${orgId}/restructure/run`,
   restructureLatest: (orgId: string) => `/orgs/${orgId}/restructure/latest`,

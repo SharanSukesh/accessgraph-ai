@@ -1785,6 +1785,137 @@ class InstalledPackage(Base, TimestampMixin):
 
 
 # ============================================================================
+# Report & Dashboard Sprawl
+# ============================================================================
+#
+# Inventory + tier scoring for Reports + Dashboards. Mirror of the
+# Managed-Package Sprawl pattern: one snapshot per run, one row per
+# item, tier + evidence computed at snapshot time.
+#
+# Tiers (precedence: orphaned > duplicate > zombie > live):
+#   - orphaned:  owner is inactive
+#   - duplicate: normalised name matches ≥1 sibling in the same run
+#   - zombie:    LastReferencedDate > 12 months ago (or never referenced)
+#   - live:      referenced within the last 12 months
+
+
+class ReportSprawlRun(Base, TimestampMixin):
+    """One run of the Report & Dashboard Sprawl analyser.
+
+    All the rollup counters are stored on this row so /latest is a
+    single-row read — the per-item detail lives on ReportInventoryItem
+    and only loads when the user opens the drilldown.
+    """
+    __tablename__ = "report_sprawl_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    reports_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    dashboards_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    items_live: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_zombie: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_orphaned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    items_duplicate: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Aggregate signals for the KPI strip.
+    items_never_referenced: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    # Mean of `days_since_last_view` across items that have any view
+    # history. Nullable — an empty org (no items) has nothing to average.
+    avg_days_since_last_view: Mapped[Optional[int]] = mapped_column(Integer)
+    # Distinct normalised-name buckets that have ≥2 items — the number
+    # of duplicate GROUPS, not the total duplicate item count.
+    duplicate_groups: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(String(500))
+
+    items = relationship(
+        "ReportInventoryItem",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_report_sprawl_run_org_time", "organization_id", "snapshot_at"),
+    )
+
+
+class ReportInventoryItem(Base, TimestampMixin):
+    """One row per Report or Dashboard captured at snapshot time.
+
+    Deliberately unified — reports + dashboards share almost every
+    field the sprawl scorer needs, and it means the API can return
+    them in one list. `item_type` discriminates.
+    """
+    __tablename__ = "report_inventory_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("report_sprawl_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    sf_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    item_type: Mapped[str] = mapped_column(String(16), nullable=False)  # report | dashboard
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    developer_name: Mapped[Optional[str]] = mapped_column(String(255))
+    folder_name: Mapped[Optional[str]] = mapped_column(String(255))
+    folder_id: Mapped[Optional[str]] = mapped_column(String(18))
+
+    owner_sf_id: Mapped[Optional[str]] = mapped_column(String(18))
+    owner_name: Mapped[Optional[str]] = mapped_column(String(255))
+    # Nullable because we may not have resolved the owner (managed by
+    # someone in a synced-out portion of the org). None means "unknown"
+    # not "active" — the tier scorer treats None as inactive to fail safe.
+    owner_is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
+
+    description: Mapped[Optional[str]] = mapped_column(String(1000))
+    report_format: Mapped[Optional[str]] = mapped_column(String(32))
+
+    # Salesforce timestamps — kept as UTC datetimes.
+    created_at_sf: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_referenced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_modified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Snapshot-time computed values (avoid recomputing on every read).
+    # None when no view history — frontend renders "never viewed".
+    days_since_last_view: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Tier: 'live' | 'zombie' | 'orphaned' | 'duplicate'.
+    tier: Mapped[str] = mapped_column(String(16), default="live", nullable=False)
+    # Hash of the normalised name; groups items by dedup key so the
+    # frontend can render duplicate clusters. NULL when the item's name
+    # was too short or empty to normalise usefully.
+    duplicate_group_key: Mapped[Optional[str]] = mapped_column(String(64))
+
+    # Per-item evidence: normalised_name, tier_reason, sibling ids, etc.
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("ReportSprawlRun", back_populates="items")
+
+    __table_args__ = (
+        Index("ix_report_item_org_run", "organization_id", "run_id"),
+        Index("ix_report_item_dupe", "run_id", "duplicate_group_key"),
+        UniqueConstraint(
+            "run_id", "sf_id", name="uq_report_item_run_sfid"
+        ),
+    )
+
+
+# ============================================================================
 # GAEA Optimal Org Restructure — role-hierarchy + PSet consolidation
 # ============================================================================
 #

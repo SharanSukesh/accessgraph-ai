@@ -381,6 +381,89 @@ class SalesforceAPIClient:
             )
             return []
 
+    # ------------------------------------------------------------------
+    # Report + Dashboard Sprawl extractors
+    # ------------------------------------------------------------------
+
+    async def extract_reports(self) -> List[Dict[str, Any]]:
+        """All Reports the running user can see. Powers Report Sprawl.
+
+        Report is a standard queryable SObject. The fields we pull:
+          - Id / Name / DeveloperName / OwnerId — identity
+          - FolderName — inline on Report (no join needed)
+          - LastReferencedDate — anywhere-in-org signal (view / edit /
+            embed). Drives the zombie tier cutoff.
+          - LastRunDate — explicit run signal. Nullable — some orgs
+            only populate this on scheduled runs.
+          - LastModifiedDate / CreatedDate — for age vs staleness
+            heuristics on the frontend.
+          - Format — Tabular / Summary / Matrix / MultiBlock / Joined.
+            Consultants like knowing the report shape at a glance.
+          - Description — sometimes explains why the report exists.
+
+        Returns [] on any error rather than crashing so the outer run
+        can still surface dashboards.
+        """
+        soql = (
+            "SELECT Id, Name, DeveloperName, FolderName, OwnerId, "
+            "CreatedDate, LastRunDate, LastReferencedDate, "
+            "LastModifiedDate, LastViewedDate, Description, Format "
+            "FROM Report"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "Report query failed (%s) — report-sprawl runs with an "
+                "empty report list.",
+                e.response.status_code,
+            )
+            return []
+
+    async def extract_dashboards(self) -> List[Dict[str, Any]]:
+        """All Dashboards the running user can see. Same shape as
+        Reports so the sprawl engine can unify their inventory.
+
+        Dashboard exposes FolderId (not FolderName) — we resolve names
+        via `extract_folders()`. RunningUserId matters for consultants
+        because a dashboard running as an inactive user renders empty
+        even if the dashboard row itself looks fine.
+        """
+        soql = (
+            "SELECT Id, Title, DeveloperName, FolderId, RunningUserId, "
+            "CreatedDate, LastReferencedDate, LastModifiedDate, "
+            "LastViewedDate, Description "
+            "FROM Dashboard"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "Dashboard query failed (%s) — report-sprawl runs with "
+                "an empty dashboard list.",
+                e.response.status_code,
+            )
+            return []
+
+    async def extract_folders(self) -> List[Dict[str, Any]]:
+        """Report + Dashboard folders. Used to resolve
+        `Dashboard.FolderId` to a human folder name and to detect
+        "unfiled" content (FolderId is null or a personal folder)."""
+        soql = (
+            "SELECT Id, Name, DeveloperName, Type, AccessType "
+            "FROM Folder "
+            "WHERE Type IN ('Report', 'Dashboard')"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "Folder query failed (%s) — report-sprawl runs without "
+                "folder-name enrichment for dashboards.",
+                e.response.status_code,
+            )
+            return []
+
     async def count_apex_classes_in_namespace(
         self, namespace: str
     ) -> Optional[int]:

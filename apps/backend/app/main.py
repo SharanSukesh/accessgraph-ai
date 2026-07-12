@@ -137,7 +137,7 @@ async def add_security_headers(request: Request, call_next):
 from app.api.routes import (
     auth, orgs, users, privacy, package, deeplink,
     equity, reporting_graph, org_analyzer, data_quality,
-    change_risk_radar, package_sprawl, restructure,
+    change_risk_radar, package_sprawl, restructure, report_sprawl,
 )
 
 app.include_router(health.router, tags=["health"])
@@ -154,6 +154,7 @@ app.include_router(data_quality.router, tags=["data-quality"])
 app.include_router(change_risk_radar.router, tags=["change-risk-radar"])
 app.include_router(package_sprawl.router, tags=["package-sprawl"])
 app.include_router(restructure.router, tags=["restructure"])
+app.include_router(report_sprawl.router, tags=["report-sprawl"])
 
 
 # Global exception handler
