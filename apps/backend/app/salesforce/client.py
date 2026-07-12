@@ -813,18 +813,28 @@ class SalesforceAPIClient:
             )
             return []
 
-        # Filter to customer-owned apps (skip package-owned ones —
-        # a package hosting its own components is internal wiring).
-        customer_apps = [
-            r for r in app_rows
-            if (r.get("NamespacePrefix") or "") != namespace
-        ]
-        apps_to_check = customer_apps[:100]
+        # Include EVERY app in the scan, including the package's own.
+        #
+        # Rationale: when a managed package ships its own Custom App
+        # (e.g. accessgraphai ships "AccessGraph AI"), and the
+        # customer installs it, that app IS the customer's usage
+        # surface — its tabs display the package's LWCs, users
+        # navigate to it from the App Launcher, and uninstalling the
+        # package removes it. Filtering it out because it lives in
+        # the package namespace made us miss the biggest signal we
+        # have: the package's app is actually installed and its tabs
+        # are wired.
+        #
+        # We do tag hits from package-owned apps with a distinct
+        # `match_reason` so a reviewing consultant can tell the
+        # package's own app apart from a customer app that added
+        # package tabs.
+        apps_to_check = app_rows[:100]
 
         logger.warning(
             "package-sprawl: CustomApplication sweep for namespace=%s "
-            "— %d total apps, %d customer-owned to scan",
-            namespace, len(app_rows), len(apps_to_check),
+            "— %d total apps to scan (including package-owned)",
+            namespace, len(apps_to_check),
         )
 
         markers = (
@@ -918,6 +928,16 @@ class SalesforceAPIClient:
                 )
                 debug_sample_logged = True
 
+            # Note whether this app is the package's own Custom App
+            # (NamespacePrefix == the package's namespace). Package
+            # apps that reference their own components are still
+            # real usage from the customer's perspective — they
+            # installed the package to run this app — but we tag
+            # them so a reviewer can tell the source apart from a
+            # customer-created app that added package tabs.
+            app_ns = row.get("NamespacePrefix") or ""
+            is_package_own = app_ns == namespace
+
             # Pass 1: namespace-prefix marker in the app metadata.
             # High-confidence — the app directly references a
             # namespaced component. Search patterns include the
@@ -927,10 +947,18 @@ class SalesforceAPIClient:
             match_reason = ""
             if any(m in serialised for m in markers):
                 apps_matched_specific += 1
-                match_reason = "namespace-marker match"
+                match_reason = (
+                    "package-own app referencing its tabs"
+                    if is_package_own
+                    else "customer app referencing package tabs"
+                )
             elif bare_marker in serialised and len(bare_marker) >= 5:
                 apps_matched_bare_only += 1
-                match_reason = "bare-namespace match"
+                match_reason = (
+                    "package-own app (bare-namespace match)"
+                    if is_package_own
+                    else "customer app (bare-namespace match)"
+                )
 
             # Pass 2: search for tabs-of-interest — customer-owned
             # tab DeveloperNames the earlier CustomTab pass linked
