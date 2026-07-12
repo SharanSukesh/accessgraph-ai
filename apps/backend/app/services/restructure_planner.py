@@ -41,6 +41,7 @@ from app.domain.models import (
     ObjectPermissionSnapshot,
     PermissionSetAssignmentSnapshot,
     PermissionSetSnapshot,
+    ProfileSnapshot,
     RestructureMove,
     RestructureMoveStatus,
     RestructureMoveType,
@@ -81,62 +82,90 @@ def _looks_like_id(s: str) -> bool:
     identifier rather than a human label?
 
     Cases covered:
-      - 15 or 18-char alphanumeric (SF ID)
-      - Synthetic managed-package names with the "hash + version tuple"
-        pattern (e.g. `00ex00000018ozl_128_09_04_12_5`) — long strings
-        with underscore-separated digit groups and no vowels/spaces.
+      1. Bare SF ID (15 or 18 chars, all alnum)
+      2. Prefixed SF ID (16 or 19 chars — letter prefix + 15/18-char
+         alnum. E.g. `X00e1a000000MWaTAAW` used by some managed
+         packages for internal PSets)
+      3. Managed-package synthetic (long strings with underscore-
+         separated digit groups. E.g. `00ex00000018ozl_128_09_04_12_5`)
     """
     if not s:
         return True
     s = s.strip()
     if not s:
         return True
-    # Bare SF ID (15 or 18 chars, all alnum, no spaces).
-    if len(s) in (15, 18) and s.isalnum():
+    # Human labels always contain a space somewhere ("Sales Manager",
+    # "Data Cloud Architect"). SF-generated identifiers never do.
+    if " " in s:
+        return False
+    n = len(s)
+    # (1) Bare SF ID
+    if n in (15, 18) and s.isalnum():
         return True
-    # Managed-package synthetic (long, underscore-heavy, digit-heavy).
+    # (2) Prefixed SF ID
+    if n in (16, 19) and s[0].isalpha() and s[1:].isalnum():
+        return True
+    # (3) Managed-package synthetic — underscore-heavy AND digit-heavy
     if (
-        len(s) >= 15
-        and s.count("_") >= 3
-        and sum(c.isdigit() for c in s) >= 5
-        and " " not in s
+        n >= 15
+        and s.count("_") >= 2
+        and sum(c.isdigit() for c in s) >= 4
     ):
         return True
     return False
 
 
-def _ps_display(ps: PermissionSetSnapshot) -> str:
+def _ps_display(
+    ps: PermissionSetSnapshot,
+    profiles_by_id: Optional[Dict[str, "ProfileSnapshot"]] = None,
+) -> str:
     """Best-effort human-legible name for a PermissionSet, with SF ID
     appended for traceability.
 
-    Fallback ladder:
-      1. `label` (if it's a human string)
-      2. `name` (if it's a human string)
-      3. Categorized descriptor built from `ps_type` +
-         `is_owned_by_profile` — e.g. "Session-Based PS", "Profile-owned
-         Regular PS". Always followed by the SF ID.
+    Uniform format:  `<Display Name> (<sf_id>)`
+
+    Fallback ladder for `<Display Name>`:
+      1. `label` when it's a human string (not ID-like)
+      2. `name` when it's a human string
+      3. Profile-owned PSet with a known profile:
+         `PS for "<Profile Name>" Profile`
+      4. Profile-owned PSet without profile lookup:
+         `Profile-owned Permission Set`
+      5. Categorised by `ps_type`: `Session-Based Permission Set`,
+         `Group Permission Set`, etc.
+      6. Final generic fallback: `Managed Permission Set`
     """
     label = (ps.label or "").strip()
     name = (ps.name or "").strip()
     sf_id = ps.salesforce_id
 
+    # Passes 1 and 2 — real human name available.
     for candidate in (label, name):
         if candidate and not _looks_like_id(candidate) and candidate != sf_id:
             return f"{candidate} ({sf_id})"
 
-    # Fell through — construct a categorized descriptor so consultants
-    # at least know what KIND of PS this is.
-    kind = (ps.ps_type or "Regular").strip() or "Regular"
-    owned = "Profile-owned " if ps.is_owned_by_profile else ""
-    # If we have SOME string content, hint at it so consultants can
-    # cross-check in Setup. Truncate long synthetics.
-    hint = ""
-    for candidate in (label, name):
-        if candidate:
-            truncated = candidate if len(candidate) <= 30 else candidate[:27] + "..."
-            hint = f' [raw: "{truncated}"]'
-            break
-    return f"{owned}{kind} Permission Set{hint} ({sf_id})"
+    # Pass 3 — profile-owned with lookup available.
+    if ps.is_owned_by_profile and ps.profile_id:
+        prof = profiles_by_id.get(ps.profile_id) if profiles_by_id else None
+        if prof and prof.name:
+            return f'PS for "{prof.name}" Profile ({sf_id})'
+        # Pass 4 — profile-owned but we couldn't resolve the profile.
+        return f"Profile-owned Permission Set ({sf_id})"
+
+    # Pass 5 — categorise by ps_type.
+    kind_map = {
+        "Session": "Session-Based Permission Set",
+        "Group": "Permission Set Group Component",
+        "Muting": "Muting Permission Set",
+        "Standard": "Standard Permission Set",
+        "Regular": "Regular Permission Set",
+    }
+    kind = (ps.ps_type or "").strip()
+    if kind in kind_map:
+        return f"{kind_map[kind]} ({sf_id})"
+
+    # Pass 6 — nothing to go on beyond "some managed thing exists".
+    return f"Managed Permission Set ({sf_id})"
 
 
 def _role_display(r: RoleSnapshot) -> str:
@@ -144,8 +173,6 @@ def _role_display(r: RoleSnapshot) -> str:
     sf_id = r.salesforce_id
     if name and not _looks_like_id(name) and name != sf_id:
         return f"{name} ({sf_id})"
-    # Fall back to "Unnamed Role (sf_id)" so the consultant knows it's a
-    # Role rather than staring at a raw ID they can't identify.
     return f"Unnamed Role ({sf_id})"
 
 
@@ -219,6 +246,11 @@ class OrgContext:
     # Derived lookup tables — cached for O(1) access during scoring.
     users_by_sf: Dict[str, UserSnapshot] = dc_field(default_factory=dict)
     ps_by_sf: Dict[str, PermissionSetSnapshot] = dc_field(default_factory=dict)
+    # `profiles_by_id` is keyed by the Salesforce Profile ID (18-char)
+    # because that's what `PermissionSetSnapshot.profile_id` holds.
+    # Used purely for display — to resolve profile-owned PSets to
+    # "PS for <Profile Name> Profile".
+    profiles_by_id: Dict[str, ProfileSnapshot] = dc_field(default_factory=dict)
     ps_signatures: Dict[str, Tuple[frozenset, frozenset]] = dc_field(
         default_factory=dict
     )  # sf_id -> (object_sig, field_sig)
@@ -447,6 +479,13 @@ class RestructurePlannerService:
                 )
             )
         ).scalars().all())
+        profiles = list((
+            await self.db.execute(
+                select(ProfileSnapshot).where(
+                    ProfileSnapshot.organization_id == self.org_id
+                )
+            )
+        ).scalars().all())
         assignments = list((
             await self.db.execute(
                 select(PermissionSetAssignmentSnapshot).where(
@@ -480,6 +519,7 @@ class RestructurePlannerService:
         )
         ctx.users_by_sf = {u.salesforce_id: u for u in users}
         ctx.ps_by_sf = {ps.salesforce_id: ps for ps in permission_sets}
+        ctx.profiles_by_id = {p.salesforce_id: p for p in profiles}
 
         for a in assignments:
             ctx.assignments_by_ps[a.permission_set_id].append(a)
@@ -576,7 +616,7 @@ class RestructurePlannerService:
             candidates.append(CandidateMove(
                 move_type=RestructureMoveType.RETIRE_UNUSED_PS.value,
                 primary_component_id=ps.salesforce_id,
-                primary_component_name=_ps_display(ps),
+                primary_component_name=_ps_display(ps, ctx.profiles_by_id),
                 rationale_seed=(
                     f"Permission Set has zero direct assignments and no "
                     f"activity — safe candidate to retire."
@@ -607,7 +647,8 @@ class RestructurePlannerService:
                 move_type=RestructureMoveType.MERGE_PERMISSION_SETS.value,
                 primary_component_id=a.salesforce_id,
                 primary_component_name=(
-                    f"{_ps_display(a)} + {_ps_display(b)}"
+                    f"{_ps_display(a, ctx.profiles_by_id)} + "
+                    f"{_ps_display(b, ctx.profiles_by_id)}"
                 ),
                 affected_component_ids=[a.salesforce_id, b.salesforce_id],
                 affected_user_ids=sorted(assignees),
