@@ -726,6 +726,141 @@ class SalesforceAPIClient:
             )
             return []
 
+    async def find_supplemental_customapplication_references(
+        self, namespace: str
+    ) -> List[Dict[str, Any]]:
+        """Third supplemental pass: walk CustomApplication metadata to
+        find customer-owned Lightning Apps that include a tab from
+        the target namespace.
+
+        Why this is often the most direct signal: when a consultant
+        says "we have a Custom App that displays this LWC via a
+        Custom Tab," they usually mean:
+
+          1. A customer-owned CustomApplication (Setup -> App
+             Manager -> New Lightning App)
+          2. …that includes a tab either from the package (managed
+             tab named `accessgraphai__WhateverTab`) or hosting a
+             package LWC
+          3. The customer added the package's own tab to their app
+             from App Builder
+
+        In all three cases, the CustomApplication's `Metadata` JSON
+        contains the target namespace as text — the tab list is
+        stored by full DeveloperName, which includes the namespace
+        prefix.
+
+        This is a broader superset of the CustomTab lookup:
+        instead of trying to find "which tab hosts which LWC", we
+        just ask "which customer apps include ANYTHING from this
+        package's namespace." That answers the practical question
+        (is this package being surfaced to users?) without needing
+        the exact tab→LWC link that Tooling API v62 doesn't
+        expose.
+
+        Bounded to first 100 CustomApplications per package (very
+        few orgs have more than that). Metadata is a compound
+        field, fetched per-record.
+        """
+        import json as _json
+
+        try:
+            app_rows = await self.query_tooling(
+                "SELECT Id, DeveloperName, NamespacePrefix, Label "
+                "FROM CustomApplication"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "CustomApplication list for supplemental pass "
+                "(namespace=%s) failed: %s — no CustomApp hits will "
+                "be reported.", namespace, exc,
+            )
+            return []
+
+        # Filter to customer-owned apps (skip package-owned ones —
+        # a package hosting its own components is internal wiring).
+        customer_apps = [
+            r for r in app_rows
+            if (r.get("NamespacePrefix") or "") != namespace
+        ]
+        apps_to_check = customer_apps[:100]
+
+        logger.warning(
+            "package-sprawl: CustomApplication sweep for namespace=%s "
+            "— %d total apps, %d customer-owned to scan",
+            namespace, len(app_rows), len(apps_to_check),
+        )
+
+        markers = (
+            f"{namespace}:",
+            f"{namespace}__",
+        )
+        bare_marker = namespace
+        hits: List[Dict[str, Any]] = []
+        apps_with_metadata = 0
+        apps_matched_specific = 0
+        apps_matched_bare_only = 0
+        debug_sample_logged = False
+
+        for row in apps_to_check:
+            app_id = row.get("Id")
+            if not app_id:
+                continue
+            try:
+                detail_rows = await self.query_tooling(
+                    "SELECT Metadata FROM CustomApplication "
+                    f"WHERE Id = '{app_id}'"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "CustomApplication %s Metadata fetch failed: %s",
+                    app_id, exc,
+                )
+                continue
+            if not detail_rows:
+                continue
+            metadata = detail_rows[0].get("Metadata")
+            if metadata is None:
+                continue
+            apps_with_metadata += 1
+            try:
+                serialised = _json.dumps(metadata)
+            except Exception:  # noqa: BLE001
+                continue
+            # Log one sample per run so we can see what
+            # CustomApplication.Metadata looks like structurally.
+            if not debug_sample_logged:
+                logger.warning(
+                    "package-sprawl: sample CustomApplication "
+                    "Metadata (namespace=%s, app=%s): %s",
+                    namespace, row.get("DeveloperName"),
+                    serialised[:1500],
+                )
+                debug_sample_logged = True
+            specific_hit = any(m in serialised for m in markers)
+            if specific_hit:
+                apps_matched_specific += 1
+            elif bare_marker in serialised and len(bare_marker) >= 5:
+                apps_matched_bare_only += 1
+            else:
+                continue
+            hits.append({
+                "component": row.get("Label") or row.get("DeveloperName"),
+                "component_type": "CustomApplication",
+                "ref_component": None,
+                "ref_type": "LightningComponentBundle",
+                "source": "customapp",
+            })
+
+        logger.warning(
+            "package-sprawl: CustomApplication sweep for namespace=%s "
+            "— %d with Metadata, %d specific-marker matches, "
+            "%d bare-marker fallback matches",
+            namespace, apps_with_metadata,
+            apps_matched_specific, apps_matched_bare_only,
+        )
+        return hits
+
     async def find_supplemental_flexipage_references(
         self, namespace: str
     ) -> List[Dict[str, Any]]:

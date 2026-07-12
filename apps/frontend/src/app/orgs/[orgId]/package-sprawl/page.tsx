@@ -713,10 +713,14 @@ function DetailWhereUsed({
             index or our supplemental{' '}
             <code className="font-mono text-[11px] not-italic">
               CustomTab
-            </code>{' '}
-            +{' '}
+            </code>
+            {' + '}
             <code className="font-mono text-[11px] not-italic">
               FlexiPage
+            </code>
+            {' + '}
+            <code className="font-mono text-[11px] not-italic">
+              CustomApplication
             </code>{' '}
             metadata sweeps.
           </p>
@@ -788,6 +792,8 @@ function DetailWhereUsed({
                       ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component ?? '?'}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
                       : d.source === 'flexipage'
                       ? `FlexiPage "${d.component}" hosts a component from this package's namespace. Caught by our supplemental FlexiPage metadata sweep — Lightning App / Home / Record Pages built in App Builder often aren't in MetadataComponentDependency for beta packages.`
+                      : d.source === 'customapp'
+                      ? `Custom App "${d.component}" includes a tab or component from this package's namespace. Caught by our supplemental CustomApplication metadata sweep — a direct signal that the package is surfaced to end users in this app.`
                       : d.ref_component
                       ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
                       : `${d.component} references this package`
@@ -799,7 +805,11 @@ function DetailWhereUsed({
                     >
                       {isSupplemental && (
                         <span className="text-[9px] uppercase tracking-wider opacity-70">
-                          {d.source === 'flexipage' ? '⇢ Page' : '⇢ LWC'}
+                          {d.source === 'flexipage'
+                            ? '⇢ Page'
+                            : d.source === 'customapp'
+                            ? '⇢ App'
+                            : '⇢ LWC'}
                         </span>
                       )}
                       {d.component ?? '(unknown)'}

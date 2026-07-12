@@ -93,7 +93,7 @@ export interface InstalledPackage {
       component_type: string | null
       ref_component: string | null
       ref_type: string | null
-      source?: 'customtab_lwc' | 'flexipage'
+      source?: 'customtab_lwc' | 'flexipage' | 'customapp'
     }[]
     /** Number of supplemental hits (subset of top_dependents.length
      *  where source === 'customtab_lwc'). Handy for the UI to show a

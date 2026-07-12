@@ -567,6 +567,28 @@ class PackageSprawlService:
                     "%s — continuing without those hits.",
                     namespace, exc,
                 )
+            # Pass 3: CustomApplication metadata sweep. Catches the
+            # "customer Custom App includes a tab from this package"
+            # pattern directly. When a customer builds a Lightning
+            # App in Setup -> App Manager and adds any tab from the
+            # package (whether the package's own tab or a tab hosting
+            # a package LWC), the CustomApplication's Metadata JSON
+            # references the tab by full namespaced DeveloperName.
+            # This is often the most decisive signal because it maps
+            # 1-to-1 with the practical question ("is this package
+            # being surfaced to end users in any app?").
+            try:
+                supplemental_dependents.extend(
+                    await client.find_supplemental_customapplication_references(
+                        namespace
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.info(
+                    "Supplemental CustomApplication pass raised for "
+                    "namespace=%s: %s — continuing without those hits.",
+                    namespace, exc,
+                )
             if supplemental_dependents:
                 logger.warning(
                     "package-sprawl: %d supplemental hits for %s",
