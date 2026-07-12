@@ -33,11 +33,10 @@ contract while the engine gets wired.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,12 +45,13 @@ from app.auth.deps import get_current_actor_email, get_current_org
 from app.domain.models import (
     RestructureMove,
     RestructureMoveStatus,
-    RestructureMoveType,
     RestructurePlan,
     RestructurePlanStatus,
     RestructurePreservationConstraint,
     RestructureRun,
 )
+from app.services.restructure_planner import RestructurePlannerService
+from app.services.restructure_probe import RestructureProbeService
 
 
 logger = logging.getLogger(__name__)
@@ -330,38 +330,38 @@ async def run_restructure(
 ) -> RunResponse:
     """Kick off a Restructure generation.
 
-    Phase 2 stub — actual pattern miner + simulator land in later
-    phases. For now, creates a run row with an empty move list so the
-    Studio contract is testable end-to-end.
+    Synchronous call — the planner service loads snapshots, mines
+    candidate moves, scores each with Option A symbolic simulation, and
+    persists everything in one DB transaction. Typical runtime ~2-10s
+    depending on org size (dominated by the O(n²) PSet pairs pass).
     """
     _enforce_same_org(org_id, current_org_id)
 
-    run = RestructureRun(
-        organization_id=org_id,
-        snapshot_at=datetime.now(timezone.utc),
-        status="complete",
-        actor_email=actor_email,
-        moves_generated=0,
-        duration_ms=0,
-        config={
-            "max_moves": max_moves,
-            "ps_overlap_threshold": ps_overlap_threshold,
-            "role_member_overlap_threshold": role_member_overlap_threshold,
-        },
+    service = RestructurePlannerService(
+        db,
+        org_id,
+        max_moves=max_moves,
+        ps_overlap_threshold=ps_overlap_threshold,
+        role_member_overlap_threshold=role_member_overlap_threshold,
     )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
+    try:
+        run = await service.run(actor_email=actor_email)
+    except Exception as exc:
+        logger.exception("restructure: run crashed for org %s", org_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "message": "Restructure run failed",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
 
-    logger.info(
-        "restructure: stub run %s created for org %s by %s",
-        run.id, org_id, actor_email,
-    )
     return RunResponse(
         run_id=run.id,
         snapshot_at=run.snapshot_at.isoformat(),
-        moves_generated=0,
-        projected_equity_index=None,
+        moves_generated=run.moves_generated,
+        projected_equity_index=run.projected_equity_index,
     )
 
 
@@ -594,16 +594,39 @@ async def deep_analyze_move(
 ) -> MoveResponse:
     """On-demand Option B probing for a single move.
 
-    Phase 2 stub — the probe service lands in Phase 6. For now returns
-    the move unchanged with a 501-adjacent log entry so the Studio can
-    wire the button without breaking.
+    Runs the probe service synchronously — bounded record sampling
+    against snapshot tables (AccountShare, OpportunityShare) to
+    produce concrete `records_gained_by_object` / `records_lost_by_object`
+    counts. Typical runtime <5s for sample_size=1000.
+
+    PSet-only moves (MERGE_PS, RETIRE_UNUSED_PS) + REASSIGN_MANAGER
+    persist an empty result set (no record-level effect) so the UI
+    can render "no impact" and skip re-probing.
     """
     _enforce_same_org(org_id, current_org_id)
-    move = await _get_move(db, org_id, move_id)
-    logger.warning(
-        "restructure: deep_analyze called for move %s (org %s, "
-        "sample_size=%d, actor=%s) — probe engine not yet implemented",
-        move_id, org_id, sample_size, actor_email,
+    # Verify move existence + org up front so a 404 doesn't come from
+    # deep inside the probe service.
+    await _get_move(db, org_id, move_id)
+
+    service = RestructureProbeService(db, org_id)
+    try:
+        move = await service.probe_move(move_id, sample_size=sample_size)
+    except Exception as exc:
+        logger.exception(
+            "restructure: probe crashed for move %s (org %s)",
+            move_id, org_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "message": "Deep-analysis probe failed",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
+    logger.info(
+        "restructure: probe complete for move %s by %s",
+        move_id, actor_email,
     )
     return MoveResponse.from_orm(move)
 
