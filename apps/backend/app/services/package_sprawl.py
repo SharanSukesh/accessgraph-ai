@@ -534,15 +534,30 @@ class PackageSprawlService:
         # failure never tanks the per-package analysis — the whole
         # run would come back with 0 packages if it did.
         supplemental_dependents: List[Dict[str, Any]] = []
+        # DeveloperNames of tabs the CustomTab pass linked to this
+        # namespace. Threaded into the CustomApplication pass so
+        # customer apps that include these customer-owned tabs get
+        # picked up as supplemental hits even when their Metadata
+        # doesn't carry the namespace prefix.
+        customtab_tab_names: List[str] = []
         if namespace:
             # Pass 1: direct CustomTab -> LWC edges. Catches the
             # "Custom Tab of type Lightning Component" case.
             try:
-                supplemental_dependents.extend(
+                customtab_hits = (
                     await client.find_supplemental_customtab_references(
                         namespace
                     )
                 )
+                # Extract raw tab DeveloperNames from the internal
+                # `_tab_devname` field before appending to the shared
+                # dependents list — the field is a client-side detail
+                # not part of the public evidence shape.
+                for h in customtab_hits:
+                    dn = h.pop("_tab_devname", None)
+                    if dn:
+                        customtab_tab_names.append(dn)
+                supplemental_dependents.extend(customtab_hits)
             except Exception as exc:  # noqa: BLE001
                 logger.info(
                     "Supplemental CustomTab pass raised for namespace=%s: "
@@ -580,7 +595,8 @@ class PackageSprawlService:
             try:
                 supplemental_dependents.extend(
                     await client.find_supplemental_customapplication_references(
-                        namespace
+                        namespace,
+                        tabs_of_interest=customtab_tab_names,
                     )
                 )
             except Exception as exc:  # noqa: BLE001

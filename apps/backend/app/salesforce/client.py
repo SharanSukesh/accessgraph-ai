@@ -739,6 +739,12 @@ class SalesforceAPIClient:
                     "ref_component": matched_bundle,
                     "ref_type": "LightningComponentBundle",
                     "source": "customtab_lwc",
+                    # Store the raw tab.Name so downstream passes
+                    # (CustomApplication) can search for it as a
+                    # bare-name reference inside app metadata. This
+                    # is how we detect a customer app that includes
+                    # a customer-owned tab that hosts a managed LWC.
+                    "_tab_devname": tab_name_raw,
                 })
             logger.warning(
                 "package-sprawl: CustomTab sweep for namespace=%s — "
@@ -755,7 +761,9 @@ class SalesforceAPIClient:
             return []
 
     async def find_supplemental_customapplication_references(
-        self, namespace: str
+        self,
+        namespace: str,
+        tabs_of_interest: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Third supplemental pass: walk CustomApplication metadata to
         find customer-owned Lightning Apps that include a tab from
@@ -824,10 +832,27 @@ class SalesforceAPIClient:
             f"{namespace}__",
         )
         bare_marker = namespace
+        # Deduplicate + filter the tab-of-interest list to well-
+        # formed names >= 4 chars. Anything shorter risks matching
+        # random JSON tokens. Wrapped in quotes so we only match
+        # JSON string values, not partial substrings of longer names
+        # (e.g. "Equity" wrapped as `"Equity"` won't accidentally
+        # match `"CommercialEquityLimit"`).
+        interest_names: List[str] = []
+        if tabs_of_interest:
+            seen: set = set()
+            for t in tabs_of_interest:
+                t = (t or "").strip()
+                if not t or len(t) < 4 or t.lower() in seen:
+                    continue
+                seen.add(t.lower())
+                interest_names.append(t)
+
         hits: List[Dict[str, Any]] = []
         apps_with_metadata = 0
         apps_matched_specific = 0
         apps_matched_bare_only = 0
+        apps_matched_via_tab = 0
         debug_sample_logged = False
 
         for row in apps_to_check:
@@ -865,27 +890,65 @@ class SalesforceAPIClient:
                     serialised[:1500],
                 )
                 debug_sample_logged = True
-            specific_hit = any(m in serialised for m in markers)
-            if specific_hit:
+
+            # Pass 1: namespace-prefix marker in the app metadata.
+            # High-confidence — the app directly references a
+            # namespaced component. Search patterns include the
+            # LWC/Aura reference form (`accessgraphai:`), the
+            # metadata-API form (`accessgraphai__`), and the bare
+            # namespace as a fallback.
+            match_reason = ""
+            if any(m in serialised for m in markers):
                 apps_matched_specific += 1
+                match_reason = "namespace-marker match"
             elif bare_marker in serialised and len(bare_marker) >= 5:
                 apps_matched_bare_only += 1
-            else:
+                match_reason = "bare-namespace match"
+
+            # Pass 2: search for tabs-of-interest — customer-owned
+            # tab DeveloperNames the earlier CustomTab pass linked
+            # to this namespace. Because customer tabs live outside
+            # the package namespace, a customer app that hosts a
+            # package LWC via a customer tab won't have the
+            # namespace substring in its Metadata. It WILL have the
+            # tab's bare DeveloperName in its `tabs` array. Marking
+            # this a distinct match_reason keeps consultants aware
+            # of the lower confidence (a coincidentally-named
+            # customer LWC could produce the same signal).
+            #
+            # Search for the name wrapped in quotes so we only
+            # match it as a JSON string value, not a partial
+            # substring — the app metadata's `tabs` array stores
+            # entries as `"Equity"`, so `"Equity"` (with quotes)
+            # matches unambiguously.
+            matched_tab_name: Optional[str] = None
+            if not match_reason and interest_names:
+                for t in interest_names:
+                    if f'"{t}"' in serialised:
+                        matched_tab_name = t
+                        break
+            if not match_reason and matched_tab_name:
+                apps_matched_via_tab += 1
+                match_reason = f"via customer tab '{matched_tab_name}'"
+
+            if not match_reason:
                 continue
             hits.append({
                 "component": row.get("Label") or row.get("DeveloperName"),
-                "component_type": "CustomApplication",
-                "ref_component": None,
-                "ref_type": "LightningComponentBundle",
+                "component_type": f"CustomApplication ({match_reason})",
+                "ref_component": matched_tab_name,
+                "ref_type": "CustomTab" if matched_tab_name else "LightningComponentBundle",
                 "source": "customapp",
             })
 
         logger.warning(
             "package-sprawl: CustomApplication sweep for namespace=%s "
             "— %d with Metadata, %d specific-marker matches, "
-            "%d bare-marker fallback matches",
+            "%d bare-marker fallback matches, %d via-tab matches "
+            "(from %d tabs of interest)",
             namespace, apps_with_metadata,
             apps_matched_specific, apps_matched_bare_only,
+            apps_matched_via_tab, len(interest_names),
         )
         return hits
 
