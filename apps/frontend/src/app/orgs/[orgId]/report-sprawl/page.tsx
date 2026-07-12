@@ -151,6 +151,8 @@ export default function ReportSprawlPage() {
           title="No sprawl analysis yet"
           description="Click Analyse reports to inventory every Report + Dashboard and tier each by activity and ownership."
         />
+      ) : summary.items_total === 0 ? (
+        <CleanShopState summary={summary} />
       ) : (
         <>
           {/* KPI strip — 5 cards */}
@@ -338,6 +340,100 @@ export default function ReportSprawlPage() {
         </>
       )}
     </div>
+  )
+}
+
+// ============================================================================
+// Zero-items state — analysis ran successfully but found nothing
+// ============================================================================
+
+function CleanShopState({
+  summary,
+}: {
+  summary: {
+    snapshot_at: string | null
+    duration_ms: number | null
+    reports_total: number
+    dashboards_total: number
+  }
+}) {
+  return (
+    <Card variant="bordered" className="p-8">
+      <div className="flex flex-col items-center text-center gap-4 max-w-2xl mx-auto">
+        <div className="p-4 rounded-full bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800">
+          <FileBarChart className="h-10 w-10 text-primary-700 dark:text-primary-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
+            Analysis complete — 0 Reports, 0 Dashboards
+          </h3>
+          <p className="mt-2 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70 leading-relaxed">
+            The sprawl scan ran successfully
+            {summary.duration_ms !== null && (
+              <> ({(summary.duration_ms / 1000).toFixed(1)}s)</>
+            )}{' '}
+            but Salesforce returned no analytics content for this org.
+          </p>
+        </div>
+
+        <div className="mt-2 w-full text-left rounded-lg bg-grove-canvas dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk p-5">
+          <div className="text-[10px] font-mono uppercase tracking-wider text-grove-mint mb-3">
+            Three things could explain a zero result
+          </div>
+          <ol className="space-y-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+            <li className="flex gap-3">
+              <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
+                1
+              </span>
+              <span>
+                <strong>The org genuinely has no reports or
+                dashboards.</strong> Fresh dev / scratch orgs and orgs
+                that only use Analytics Studio (CRMA) for reporting
+                often have 0 rows in the classic Report and Dashboard
+                SObjects. This is the most common cause and it&rsquo;s
+                fine — nothing to clean up.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
+                2
+              </span>
+              <span>
+                <strong>The connected OAuth user can&rsquo;t see
+                any.</strong> Report / Dashboard visibility respects
+                folder sharing. If the OAuth integration user
+                isn&rsquo;t in the sharing rules for any report folder,
+                they see 0 rows even in an org full of content.
+                Reconnect from a System Admin account if this is a
+                real client engagement.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
+                3
+              </span>
+              <span>
+                <strong>Analytics access is disabled on the OAuth
+                scope.</strong> Rare, but some connected apps are
+                created with a restricted OAuth scope that omits{' '}
+                <code className="text-xs px-1 py-0.5 rounded bg-grove-ink/5 dark:bg-grove-ink-dk/10">
+                  api
+                </code>{' '}
+                or restricts to a permission set that doesn&rsquo;t
+                grant Report Read. Check the Connected App&rsquo;s
+                scopes.
+              </span>
+            </li>
+          </ol>
+        </div>
+
+        {summary.snapshot_at && (
+          <div className="text-[11px] text-grove-ink/50 dark:text-grove-ink-dk/50 mt-1">
+            Snapshot at {new Date(summary.snapshot_at).toLocaleString()}
+          </div>
+        )}
+      </div>
+    </Card>
   )
 }
 
