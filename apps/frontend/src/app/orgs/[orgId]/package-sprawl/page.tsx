@@ -28,6 +28,7 @@ import {
   Zap,
   Layers,
   Component,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -588,6 +589,64 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
 // if the underlying evidence isn't there (no deps, no records, no
 // licence), that section is skipped entirely so the panel doesn't
 // pad out with empty scaffolding.
+// Maximum chips rendered per component_type in the "Where it's used"
+// drill-down. A package with hundreds of Apex references would blow
+// up the drawer height otherwise. The full list is still available
+// via the Download button.
+const CHIPS_PER_TYPE_MAX = 5
+
+// Client-side CSV export of every dependency in the package's
+// top_dependents evidence list. Runs entirely in the browser off the
+// data already loaded — no extra SF round-trip. Uses a Blob + a
+// transient <a download> so the file lands in the user's Downloads
+// folder like any other browser download.
+function downloadDependenciesCsv(
+  pkg: InstalledPackage,
+  dependents: NonNullable<InstalledPackage['evidence']['top_dependents']>,
+) {
+  const header = [
+    'component',
+    'component_type',
+    'references',
+    'reference_type',
+    'source',
+  ]
+  const csvEscape = (v: string | null | undefined) => {
+    if (v === null || v === undefined) return ''
+    const s = String(v)
+    // Quote if the cell contains a delimiter, quote, or newline —
+    // and double any embedded quotes per RFC 4180.
+    if (/[",\n\r]/.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    return s
+  }
+  const rows = dependents.map((d) =>
+    [
+      d.component,
+      d.component_type,
+      d.ref_component,
+      d.ref_type,
+      d.source ?? 'primary_index',
+    ]
+      .map(csvEscape)
+      .join(','),
+  )
+  const csv = [header.join(','), ...rows].join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const safeName = (pkg.namespace_prefix || pkg.name || 'package')
+    .replace(/[^a-z0-9-_]/gi, '_')
+    .slice(0, 60)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `dependencies-${safeName}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 function PackageDetail({ pkg }: { pkg: InstalledPackage }) {
   const breakdown = pkg.evidence?.reasoning?.components_breakdown ?? {}
   const dependents = pkg.evidence?.top_dependents ?? []
@@ -695,6 +754,24 @@ function DetailWhereUsed({
             +{supplementalCount} supplemental
           </span>
         )}
+        {/* Download button lives on the right side of the header
+            when there's anything to download. The list is capped in
+            the chip render (5 per component type) so a package with
+            hundreds of references can still be exported in full. */}
+        {dependents.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              downloadDependenciesCsv(pkg, dependents)
+            }}
+            className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium text-grove-mint hover:bg-grove-mint/10 dark:hover:bg-grove-mint/15 ring-1 ring-grove-mint/40 transition-colors"
+            title={`Download all ${dependents.length.toLocaleString()} references as a CSV file.`}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download all ({dependents.length.toLocaleString()})
+          </button>
+        )}
       </div>
       {depCount === null || depCount === undefined ? (
         <p className="text-xs italic text-grove-ink/55 dark:text-grove-ink-dk/55">
@@ -771,59 +848,78 @@ function DetailWhereUsed({
         </p>
       ) : (
         <div className="space-y-3">
-          {typeKeys.map((typeKey) => (
-            <div key={typeKey}>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
-                  {typeKey}
-                </span>
-                <span className="text-[10px] font-mono text-grove-ink/40 dark:text-grove-ink-dk/40 tabular-nums">
-                  {grouped[typeKey].length}
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {grouped[typeKey].map((d, i) => {
-                  const isSupplemental = !!d.source
-                  const cls = isSupplemental
-                    ? 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-mint/10 dark:bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30'
-                    : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15'
-                  const tooltip =
-                    d.source === 'customtab_lwc'
-                      ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component ?? '?'}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
-                      : d.source === 'flexipage'
-                      ? `FlexiPage "${d.component}" hosts a component from this package's namespace. Caught by our supplemental FlexiPage metadata sweep — Lightning App / Home / Record Pages built in App Builder often aren't in MetadataComponentDependency for beta packages.`
-                      : d.source === 'customapp'
-                      ? `Custom App "${d.component}" includes a tab or component from this package's namespace. Caught by our supplemental CustomApplication metadata sweep — a direct signal that the package is surfaced to end users in this app.`
-                      : d.ref_component
-                      ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
-                      : `${d.component} references this package`
-                  return (
+          {typeKeys.map((typeKey) => {
+            const bucket = grouped[typeKey]
+            // Cap each type's chip render at CHIPS_PER_TYPE_MAX so a
+            // package with hundreds of references from the same
+            // component type doesn't blow up the drawer. The full
+            // list is still in `dependents` for the CSV download.
+            const shown = bucket.slice(0, CHIPS_PER_TYPE_MAX)
+            const hidden = bucket.length - shown.length
+            return (
+              <div key={typeKey}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+                    {typeKey}
+                  </span>
+                  <span className="text-[10px] font-mono text-grove-ink/40 dark:text-grove-ink-dk/40 tabular-nums">
+                    {bucket.length}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {shown.map((d, i) => {
+                    const isSupplemental = !!d.source
+                    const cls = isSupplemental
+                      ? 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-mint/10 dark:bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30'
+                      : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15'
+                    const tooltip =
+                      d.source === 'customtab_lwc'
+                        ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component ?? '?'}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
+                        : d.source === 'flexipage'
+                        ? `FlexiPage "${d.component}" hosts a component from this package's namespace. Caught by our supplemental FlexiPage metadata sweep — Lightning App / Home / Record Pages built in App Builder often aren't in MetadataComponentDependency for beta packages.`
+                        : d.source === 'customapp'
+                        ? `Custom App "${d.component}" includes a tab or component from this package's namespace. Caught by our supplemental CustomApplication metadata sweep — a direct signal that the package is surfaced to end users in this app.`
+                        : d.ref_component
+                        ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
+                        : `${d.component} references this package`
+                    return (
+                      <span
+                        key={`${d.component}-${i}`}
+                        className={cls}
+                        title={tooltip}
+                      >
+                        {isSupplemental && (
+                          <span className="text-[9px] uppercase tracking-wider opacity-70">
+                            {d.source === 'flexipage'
+                              ? '⇢ Page'
+                              : d.source === 'customapp'
+                              ? '⇢ App'
+                              : '⇢ LWC'}
+                          </span>
+                        )}
+                        {d.component ?? '(unknown)'}
+                      </span>
+                    )
+                  })}
+                  {hidden > 0 && (
                     <span
-                      key={`${d.component}-${i}`}
-                      className={cls}
-                      title={tooltip}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono text-grove-ink/55 dark:text-grove-ink-dk/55 ring-1 ring-grove-ink/15 dark:ring-grove-ink-dk/20"
+                      title={`${hidden.toLocaleString()} more ${typeKey} references not shown — click "Download all" to export the full list.`}
                     >
-                      {isSupplemental && (
-                        <span className="text-[9px] uppercase tracking-wider opacity-70">
-                          {d.source === 'flexipage'
-                            ? '⇢ Page'
-                            : d.source === 'customapp'
-                            ? '⇢ App'
-                            : '⇢ LWC'}
-                        </span>
-                      )}
-                      {d.component ?? '(unknown)'}
+                      +{hidden.toLocaleString()} more
                     </span>
-                  )
-                })}
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           {typeof depCount === 'number' && depCount > primaryHits.length && (
             <p className="text-[11px] italic text-grove-ink/45 dark:text-grove-ink-dk/45">
-              Showing the top {primaryHits.length.toLocaleString()} of{' '}
-              {depCount.toLocaleString()} primary-index references —
-              the rest follow the same pattern.
+              Primary-index total is {depCount.toLocaleString()}; the
+              chips above sample the first{' '}
+              {primaryHits.length.toLocaleString()}. Use{' '}
+              <strong>Download all</strong> above for the complete
+              reference list.
             </p>
           )}
         </div>

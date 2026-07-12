@@ -507,12 +507,14 @@ class PackageSprawlService:
                 namespace
             )
             if dependency_count and dependency_count > 0:
-                # 50-row cap. The card still only surfaces 5 by default;
-                # the expandable detail view uses the rest so the reader
-                # can see the full picture of *where* the package is
-                # actually used without another round-trip.
+                # 2000-row cap. The card only renders 5 per component
+                # type by default and shows a "Download all" affordance
+                # when there's more; the FE generates a CSV from the
+                # full list without needing to hit SF again. 2000 is
+                # the SOQL Tooling default limit so we get whatever
+                # SF is willing to hand back in a single query.
                 top_dependents = await client.top_metadata_dependents(
-                    namespace, limit=50
+                    namespace, limit=2000
                 )
 
         # Supplemental dependency detection — MetadataComponentDependency
