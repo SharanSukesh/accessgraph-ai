@@ -107,4 +107,22 @@ export const endpoints = {
     `/orgs/${orgId}/package-sprawl/packages`,
   packageSprawlHistory: (orgId: string) =>
     `/orgs/${orgId}/package-sprawl/history`,
+
+  // Restructure Studio — GAEA Optimal Org Restructure
+  restructureRun: (orgId: string) => `/orgs/${orgId}/restructure/run`,
+  restructureLatest: (orgId: string) => `/orgs/${orgId}/restructure/latest`,
+  restructureMoves: (orgId: string) => `/orgs/${orgId}/restructure/moves`,
+  restructureMove: (orgId: string, moveId: string) =>
+    `/orgs/${orgId}/restructure/moves/${moveId}`,
+  restructureMoveDeepAnalyze: (orgId: string, moveId: string) =>
+    `/orgs/${orgId}/restructure/moves/${moveId}/deep-analyze`,
+  restructurePlans: (orgId: string) => `/orgs/${orgId}/restructure/plans`,
+  restructurePlan: (orgId: string, planId: string) =>
+    `/orgs/${orgId}/restructure/plans/${planId}`,
+  restructurePlanExport: (orgId: string, planId: string) =>
+    `/orgs/${orgId}/restructure/plans/${planId}/export.csv`,
+  restructureConstraints: (orgId: string) =>
+    `/orgs/${orgId}/restructure/constraints`,
+  restructureConstraint: (orgId: string, constraintId: string) =>
+    `/orgs/${orgId}/restructure/constraints/${constraintId}`,
 } as const
