@@ -854,6 +854,13 @@ class SalesforceAPIClient:
         apps_matched_bare_only = 0
         apps_matched_via_tab = 0
         debug_sample_logged = False
+        # Diagnostic: aggregate every non-standard tab referenced by
+        # any customer app we scanned. Salesforce prefixes stock tabs
+        # with "standard-"; anything else is either a customer-made
+        # tab or a managed-package tab. Logging the aggregate at the
+        # end of the sweep shows exactly what our matching had to
+        # work with — invaluable for tuning what "match" means.
+        non_standard_tabs_seen: set = set()
 
         for row in apps_to_check:
             app_id = row.get("Id")
@@ -880,6 +887,26 @@ class SalesforceAPIClient:
                 serialised = _json.dumps(metadata)
             except Exception:  # noqa: BLE001
                 continue
+            # Collect every non-standard tab this app references so
+            # we can log the aggregate at the end. Non-standard =
+            # anything not prefixed with "standard-" (SF's naming
+            # convention for stock tabs). Managed-package tabs and
+            # customer-created tabs both fall through here.
+            try:
+                tabs_field = (
+                    metadata.get("tabs")
+                    if isinstance(metadata, dict)
+                    else None
+                )
+                if isinstance(tabs_field, list):
+                    for t in tabs_field:
+                        if (
+                            isinstance(t, str)
+                            and not t.startswith("standard-")
+                        ):
+                            non_standard_tabs_seen.add(t)
+            except Exception:  # noqa: BLE001
+                pass
             # Log one sample per run so we can see what
             # CustomApplication.Metadata looks like structurally.
             if not debug_sample_logged:
@@ -949,6 +976,18 @@ class SalesforceAPIClient:
             namespace, apps_with_metadata,
             apps_matched_specific, apps_matched_bare_only,
             apps_matched_via_tab, len(interest_names),
+        )
+        # Diagnostic: every non-standard tab referenced across all
+        # customer apps we scanned. Capped to first 100 so a
+        # sprawling org doesn't blow up the log line. If the
+        # customer's LWC-hosting tab is in the org at all, it will
+        # appear here — comparing this list against `interest_names`
+        # tells us if the correlation is aligned or if the search
+        # needs to widen further.
+        logger.warning(
+            "package-sprawl: CustomApplication sweep for namespace=%s "
+            "— non-standard tabs seen across customer apps (first 100): %s",
+            namespace, sorted(non_standard_tabs_seen)[:100],
         )
         return hits
 
