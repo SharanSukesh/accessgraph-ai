@@ -29,6 +29,7 @@ import {
   Layers,
   Boxes,
   Zap,
+  ChevronLeft,
   ChevronRight,
   X as XIcon,
   Check,
@@ -156,6 +157,8 @@ const BLAST_META: Record<
 // Page
 // ============================================================================
 
+const PAGE_SIZE = 30
+
 export default function RestructurePage() {
   const params = useParams()
   const orgId = params.orgId as string
@@ -163,6 +166,7 @@ export default function RestructurePage() {
   const [moveTypeFilter, setMoveTypeFilter] = useState<string | undefined>()
   const [blastFilter, setBlastFilter] = useState<string | undefined>()
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
+  const [page, setPage] = useState(0)
   const [selectedMove, setSelectedMove] = useState<RestructureMove | null>(
     null,
   )
@@ -182,6 +186,8 @@ export default function RestructurePage() {
     move_type: moveTypeFilter,
     blast_tier: blastFilter,
     status: statusFilter,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
   })
 
   const runMutation = useRunRestructure(orgId)
@@ -256,13 +262,23 @@ export default function RestructurePage() {
             statusFilter={statusFilter}
             typeCounts={summary?.move_type_counts ?? {}}
             blastCounts={summary?.blast_tier_counts ?? {}}
-            onMoveType={setMoveTypeFilter}
-            onBlast={setBlastFilter}
-            onStatus={setStatusFilter}
+            onMoveType={(v) => {
+              setMoveTypeFilter(v)
+              setPage(0)
+            }}
+            onBlast={(v) => {
+              setBlastFilter(v)
+              setPage(0)
+            }}
+            onStatus={(v) => {
+              setStatusFilter(v)
+              setPage(0)
+            }}
             onClear={() => {
               setMoveTypeFilter(undefined)
               setBlastFilter(undefined)
               setStatusFilter(undefined)
+              setPage(0)
             }}
           />
 
@@ -275,26 +291,34 @@ export default function RestructurePage() {
               </CardContent>
             </Card>
           ) : hasMoves ? (
-            <div className="space-y-3">
-              {movesPage!.moves.map((m) => (
-                <MoveCard
-                  key={m.id}
-                  move={m}
-                  onSelect={() => setSelectedMove(m)}
-                  onAccept={() =>
-                    updateMove.mutate({
-                      moveId: m.id,
-                      move_status: 'accepted',
-                    })
-                  }
-                  onReject={() =>
-                    updateMove.mutate({
-                      moveId: m.id,
-                      move_status: 'rejected',
-                    })
-                  }
-                />
-              ))}
+            <div>
+              <div className="space-y-3">
+                {movesPage!.moves.map((m) => (
+                  <MoveCard
+                    key={m.id}
+                    move={m}
+                    onSelect={() => setSelectedMove(m)}
+                    onAccept={() =>
+                      updateMove.mutate({
+                        moveId: m.id,
+                        move_status: 'accepted',
+                      })
+                    }
+                    onReject={() =>
+                      updateMove.mutate({
+                        moveId: m.id,
+                        move_status: 'rejected',
+                      })
+                    }
+                  />
+                ))}
+              </div>
+              <PaginationBar
+                total={movesPage!.total}
+                page={page}
+                pageSize={PAGE_SIZE}
+                onChange={setPage}
+              />
             </div>
           ) : (
             <Card variant="bordered">
@@ -883,13 +907,17 @@ function sumObjectCounts(o: Record<string, number>): number {
 
 function MoveDrawer({
   orgId,
-  move,
+  move: initialMove,
   onClose,
 }: {
   orgId: string
   move: RestructureMove
   onClose: () => void
 }) {
+  // Local copy of the move so mutation results (deep-analyse, notes,
+  // status changes) refresh the drawer without needing the parent to
+  // re-emit. Seeded from the prop, updated by mutation onSuccess.
+  const [move, setMove] = useState<RestructureMove>(initialMove)
   const deepAnalyze = useDeepAnalyzeMove(orgId)
   const updateMove = useUpdateRestructureMove(orgId)
   const [notes, setNotes] = useState(move.consultant_notes ?? '')
@@ -1036,7 +1064,12 @@ function MoveDrawer({
                 </p>
                 <Button
                   onClick={() =>
-                    deepAnalyze.mutate({ moveId: move.id, sampleSize: 1000 })
+                    deepAnalyze.mutate(
+                      { moveId: move.id, sampleSize: 1000 },
+                      {
+                        onSuccess: (updated) => setMove(updated),
+                      },
+                    )
                   }
                   disabled={deepAnalyze.isPending}
                 >
@@ -1378,7 +1411,7 @@ function ConfigDialog({
   const [roleOverlap, setRoleOverlap] = useState(0.85)
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 overflow-y-auto pt-20 pb-10 px-4"
       onClick={onClose}
     >
       <div
@@ -1471,6 +1504,68 @@ function ConfigSlider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full mt-1 accent-grove-mint"
       />
+    </div>
+  )
+}
+
+// ============================================================================
+// Pagination
+// ============================================================================
+
+function PaginationBar({
+  total,
+  page,
+  pageSize,
+  onChange,
+}: {
+  total: number
+  page: number
+  pageSize: number
+  onChange: (next: number) => void
+}) {
+  if (total <= pageSize) {
+    return (
+      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-3">
+        {total.toLocaleString()} matching move{total === 1 ? '' : 's'}
+      </p>
+    )
+  }
+  const totalPages = Math.ceil(total / pageSize)
+  const currentPage = page + 1
+  const firstOnPage = page * pageSize + 1
+  const lastOnPage = Math.min(total, (page + 1) * pageSize)
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 mt-2 border-t border-grove-ink/10 dark:border-grove-ink-dk/15">
+      <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+        Showing{' '}
+        <span className="tabular-nums text-grove-ink dark:text-grove-ink-dk">
+          {firstOnPage.toLocaleString()}–{lastOnPage.toLocaleString()}
+        </span>{' '}
+        of {total.toLocaleString()}
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(0, page - 1))}
+          disabled={page === 0}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Prev
+        </button>
+        <span className="text-xs tabular-nums text-grove-ink/60 dark:text-grove-ink-dk/60">
+          Page {currentPage} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
+          disabled={currentPage >= totalPages}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Next
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   )
 }

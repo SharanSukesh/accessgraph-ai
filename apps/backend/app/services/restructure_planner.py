@@ -61,6 +61,44 @@ DEFAULT_PS_OVERLAP = 0.90
 DEFAULT_ROLE_MEMBER_OVERLAP = 0.85
 DEFAULT_MAX_MOVES = 50
 
+
+# ============================================================================
+# Display-name helpers
+# ============================================================================
+#
+# Consultants need human-legible names on every move card — SF IDs alone are
+# useless in a client meeting. But we ALSO need the raw ID for traceability
+# ("which specific PSet is this?"). Each helper returns `"Label (SF_ID)"`
+# when a human label exists, or just the SF ID when it doesn't.
+#
+# `label` (PermissionSet only) is the Salesforce display label — typically
+# what admins see in Setup. `name` is the API name (often identical to the
+# ID for managed-package PSets, hence the fallback chain).
+
+
+def _ps_display(ps: PermissionSetSnapshot) -> str:
+    display = ps.label or ps.name or ""
+    sf_id = ps.salesforce_id
+    if display and display != sf_id:
+        return f"{display} ({sf_id})"
+    return sf_id
+
+
+def _role_display(r: RoleSnapshot) -> str:
+    name = r.name or ""
+    sf_id = r.salesforce_id
+    if name and name != sf_id:
+        return f"{name} ({sf_id})"
+    return sf_id
+
+
+def _user_display(u: UserSnapshot) -> str:
+    name = u.name or u.username or ""
+    sf_id = u.salesforce_id
+    if name and name != sf_id:
+        return f"{name} ({sf_id})"
+    return sf_id
+
 # Bands used to convert `affected_user_count` (or a role-move's implied
 # record impact) into a blast tier. Mirrors the change-risk-radar tier
 # semantics so the two features read as one system.
@@ -479,7 +517,7 @@ class RestructurePlannerService:
             candidates.append(CandidateMove(
                 move_type=RestructureMoveType.RETIRE_UNUSED_PS.value,
                 primary_component_id=ps.salesforce_id,
-                primary_component_name=ps.label or ps.name or ps.salesforce_id,
+                primary_component_name=_ps_display(ps),
                 rationale_seed=(
                     f"Permission Set has zero direct assignments and no "
                     f"activity — safe candidate to retire."
@@ -510,7 +548,7 @@ class RestructurePlannerService:
                 move_type=RestructureMoveType.MERGE_PERMISSION_SETS.value,
                 primary_component_id=a.salesforce_id,
                 primary_component_name=(
-                    f"{a.label or a.name} + {b.label or b.name}"
+                    f"{_ps_display(a)} + {_ps_display(b)}"
                 ),
                 affected_component_ids=[a.salesforce_id, b.salesforce_id],
                 affected_user_ids=sorted(assignees),
@@ -565,7 +603,9 @@ class RestructurePlannerService:
             candidates.append(CandidateMove(
                 move_type=RestructureMoveType.MERGE_ROLES.value,
                 primary_component_id=r_a.salesforce_id,
-                primary_component_name=f"{r_a.name} + {r_b.name}",
+                primary_component_name=(
+                    f"{_role_display(r_a)} + {_role_display(r_b)}"
+                ),
                 affected_component_ids=[r_a.salesforce_id, r_b.salesforce_id],
                 affected_user_ids=[u.salesforce_id for u in users_a + users_b],
                 context={"jaccard": j},
@@ -595,7 +635,7 @@ class RestructurePlannerService:
             candidates.append(CandidateMove(
                 move_type=RestructureMoveType.FLATTEN_ROLE_LEVEL.value,
                 primary_component_id=r.salesforce_id,
-                primary_component_name=r.name,
+                primary_component_name=_role_display(r),
                 affected_component_ids=[r.salesforce_id, child.salesforce_id],
                 affected_user_ids=[u.salesforce_id for u in affected],
                 context={},
@@ -655,7 +695,7 @@ class RestructurePlannerService:
                 candidates.append(CandidateMove(
                     move_type=RestructureMoveType.REASSIGN_TO_ROLE.value,
                     primary_component_id=u.salesforce_id,
-                    primary_component_name=u.name or u.username or u.salesforce_id,
+                    primary_component_name=_user_display(u),
                     affected_component_ids=[u.user_role_id or "", best_id],
                     affected_user_ids=[u.salesforce_id],
                     context={
@@ -706,7 +746,7 @@ class RestructurePlannerService:
                 candidates.append(CandidateMove(
                     move_type=RestructureMoveType.REPARENT_ROLE.value,
                     primary_component_id=r.salesforce_id,
-                    primary_component_name=r.name,
+                    primary_component_name=_role_display(r),
                     affected_component_ids=[
                         r.parent_role_id or "",
                         target.salesforce_id,
@@ -757,7 +797,7 @@ class RestructurePlannerService:
                 candidates.append(CandidateMove(
                     move_type=RestructureMoveType.REASSIGN_MANAGER.value,
                     primary_component_id=u.salesforce_id,
-                    primary_component_name=u.name or u.username or u.salesforce_id,
+                    primary_component_name=_user_display(u),
                     affected_component_ids=[u.manager_id or "", grand_id],
                     affected_user_ids=[u.salesforce_id],
                     context={

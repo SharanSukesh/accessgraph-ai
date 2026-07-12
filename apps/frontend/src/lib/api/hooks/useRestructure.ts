@@ -134,6 +134,8 @@ export const restructureKeys = {
       move_type?: string
       blast_tier?: string
       status?: string
+      limit?: number
+      offset?: number
     },
   ) => [...restructureKeys.all, 'moves', orgId, filters ?? {}] as const,
   move: (orgId: string, moveId: string) =>
@@ -167,12 +169,17 @@ export function useRestructureMoves(
     move_type?: string
     blast_tier?: string
     status?: string
+    limit?: number
+    offset?: number
   },
 ) {
   const qs = new URLSearchParams()
   if (filters?.move_type) qs.set('move_type', filters.move_type)
   if (filters?.blast_tier) qs.set('blast_tier', filters.blast_tier)
   if (filters?.status) qs.set('status', filters.status)
+  if (typeof filters?.limit === 'number') qs.set('limit', String(filters.limit))
+  if (typeof filters?.offset === 'number')
+    qs.set('offset', String(filters.offset))
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
 
   return useQuery<RestructureMoveListResponse>({
