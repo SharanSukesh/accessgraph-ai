@@ -736,28 +736,34 @@ function DetailWhereUsed({
 
   return (
     <section>
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        <GitBranch className="h-4 w-4 text-grove-mint" />
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
-          Where it's used
-        </h4>
-        {totalUsage > 0 && (
-          <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 tabular-nums">
-            {totalUsage.toLocaleString()} customer component{totalUsage === 1 ? '' : 's'} reference this package
-          </span>
-        )}
-        {supplementalCount > 0 && (
-          <span
-            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30"
-            title="Includes CustomTab -> LWC references caught by our supplemental pass — Salesforce's MetadataComponentDependency index missed these."
-          >
-            +{supplementalCount} supplemental
-          </span>
-        )}
-        {/* Download button lives on the right side of the header
-            when there's anything to download. The list is capped in
-            the chip render (5 per component type) so a package with
-            hundreds of references can still be exported in full. */}
+      {/* Header: left-side title + counts, right-side download.
+          `justify-between` on the outer row keeps the download
+          button anchored to the right regardless of how many
+          badges live in the left group. `gap-4` gives comfortable
+          breathing room when wrap kicks in on narrow viewports.
+          The left group is its own flex-wrap container so its
+          badges wrap among themselves without pushing the download
+          button into an ambiguous position. */}
+      <div className="flex items-center justify-between gap-4 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <GitBranch className="h-4 w-4 text-grove-mint" />
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-grove-ink dark:text-grove-ink-dk">
+            Where it's used
+          </h4>
+          {totalUsage > 0 && (
+            <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 tabular-nums">
+              {totalUsage.toLocaleString()} customer component{totalUsage === 1 ? '' : 's'} reference this package
+            </span>
+          )}
+          {supplementalCount > 0 && (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30"
+              title="Includes CustomTab -> LWC references caught by our supplemental pass — Salesforce's MetadataComponentDependency index missed these."
+            >
+              +{supplementalCount} supplemental
+            </span>
+          )}
+        </div>
         {dependents.length > 0 && (
           <button
             type="button"
@@ -765,7 +771,7 @@ function DetailWhereUsed({
               e.stopPropagation()
               downloadDependenciesCsv(pkg, dependents)
             }}
-            className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium text-grove-mint hover:bg-grove-mint/10 dark:hover:bg-grove-mint/15 ring-1 ring-grove-mint/40 transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium text-grove-mint hover:bg-grove-mint/10 dark:hover:bg-grove-mint/15 ring-1 ring-grove-mint/40 transition-colors flex-shrink-0"
             title={`Download all ${dependents.length.toLocaleString()} references as a CSV file.`}
           >
             <Download className="h-3.5 w-3.5" />
@@ -867,44 +873,16 @@ function DetailWhereUsed({
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {shown.map((d, i) => {
-                    const isSupplemental = !!d.source
-                    const cls = isSupplemental
-                      ? 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-mint/10 dark:bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30'
-                      : 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink/85 dark:text-grove-ink-dk/85 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15'
-                    const tooltip =
-                      d.source === 'customtab_lwc'
-                        ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component ?? '?'}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
-                        : d.source === 'flexipage'
-                        ? `FlexiPage "${d.component}" hosts a component from this package's namespace. Caught by our supplemental FlexiPage metadata sweep — Lightning App / Home / Record Pages built in App Builder often aren't in MetadataComponentDependency for beta packages.`
-                        : d.source === 'customapp'
-                        ? `Custom App "${d.component}" includes a tab or component from this package's namespace. Caught by our supplemental CustomApplication metadata sweep — a direct signal that the package is surfaced to end users in this app.`
-                        : d.ref_component
-                        ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
-                        : `${d.component} references this package`
-                    return (
-                      <span
-                        key={`${d.component}-${i}`}
-                        className={cls}
-                        title={tooltip}
-                      >
-                        {isSupplemental && (
-                          <span className="text-[9px] uppercase tracking-wider opacity-70">
-                            {d.source === 'flexipage'
-                              ? '⇢ Page'
-                              : d.source === 'customapp'
-                              ? '⇢ App'
-                              : '⇢ LWC'}
-                          </span>
-                        )}
-                        {d.component ?? '(unknown)'}
-                      </span>
-                    )
-                  })}
+                  {shown.map((d, i) => (
+                    <ReferenceChip
+                      key={`${d.component}-${i}`}
+                      dependent={d}
+                    />
+                  ))}
                   {hidden > 0 && (
                     <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-mono text-grove-ink/55 dark:text-grove-ink-dk/55 ring-1 ring-grove-ink/15 dark:ring-grove-ink-dk/20"
-                      title={`${hidden.toLocaleString()} more ${typeKey} references not shown — click "Download all" to export the full list.`}
+                      className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55 ring-1 ring-grove-ink/15 dark:ring-grove-ink-dk/20 bg-grove-canvas/40 dark:bg-grove-canvas-dk/20"
+                      title={`${hidden.toLocaleString()} more ${typeKey} references not shown — click "Download all" above to export the full list.`}
                     >
                       +{hidden.toLocaleString()} more
                     </span>
@@ -925,6 +903,86 @@ function DetailWhereUsed({
         </div>
       )}
     </section>
+  )
+}
+
+// Split-pill reference chip. Left segment is a themed "kind" tab
+// (icon + short label) mirroring the source of the hit; right
+// segment is the referring component name in a neutral tone.
+// Palette lines up with the Grove system (mint for supplemental
+// evidence, evergreen ink for primary-index hits).
+function ReferenceChip({
+  dependent,
+}: {
+  dependent: NonNullable<
+    InstalledPackage['evidence']['top_dependents']
+  >[number]
+}) {
+  const d = dependent
+  const source = d.source
+
+  // Kind label + icon are driven by the source tag. Primary-index
+  // hits (no source) get a colour keyed off the component_type so
+  // Apex vs Flow vs ValidationRule reads distinctly. Icons kept to
+  // the lucide set we already import.
+  let kindLabel: string
+  let Icon: React.ComponentType<{ className?: string }>
+  let leftClasses: string
+  if (source === 'customtab_lwc') {
+    kindLabel = 'Custom Tab'
+    Icon = Zap
+    leftClasses =
+      'bg-grove-mint/20 text-grove-mint dark:bg-grove-mint/25 dark:text-grove-mint'
+  } else if (source === 'customapp') {
+    kindLabel = 'Custom App'
+    Icon = Boxes
+    leftClasses =
+      'bg-grove-mint/20 text-grove-mint dark:bg-grove-mint/25 dark:text-grove-mint'
+  } else if (source === 'flexipage') {
+    kindLabel = 'FlexiPage'
+    Icon = Layers
+    leftClasses =
+      'bg-grove-mint/20 text-grove-mint dark:bg-grove-mint/25 dark:text-grove-mint'
+  } else {
+    // Primary-index hit — colour lightly by component_type so
+    // buckets read distinctly, but stay in the evergreen family so
+    // supplemental (mint) still stands apart.
+    kindLabel = d.component_type ?? 'Reference'
+    Icon = GitBranch
+    leftClasses =
+      'bg-primary-100/70 text-primary-800 dark:bg-primary-900/40 dark:text-primary-200'
+  }
+
+  // Long tooltip explains the hit's source + wiring for the
+  // reviewer, without cluttering the chip itself.
+  const tooltip =
+    source === 'customtab_lwc'
+      ? `Custom Tab "${d.component}" displays this package's LWC "${d.ref_component ?? '?'}". Caught by our supplemental CustomTab pass — this reference isn't in Salesforce's MetadataComponentDependency index.`
+      : source === 'flexipage'
+      ? `FlexiPage "${d.component}" hosts a component from this package's namespace. Caught by our supplemental FlexiPage metadata sweep — Lightning App / Home / Record Pages built in App Builder often aren't in MetadataComponentDependency for beta packages.`
+      : source === 'customapp'
+      ? `Custom App "${d.component}" includes a tab or component from this package's namespace. Caught by our supplemental CustomApplication metadata sweep — a direct signal that the package is surfaced to end users in this app.`
+      : d.ref_component
+      ? `${d.component} → ${d.ref_component} (${d.ref_type ?? 'component'})`
+      : `${d.component} references this package`
+
+  return (
+    <span
+      className="inline-flex items-stretch rounded-md overflow-hidden ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15 text-[11px]"
+      title={tooltip}
+    >
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-1 ${leftClasses}`}
+      >
+        <Icon className="h-3 w-3 flex-shrink-0" />
+        <span className="font-mono uppercase tracking-wider text-[9px] whitespace-nowrap">
+          {kindLabel}
+        </span>
+      </span>
+      <span className="inline-flex items-center px-2.5 py-1 bg-grove-canvas dark:bg-grove-canvas-dk/40 text-grove-ink dark:text-grove-ink-dk font-medium tabular-nums">
+        {d.component ?? '(unknown)'}
+      </span>
+    </span>
   )
 }
 
