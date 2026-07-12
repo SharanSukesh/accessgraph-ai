@@ -32,6 +32,12 @@ import {
   Settings2,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
+  Link2,
+  Pencil,
+  Check,
+  X as XIcon,
+  ExternalLink,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -53,6 +59,7 @@ import {
   useChangeRiskLatest,
   useChangeRiskEvents,
   useRunChangeRisk,
+  useUpdateChangeRiskEvent,
   type BlastTier,
   type ChangeEvent,
   type ChangeRiskRunOptions,
@@ -548,7 +555,7 @@ export default function ChangeRiskPage() {
                 <div>
                   <ul className="divide-y divide-grove-border dark:divide-grove-border-dk">
                     {eventPage.events.map((e) => (
-                      <TimelineEvent key={e.id} event={e} />
+                      <TimelineEvent key={e.id} event={e} orgId={orgId} />
                     ))}
                   </ul>
                   <PaginationBar
@@ -1159,7 +1166,13 @@ function ActiveFilterPill({
   )
 }
 
-function TimelineEvent({ event: e }: { event: ChangeEvent }) {
+function TimelineEvent({
+  event: e,
+  orgId,
+}: {
+  event: ChangeEvent
+  orgId: string
+}) {
   const isOff = isOffHours(e.created_at_sf)
   const isWeekend = isWeekendDay(e.created_at_sf)
   return (
@@ -1185,6 +1198,15 @@ function TimelineEvent({ event: e }: { event: ChangeEvent }) {
               {isWeekend ? 'Weekend' : 'Off-hours'}
             </span>
           )}
+          {(e.notes || e.ticket_url) && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-grove-mint/15 text-grove-mint ring-1 ring-grove-mint/30"
+              title="A reviewer has attached context to this event."
+            >
+              <Check className="h-3 w-3" />
+              Reviewed
+            </span>
+          )}
         </div>
         <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 mt-0.5">
           {e.display}
@@ -1204,8 +1226,191 @@ function TimelineEvent({ event: e }: { event: ChangeEvent }) {
             </>
           )}
         </div>
+        <ReviewFields event={e} orgId={orgId} />
       </div>
     </li>
+  )
+}
+
+// ReviewFields — attaches human context (a note + a ticket link) to
+// an auto-detected change event. Turns the timeline into an
+// auditable record: consultants can annotate "expected", "signed off
+// by so-and-so", or attach a Jira link that documents the approval.
+//
+// Collapsed state:
+//   - If neither note nor URL is set: a subtle "Attach note or link"
+//     affordance in the muted-ink palette.
+//   - If either is set: a compact display row showing the note text
+//     + a clickable link, plus an Edit button.
+//
+// Edit state:
+//   - Two side-by-side inputs (textarea for the note, url input for
+//     the link), Save + Cancel buttons.
+//   - Save issues a PATCH; the mutation invalidates the event query
+//     so the UI reflects the new content on the next refetch.
+function ReviewFields({
+  event: e,
+  orgId,
+}: {
+  event: ChangeEvent
+  orgId: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [notesDraft, setNotesDraft] = useState(e.notes ?? '')
+  const [urlDraft, setUrlDraft] = useState(e.ticket_url ?? '')
+
+  const mutation = useUpdateChangeRiskEvent(orgId)
+
+  const hasContent = !!(e.notes || e.ticket_url)
+
+  // Reset drafts when the event changes (e.g. after a refetch mutates
+  // the event object in place) — otherwise stale drafts persist.
+  useEffect(() => {
+    setNotesDraft(e.notes ?? '')
+    setUrlDraft(e.ticket_url ?? '')
+  }, [e.notes, e.ticket_url])
+
+  const beginEdit = () => {
+    setNotesDraft(e.notes ?? '')
+    setUrlDraft(e.ticket_url ?? '')
+    setEditing(true)
+  }
+
+  const cancelEdit = () => {
+    setNotesDraft(e.notes ?? '')
+    setUrlDraft(e.ticket_url ?? '')
+    setEditing(false)
+  }
+
+  const save = () => {
+    // Send only fields whose value changed. `''` means "clear" and
+    // is normalised to null on the wire so the backend clears the
+    // column instead of writing an empty string.
+    const patch: {
+      eventId: string
+      notes?: string | null
+      ticket_url?: string | null
+    } = { eventId: e.id }
+    const nextNotes = notesDraft.trim() || null
+    const nextUrl = urlDraft.trim() || null
+    if (nextNotes !== (e.notes ?? null)) patch.notes = nextNotes
+    if (nextUrl !== (e.ticket_url ?? null)) patch.ticket_url = nextUrl
+    // No-op save: just close the editor without hitting the network.
+    if (Object.keys(patch).length === 1) {
+      setEditing(false)
+      return
+    }
+    mutation.mutate(patch, { onSuccess: () => setEditing(false) })
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-2 p-3 rounded-md bg-grove-canvas/40 dark:bg-grove-canvas-dk/25 ring-1 ring-grove-ink/10 dark:ring-grove-ink-dk/15 space-y-2">
+        <div>
+          <label className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 flex items-center gap-1">
+            <MessageSquare className="h-3 w-3" />
+            Note
+          </label>
+          <textarea
+            value={notesDraft}
+            onChange={(ev) => setNotesDraft(ev.target.value)}
+            rows={2}
+            placeholder="e.g. Approved by security team — expected as part of Q3 access review."
+            className="w-full mt-1 px-2 py-1.5 text-xs rounded bg-white dark:bg-grove-canvas-dk/50 text-grove-ink dark:text-grove-ink-dk ring-1 ring-grove-ink/15 dark:ring-grove-ink-dk/20 focus:ring-grove-mint/60 focus:outline-none resize-y"
+            disabled={mutation.isPending}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 flex items-center gap-1">
+            <Link2 className="h-3 w-3" />
+            Ticket / approval URL
+          </label>
+          <input
+            type="url"
+            value={urlDraft}
+            onChange={(ev) => setUrlDraft(ev.target.value)}
+            placeholder="https://jira.example.com/browse/SEC-1234"
+            className="w-full mt-1 px-2 py-1.5 text-xs rounded bg-white dark:bg-grove-canvas-dk/50 text-grove-ink dark:text-grove-ink-dk ring-1 ring-grove-ink/15 dark:ring-grove-ink-dk/20 focus:ring-grove-mint/60 focus:outline-none"
+            disabled={mutation.isPending}
+          />
+        </div>
+        {mutation.isError && (
+          <p className="text-[11px] text-red-600 dark:text-red-400">
+            Failed to save. Try again or clear both fields.
+          </p>
+        )}
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            type="button"
+            onClick={save}
+            disabled={mutation.isPending}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium bg-grove-mint text-white hover:bg-grove-mint/90 disabled:opacity-50 transition-colors"
+          >
+            {mutation.isPending ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Check className="h-3 w-3" />
+            )}
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={cancelEdit}
+            disabled={mutation.isPending}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium text-grove-ink/70 dark:text-grove-ink-dk/70 hover:bg-grove-ink/5 dark:hover:bg-grove-ink-dk/10 transition-colors"
+          >
+            <XIcon className="h-3 w-3" />
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!hasContent) {
+    return (
+      <button
+        type="button"
+        onClick={beginEdit}
+        className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-grove-ink/50 dark:text-grove-ink-dk/45 hover:text-grove-mint transition-colors"
+      >
+        <MessageSquare className="h-3 w-3" />
+        Attach note or ticket link
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 flex items-start gap-3 flex-wrap">
+      {e.notes && (
+        <div className="flex items-start gap-1.5 text-xs text-grove-ink/85 dark:text-grove-ink-dk/85 max-w-2xl">
+          <MessageSquare className="h-3.5 w-3.5 mt-0.5 text-grove-mint flex-shrink-0" />
+          <span className="whitespace-pre-wrap break-words">{e.notes}</span>
+        </div>
+      )}
+      {e.ticket_url && (
+        <a
+          href={e.ticket_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-grove-mint hover:underline break-all"
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <Link2 className="h-3.5 w-3.5 flex-shrink-0" />
+          <span className="truncate max-w-xs">{e.ticket_url}</span>
+          <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-60" />
+        </a>
+      )}
+      <button
+        type="button"
+        onClick={beginEdit}
+        className="ml-auto inline-flex items-center gap-1 text-[11px] text-grove-ink/50 dark:text-grove-ink-dk/45 hover:text-grove-mint transition-colors"
+        title="Edit note / link"
+      >
+        <Pencil className="h-3 w-3" />
+        Edit
+      </button>
+    </div>
   )
 }
 

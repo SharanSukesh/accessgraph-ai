@@ -64,6 +64,11 @@ class EventResponse(BaseModel):
     blast_radius: float
     blast_tier: str
     reasoning: Dict[str, Any] = {}
+    # Reviewer-attached context. Nullable — unclaimed events return
+    # None so the UI can render an "Add note" affordance instead of
+    # an empty block.
+    notes: Optional[str] = None
+    ticket_url: Optional[str] = None
 
     @classmethod
     def from_orm(cls, row: ChangeAuditEvent) -> "EventResponse":
@@ -80,7 +85,21 @@ class EventResponse(BaseModel):
             blast_radius=round(row.blast_radius, 1),
             blast_tier=row.blast_tier,
             reasoning=row.reasoning or {},
+            notes=row.notes,
+            ticket_url=row.ticket_url,
         )
+
+
+class EventReviewUpdate(BaseModel):
+    """PATCH payload for reviewer-attached fields on a ChangeAuditEvent.
+
+    Both fields explicitly optional so the frontend can update just
+    one at a time. `None` MEANS "clear this field" — omitting a key
+    means "don't touch this field".
+    """
+
+    notes: Optional[str] = None
+    ticket_url: Optional[str] = None
 
 
 class EventListResponse(BaseModel):
@@ -340,3 +359,78 @@ async def get_history(
         )
         for r in reversed(runs)  # chronological order for charting
     ]
+
+
+@router.patch(
+    "/orgs/{org_id}/change-risk/events/{event_id}",
+    response_model=EventResponse,
+)
+async def update_event_review(
+    org_id: str,
+    event_id: str,
+    payload: EventReviewUpdate,
+    current_org_id: str = Depends(get_current_org),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> EventResponse:
+    """Attach or clear reviewer context (notes + ticket URL) on a
+    ChangeAuditEvent. Uses Pydantic's `exclude_unset` so only the
+    fields the client explicitly sent get modified — omitting a key
+    leaves the existing value alone, sending `null` clears it.
+    """
+    _enforce_same_org(org_id, current_org_id)
+
+    result = await db.execute(
+        select(ChangeAuditEvent).where(
+            ChangeAuditEvent.id == event_id,
+            ChangeAuditEvent.organization_id == org_id,
+        )
+    )
+    event = result.scalar_one_or_none()
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found.",
+        )
+
+    # Explicit dance to distinguish "not sent" from "sent as null":
+    #   - dump with exclude_unset=True → only keys the client sent
+    #   - assign each one to the ORM row, so `null` really clears
+    updates = payload.model_dump(exclude_unset=True)
+    if "notes" in updates:
+        # Empty-string trim: a whitespace-only note is really "no
+        # note". Store None to keep the frontend's has-a-note check
+        # trivial.
+        n = updates["notes"]
+        event.notes = n.strip() if isinstance(n, str) and n.strip() else None
+    if "ticket_url" in updates:
+        u = updates["ticket_url"]
+        # Same normalisation for URLs. Truncate at the column ceiling
+        # so an accidental paste of a huge blob can't 500 the request.
+        if isinstance(u, str):
+            u = u.strip()
+            event.ticket_url = u[:2048] if u else None
+        else:
+            event.ticket_url = None
+
+    try:
+        await db.commit()
+        await db.refresh(event)
+    except Exception as exc:
+        logger.exception(
+            "change-risk: failed to update event %s for org %s",
+            event_id, org_id,
+        )
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update event: {exc}",
+        )
+
+    logger.info(
+        "change-risk: event %s reviewer fields updated by %s "
+        "(notes_set=%s, ticket_set=%s)",
+        event_id, actor_email,
+        event.notes is not None, event.ticket_url is not None,
+    )
+    return EventResponse.from_orm(event)

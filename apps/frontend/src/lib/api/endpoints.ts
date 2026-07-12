@@ -96,6 +96,8 @@ export const endpoints = {
   changeRiskRun: (orgId: string) => `/orgs/${orgId}/change-risk/run`,
   changeRiskLatest: (orgId: string) => `/orgs/${orgId}/change-risk/latest`,
   changeRiskEvents: (orgId: string) => `/orgs/${orgId}/change-risk/events`,
+  changeRiskEvent: (orgId: string, eventId: string) =>
+    `/orgs/${orgId}/change-risk/events/${eventId}`,
   changeRiskHistory: (orgId: string) => `/orgs/${orgId}/change-risk/history`,
 
   // Managed-package sprawl — AppExchange inventory + usage tiering

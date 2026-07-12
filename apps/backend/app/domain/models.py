@@ -1592,6 +1592,16 @@ class ChangeAuditEvent(Base, TimestampMixin):
     # the "+15 delete modifier"). Renders in the timeline drilldown.
     reasoning: Mapped[dict] = mapped_column(JSON, default=dict)
 
+    # Reviewer-attached context. `notes` is free-form text explaining
+    # what happened / why it was OK / what to follow up on. `ticket_url`
+    # links to the change-management record (Jira, ServiceNow, etc.) —
+    # the URL is the source of truth outside this tool. Both nullable
+    # so unclaimed events stay clean in the UI.
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ticket_url: Mapped[Optional[str]] = mapped_column(
+        String(2048), nullable=True
+    )
+
     run = relationship("ChangeAuditRun", back_populates="events")
 
     __table_args__ = (

@@ -36,6 +36,13 @@ export interface ChangeEvent {
     modifiers?: { keyword: string; bump: number }[]
     final?: number
   }
+  /** Reviewer-attached free-form context (why this change is OK / what
+   *  to follow up on / who signed off). Nullable until a reviewer
+   *  fills it in from the timeline UI. */
+  notes: string | null
+  /** URL of the approval or change-management record (Jira ticket,
+   *  ServiceNow, an email thread). Nullable until attached. */
+  ticket_url: string | null
 }
 
 export interface ChangeRiskSummary {
@@ -273,6 +280,38 @@ export function useRunChangeRisk(orgId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: changeRiskKeys.all })
+    },
+  })
+}
+
+/**
+ * PATCH-based update of the reviewer-attached fields on a single
+ * ChangeAuditEvent. Keys omitted from the payload leave the existing
+ * value alone; passing an explicit `null` clears the field.
+ *
+ * On success, invalidates every event query for the org so any list
+ * showing this event picks up the new content on next fetch.
+ */
+export interface EventReviewUpdate {
+  eventId: string
+  /** Free-form context. Pass `null` to clear an existing note. */
+  notes?: string | null
+  /** Approval / ticket URL. Pass `null` to clear an existing link. */
+  ticket_url?: string | null
+}
+
+export function useUpdateChangeRiskEvent(orgId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<ChangeEvent, unknown, EventReviewUpdate>({
+    mutationFn: ({ eventId, ...patch }) =>
+      apiClient.patch<ChangeEvent>(
+        endpoints.changeRiskEvent(orgId, eventId),
+        patch,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [...changeRiskKeys.all, 'events', orgId],
+      })
     },
   })
 }
