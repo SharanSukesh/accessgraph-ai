@@ -41,6 +41,7 @@ import {
   ShieldCheck,
   Pin,
   Filter,
+  HelpCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -171,6 +172,7 @@ export default function RestructurePage() {
     null,
   )
   const [showConfig, setShowConfig] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
 
   const {
     data: summary,
@@ -232,6 +234,15 @@ export default function RestructurePage() {
               <Filter className="h-4 w-4" />
               Config
             </Button>
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-grove-ink/70 dark:text-grove-ink-dk/70 hover:bg-grove-ink/5 dark:hover:bg-grove-ink-dk/10 transition-colors"
+              title="How does this work?"
+            >
+              <HelpCircle className="h-4 w-4" />
+              How it works
+            </button>
           </div>
         }
       />
@@ -381,6 +392,8 @@ export default function RestructurePage() {
           isPending={runMutation.isPending}
         />
       )}
+
+      {showHelp && <HelpDialog onClose={() => setShowHelp(false)} />}
     </div>
   )
 }
@@ -1504,6 +1517,246 @@ function ConfigSlider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full mt-1 accent-grove-mint"
       />
+    </div>
+  )
+}
+
+// ============================================================================
+// Help dialog — documentation the user can pull up any time
+// ============================================================================
+
+function HelpDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 overflow-y-auto pt-16 pb-10 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl bg-grove-canvas dark:bg-grove-canvas-dk rounded-lg shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-grove-ink/10 dark:border-grove-ink-dk/15 flex items-center gap-3 sticky top-0 bg-grove-canvas/95 dark:bg-grove-canvas-dk/95 backdrop-blur">
+          <BookOpen className="h-5 w-5 text-grove-mint flex-shrink-0" />
+          <h2 className="text-base font-semibold text-grove-ink dark:text-grove-ink-dk flex-1">
+            Restructure Studio — how it works
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded hover:bg-grove-ink/10 dark:hover:bg-grove-ink-dk/10"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 leading-relaxed">
+          <HelpSection title="What this is">
+            <p>
+              An interactive canvas for consultants to review, accept,
+              and export <strong>structural changes</strong> to a
+              Salesforce org's access model. It surfaces candidate moves
+              across two axes — <strong>object/field access</strong>{' '}
+              (Permission Sets) and <strong>record access</strong>{' '}
+              (Role hierarchy) — and scores each on multiple objectives
+              so you can pick what matters for this engagement.
+            </p>
+          </HelpSection>
+
+          <HelpSection title="How the analysis runs">
+            <ol className="list-decimal ml-5 space-y-1.5">
+              <li>
+                Click <strong>Run new analysis</strong>. The backend
+                loads every snapshot for the org (users, roles, PSets,
+                assignments, permissions, sharing model) plus the
+                latest GAEA equity output if one exists.
+              </li>
+              <li>
+                Pattern miners scan for 7 candidate move types (see
+                below). Each candidate carries a rationale citing the
+                specific metric that triggered detection.
+              </li>
+              <li>
+                The impact simulator scores every move on 5 axes:
+                object/field access preservation, equity delta, cost
+                delta, complexity delta, and blast radius.
+              </li>
+              <li>
+                Results persist as a <strong>run</strong> with a list
+                of proposed <strong>moves</strong>. The KPI strip shows
+                current org state and projected state if every move is
+                accepted.
+              </li>
+            </ol>
+          </HelpSection>
+
+          <HelpSection title="The 7 move types">
+            <div className="space-y-2">
+              <HelpMove
+                title="Merge Permission Sets"
+                desc="Combine two Permission Sets whose object + field permissions overlap heavily (Jaccard ≥ threshold, default 90%). Merger is a strict superset — no user loses access. Reduces admin surface area."
+              />
+              <HelpMove
+                title="Retire Unused Permission Set"
+                desc="A Permission Set with zero direct assignments. Safe to drop — nobody has it, so nobody's access changes."
+              />
+              <HelpMove
+                title="Merge Roles"
+                desc="Two roles whose members share ≥85% of their (Profile, PSet) signatures. Widens record visibility uniformly for both sets of members — never narrows."
+              />
+              <HelpMove
+                title="Flatten Role Level"
+                desc="A role with exactly one child role adds no differentiation. Removing it shortens record rollup for descendants."
+              />
+              <HelpMove
+                title="Reparent Role"
+                desc="A bottom-quartile role (by member utility) gets reparented under a top-utility role to improve rollup access."
+              />
+              <HelpMove
+                title="Reassign to Role"
+                desc="A user whose GAEA utility is below their role's average moves to a role whose members have better graph position. ≥5% projected equity lift."
+              />
+              <HelpMove
+                title="Reassign Manager"
+                desc="Approval-chain change (User.ManagerId, not User.UserRoleId). Suggests a higher-utility supervisor when the current manager is under-served."
+              />
+            </div>
+          </HelpSection>
+
+          <HelpSection title="Reading a move card">
+            <p>Every card carries:</p>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>
+                <strong>Type badge</strong> (top-left) — one of the 7
+                above.
+              </li>
+              <li>
+                <strong>Primary component name</strong> — the main
+                thing being changed, always shown with its Salesforce
+                ID in parens for traceability.
+              </li>
+              <li>
+                <strong>Blast tier</strong> — LOW / MEDIUM / HIGH /
+                CRITICAL. Reflects both affected-user count and whether
+                the move changes record-level visibility.
+              </li>
+              <li>
+                <strong>Rationale</strong> — auto-generated. Cites the
+                specific metric (Jaccard %, utility number, member
+                count) that triggered detection.
+              </li>
+              <li>
+                <strong>Impact chips</strong> — users affected, object
+                access preserved, equity delta, complexity delta, and
+                more. See the drawer for the full breakdown.
+              </li>
+              <li>
+                <strong>Actions</strong> — Details (drawer),
+                Accept, Reject.
+              </li>
+            </ul>
+          </HelpSection>
+
+          <HelpSection title="Deep Analysis (Option B)">
+            <p>
+              The default scoring is symbolic — fast, category-level.
+              For any move you want a concrete record-count answer to,
+              click <strong>Details</strong> then <strong>Deep analyse</strong>{' '}
+              in the drawer. That runs a bounded probe (samples 1,000
+              records per key object) against the org's snapshot share
+              tables and returns actual before/after visibility counts
+              per object.
+            </p>
+            <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 italic">
+              For PSet-only moves (merges + retires), record-level
+              access doesn't change so the deep analysis returns zero
+              gained / zero lost — that's the correct answer.
+            </p>
+          </HelpSection>
+
+          <HelpSection title="Preservation constraints">
+            <p>
+              Sometimes a specific user MUST retain access to a specific
+              object regardless of restructure gains — audit rules,
+              regulatory constraints, a whale account owner. Pin them
+              in the <strong>Preservation constraints</strong> panel.
+              Any proposed move that would violate a pin gets a red
+              warning badge and the Accept button is disabled until the
+              consultant explicitly waives.
+            </p>
+          </HelpSection>
+
+          <HelpSection title="Exporting the plan">
+            <p>
+              Once you've accepted the moves you want to execute, click{' '}
+              <strong>Export CSV</strong> in the plan row. That gives
+              you a CSV of the accepted sequence with every move's
+              type, primary component, blast tier, and rationale — the
+              handoff artifact for the client's admin team or your own
+              deployment engineer.
+            </p>
+          </HelpSection>
+
+          <HelpSection title="Config">
+            <p>
+              The <strong>Config</strong> button lets you tune the
+              pattern miner:{' '}
+              <strong>max moves</strong> (default 50),{' '}
+              <strong>PS overlap threshold</strong> (default 90% —
+              lower means more merge candidates, higher means stricter),
+              and <strong>role member overlap threshold</strong>{' '}
+              (default 85%). Save and re-run to regenerate the plan.
+            </p>
+          </HelpSection>
+
+          <HelpSection title="Relationship to GAEA">
+            <p>
+              The Restructure Studio is <strong>fully additive</strong>{' '}
+              to the GAEA equity engine. It reads GAEA's per-user
+              utility scores as a scoring signal for the role and
+              manager reassign moves, but does not modify the equity
+              recommendations service, the R-GCN policy, or the
+              Recommendation table in any way. Run GAEA + Restructure
+              independently.
+            </p>
+          </HelpSection>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HelpSection({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section>
+      <h3 className="text-[10px] font-mono uppercase tracking-wider text-grove-mint mb-2">
+        {title}
+      </h3>
+      <div className="space-y-2">{children}</div>
+    </section>
+  )
+}
+
+function HelpMove({
+  title,
+  desc,
+}: {
+  title: string
+  desc: string
+}) {
+  return (
+    <div className="rounded-md bg-grove-canvas/50 dark:bg-grove-canvas-dk/30 p-3">
+      <div className="text-xs font-semibold text-grove-ink dark:text-grove-ink-dk">
+        {title}
+      </div>
+      <div className="text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 mt-1">
+        {desc}
+      </div>
     </div>
   )
 }

@@ -76,28 +76,87 @@ DEFAULT_MAX_MOVES = 50
 # ID for managed-package PSets, hence the fallback chain).
 
 
+def _looks_like_id(s: str) -> bool:
+    """Heuristic: is this string a raw SF ID or a synthetic managed-package
+    identifier rather than a human label?
+
+    Cases covered:
+      - 15 or 18-char alphanumeric (SF ID)
+      - Synthetic managed-package names with the "hash + version tuple"
+        pattern (e.g. `00ex00000018ozl_128_09_04_12_5`) — long strings
+        with underscore-separated digit groups and no vowels/spaces.
+    """
+    if not s:
+        return True
+    s = s.strip()
+    if not s:
+        return True
+    # Bare SF ID (15 or 18 chars, all alnum, no spaces).
+    if len(s) in (15, 18) and s.isalnum():
+        return True
+    # Managed-package synthetic (long, underscore-heavy, digit-heavy).
+    if (
+        len(s) >= 15
+        and s.count("_") >= 3
+        and sum(c.isdigit() for c in s) >= 5
+        and " " not in s
+    ):
+        return True
+    return False
+
+
 def _ps_display(ps: PermissionSetSnapshot) -> str:
-    display = ps.label or ps.name or ""
+    """Best-effort human-legible name for a PermissionSet, with SF ID
+    appended for traceability.
+
+    Fallback ladder:
+      1. `label` (if it's a human string)
+      2. `name` (if it's a human string)
+      3. Categorized descriptor built from `ps_type` +
+         `is_owned_by_profile` — e.g. "Session-Based PS", "Profile-owned
+         Regular PS". Always followed by the SF ID.
+    """
+    label = (ps.label or "").strip()
+    name = (ps.name or "").strip()
     sf_id = ps.salesforce_id
-    if display and display != sf_id:
-        return f"{display} ({sf_id})"
-    return sf_id
+
+    for candidate in (label, name):
+        if candidate and not _looks_like_id(candidate) and candidate != sf_id:
+            return f"{candidate} ({sf_id})"
+
+    # Fell through — construct a categorized descriptor so consultants
+    # at least know what KIND of PS this is.
+    kind = (ps.ps_type or "Regular").strip() or "Regular"
+    owned = "Profile-owned " if ps.is_owned_by_profile else ""
+    # If we have SOME string content, hint at it so consultants can
+    # cross-check in Setup. Truncate long synthetics.
+    hint = ""
+    for candidate in (label, name):
+        if candidate:
+            truncated = candidate if len(candidate) <= 30 else candidate[:27] + "..."
+            hint = f' [raw: "{truncated}"]'
+            break
+    return f"{owned}{kind} Permission Set{hint} ({sf_id})"
 
 
 def _role_display(r: RoleSnapshot) -> str:
-    name = r.name or ""
+    name = (r.name or "").strip()
     sf_id = r.salesforce_id
-    if name and name != sf_id:
+    if name and not _looks_like_id(name) and name != sf_id:
         return f"{name} ({sf_id})"
-    return sf_id
+    # Fall back to "Unnamed Role (sf_id)" so the consultant knows it's a
+    # Role rather than staring at a raw ID they can't identify.
+    return f"Unnamed Role ({sf_id})"
 
 
 def _user_display(u: UserSnapshot) -> str:
-    name = u.name or u.username or ""
+    name = (u.name or "").strip()
+    username = (u.username or "").strip()
     sf_id = u.salesforce_id
-    if name and name != sf_id:
-        return f"{name} ({sf_id})"
-    return sf_id
+    for candidate in (name, username):
+        if candidate and not _looks_like_id(candidate) and candidate != sf_id:
+            return f"{candidate} ({sf_id})"
+    return f"Unnamed User ({sf_id})"
 
 # Bands used to convert `affected_user_count` (or a role-move's implied
 # record impact) into a blast tier. Mirrors the change-risk-radar tier
