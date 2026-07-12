@@ -634,22 +634,33 @@ class SalesforceAPIClient:
                 "%d tabs via %s",
                 namespace, len(tab_rows), tab_source_used,
             )
+            # Normalise the namespace: strip whitespace and any
+            # non-alphanumeric characters, lowercase. So "AccessGraph
+            # AI" (as it'd appear in a tab Label) collapses to
+            # "accessgraphai" — matching the namespace exactly.
+            # Only use this heuristic for namespaces >= 5 chars so
+            # short namespaces like "abc" don't false-positive.
+            def _alnum_lower(s: str) -> str:
+                return "".join(c.lower() for c in s if c.isalnum())
+
+            namespace_norm = _alnum_lower(namespace)
             hits: List[Dict[str, Any]] = []
+            seen_tab_ids: set = set()
+            bundle_names_display = list(bundle_names_normalised.values())
             for r in tab_rows:
-                # TabDefinition doesn't expose a namespace column,
-                # so we can't filter package-owned tabs upfront.
-                # Instead we rely on the name heuristic: bundle
-                # DeveloperName as a substring of the tab's Name or
-                # Label (or vice versa). If a package's own tab
-                # happens to name-collide with its own LWC, it's the
-                # package hosting its own component, which is
-                # arguably an interesting "wired" signal anyway.
+                tab_id = r.get("Id")
+                if tab_id in seen_tab_ids:
+                    continue
                 tab_name = (r.get("Name") or "").lower()
                 tab_label = (r.get("Label") or "").lower()
-                combined = f"{tab_name} {tab_label}".strip()
-                if not combined:
+                if not tab_name and not tab_label:
                     continue
+
+                # Pass 1: bundle DeveloperName ↔ tab Name/Label
+                # substring match. This catches "MyLwcTab" hosting
+                # "myLwc" and similar name-followed-through cases.
                 matched_bundle: Optional[str] = None
+                match_reason = ""
                 for bnorm, bname in bundle_names_normalised.items():
                     if not bnorm:
                         continue
@@ -660,20 +671,51 @@ class SalesforceAPIClient:
                         or tab_label == bnorm
                     ):
                         matched_bundle = bname
+                        match_reason = "bundle-name overlap"
                         break
-                if not matched_bundle:
+
+                # Pass 2 (only if pass 1 missed): normalised
+                # namespace substring/equality. Catches the far more
+                # common case where a user labels their custom tab
+                # after the *app* — e.g. "AccessGraph AI" tab
+                # displaying accessgraphai's LWCs. Only runs for
+                # namespaces >= 5 chars to control false positives.
+                if matched_bundle is None and len(namespace_norm) >= 5:
+                    tab_name_norm = _alnum_lower(tab_name)
+                    tab_label_norm = _alnum_lower(tab_label)
+                    for candidate in (tab_name_norm, tab_label_norm):
+                        if not candidate:
+                            continue
+                        if (
+                            namespace_norm == candidate
+                            or namespace_norm in candidate
+                            or (
+                                len(candidate) >= 5
+                                and candidate in namespace_norm
+                            )
+                        ):
+                            matched_bundle = (
+                                bundle_names_display[0]
+                                if bundle_names_display
+                                else "?"
+                            )
+                            match_reason = "namespace-in-tab-name overlap"
+                            break
+
+                if matched_bundle is None:
                     continue
+                seen_tab_ids.add(tab_id)
                 hits.append({
                     "component": r.get("Label") or r.get("Name"),
-                    "component_type": "CustomTab",
+                    "component_type": f"CustomTab ({match_reason})",
                     "ref_component": matched_bundle,
                     "ref_type": "LightningComponentBundle",
                     "source": "customtab_lwc",
                 })
             logger.warning(
                 "package-sprawl: CustomTab sweep for namespace=%s — "
-                "%d name-heuristic hits",
-                namespace, len(hits),
+                "%d name-heuristic hits (normalised namespace=%s)",
+                namespace, len(hits), namespace_norm,
             )
             return hits
         except Exception as exc:  # noqa: BLE001
