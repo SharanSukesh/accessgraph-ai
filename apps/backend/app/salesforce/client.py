@@ -675,28 +675,50 @@ class SalesforceAPIClient:
                     continue
                 tab_name_raw = r.get("Name") or ""
                 tab_label_raw = r.get("Label") or ""
+                # Skip Salesforce-provided tabs entirely. Their Name
+                # is prefixed "standard-" and they're by definition
+                # not a customer's LWC-hosting tab; matching them
+                # produces false positives (a stock Home tab with
+                # Label "Home" matches an "accessGraphHome" bundle
+                # via bundle-name overlap, but has zero relationship
+                # to the package). This filter removes that whole
+                # category of noise up front.
+                if tab_name_raw.startswith("standard-"):
+                    continue
                 tab_name_norm = _alnum_lower(tab_name_raw)
                 tab_label_norm = _alnum_lower(tab_label_raw)
                 if not tab_name_norm and not tab_label_norm:
                     continue
 
                 # Pass 1: bundle DeveloperName ↔ tab Name/Label
-                # substring match, BIDIRECTIONAL.
+                # substring match, BIDIRECTIONAL, with directional
+                # length gates.
                 #
-                # Both directions matter:
-                #   - bundle name substring OF tab name catches
-                #     "MyLwcTab" hosting "MyLwc"
-                #   - tab name substring OF bundle name catches
-                #     "Equity" tab hosting "accessGraphEquity" bundle
-                # Minimum length 4 on both sides to prevent tiny
-                # tokens matching everything.
+                # Forward (bnorm ⊂ candidate): bundle name substring
+                #   of tab name. Catches "MyLwcTab" hosting "MyLwc".
+                #   Bundle name is already required to be >=4 chars
+                #   at bundle_names_by_alnum build time; that's
+                #   sufficient guard.
+                # Reverse (candidate ⊂ bnorm): tab name substring of
+                #   bundle name. Catches "Equity" tab hosting
+                #   "accessGraphEquity" bundle. Requires candidate
+                #   >=6 chars to prevent short common words like
+                #   "home" from matching "accessgraphhome" and
+                #   producing false positives on Salesforce-shipped
+                #   generic tabs.
                 matched_bundle: Optional[str] = None
                 match_reason = ""
                 for bnorm, bname in bundle_names_by_alnum.items():
                     for candidate in (tab_name_norm, tab_label_norm):
-                        if len(candidate) < 4:
+                        if not candidate:
                             continue
-                        if bnorm in candidate or candidate in bnorm:
+                        # Forward direction
+                        if len(candidate) >= 4 and bnorm in candidate:
+                            matched_bundle = bname
+                            match_reason = "bundle-name overlap"
+                            break
+                        # Reverse direction (stricter length gate)
+                        if len(candidate) >= 6 and candidate in bnorm:
                             matched_bundle = bname
                             match_reason = "bundle-name overlap"
                             break
