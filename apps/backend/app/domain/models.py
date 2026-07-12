@@ -1782,3 +1782,331 @@ class InstalledPackage(Base, TimestampMixin):
             "run_id", "sf_package_id", name="uq_installed_package_run_sfid"
         ),
     )
+
+
+# ============================================================================
+# GAEA Optimal Org Restructure — role-hierarchy + PSet consolidation
+# ============================================================================
+#
+# Fully additive to the equity engine. Reads GAEA outputs (utility per user,
+# equity index) as a scoring signal. Never modifies equity_recommendations
+# or the Recommendation table.
+#
+# Four tables, all migrated in c4e8f2a9b7d1 -> e5f9b2c8a4d6:
+#
+#   RestructureRun                        - header + rollup KPIs per generation
+#     └── RestructureMove                 - one row per proposed move
+#     └── RestructurePlan                 - named collections of accepted moves
+#     └── RestructurePreservationConstraint - per-user, per-object hard pins
+#
+# See product_roadmap in memory + docstrings below for scope.
+
+
+class RestructureMoveType(str, PyEnum):
+    """The 7 move types v1 of the Restructure feature can propose.
+
+    First two are object/field-level (touch PermissionSet only). The rest
+    are record-level (touch the role hierarchy). Both matter — a client-
+    facing restructure isn't complete without the role-hierarchy axis.
+    """
+    MERGE_PERMISSION_SETS = "MERGE_PERMISSION_SETS"
+    RETIRE_UNUSED_PS = "RETIRE_UNUSED_PS"
+    REASSIGN_TO_ROLE = "REASSIGN_TO_ROLE"
+    MERGE_ROLES = "MERGE_ROLES"
+    FLATTEN_ROLE_LEVEL = "FLATTEN_ROLE_LEVEL"
+    REPARENT_ROLE = "REPARENT_ROLE"
+    REASSIGN_MANAGER = "REASSIGN_MANAGER"
+
+
+class RestructureMoveStatus(str, PyEnum):
+    """Move review state. Consultant clicks Accept / Reject / Edit in the
+    Studio UI; edited moves get their impact re-simulated.
+    """
+    PROPOSED = "proposed"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    EDITED = "edited"
+
+
+class RestructurePlanStatus(str, PyEnum):
+    """Plan lifecycle. A Studio can have multiple drafts (A vs B) but
+    only one approved plan per run at a time.
+    """
+    DRAFT = "draft"
+    APPROVED = "approved"
+    ARCHIVED = "archived"
+
+
+class RestructureRun(Base, TimestampMixin):
+    """One row per POST /restructure/run. Header + rollup KPIs so the
+    Studio's top strip renders from a single row, drilldown hangs off
+    the `moves` relationship.
+
+    Both `current_*` (org today) and `projected_*` (org after every
+    proposed move is accepted) are stored on this row. The projected
+    KPIs are the "if we did everything" ceiling — the consultant will
+    typically accept a subset, but the ceiling is the top-of-page hook.
+    """
+    __tablename__ = "restructure_runs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    # Pinned GAEA state — the equity snapshot this run was scored
+    # against. Nullable so runs made before the equity engine has ever
+    # fired still work; they just won't have equity deltas to show.
+    gaea_snapshot_id: Mapped[Optional[str]] = mapped_column(String(36))
+
+    # 'running' | 'complete' | 'error' — the run isn't backgrounded in
+    # v1 (Restructure runs are synchronous like Package Sprawl) but the
+    # column is here for when we move to async.
+    status: Mapped[str] = mapped_column(
+        String(16), default="running", nullable=False
+    )
+    actor_email: Mapped[Optional[str]] = mapped_column(String(255))
+    moves_generated: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Current-state KPIs at snapshot time (before any accepted moves).
+    # equity_index nullable when GAEA hasn't ever run for this org.
+    # monthly_license_cost nullable when we lack licence data.
+    current_equity_index: Mapped[Optional[float]] = mapped_column(Float)
+    current_ps_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    current_role_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    current_user_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    current_monthly_license_cost: Mapped[Optional[float]] = mapped_column(Float)
+
+    # Projected KPIs — org if every proposed move were accepted.
+    projected_equity_index: Mapped[Optional[float]] = mapped_column(Float)
+    projected_ps_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    projected_role_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    projected_monthly_license_cost: Mapped[Optional[float]] = mapped_column(Float)
+
+    # Free-form JSON — pattern-miner thresholds, probe sample size,
+    # random seeds. Recorded so re-runs with identical config are
+    # deterministic and post-hoc audits can see what knobs were used.
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    moves = relationship(
+        "RestructureMove",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+    plans = relationship(
+        "RestructurePlan",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+    constraints = relationship(
+        "RestructurePreservationConstraint",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_restructure_run_org_time",
+            "organization_id", "snapshot_at",
+        ),
+    )
+
+
+class RestructureMove(Base, TimestampMixin):
+    """One row per proposed structural change on an org.
+
+    Every field the Studio card needs lives here so the frontend renders
+    without a second fetch. Deep-analysis (Option B bounded probing)
+    columns are nullable until the on-demand probe endpoint has been hit
+    for this move — the default view uses Option A symbolic scoring.
+    """
+    __tablename__ = "restructure_moves"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("restructure_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # One of RestructureMoveType. Stored as a string (not an Enum
+    # column) so adding new move types in v2 doesn't require a
+    # schema migration — the app-layer enum enforces validity.
+    move_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    move_status: Mapped[str] = mapped_column(
+        String(16), default="proposed", nullable=False
+    )
+
+    # Primary component (the "main" thing changed) + human-readable name.
+    # For a MERGE_ROLES move this is the surviving role; for a
+    # RETIRE_UNUSED_PS it's the PSet being dropped; and so on.
+    primary_component_id: Mapped[Optional[str]] = mapped_column(String(64))
+    primary_component_name: Mapped[Optional[str]] = mapped_column(String(255))
+    # SF IDs of every other component + user this move touches.
+    affected_component_ids: Mapped[list] = mapped_column(JSON, default=list)
+    affected_user_ids: Mapped[list] = mapped_column(JSON, default=list)
+
+    # Access-preservation percentages (0-100). Object-level and field-
+    # level tracked separately because a merge that preserves object
+    # access can still change field-level FLS in edge cases.
+    object_access_preserved_pct: Mapped[Optional[float]] = mapped_column(Float)
+    field_access_preserved_pct: Mapped[Optional[float]] = mapped_column(Float)
+
+    # Impact deltas. Sign conventions in the docstring on their columns
+    # in the migration; short version:
+    #   equity_delta       > 0  = move improves equity
+    #   cost_delta_monthly < 0  = move saves the client money
+    #   complexity_delta   < 0  = fewer PSets / roles to manage
+    equity_delta: Mapped[Optional[float]] = mapped_column(Float)
+    cost_delta_monthly: Mapped[Optional[float]] = mapped_column(Float)
+    complexity_delta: Mapped[Optional[int]] = mapped_column(Integer)
+    sharing_rules_simplified: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Blast tier + score (mirrors the change-risk-radar model).
+    blast_tier: Mapped[str] = mapped_column(
+        String(16), default="low", nullable=False
+    )
+    blast_score: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
+
+    # Option B deep-analysis fields. NULL until the on-demand endpoint
+    # /moves/{id}/deep-analyze has been hit for this row. When populated,
+    # gives the consultant concrete counts like "user X will lose
+    # visibility of ~2,400 Opportunities".
+    records_gained_by_object: Mapped[Optional[dict]] = mapped_column(JSON)
+    records_lost_by_object: Mapped[Optional[dict]] = mapped_column(JSON)
+    deep_analysis_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    probe_sample_size: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Which preservation constraints this move violates if accepted.
+    # Surfaced on the move card as a red badge; blocks Accept if any
+    # element is non-empty (consultant must waive to proceed).
+    constraint_violations: Mapped[list] = mapped_column(JSON, default=list)
+
+    rationale: Mapped[Optional[str]] = mapped_column(Text)
+    consultant_notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    run = relationship("RestructureRun", back_populates="moves")
+
+    __table_args__ = (
+        Index("ix_restructure_move_run", "run_id"),
+        Index(
+            "ix_restructure_move_run_type_status",
+            "run_id", "move_type", "move_status",
+        ),
+    )
+
+
+class RestructurePlan(Base, TimestampMixin):
+    """A named, ordered collection of accepted moves.
+
+    Consultants can maintain multiple drafts per run (Plan A / Plan B)
+    to explore trade-offs before committing to one. The `accepted_move_ids`
+    list preserves the order the consultant chose for execution — the
+    export sequences the manual Setup steps in that order.
+    """
+    __tablename__ = "restructure_plans"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("restructure_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), default="draft", nullable=False
+    )
+    # Ordered list of RestructureMove IDs. JSON so we don't need a
+    # join-table for what's really a list-per-plan. Order matters —
+    # this is the execution sequence.
+    accepted_move_ids: Mapped[list] = mapped_column(JSON, default=list)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255))
+    updated_by: Mapped[Optional[str]] = mapped_column(String(255))
+
+    run = relationship("RestructureRun", back_populates="plans")
+
+    __table_args__ = (
+        Index("ix_restructure_plan_run", "run_id"),
+    )
+
+
+class RestructurePreservationConstraint(Base, TimestampMixin):
+    """Per-user, per-object hard pin.
+
+    "Priya must retain Account object access." Populated by the
+    consultant in the Studio UI. When a proposed move would violate a
+    constraint, the move row gets that constraint's ID in
+    `constraint_violations`, blocking Accept until the consultant
+    explicitly waives.
+
+    Per-user, per-record granularity is a v2 addition — see
+    future_v2_items in memory for context.
+    """
+    __tablename__ = "restructure_preservation_constraints"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("restructure_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_sf_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    object_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255))
+
+    run = relationship("RestructureRun", back_populates="constraints")
+
+    __table_args__ = (
+        Index("ix_restructure_constraint_run", "run_id"),
+        UniqueConstraint(
+            "run_id", "user_sf_id", "object_type",
+            name="uq_restructure_constraint_run_user_object",
+        ),
+    )

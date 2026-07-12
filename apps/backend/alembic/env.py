@@ -35,6 +35,11 @@ from app.domain.models import (  # noqa: F401
     Recommendation,
     AuditLog,
     OrgUser,
+    # Restructure feature — GAEA optimal org restructure
+    RestructureRun,
+    RestructureMove,
+    RestructurePlan,
+    RestructurePreservationConstraint,
 )
 
 # Fix for Windows psycopg3 compatibility
