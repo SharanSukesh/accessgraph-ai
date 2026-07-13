@@ -38,29 +38,32 @@ SYSTEM_ORG_NAME = "AccessGraph System"
 
 
 async def bootstrap_first_admin() -> None:
-    """Provision the first ORG_ADMIN if none exists yet."""
+    """Sync the FIRST_ADMIN_EMAIL user to ORG_ADMIN on every startup.
+
+    Semantics per user request ("we will always have my user as the
+    admin"): whenever FIRST_ADMIN_EMAIL + FIRST_ADMIN_PASSWORD are
+    set, ensure a user with that email exists as an ORG_ADMIN, is
+    active + verified, and whose password matches the env var. This
+    is a full idempotent sync — it will UPDATE the stored password
+    hash every boot to match the env var, so rotating the env var
+    also rotates the admin password.
+
+    That semantics matters for two failure modes we've seen:
+      1. Env vars were set correctly but a stale admin from a prior
+         deploy still exists with a different password → login fails.
+      2. Admin forgot the password → operator updates the env var and
+         redeploys to reset.
+    """
     email = (settings.FIRST_ADMIN_EMAIL or "").strip().lower()
     password = settings.FIRST_ADMIN_PASSWORD or ""
     if not email or not password:
         logger.info(
             "bootstrap: FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD not set — "
-            "skipping first-admin provisioning."
+            "skipping admin provisioning."
         )
         return
 
     async with AsyncSessionLocal() as db:
-        existing_admin = (
-            await db.execute(
-                select(OrgUser).where(OrgUser.role == OrgUserRole.ORG_ADMIN)
-            )
-        ).scalar_one_or_none()
-        if existing_admin is not None:
-            logger.info(
-                "bootstrap: ORG_ADMIN already exists (%s) — no-op.",
-                existing_admin.email,
-            )
-            return
-
         # Make sure the system org exists. Idempotent upsert-by-id.
         system_org = (
             await db.execute(
@@ -81,26 +84,32 @@ async def bootstrap_first_admin() -> None:
                 SYSTEM_ORG_ID, SYSTEM_ORG_DOMAIN,
             )
 
-        # If a user with this email already exists (e.g., created as a
-        # non-admin previously), promote them rather than creating a
-        # duplicate.
+        # Look up the admin user by lowercased email. Case-insensitive
+        # so a mismatch between the env var (which we lowercase above)
+        # and any historically-stored capitalisation doesn't leave two
+        # rows in the table. We check both the system org AND all orgs
+        # — if the admin was somehow created in a different org
+        # historically, we adopt them into the system org too.
+        from sqlalchemy import func
+
         existing_user = (
             await db.execute(
-                select(OrgUser).where(
-                    OrgUser.organization_id == SYSTEM_ORG_ID,
-                    OrgUser.email == email,
-                )
+                select(OrgUser).where(func.lower(OrgUser.email) == email)
             )
         ).scalar_one_or_none()
+
         now = datetime.now(timezone.utc)
         if existing_user is not None:
+            existing_user.email = email  # normalise casing
+            existing_user.organization_id = SYSTEM_ORG_ID
             existing_user.role = OrgUserRole.ORG_ADMIN
             existing_user.password_hash = hash_password(password)
             existing_user.is_active = True
             existing_user.is_email_verified = True
             existing_user.last_login_at = existing_user.last_login_at or now
             logger.warning(
-                "bootstrap: promoted existing user %s to ORG_ADMIN.",
+                "bootstrap: synced admin %s (role, password, verified all "
+                "updated from env vars).",
                 email,
             )
         else:

@@ -203,8 +203,16 @@ async def login_with_password(
     """Authenticate via email + password. Rejects unverified accounts
     (activation link not clicked yet) with a distinct message so the
     UI can prompt for a resend."""
+    # Case-insensitive email lookup — the bootstrap flow lowercases
+    # incoming emails, but historically we've had rows stored with
+    # mixed case. Lower both sides so a user typing "Foo@bar.com"
+    # into the login form still finds a row stored as "foo@bar.com".
+    from sqlalchemy import func
+
     row = await db.execute(
-        select(OrgUser).where(OrgUser.email == body.email)
+        select(OrgUser).where(
+            func.lower(OrgUser.email) == body.email.strip().lower()
+        )
     )
     user = row.scalar_one_or_none()
     if user is None:
