@@ -13,7 +13,9 @@
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
+  AlertTriangle,
   Check,
+  CheckCircle2,
   ExternalLink,
   Info,
   Scale,
@@ -230,6 +232,33 @@ function formatTimeAgo(iso: string): string {
 }
 
 
+// Pulls the useful message out of whatever the mutation threw. The
+// API client wraps HTTP errors in ApiError with `.errorData` — the
+// backend surfaces the traceback message on the `detail` field. Falls
+// through to `err.message` and finally a JSON dump so the user never
+// sees "undefined".
+function formatGenerateError(err: unknown): string {
+  if (!err) return 'Unknown error'
+  const e = err as Record<string, unknown> & { message?: string }
+  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const detail = errorData?.detail
+  if (detail && typeof detail === 'object') {
+    const d = detail as Record<string, unknown>
+    const t = d.error_type as string | undefined
+    const msg = (d.error as string | undefined) ?? (d.message as string | undefined)
+    if (t && msg) return `${t}: ${msg}`
+    if (msg) return msg
+  }
+  if (typeof detail === 'string') return detail
+  if (e.message) return e.message
+  try {
+    return JSON.stringify(err)
+  } catch {
+    return String(err)
+  }
+}
+
+
 // Plain-English summary of what the snapshot says. Driven by the same
 // fields the UI cards render — keeps the narration in sync with the
 // numbers above it. Returns null when there's no data to narrate.
@@ -385,6 +414,82 @@ export default function EquityPage() {
           </Button>
         }
       />
+
+      {/* Generate-mutation status banners. Without these, a failed run
+          was invisible — the user saw the "Computing…" spinner briefly
+          then nothing else. */}
+      {generateMutation.isError && (
+        <Card variant="bordered" className="p-4 border-red-300 dark:border-red-800 bg-red-50/40 dark:bg-red-900/15">
+          <div className="flex items-start gap-3 text-sm">
+            <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold text-red-700 dark:text-red-400">
+                Generation failed
+              </div>
+              <div className="text-red-700/80 dark:text-red-400/80 mt-1">
+                {formatGenerateError(generateMutation.error)}
+              </div>
+              <div className="text-red-700/60 dark:text-red-400/60 mt-2 text-xs">
+                Check the Railway backend logs — the full traceback is
+                logged under "Equity recs generation failed for org …".
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => generateMutation.reset()}
+              className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
+              title="Dismiss"
+            >
+              <XIcon className="h-4 w-4 text-red-500" />
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {generateMutation.isSuccess && generateMutation.data && (
+        <Card variant="bordered" className="p-4 border-primary-300 dark:border-primary-800 bg-primary-50/40 dark:bg-primary-900/15">
+          <div className="flex items-start gap-3 text-sm">
+            <CheckCircle2 className="h-5 w-5 text-primary-600 dark:text-primary-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold text-primary-800 dark:text-primary-300">
+                Generation complete
+              </div>
+              <div className="text-primary-800/80 dark:text-primary-300/80 mt-1">
+                Policy proposed{' '}
+                <strong>
+                  {generateMutation.data.recommendations_created}
+                </strong>{' '}
+                grant
+                {generateMutation.data.recommendations_created === 1
+                  ? ''
+                  : 's'}
+                . Equity Index now{' '}
+                <strong>
+                  {((generateMutation.data.equity_index ?? 0) * 100).toFixed(1)}%
+                </strong>
+                {generateMutation.data.most_disadvantaged_group && (
+                  <>
+                    {' '}
+                    — most disadvantaged group:{' '}
+                    <strong>
+                      {generateMutation.data.most_disadvantaged_group}
+                    </strong>
+                  </>
+                )}
+                .
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => generateMutation.reset()}
+              className="p-1 rounded hover:bg-primary-100 dark:hover:bg-primary-900/30"
+              title="Dismiss"
+            >
+              <XIcon className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+            </button>
+          </div>
+        </Card>
+      )}
 
       {/* Plain-English narration of the snapshot */}
       {narration && (
