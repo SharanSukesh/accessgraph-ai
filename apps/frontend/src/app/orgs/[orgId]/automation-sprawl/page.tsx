@@ -46,6 +46,7 @@ import {
   type AutomationItem,
   type AutomationTier,
   type AutomationItemType,
+  type AutomationSourceDiagnostics,
 } from '@/lib/api/hooks/useAutomationSprawl'
 
 const PAGE_SIZE = 30
@@ -351,35 +352,85 @@ function CleanShopState({
   summary: {
     snapshot_at: string | null
     duration_ms: number | null
+    source_diagnostics: AutomationSourceDiagnostics | null
   }
 }) {
+  const diag = summary.source_diagnostics
+  const flowsCount = diag?.flows?.raw_count ?? null
+  const triggersCount = diag?.triggers?.raw_count ?? null
+  const flowsError = diag?.flows?.error ?? null
+  const triggersError = diag?.triggers?.error ?? null
+  const usersError = diag?.users?.error ?? null
+  const hasAnyError = Boolean(flowsError || triggersError || usersError)
+
   return (
     <Card variant="bordered" className="p-8">
-      <div className="flex flex-col items-center text-center gap-4 max-w-2xl mx-auto">
+      <div className="flex flex-col items-center text-center gap-4 max-w-3xl mx-auto">
         <div className="p-4 rounded-full bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800">
           <Workflow className="h-10 w-10 text-primary-700 dark:text-primary-400" />
         </div>
         <div>
           <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
-            Analysis complete — 0 Flows, 0 Triggers
+            Analysis complete — 0 automations found
           </h3>
           <p className="mt-2 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70 leading-relaxed">
             The sprawl scan ran successfully
             {summary.duration_ms !== null && (
               <> ({(summary.duration_ms / 1000).toFixed(1)}s)</>
-            )}{' '}
-            but Salesforce returned no automation content for this org.
+            )}
+            .{' '}
+            {hasAnyError
+              ? 'One or more Salesforce queries hit an error — see below.'
+              : 'Salesforce returned no Flow or ApexTrigger rows.'}
           </p>
         </div>
 
-        <div className="mt-2 w-full text-left rounded-lg bg-grove-canvas dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk p-5">
+        {/* Actual diagnostics from this run — never a silent zero. */}
+        {diag && (
+          <div className="w-full text-left rounded-lg bg-grove-canvas dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk p-5">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-grove-mint mb-3">
+              What Salesforce actually returned
+            </div>
+            <dl className="space-y-2 text-sm">
+              <DiagRow
+                label="FlowDefinitionView"
+                count={flowsCount}
+                error={flowsError}
+              />
+              <DiagRow
+                label="ApexTrigger"
+                count={triggersCount}
+                error={triggersError}
+              />
+              <DiagRow
+                label="User lookup"
+                count={diag.users?.resolved_count ?? null}
+                error={usersError}
+                unit="resolved"
+              />
+            </dl>
+          </div>
+        )}
+
+        <div className="w-full text-left rounded-lg bg-grove-canvas dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk p-5">
           <div className="text-[10px] font-mono uppercase tracking-wider text-grove-mint mb-3">
-            Three things could explain a zero result
+            Likely causes when raw counts are 0
           </div>
           <ol className="space-y-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
             <li className="flex gap-3">
               <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
                 1
+              </span>
+              <span>
+                <strong>Freshly-created content hasn&rsquo;t propagated.</strong>{' '}
+                If you just created a trigger, the SF metadata index
+                sometimes lags a minute or two before the row appears
+                in Tooling queries. Wait 30-60 seconds and re-analyse.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
+                2
               </span>
               <span>
                 <strong>The org genuinely has no Flows or
@@ -390,7 +441,7 @@ function CleanShopState({
             </li>
             <li className="flex gap-3">
               <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
-                2
+                3
               </span>
               <span>
                 <strong>The OAuth user lacks Tooling API
@@ -399,20 +450,6 @@ function CleanShopState({
                 or &ldquo;Author Apex&rdquo; permission. If the
                 integration user is missing these, both queries return
                 zero rows.
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <span className="font-mono text-xs text-grove-ink/40 dark:text-grove-ink-dk/40 mt-0.5">
-                3
-              </span>
-              <span>
-                <strong>The Connected App scope omits Tooling
-                access.</strong> Some connected apps ship with{' '}
-                <code className="text-xs px-1 py-0.5 rounded bg-grove-ink/5 dark:bg-grove-ink-dk/10">
-                  api
-                </code>{' '}
-                only and not the extended scope needed for Tooling
-                queries. Check the Connected App configuration.
               </span>
             </li>
           </ol>
@@ -425,6 +462,47 @@ function CleanShopState({
         )}
       </div>
     </Card>
+  )
+}
+
+function DiagRow({
+  label,
+  count,
+  error,
+  unit = 'rows',
+}: {
+  label: string
+  count: number | null
+  error: string | null
+  unit?: string
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div className="text-xs font-mono text-grove-ink/70 dark:text-grove-ink-dk/70">
+        {label}
+      </div>
+      <div className="flex-1 text-right">
+        {error ? (
+          <span className="text-red-600 dark:text-red-400 text-xs">
+            {error}
+          </span>
+        ) : count === null ? (
+          <span className="text-grove-ink/40 dark:text-grove-ink-dk/40 text-xs italic">
+            not queried
+          </span>
+        ) : (
+          <span
+            className={`text-sm font-semibold tabular-nums ${
+              count === 0
+                ? 'text-copper-600 dark:text-copper-400'
+                : 'text-primary-700 dark:text-primary-400'
+            }`}
+          >
+            {count.toLocaleString()} {unit}
+          </span>
+        )}
+      </div>
+    </div>
   )
 }
 

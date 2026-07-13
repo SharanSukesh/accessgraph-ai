@@ -479,34 +479,25 @@ class SalesforceAPIClient:
           - IsActive — the *current* activation state
           - IsOutOfDate — active version isn't the latest saved version
                           (usually indicates a broken deploy)
-          - LastModifiedDate + LastModifiedBy.Id/Name/IsActive
-          - NamespacePrefix — for managed vs custom filtering
+          - LastModifiedDate + LastModifiedById
+          - NamespacePrefix
 
-        Returns [] on any error so a partial run still surfaces the
-        Apex Trigger side.
+        Owner (last modifier) resolution is done by a separate
+        User query in the service layer — Tooling API rejects some
+        parent-reference joins depending on org config, so we keep
+        this SELECT flat and reliable.
+
+        Raises the underlying httpx error so the caller can log
+        precise diagnostics. Callers wrap in try/except to fail soft.
         """
         soql = (
             "SELECT Id, ApiName, Label, Description, ProcessType, "
             "TriggerType, IsActive, IsOutOfDate, "
             "LastModifiedDate, LastModifiedById, "
-            "LastModifiedBy.Name, LastModifiedBy.IsActive, "
             "NamespacePrefix "
             "FROM FlowDefinitionView"
         )
-        try:
-            return await self.query_tooling(soql)
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "FlowDefinitionView query failed (%s) — automation-sprawl "
-                "runs without flows.",
-                e.response.status_code,
-            )
-            return []
-        except Exception as exc:  # noqa: BLE001
-            logger.info(
-                "FlowDefinitionView query failed (%s)", exc
-            )
-            return []
+        return await self.query_tooling(soql)
 
     async def extract_apex_triggers(self) -> List[Dict[str, Any]]:
         """Every ApexTrigger in the org via Tooling API.
@@ -518,29 +509,22 @@ class SalesforceAPIClient:
 
         LengthWithoutComments is a rough "how much code" signal
         for the drilldown.
+
+        Same flat-SELECT policy as extract_flows — LastModifiedBy
+        is resolved via a separate User query rather than an inline
+        Tooling API subquery.
+
+        Raises the underlying httpx error so the caller can log
+        precise diagnostics.
         """
         soql = (
             "SELECT Id, Name, TableEnumOrId, Status, IsValid, "
             "ApiVersion, LengthWithoutComments, "
             "LastModifiedDate, LastModifiedById, "
-            "LastModifiedBy.Name, LastModifiedBy.IsActive, "
             "NamespacePrefix "
             "FROM ApexTrigger"
         )
-        try:
-            return await self.query_tooling(soql)
-        except httpx.HTTPStatusError as e:
-            logger.warning(
-                "ApexTrigger query failed (%s) — automation-sprawl "
-                "runs without triggers.",
-                e.response.status_code,
-            )
-            return []
-        except Exception as exc:  # noqa: BLE001
-            logger.info(
-                "ApexTrigger query failed (%s)", exc
-            )
-            return []
+        return await self.query_tooling(soql)
 
     async def count_apex_classes_in_namespace(
         self, namespace: str

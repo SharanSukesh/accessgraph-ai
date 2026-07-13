@@ -189,6 +189,27 @@ def _days_between(
     return max(delta.days, 0)
 
 
+def _extract_sf_error(exc: Any) -> str:
+    """Pull the human-readable Salesforce error message out of an
+    HTTPStatusError so diagnostics show something more useful than
+    "HTTP 400". SF error responses come back as
+    [{"message": "...", "errorCode": "..."}]."""
+    try:
+        body = exc.response.json()
+        if isinstance(body, list) and body:
+            first = body[0]
+            code = first.get("errorCode") or ""
+            msg = first.get("message") or ""
+            return f"{code}: {msg}" if code else msg
+        if isinstance(body, dict):
+            return str(
+                body.get("message") or body.get("error_description") or body
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    return str(exc)
+
+
 # ----------------------------------------------------------------------
 # Service
 # ----------------------------------------------------------------------
@@ -227,6 +248,15 @@ class AutomationSprawlService:
                 f"Failed to build Salesforce client: {exc}"
             ) from exc
 
+        # Per-source diagnostics. Captured whether the pull succeeds
+        # or fails so the frontend can render an honest "here's what
+        # actually happened" panel when items_total is unexpectedly 0.
+        diagnostics: Dict[str, Dict[str, Any]] = {
+            "flows": {"raw_count": 0, "error": None},
+            "triggers": {"raw_count": 0, "error": None},
+            "users": {"resolved_count": 0, "error": None},
+        }
+
         # -- Flows ----------------------------------------------------
         raw_flows: List[Dict[str, Any]] = []
         try:
@@ -248,25 +278,95 @@ class AutomationSprawlService:
                         "Salesforce access token expired and refresh "
                         "failed. Please reconnect Salesforce."
                     ) from refresh_exc
+            else:
+                diagnostics["flows"]["error"] = (
+                    f"HTTP {exc.response.status_code}: "
+                    f"{_extract_sf_error(exc)}"
+                )
+                logger.warning(
+                    "automation-sprawl: Flow query HTTP %s — %s",
+                    exc.response.status_code,
+                    diagnostics["flows"]["error"],
+                )
         except Exception as exc:  # noqa: BLE001
+            diagnostics["flows"]["error"] = f"{type(exc).__name__}: {exc}"
             logger.info(
-                "automation-sprawl: Flow pull failed (%s) — continuing "
-                "with triggers", exc,
+                "automation-sprawl: Flow pull failed — %s",
+                diagnostics["flows"]["error"],
             )
+        diagnostics["flows"]["raw_count"] = len(raw_flows)
 
         # -- Triggers -------------------------------------------------
         raw_triggers: List[Dict[str, Any]] = []
         try:
             raw_triggers = await client.extract_apex_triggers()
-        except Exception as exc:  # noqa: BLE001
-            logger.info(
-                "automation-sprawl: ApexTrigger pull failed (%s)", exc
+        except httpx.HTTPStatusError as exc:
+            diagnostics["triggers"]["error"] = (
+                f"HTTP {exc.response.status_code}: "
+                f"{_extract_sf_error(exc)}"
             )
+            logger.warning(
+                "automation-sprawl: ApexTrigger query HTTP %s — %s",
+                exc.response.status_code,
+                diagnostics["triggers"]["error"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            diagnostics["triggers"]["error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )
+            logger.info(
+                "automation-sprawl: ApexTrigger pull failed — %s",
+                diagnostics["triggers"]["error"],
+            )
+        diagnostics["triggers"]["raw_count"] = len(raw_triggers)
+
+        # -- Users (batch resolve last-modifier active-status) --------
+        # Tooling API rejects some inline User joins depending on org
+        # config, so we ask for Name + IsActive via the regular /query
+        # endpoint after collecting all last-modifier ids.
+        owner_ids = {
+            f.get("LastModifiedById")
+            for f in raw_flows
+            if f.get("LastModifiedById")
+        } | {
+            t.get("LastModifiedById")
+            for t in raw_triggers
+            if t.get("LastModifiedById")
+        }
+        owner_ids.discard(None)
+        try:
+            users_by_id = await self._resolve_users(
+                client, list(owner_ids)
+            )
+            diagnostics["users"]["resolved_count"] = len(users_by_id)
+        except Exception as exc:  # noqa: BLE001
+            users_by_id = {}
+            diagnostics["users"]["error"] = (
+                f"{type(exc).__name__}: {exc}"
+            )
+            logger.info(
+                "automation-sprawl: user-resolve batch failed — %s",
+                diagnostics["users"]["error"],
+            )
+
+        logger.warning(
+            "automation-sprawl: org=%s SF returned flows=%d triggers=%d "
+            "resolved_users=%d",
+            self.org_id,
+            len(raw_flows),
+            len(raw_triggers),
+            diagnostics["users"]["resolved_count"],
+        )
 
         # -- Score every item ----------------------------------------
         now = datetime.now(timezone.utc)
-        flow_items = [self._score_flow(f, now) for f in raw_flows]
-        trigger_items = [self._score_trigger(t, now) for t in raw_triggers]
+        flow_items = [
+            self._score_flow(f, users_by_id, now) for f in raw_flows
+        ]
+        trigger_items = [
+            self._score_trigger(t, users_by_id, now)
+            for t in raw_triggers
+        ]
         flow_items = [x for x in flow_items if x is not None]
         trigger_items = [x for x in trigger_items if x is not None]
         all_items: List[ScoredItem] = flow_items + trigger_items
@@ -357,6 +457,7 @@ class AutomationSprawlService:
             duplicate_groups=duplicate_group_count,
             duration_ms=duration_ms,
             error=None,
+            source_diagnostics=diagnostics,
         )
         self.db.add(run)
         await self.db.flush()
@@ -408,16 +509,19 @@ class AutomationSprawlService:
     # ------------------------------------------------------------------
 
     def _score_flow(
-        self, raw: Dict[str, Any], now: datetime
+        self,
+        raw: Dict[str, Any],
+        users_by_id: Dict[str, Dict[str, Any]],
+        now: datetime,
     ) -> Optional[ScoredItem]:
         sf_id = raw.get("Id")
         if not sf_id:
             return None
         name = raw.get("Label") or raw.get("ApiName") or "(unnamed flow)"
         api_name = raw.get("ApiName")
-        modifier = raw.get("LastModifiedBy") or {}
         owner_id = raw.get("LastModifiedById")
-        owner_active = modifier.get("IsActive")
+        modifier = users_by_id.get(owner_id) if owner_id else None
+        owner_active = (modifier or {}).get("IsActive")
 
         last_modified = _parse_sf_datetime(raw.get("LastModifiedDate"))
         days = _days_between(now, last_modified)
@@ -458,7 +562,7 @@ class AutomationSprawlService:
             is_active=is_active,
             is_valid=is_valid,
             owner_sf_id=owner_id,
-            owner_name=modifier.get("Name"),
+            owner_name=(modifier or {}).get("Name"),
             owner_is_active=owner_active,
             last_modified_at=last_modified,
             days_since_modified=days,
@@ -474,15 +578,18 @@ class AutomationSprawlService:
         )
 
     def _score_trigger(
-        self, raw: Dict[str, Any], now: datetime
+        self,
+        raw: Dict[str, Any],
+        users_by_id: Dict[str, Dict[str, Any]],
+        now: datetime,
     ) -> Optional[ScoredItem]:
         sf_id = raw.get("Id")
         if not sf_id:
             return None
         name = raw.get("Name") or "(unnamed trigger)"
-        modifier = raw.get("LastModifiedBy") or {}
         owner_id = raw.get("LastModifiedById")
-        owner_active = modifier.get("IsActive")
+        modifier = users_by_id.get(owner_id) if owner_id else None
+        owner_active = (modifier or {}).get("IsActive")
 
         last_modified = _parse_sf_datetime(raw.get("LastModifiedDate"))
         days = _days_between(now, last_modified)
@@ -526,7 +633,7 @@ class AutomationSprawlService:
             is_active=is_active,
             is_valid=is_valid,
             owner_sf_id=owner_id,
-            owner_name=modifier.get("Name"),
+            owner_name=(modifier or {}).get("Name"),
             owner_is_active=owner_active,
             last_modified_at=last_modified,
             days_since_modified=days,
@@ -595,6 +702,37 @@ class AutomationSprawlService:
             "active",
             f"Modified {days} days ago — actively maintained",
         )
+
+    # ------------------------------------------------------------------
+    # Owner resolution
+    # ------------------------------------------------------------------
+
+    async def _resolve_users(
+        self,
+        client: SalesforceAPIClient,
+        user_ids: List[str],
+    ) -> Dict[str, Dict[str, Any]]:
+        """Batch lookup Name + IsActive for the LastModifiedById values
+        we saw on Flow / ApexTrigger rows. Batches at 200 ids per
+        SOQL (SF IN-list ceiling). Uses the regular /query endpoint
+        (User is queryable there), NOT Tooling."""
+        if not user_ids:
+            return {}
+        result: Dict[str, Dict[str, Any]] = {}
+        unique = list({uid for uid in user_ids if uid})
+        BATCH = 200
+        for start in range(0, len(unique), BATCH):
+            slice_ids = unique[start : start + BATCH]
+            joined = ",".join(f"'{uid}'" for uid in slice_ids)
+            soql = (
+                f"SELECT Id, Name, IsActive FROM User "
+                f"WHERE Id IN ({joined})"
+            )
+            rows = await client.query_all(soql)
+            for row in rows:
+                if row.get("Id"):
+                    result[row["Id"]] = row
+        return result
 
     # ------------------------------------------------------------------
     # Support (mirrors PackageSprawl / ReportSprawl)

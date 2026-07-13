@@ -45,6 +45,18 @@ export interface AutomationItem {
   evidence: Record<string, unknown>
 }
 
+export interface AutomationSourceDiagnostic {
+  raw_count?: number
+  resolved_count?: number
+  error?: string | null
+}
+
+export interface AutomationSourceDiagnostics {
+  flows?: AutomationSourceDiagnostic
+  triggers?: AutomationSourceDiagnostic
+  users?: AutomationSourceDiagnostic
+}
+
 export interface AutomationSprawlSummary {
   run_id: string | null
   snapshot_at: string | null
@@ -60,6 +72,7 @@ export interface AutomationSprawlSummary {
   has_data: boolean
   duration_ms: number | null
   error: string | null
+  source_diagnostics: AutomationSourceDiagnostics | null
 }
 
 export interface AutomationItemListResponse {

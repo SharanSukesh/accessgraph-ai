@@ -52,6 +52,10 @@ class RunSummary(BaseModel):
     has_data: bool
     duration_ms: Optional[int]
     error: Optional[str]
+    # Raw per-source counts + errors captured during the last run —
+    # None when we've never run analysis. Powers the "why did I get
+    # 0 items?" panel on the frontend.
+    source_diagnostics: Optional[Dict[str, Any]] = None
 
 
 class ItemResponse(BaseModel):
@@ -218,6 +222,7 @@ async def get_latest_summary(
             has_data=False,
             duration_ms=None,
             error=None,
+            source_diagnostics=None,
         )
     return RunSummary(
         run_id=run.id,
@@ -234,6 +239,7 @@ async def get_latest_summary(
         has_data=True,
         duration_ms=run.duration_ms,
         error=run.error,
+        source_diagnostics=run.source_diagnostics or None,
     )
 
 

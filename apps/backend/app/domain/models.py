@@ -1985,6 +1985,12 @@ class AutomationSprawlRun(Base, TimestampMixin):
     duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
     error: Mapped[Optional[str]] = mapped_column(String(500))
 
+    # Per-source raw counts + error captures ({"flows": {"raw_count": N,
+    # "error": "..."}, "triggers": {...}, "users": {...}}). Written on
+    # every run so a "0 items" outcome is never a silent failure — the
+    # frontend can render exactly which SF query returned what.
+    source_diagnostics: Mapped[dict] = mapped_column(JSON, default=dict)
+
     items = relationship(
         "AutomationInventoryItem",
         back_populates="run",
