@@ -507,35 +507,81 @@ export default function EquityPage() {
 
       {/* Headline metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Equity Index
-              </p>
-              <p className="mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
-                {diagnosticLoading
-                  ? '…'
-                  : hasData
-                  ? diagnostic!.equity_index.toFixed(2)
-                  : '—'}
-              </p>
-              <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-                1.0 = perfect parity, 0.0 = maximal inequality
-              </p>
-              {/* Trend sparkline — last 30 snapshots */}
-              {history && history.length >= 2 && (
-                <div className="mt-3">
-                  <Sparkline points={history} />
-                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
-                    Trend across last {history.length} runs
+        {(() => {
+          // "Vacuous 100%": the calc returned 1.0 not because the org has
+          // perfect parity, but because there were no juniors with a
+          // populated Department to group by (so the Gini is over an
+          // empty set → equity_index falls through to 1.0). We detect
+          // that state and render the number in a warning tone so the
+          // consultant doesn't misread it as "everything is fair."
+          const groupsCount = diagnostic
+            ? Object.keys(diagnostic.per_dept_utilities).length
+            : 0
+          const isVacuous =
+            hasData &&
+            diagnostic!.equity_index >= 0.999 &&
+            groupsCount === 0 &&
+            diagnostic!.vip_count > 0
+          const numberCls = isVacuous
+            ? 'mt-2 text-3xl font-bold text-copper-600 dark:text-copper-400'
+            : 'mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400'
+          const iconCls = isVacuous
+            ? 'h-8 w-8 text-copper-400 flex-shrink-0'
+            : 'h-8 w-8 text-primary-400 flex-shrink-0'
+          return (
+            <Card
+              variant="bordered"
+              className={
+                isVacuous
+                  ? 'p-6 ring-1 ring-copper-200 dark:ring-copper-900/60'
+                  : 'p-6'
+              }
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                    Equity Index
                   </p>
+                  <p className={numberCls}>
+                    {diagnosticLoading
+                      ? '…'
+                      : hasData
+                      ? diagnostic!.equity_index.toFixed(2)
+                      : '—'}
+                    {isVacuous && (
+                      <span className="ml-2 text-xs font-mono uppercase tracking-wider text-copper-600 dark:text-copper-400 align-middle">
+                        vacuous
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                    1.0 = perfect parity, 0.0 = maximal inequality
+                  </p>
+                  {isVacuous && (
+                    <p className="mt-2 text-xs text-copper-700 dark:text-copper-400 leading-relaxed">
+                      <strong>Not a real parity signal.</strong> No junior
+                      users have a populated Department, so the Gini is
+                      calculated over an empty set of groups and falls
+                      through to 1.0. Populate the Department field on
+                      users in Salesforce and re-sync to get a meaningful
+                      number here.
+                    </p>
+                  )}
+                  {/* Trend sparkline — last 30 snapshots */}
+                  {history && history.length >= 2 && (
+                    <div className="mt-3">
+                      <Sparkline points={history} />
+                      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
+                        Trend across last {history.length} runs
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <TrendingUp className="h-8 w-8 text-primary-400 flex-shrink-0" />
-          </div>
-        </Card>
+                <TrendingUp className={iconCls} />
+              </div>
+            </Card>
+          )
+        })()}
 
         <Card variant="bordered" className="p-6">
           <div>
