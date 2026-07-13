@@ -2087,6 +2087,204 @@ class AutomationInventoryItem(Base, TimestampMixin):
 
 
 # ============================================================================
+# License-to-Persona Fit / Right-Sizing
+# ============================================================================
+#
+# Per-user "does the license SKU match the actual usage?" analysis.
+# Cross-references each user's ownership footprint (Opportunity /
+# Case / Lead / Account / Contact record counts), effective object
+# access, profile persona, and login recency against the assigned
+# UserLicense.
+#
+# Fit categories:
+#   right_sized  — persona matches SKU capability
+#   overbuilt    — user has richer SKU than their actual usage warrants
+#                  (e.g., Salesforce full → could work on Platform)
+#   wrong_cloud  — user has Sales Cloud SKU but works exclusively in
+#                  Service objects (or vice versa)
+#   underused    — user has a paid SKU but hasn't logged in in 90+ days
+#   inactive     — user is deactivated but still holds a paid seat
+#                  (shouldn't happen but does)
+#   unknown      — insufficient evidence to classify. Fail-safe.
+#
+# Reuses the existing LicensePriceBook (defined below alongside
+# Org Analyzer) for per-SKU monthly cost.
+
+
+class LicenseFitRun(Base, TimestampMixin):
+    """One run of the License-to-Persona Fit analyser.
+
+    Rollup counters live on this row so /latest is a single-row read.
+    Per-user assessments live on LicenseFitAssessment.
+    """
+    __tablename__ = "license_fit_runs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    users_assessed: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    users_right_sized: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    users_overbuilt: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    users_wrong_cloud: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    users_underused: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    users_inactive_billed: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    users_unknown: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # The headline number. Sum of `annual_savings_cents` across every
+    # non-right_sized assessment. Stored in cents to avoid FP drift.
+    total_annual_savings_cents: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    # Current spend across all assessed users (per the price book).
+    total_current_annual_cost_cents: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(String(500))
+    source_diagnostics: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    assessments = relationship(
+        "LicenseFitAssessment",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_license_fit_run_org_time",
+            "organization_id",
+            "snapshot_at",
+        ),
+    )
+
+
+class LicenseFitAssessment(Base, TimestampMixin):
+    """One row per active user per run. Captures the persona verdict,
+    the current SKU, the recommended SKU, and the projected annual
+    savings from switching."""
+    __tablename__ = "license_fit_assessments"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("license_fit_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    user_sf_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    user_name: Mapped[Optional[str]] = mapped_column(String(255))
+    user_username: Mapped[Optional[str]] = mapped_column(String(255))
+    user_is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    user_profile_name: Mapped[Optional[str]] = mapped_column(String(255))
+    user_department: Mapped[Optional[str]] = mapped_column(String(255))
+    user_title: Mapped[Optional[str]] = mapped_column(String(255))
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    days_since_login: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # License SKU as reported by UserLicense (via Profile.user_license_id).
+    current_license_name: Mapped[Optional[str]] = mapped_column(String(255))
+    current_monthly_cost_cents: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Persona verdict + fit category (see LicenseFitRun docstring).
+    persona: Mapped[str] = mapped_column(
+        String(32), default="unknown", nullable=False
+    )
+    fit_category: Mapped[str] = mapped_column(
+        String(32), default="unknown", nullable=False
+    )
+    confidence: Mapped[str] = mapped_column(
+        String(16), default="low", nullable=False
+    )  # high | medium | low
+
+    # Recommendation. None when the assessment is right_sized OR when
+    # confidence is too low to recommend a change.
+    recommended_license_name: Mapped[Optional[str]] = mapped_column(
+        String(255)
+    )
+    recommended_monthly_cost_cents: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )
+    annual_savings_cents: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Per-user usage signals used in the decision — persisted so the
+    # drilldown can show "why did we classify this way".
+    accounts_owned: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    opportunities_owned: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    cases_owned: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    leads_owned: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    contacts_owned: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Free-form evidence blob (rationale, per-object edit access
+    # summary, tiebreakers used, etc.).
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("LicenseFitRun", back_populates="assessments")
+
+    __table_args__ = (
+        Index(
+            "ix_license_fit_assessment_org_run",
+            "organization_id",
+            "run_id",
+        ),
+        Index(
+            "ix_license_fit_assessment_savings",
+            "run_id",
+            "annual_savings_cents",
+        ),
+        UniqueConstraint(
+            "run_id",
+            "user_sf_id",
+            name="uq_license_fit_assessment_run_user",
+        ),
+    )
+
+
+# ============================================================================
 # GAEA Optimal Org Restructure — role-hierarchy + PSet consolidation
 # ============================================================================
 #

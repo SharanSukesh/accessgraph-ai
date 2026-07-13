@@ -138,7 +138,7 @@ from app.api.routes import (
     auth, orgs, users, privacy, package, deeplink,
     equity, reporting_graph, org_analyzer, data_quality,
     change_risk_radar, package_sprawl, restructure, report_sprawl,
-    automation_sprawl,
+    automation_sprawl, license_fit,
 )
 
 app.include_router(health.router, tags=["health"])
@@ -157,6 +157,7 @@ app.include_router(package_sprawl.router, tags=["package-sprawl"])
 app.include_router(restructure.router, tags=["restructure"])
 app.include_router(report_sprawl.router, tags=["report-sprawl"])
 app.include_router(automation_sprawl.router, tags=["automation-sprawl"])
+app.include_router(license_fit.router, tags=["license-fit"])
 
 
 # Global exception handler

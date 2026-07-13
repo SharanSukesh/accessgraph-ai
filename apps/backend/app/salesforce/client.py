@@ -1606,6 +1606,46 @@ class SalesforceAPIClient:
             logger.warning("Account COUNT failed: %s", e)
             return None
 
+    async def owner_counts_by_object(
+        self, object_name: str
+    ) -> Dict[str, int]:
+        """Aggregate: how many <object_name> records does each user own?
+
+        Returns { owner_sf_id: count }. Empty dict on any failure — the
+        caller shouldn't fail because a single object query was rejected
+        (e.g. the org doesn't have the SObject enabled).
+
+        Used by License-to-Persona Fit to derive per-user activity
+        signal for {Opportunity, Case, Lead, Contact} without needing
+        Event Monitoring. Uses aggregate SOQL so the result is small
+        even in orgs with millions of records.
+        """
+        try:
+            soql = (
+                f"SELECT OwnerId, COUNT(Id) cnt FROM {object_name} "
+                f"GROUP BY OwnerId"
+            )
+            res = await self.query(soql)
+            out: Dict[str, int] = {}
+            for row in (res.records or []):
+                oid = row.get("OwnerId")
+                if oid:
+                    out[oid] = int(row.get("cnt") or 0)
+            return out
+        except httpx.HTTPStatusError as e:
+            logger.info(
+                "owner_counts_by_object(%s) HTTP %s — object not "
+                "available in this org or user lacks access",
+                object_name, e.response.status_code,
+            )
+            return {}
+        except Exception as e:  # noqa: BLE001
+            logger.info(
+                "owner_counts_by_object(%s) failed: %s",
+                object_name, e,
+            )
+            return {}
+
     # =========================================================================
     # Extraction Methods
     # =========================================================================

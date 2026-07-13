@@ -125,6 +125,14 @@ export const endpoints = {
   automationSprawlHistory: (orgId: string) =>
     `/orgs/${orgId}/automation-sprawl/history`,
 
+  // License-to-Persona Fit — right-sizing recommendations + savings
+  licenseFitRun: (orgId: string) => `/orgs/${orgId}/license-fit/run`,
+  licenseFitLatest: (orgId: string) =>
+    `/orgs/${orgId}/license-fit/latest`,
+  licenseFitItems: (orgId: string) => `/orgs/${orgId}/license-fit/items`,
+  licenseFitHistory: (orgId: string) =>
+    `/orgs/${orgId}/license-fit/history`,
+
   // Restructure Studio — GAEA Optimal Org Restructure
   restructureRun: (orgId: string) => `/orgs/${orgId}/restructure/run`,
   restructureLatest: (orgId: string) => `/orgs/${orgId}/restructure/latest`,
