@@ -464,6 +464,84 @@ class SalesforceAPIClient:
             )
             return []
 
+    # ------------------------------------------------------------------
+    # Automation Sprawl extractors (Flows + Apex Triggers)
+    # ------------------------------------------------------------------
+
+    async def extract_flows(self) -> List[Dict[str, Any]]:
+        """Every Flow definition in the org via Tooling API.
+
+        Uses FlowDefinitionView (not `Flow` — that's the internal
+        version table). Fields pulled:
+          - Id / ApiName / Label / Description
+          - ProcessType (Flow / AutoLaunchedFlow / RecordTrigger etc.)
+          - TriggerType — for RecordTriggered flows: BeforeSave etc.
+          - IsActive — the *current* activation state
+          - IsOutOfDate — active version isn't the latest saved version
+                          (usually indicates a broken deploy)
+          - LastModifiedDate + LastModifiedBy.Id/Name/IsActive
+          - NamespacePrefix — for managed vs custom filtering
+
+        Returns [] on any error so a partial run still surfaces the
+        Apex Trigger side.
+        """
+        soql = (
+            "SELECT Id, ApiName, Label, Description, ProcessType, "
+            "TriggerType, IsActive, IsOutOfDate, "
+            "LastModifiedDate, LastModifiedById, "
+            "LastModifiedBy.Name, LastModifiedBy.IsActive, "
+            "NamespacePrefix "
+            "FROM FlowDefinitionView"
+        )
+        try:
+            return await self.query_tooling(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "FlowDefinitionView query failed (%s) — automation-sprawl "
+                "runs without flows.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "FlowDefinitionView query failed (%s)", exc
+            )
+            return []
+
+    async def extract_apex_triggers(self) -> List[Dict[str, Any]]:
+        """Every ApexTrigger in the org via Tooling API.
+
+        Status vs IsValid:
+          - Status: Active / Inactive / Deleted — admin activation
+          - IsValid: does the trigger currently compile against
+                    the org's schema? False = broken.
+
+        LengthWithoutComments is a rough "how much code" signal
+        for the drilldown.
+        """
+        soql = (
+            "SELECT Id, Name, TableEnumOrId, Status, IsValid, "
+            "ApiVersion, LengthWithoutComments, "
+            "LastModifiedDate, LastModifiedById, "
+            "LastModifiedBy.Name, LastModifiedBy.IsActive, "
+            "NamespacePrefix "
+            "FROM ApexTrigger"
+        )
+        try:
+            return await self.query_tooling(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "ApexTrigger query failed (%s) — automation-sprawl "
+                "runs without triggers.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "ApexTrigger query failed (%s)", exc
+            )
+            return []
+
     async def count_apex_classes_in_namespace(
         self, namespace: str
     ) -> Optional[int]:

@@ -115,6 +115,16 @@ export const endpoints = {
   reportSprawlHistory: (orgId: string) =>
     `/orgs/${orgId}/report-sprawl/history`,
 
+  // Automation sprawl — Flow + ApexTrigger inventory + tier scoring
+  automationSprawlRun: (orgId: string) =>
+    `/orgs/${orgId}/automation-sprawl/run`,
+  automationSprawlLatest: (orgId: string) =>
+    `/orgs/${orgId}/automation-sprawl/latest`,
+  automationSprawlItems: (orgId: string) =>
+    `/orgs/${orgId}/automation-sprawl/items`,
+  automationSprawlHistory: (orgId: string) =>
+    `/orgs/${orgId}/automation-sprawl/history`,
+
   // Restructure Studio — GAEA Optimal Org Restructure
   restructureRun: (orgId: string) => `/orgs/${orgId}/restructure/run`,
   restructureLatest: (orgId: string) => `/orgs/${orgId}/restructure/latest`,

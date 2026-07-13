@@ -1916,6 +1916,171 @@ class ReportInventoryItem(Base, TimestampMixin):
 
 
 # ============================================================================
+# Automation Sprawl — Flow + ApexTrigger inventory
+# ============================================================================
+#
+# Mirror of the Report Sprawl + Package Sprawl pattern applied to
+# automation. One row per Flow / ApexTrigger, tiered by:
+#
+#   broken > orphaned > dormant > active
+#
+#   - broken:   Flow IsOutOfDate=True (active version doesn't match
+#               latest saved), OR ApexTrigger IsValid=False (doesn't
+#               compile against current schema).
+#   - orphaned: LastModifiedBy is an inactive user.
+#   - dormant:  currently active but LastModifiedDate >12 months ago.
+#               Proxy for "nobody has touched this in a year".
+#   - active:   modified within the last 12 months + owner active.
+
+
+class AutomationSprawlRun(Base, TimestampMixin):
+    """Header row + rollup counters per run. Single-row read for the
+    KPI strip; per-item detail lives on AutomationInventoryItem."""
+    __tablename__ = "automation_sprawl_runs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    flows_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    triggers_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    items_active: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_dormant: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_orphaned: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_broken: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Mean of days-since-last-modified across items that were modified
+    # at least once. Nullable when no items exist.
+    avg_days_since_modified: Mapped[Optional[int]] = mapped_column(Integer)
+    # Distinct normalised-name buckets with ≥2 members. Same idea as
+    # duplicate_groups on ReportSprawlRun.
+    duplicate_groups: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(String(500))
+
+    items = relationship(
+        "AutomationInventoryItem",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_automation_sprawl_run_org_time",
+            "organization_id",
+            "snapshot_at",
+        ),
+    )
+
+
+class AutomationInventoryItem(Base, TimestampMixin):
+    """One row per Flow or ApexTrigger captured at snapshot time.
+
+    Unified schema — item_type discriminates. Flow-only fields
+    (process_type, trigger_type) are NULL for triggers, and vice
+    versa (target_object is NULL for flows without a trigger object).
+    """
+    __tablename__ = "automation_inventory_items"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("automation_sprawl_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    sf_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    item_type: Mapped[str] = mapped_column(
+        String(16), nullable=False
+    )  # 'flow' | 'trigger'
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    api_name: Mapped[Optional[str]] = mapped_column(String(255))
+    description: Mapped[Optional[str]] = mapped_column(String(1000))
+    namespace_prefix: Mapped[Optional[str]] = mapped_column(String(120))
+
+    # Flow-specific
+    process_type: Mapped[Optional[str]] = mapped_column(String(64))
+    trigger_type: Mapped[Optional[str]] = mapped_column(String(64))
+    # Trigger-specific
+    target_object: Mapped[Optional[str]] = mapped_column(String(120))
+    api_version: Mapped[Optional[str]] = mapped_column(String(16))
+    length_without_comments: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # State flags. `is_active` is what Salesforce currently runs;
+    # `is_valid` is compile / schema-validity for triggers or
+    # IsOutOfDate inverted for flows.
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
+    is_valid: Mapped[Optional[bool]] = mapped_column(Boolean)
+
+    # Owner (last modifier) — mirrors ReportInventoryItem.
+    owner_sf_id: Mapped[Optional[str]] = mapped_column(String(18))
+    owner_name: Mapped[Optional[str]] = mapped_column(String(255))
+    owner_is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
+
+    last_modified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+    days_since_modified: Mapped[Optional[int]] = mapped_column(Integer)
+
+    tier: Mapped[str] = mapped_column(
+        String(16), default="active", nullable=False
+    )
+    duplicate_group_key: Mapped[Optional[str]] = mapped_column(String(64))
+
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("AutomationSprawlRun", back_populates="items")
+
+    __table_args__ = (
+        Index(
+            "ix_automation_item_org_run",
+            "organization_id",
+            "run_id",
+        ),
+        Index(
+            "ix_automation_item_dupe",
+            "run_id",
+            "duplicate_group_key",
+        ),
+        UniqueConstraint(
+            "run_id",
+            "sf_id",
+            name="uq_automation_item_run_sfid",
+        ),
+    )
+
+
+# ============================================================================
 # GAEA Optimal Org Restructure — role-hierarchy + PSet consolidation
 # ============================================================================
 #
