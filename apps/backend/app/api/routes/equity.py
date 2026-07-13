@@ -56,6 +56,12 @@ class DiagnosticResponse(BaseModel):
     recommendations_generated: int
     has_data: bool
     salesforce_instance_url: Optional[str] = None
+    # Which tier of the grouping-fallback ladder the equity metric used.
+    # Values: 'department' | 'role' | 'profile' | 'unassigned' |
+    # 'no_vips' | null (pre-fallback snapshots). The frontend renders
+    # a small note explaining the tier + which SF field was used so
+    # consultants aren't left wondering why the buckets look odd.
+    grouping_key: Optional[str] = None
 
 
 class HistoryPointResponse(BaseModel):

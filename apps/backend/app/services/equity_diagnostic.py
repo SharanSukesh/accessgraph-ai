@@ -40,6 +40,10 @@ class DiagnosticPayload:
     # the frontend can build deep-links from recommendations into the
     # right org. Null if no active SalesforceConnection for this org.
     salesforce_instance_url: Optional[str] = None
+    # Which tier of the grouping-fallback ladder the metric used —
+    # persisted on EquitySnapshot.raw_metrics['grouping_key']. None on
+    # pre-fallback historical snapshots.
+    grouping_key: Optional[str] = None
 
 
 @dataclass
@@ -117,6 +121,8 @@ class EquityDiagnosticService:
                 recommendations_generated=0, has_data=False,
                 salesforce_instance_url=instance_url,
             )
+        raw = snapshot.raw_metrics or {}
+        grouping_key = raw.get("grouping_key") if isinstance(raw, dict) else None
         return DiagnosticPayload(
             snapshot_id=snapshot.id,
             snapshot_at=snapshot.snapshot_at.isoformat() if snapshot.snapshot_at else None,
@@ -129,6 +135,7 @@ class EquityDiagnosticService:
             recommendations_generated=int(snapshot.recommendations_generated or 0),
             has_data=True,
             salesforce_instance_url=instance_url,
+            grouping_key=grouping_key,
         )
 
     async def history(self, org_id: str, limit: int = 30) -> List[HistoryPoint]:

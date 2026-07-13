@@ -550,24 +550,84 @@ class EquityRecommendationService:
             cost = np.minimum(cost, col_k + row_k)
         return cost
 
+    def _derive_bucket(
+        self, graph: EquityGraph, idx: int
+    ) -> Tuple[Optional[str], str]:
+        """Fallback ladder for a user's group-membership label. Returns
+        (bucket, source) where source is one of
+        'department' | 'role' | 'profile' | 'unassigned'.
+
+        Rationale for the ladder: Department is the semantically correct
+        grouping (org function → equity of access to VIP nodes). But
+        many real orgs don't populate it on every user. UserRole and
+        Profile are populated far more consistently and still capture
+        meaningful cohorts:
+          - Sales Reps sharing a role
+          - Users on the same Profile ("Marketing User" etc.)
+        Returning 'unassigned' as the final catch-all is deliberate: we
+        never silently drop juniors from the disparity calc — a group
+        of unassigned users is at least a group.
+        """
+        dept = graph.user_dept[idx]
+        if dept:
+            return dept, "department"
+        role_name = graph.user_role_name[idx] or ""
+        if role_name.strip():
+            return role_name.strip(), "role"
+        profile_name = graph.user_profile_name[idx] or ""
+        if profile_name.strip():
+            return profile_name.strip(), "profile"
+        return "unassigned", "unassigned"
+
     def _group_utilities(
         self, graph: EquityGraph
-    ) -> Tuple[Dict[str, float], float, Optional[str], np.ndarray]:
+    ) -> Tuple[Dict[str, float], float, Optional[str], np.ndarray, str]:
+        """Returns (group_util, disparity, most_disadvantaged, per_user_util,
+        grouping_key). `grouping_key` reports which fallback tier the
+        bucketing actually used ('department' when at least one junior
+        had a non-null Department, else 'role' / 'profile' / 'unassigned'
+        / 'mixed' when different juniors fell to different tiers)."""
         if graph.vip_indices.size == 0:
-            return {}, 0.0, None, np.zeros(len(graph.user_ids), dtype=np.float32)
+            return (
+                {},
+                0.0,
+                None,
+                np.zeros(len(graph.user_ids), dtype=np.float32),
+                "no_vips",
+            )
         cost = self._compute_distances(graph)
         vip_dist = cost[:, graph.vip_indices]
         min_d = np.min(vip_dist, axis=1)
         with np.errstate(divide="ignore"):
             per_user_util = np.where(np.isinf(min_d), 0.0, 1.0 / np.maximum(min_d, 1e-6))
 
-        utils_by_dept: Dict[str, List[float]] = {}
+        utils_by_bucket: Dict[str, List[float]] = {}
+        sources_seen: Set[str] = set()
         for idx in graph.junior_indices.tolist():
-            dept = graph.user_dept[idx]
-            if dept is None:
+            bucket, source = self._derive_bucket(graph, idx)
+            if bucket is None:
+                # Shouldn't happen — 'unassigned' is the guaranteed
+                # fallback — but defensive.
                 continue
-            utils_by_dept.setdefault(dept, []).append(float(per_user_util[idx]))
-        group_util = {d: float(np.mean(v)) if v else 0.0 for d, v in utils_by_dept.items()}
+            utils_by_bucket.setdefault(bucket, []).append(
+                float(per_user_util[idx])
+            )
+            sources_seen.add(source)
+        group_util = {
+            d: float(np.mean(v)) if v else 0.0
+            for d, v in utils_by_bucket.items()
+        }
+
+        # Report the tier the bucketing used. If any junior fell back
+        # past 'department' we report the WORST tier seen so the UI
+        # can be honest ("grouped by role" rather than pretending it
+        # was Department when only 1 in 100 juniors had Dept set).
+        tier_priority = ["unassigned", "profile", "role", "department"]
+        grouping_key = "department"
+        for tier in tier_priority:
+            if tier in sources_seen:
+                grouping_key = tier
+                break
 
         if group_util:
             mean_u = float(np.mean(list(group_util.values())))
@@ -576,7 +636,7 @@ class EquityRecommendationService:
         else:
             disparity = 0.0
             most_dis = None
-        return group_util, disparity, most_dis, per_user_util
+        return group_util, disparity, most_dis, per_user_util, grouping_key
 
     def _equity_index(self, group_util: Dict[str, float]) -> float:
         vals = sorted(group_util.values())
@@ -598,7 +658,7 @@ class EquityRecommendationService:
     ) -> List[EquityProposal]:
         proposals: List[EquityProposal] = []
         for _ in range(self.budget):
-            group_util, disparity, most_dis, _ = self._group_utilities(graph)
+            group_util, disparity, most_dis, _, _ = self._group_utilities(graph)
             if most_dis is None:
                 break
 
@@ -611,7 +671,7 @@ class EquityRecommendationService:
             ps_sf_id = graph.ps_ids[ps_idx]
             graph.user_ps.setdefault(user_sf_id, set()).add(ps_sf_id)
 
-            new_util, new_disparity, _, _ = self._group_utilities(graph)
+            new_util, new_disparity, _, _, _ = self._group_utilities(graph)
             before = group_util.get(most_dis, 0.0)
             after = new_util.get(most_dis, 0.0)
             rationale = (
@@ -702,7 +762,7 @@ class EquityRecommendationService:
                     continue
                 # Simulate
                 graph.user_ps.setdefault(sf_id, set()).add(ps_id)
-                util_after, _, _, _ = self._group_utilities(graph)
+                util_after, _, _, _, _ = self._group_utilities(graph)
                 graph.user_ps[sf_id].discard(ps_id)
                 score = util_after.get(most_dis, 0.0)
                 if score > best_score:
@@ -719,7 +779,7 @@ class EquityRecommendationService:
         graph: EquityGraph,
         proposals: List[EquityProposal],
     ) -> EquityRunResult:
-        group_util, disparity, most_dis, _ = self._group_utilities(graph)
+        group_util, disparity, most_dis, _, grouping_key = self._group_utilities(graph)
         equity_index = self._equity_index(group_util)
         edge_counts = {
             "manages":            int(graph.adj_manages.sum()),
@@ -747,6 +807,12 @@ class EquityRecommendationService:
                 "budget": self.budget,
                 "lambda_disparity": self.lambda_disparity,
                 "policy_loaded": os.path.exists(self.policy_path),
+                # Which tier of the grouping-fallback ladder the metric
+                # actually used. Values: 'department' | 'role' |
+                # 'profile' | 'unassigned' | 'no_vips'. Frontend reads
+                # this to explain "grouped by X because Department was
+                # null on all juniors" in the UI.
+                "grouping_key": grouping_key,
             },
             recommendations_generated=len(proposals),
             created_at=now,

@@ -272,32 +272,33 @@ function narrate(d: EquityDiagnostic): string | null {
       "Generate again."
     )
   }
-  const depts = Object.entries(d.per_dept_utilities)
-  if (depts.length === 0) {
+  const groups = Object.entries(d.per_dept_utilities)
+  if (groups.length === 0) {
     return (
       `Found ${d.vip_count} VIP${d.vip_count === 1 ? '' : 's'} but no ` +
-      "department groups to compare across. Junior users may have null " +
-      "Department values — populate Department in Salesforce and resync."
+      "junior users to bucket. If you expect juniors here, verify they " +
+      "aren't all being classified as VIPs — check Salesforce roles, " +
+      "manager relationships, or pins in the vip_designations table."
     )
   }
-  const tied = new Set(depts.map(([, v]) => v.toFixed(3))).size === 1
-  const dept = d.most_disadvantaged_group
+  const tied = new Set(groups.map(([, v]) => v.toFixed(3))).size === 1
+  const worstGroup = d.most_disadvantaged_group
   const manages = d.edge_type_counts?.manages ?? 0
   const roleAbove = d.edge_type_counts?.role_above ?? 0
   if (tied) {
-    const u = depts[0][1]
+    const u = groups[0][1]
     const hops = u > 0 ? (1 / u).toFixed(1) : '∞'
     return (
-      `All ${depts.length} departments are tied at utility ${u.toFixed(2)} ` +
+      `All ${groups.length} groups are tied at utility ${u.toFixed(2)} ` +
       `(~${hops} hops to the nearest VIP). With ${manages} manager and ` +
       `${roleAbove} role-hierarchy edges, the graph has limited structural ` +
       "variation — populate ManagerId on more users to differentiate groups."
     )
   }
-  const worstUtil = depts.find(([k]) => k === dept)?.[1] ?? 0
+  const worstUtil = groups.find(([k]) => k === worstGroup)?.[1] ?? 0
   const worstHops = worstUtil > 0 ? (1 / worstUtil).toFixed(1) : '∞'
   return (
-    `${dept} juniors have the lowest access (~${worstHops} hops to the ` +
+    `${worstGroup} juniors have the lowest access (~${worstHops} hops to the ` +
     `nearest of your ${d.vip_count} VIP${d.vip_count === 1 ? '' : 's'}). ` +
     `The policy suggested ${d.recommendations_generated} grant${
       d.recommendations_generated === 1 ? '' : 's'
@@ -508,26 +509,46 @@ export default function EquityPage() {
       {/* Headline metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {(() => {
-          // "Vacuous 100%": the calc returned 1.0 not because the org has
-          // perfect parity, but because there were no juniors with a
-          // populated Department to group by (so the Gini is over an
-          // empty set → equity_index falls through to 1.0). We detect
-          // that state and render the number in a warning tone so the
-          // consultant doesn't misread it as "everything is fair."
+          // Vacuous 100% detection AND grouping-tier disclosure.
+          //
+          // The metric only trips into "vacuous" when the equity is 1.0
+          // AND there are literally zero groups to bucket into — even the
+          // 'unassigned' catch-all missed everyone (means zero juniors,
+          // which is a valid but useless state). Once the fallback ladder
+          // is live, most orgs will land in 'role' or 'profile' rather
+          // than 'department', and we just note which tier drove it.
           const groupsCount = diagnostic
             ? Object.keys(diagnostic.per_dept_utilities).length
             : 0
+          const groupingKey = diagnostic?.grouping_key ?? null
           const isVacuous =
             hasData &&
             diagnostic!.equity_index >= 0.999 &&
             groupsCount === 0 &&
             diagnostic!.vip_count > 0
+          // Non-vacuous but grouped by a fallback tier — the number is
+          // real, but the consultant should know it's not the ideal
+          // Department-grouped answer so they can populate Department
+          // and re-run for a more meaningful cohort split.
+          const isFallbackGrouped =
+            hasData &&
+            !isVacuous &&
+            groupingKey &&
+            groupingKey !== 'department' &&
+            groupingKey !== 'no_vips'
           const numberCls = isVacuous
             ? 'mt-2 text-3xl font-bold text-copper-600 dark:text-copper-400'
             : 'mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400'
           const iconCls = isVacuous
             ? 'h-8 w-8 text-copper-400 flex-shrink-0'
             : 'h-8 w-8 text-primary-400 flex-shrink-0'
+          const groupingSourceLabel: Record<string, string> = {
+            department: 'User.Department',
+            role: 'User.UserRole',
+            profile: 'User.Profile',
+            unassigned: 'a single "unassigned" bucket',
+            no_vips: 'no VIPs found',
+          }
           return (
             <Card
               variant="bordered"
@@ -559,12 +580,26 @@ export default function EquityPage() {
                   </p>
                   {isVacuous && (
                     <p className="mt-2 text-xs text-copper-700 dark:text-copper-400 leading-relaxed">
-                      <strong>Not a real parity signal.</strong> No junior
-                      users have a populated Department, so the Gini is
-                      calculated over an empty set of groups and falls
-                      through to 1.0. Populate the Department field on
-                      users in Salesforce and re-sync to get a meaningful
-                      number here.
+                      <strong>Not a real parity signal.</strong> Even the
+                      fallback grouping ladder couldn&rsquo;t bucket any
+                      juniors (likely because there are no juniors, or
+                      VIPs are not identified). Populate User.Department
+                      or add a manager relationship in Salesforce, then
+                      re-sync.
+                    </p>
+                  )}
+                  {isFallbackGrouped && (
+                    <p className="mt-2 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 leading-relaxed">
+                      Grouped by <strong>{groupingSourceLabel[groupingKey!] ?? groupingKey}</strong>{' '}
+                      {groupingKey === 'unassigned' ? (
+                        <>— no juniors had Department, UserRole, or
+                        Profile populated, so all landed in one bucket
+                        (disparity can&rsquo;t distinguish groups yet).</>
+                      ) : (
+                        <>— User.Department was null on juniors, so the
+                        ladder fell back to this field. Populate
+                        Department for a more semantic cohort split.</>
+                      )}
                     </p>
                   )}
                   {/* Trend sparkline — last 30 snapshots */}
@@ -617,10 +652,19 @@ export default function EquityPage() {
         </Card>
       </div>
 
-      {/* Per-department utility bars */}
+      {/* Per-group utility bars — heading adapts to whichever tier of
+          the grouping ladder was used so the axis label is honest. */}
       <Card variant="bordered">
         <CardHeader>
-          <CardTitle>Per-department access utility</CardTitle>
+          <CardTitle>
+            {(() => {
+              const k = diagnostic?.grouping_key ?? 'department'
+              if (k === 'role') return 'Per-role access utility'
+              if (k === 'profile') return 'Per-profile access utility'
+              if (k === 'unassigned') return 'Access utility'
+              return 'Per-department access utility'
+            })()}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {diagnosticLoading ? (

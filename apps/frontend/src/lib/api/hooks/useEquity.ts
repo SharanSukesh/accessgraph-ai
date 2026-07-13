@@ -29,6 +29,11 @@ export interface EquityDiagnostic {
   // Salesforce instance URL so the frontend can build deep-links into
   // the right org. Null when no active connection exists.
   salesforce_instance_url?: string | null
+  // Which tier of the grouping-fallback ladder the metric actually
+  // used: 'department' | 'role' | 'profile' | 'unassigned' | 'no_vips'.
+  // Null on pre-fallback historical snapshots — frontend treats null
+  // as 'department' since that was the only option before the ladder.
+  grouping_key?: string | null
 }
 
 export interface EquityHistoryPoint {
