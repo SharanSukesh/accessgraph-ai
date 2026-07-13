@@ -42,8 +42,9 @@ import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 
 // Sidebar nav grouped by user intent, not feature-ship-order.
 //
+//  EXPLORE   — read/browse the org model (default landing surface,
+//              so it leads)
 //  ATTENTION — the triage inbox (what needs my action right now)
-//  EXPLORE   — read/browse the org model
 //  OPTIMIZE  — proactive consulting-flavoured work
 //  ADMIN     — settings-adjacent surfaces
 //
@@ -67,14 +68,6 @@ export const navigationSections: {
   items: { name: string; path: string; icon: typeof LayoutDashboard }[]
 }[] = [
   {
-    label: 'ATTENTION',
-    items: [
-      { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
-      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
-      { name: 'Change Risk', path: 'change-risk', icon: Radar },
-    ],
-  },
-  {
     label: 'EXPLORE',
     items: [
       { name: 'Overview', path: 'dashboard', icon: LayoutDashboard },
@@ -86,6 +79,14 @@ export const navigationSections: {
       // than a sidebar restructure warrants. Re-add here once built.
       // { name: 'Permission Sets', path: 'permission-sets', icon: KeyRound },
       { name: 'Graph Explorer', path: 'graph', icon: Network },
+    ],
+  },
+  {
+    label: 'ATTENTION',
+    items: [
+      { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
+      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
+      { name: 'Change Risk', path: 'change-risk', icon: Radar },
     ],
   },
   {
