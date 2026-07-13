@@ -227,8 +227,8 @@ export default function OrgAnalyzerPage() {
                   onClick={() => setTab(t.id)}
                   className={`px-4 py-2 text-sm font-medium border-b-2 transition flex items-center gap-2 ${
                     active
-                      ? 'border-indigo-600 text-primary-700 dark:text-primary-400'
-                      : 'border-transparent text-grove-ink/55 hover:text-grove-ink/85 dark:hover:text-grove-border'
+                      ? 'border-primary-700 text-primary-700 dark:border-primary-400 dark:text-primary-400'
+                      : 'border-transparent text-grove-ink/60 hover:text-grove-ink/90 dark:text-grove-ink-dk/70 dark:hover:text-grove-ink-dk/95 hover:border-grove-border dark:hover:border-grove-border-dk'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
