@@ -12,23 +12,21 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   Users,
-  Database,
-  FileText,
+  Users2,
   AlertTriangle,
-  CheckCircle,
+  ListChecks,
   Network,
   Menu,
   RefreshCw,
   Link2,
   Scale,
-  GitBranch,
   Stethoscope,
   Radar,
-  Package,
   Wrench,
-  FileBarChart,
-  Workflow,
   DollarSign,
+  Layers,
+  Boxes,
+  Shield,
   LogOut,
   ChevronUp,
   Command,
@@ -38,46 +36,73 @@ import { apiClient } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { openCommandPalette } from '@/components/shared/CommandPalette'
+import { MarqueeLabel } from '@/components/layout/MarqueeLabel'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 
-// Sidebar nav grouped into three semantic sections. Labels render only
-// in the expanded state; collapsed mode shows a hairline divider between
-// groups. Route paths and click behaviour are unchanged from the v1.8
-// flat list — this is purely a visual grouping.
+// Sidebar nav grouped by user intent, not feature-ship-order.
+//
+//  ATTENTION — the triage inbox (what needs my action right now)
+//  EXPLORE   — read/browse the org model
+//  OPTIMIZE  — proactive consulting-flavoured work
+//  ADMIN     — settings-adjacent surfaces
+//
+// Rename rationale is documented in
+// `.claude/plans/this-is-the-paper-parallel-horizon.md`. In short:
+//   - "Dashboard" → "Overview": everything is a dashboard; be honest.
+//   - "Recommendations" → "Priority Actions": distinguishes the
+//      cross-track action inbox from track-specific recs (equity /
+//      license fit each generate their own).
+//   - "Org Analyzer" → "Health Report": matches the service docstring
+//      ("consulting-grade org-health diagnostics"); every feature
+//      "analyzes the org", but only this one produces a PDF health
+//      report with severity-ranked findings.
+//   - "Reporting Graph" → "Org Chart": the page is a drag-drop editor
+//      for the manager hierarchy; "Reporting Graph" sounds like a
+//      data-lineage tool.
+// URL paths intentionally kept as-is so bookmarks / deep-links from
+// the SF managed package / older analytics don't break.
 export const navigationSections: {
   label: string
   items: { name: string; path: string; icon: typeof LayoutDashboard }[]
 }[] = [
   {
+    label: 'ATTENTION',
+    items: [
+      { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
+      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
+      { name: 'Change Risk', path: 'change-risk', icon: Radar },
+    ],
+  },
+  {
     label: 'EXPLORE',
     items: [
-      { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
+      { name: 'Overview', path: 'dashboard', icon: LayoutDashboard },
       { name: 'Users', path: 'users', icon: Users },
-      { name: 'Objects', path: 'objects', icon: Database },
-      { name: 'Fields', path: 'fields', icon: FileText },
-    ],
-  },
-  {
-    label: 'ANALYZE',
-    items: [
-      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
-      { name: 'Recommendations', path: 'recommendations', icon: CheckCircle },
-      { name: 'Equity', path: 'equity', icon: Scale },
-      { name: 'Change Risk', path: 'change-risk', icon: Radar },
-      { name: 'Package Sprawl', path: 'package-sprawl', icon: Package },
-      { name: 'Report Sprawl', path: 'report-sprawl', icon: FileBarChart },
-      { name: 'Automation Sprawl', path: 'automation-sprawl', icon: Workflow },
-      { name: 'License Fit', path: 'license-fit', icon: DollarSign },
-      { name: 'Restructure Studio', path: 'restructure', icon: Wrench },
-      { name: 'Org Analyzer', path: 'org-analyzer', icon: Stethoscope },
-    ],
-  },
-  {
-    label: 'VISUALIZE',
-    items: [
+      { name: 'Schema', path: 'schema', icon: Layers },
+      // Permission Sets list page — deferred. Only the detail route
+      // (`permission-sets/[psId]`) exists today; the list surface
+      // needs a new backend endpoint + hook + page, which is bigger
+      // than a sidebar restructure warrants. Re-add here once built.
+      // { name: 'Permission Sets', path: 'permission-sets', icon: KeyRound },
       { name: 'Graph Explorer', path: 'graph', icon: Network },
-      { name: 'Reporting Graph', path: 'reporting-graph', icon: GitBranch },
+    ],
+  },
+  {
+    label: 'OPTIMIZE',
+    items: [
+      { name: 'Health Report', path: 'org-analyzer', icon: Stethoscope },
+      { name: 'Equity', path: 'equity', icon: Scale },
+      { name: 'Restructure Studio', path: 'restructure', icon: Wrench },
+      { name: 'Sprawl', path: 'sprawl', icon: Boxes },
+      { name: 'License Fit', path: 'license-fit', icon: DollarSign },
+    ],
+  },
+  {
+    label: 'ADMIN',
+    items: [
+      { name: 'Org Chart', path: 'reporting-graph', icon: Users2 },
+      { name: 'Privacy', path: 'privacy', icon: Shield },
     ],
   },
 ]
@@ -308,7 +333,7 @@ export function Sidebar() {
                           : 'group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400',
                       )}
                     />
-                    {isExpanded && <span className="whitespace-nowrap">{item.name}</span>}
+                    {isExpanded && <MarqueeLabel text={item.name} />}
 
                     {/* Tooltip for collapsed state — Grove ink ground with
                         cream text; section label in the copper accent so it

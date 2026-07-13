@@ -107,7 +107,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         icon={LayoutDashboard}
-        title="Dashboard"
+        title="Overview"
         subtitle="Access health overview for your organization"
         actions={
           (!anomalies?.length && !recommendations?.length) && (

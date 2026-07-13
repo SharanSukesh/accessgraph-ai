@@ -269,6 +269,24 @@
     opacity: 1;
   }
 
+  /* Grove — marquee for sidebar labels that overflow their container.
+     Paused at rest, plays on hover. Duplicated text with a separator
+     gives an infinite-scroll feel. Reduced-motion users get ellipsis
+     via the JS fallback in MarqueeLabel.tsx — this CSS only fires
+     when the JS has decided marquee is safe. */
+  @keyframes grove-marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .grove-marquee-inner {
+    animation: grove-marquee 8s linear infinite;
+    animation-play-state: paused;
+  }
+  .grove-marquee-track:hover .grove-marquee-inner,
+  a:hover .grove-marquee-track .grove-marquee-inner {
+    animation-play-state: running;
+  }
+
   /* Animated blob effect for background gradients */
   @keyframes blob {
     0% {

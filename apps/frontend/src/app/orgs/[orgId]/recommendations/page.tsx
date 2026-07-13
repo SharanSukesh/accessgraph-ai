@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   CheckCircle,
+  ListChecks,
   Filter,
   Search,
   Download,
@@ -108,8 +109,8 @@ export default function RecommendationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={CheckCircle}
-        title="Recommendations"
+        icon={ListChecks}
+        title="Priority Actions"
         subtitle="Review and act on security recommendations"
         actions={
           <>

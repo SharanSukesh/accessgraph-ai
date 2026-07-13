@@ -133,7 +133,7 @@ export default function OrgAnalyzerPage() {
     <div className="space-y-4">
       <PageHeader
         icon={Stethoscope}
-        title="Org Analyzer"
+        title="Health Report"
         subtitle={
           <>
             License waste, configuration bloat, automation hygiene,

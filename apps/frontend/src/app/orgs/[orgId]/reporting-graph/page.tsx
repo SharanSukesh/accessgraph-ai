@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
   AlertCircle,
-  GitBranch,
+  Users2,
   Search,
   Save,
   X as XIcon,
@@ -712,8 +712,8 @@ export default function ReportingGraphPage() {
       )}
 
       <PageHeader
-        icon={GitBranch}
-        title="Reporting Graph"
+        icon={Users2}
+        title="Org Chart"
         subtitle="Drag from a user to another to set their manager or delegated approver. Save writes back to Salesforce User records."
         actions={
           <>
