@@ -26,29 +26,23 @@ import { Badge } from '@/components/shared/Badge'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 
-interface DataInventory {
-  snapshots: {
-    users: number
-    roles: number
-    profiles: number
-    permission_sets: number
-    permission_set_groups: number
-    object_permissions: number
-    field_permissions: number
-    groups: number
-    group_members: number
-    account_shares: number
-    opportunity_shares: number
-    team_members: number
-    sharing_rules: number
-    owd: number
-  }
-  sync_jobs: number
-  audit_logs: number
-  anomalies: number
-  recommendations: number
-  risk_scores: number
-}
+// Flat dict returned by GET /orgs/{id}/privacy/inventory. The backend
+// (DataRetentionService.get_data_inventory) returns one key per record
+// class rather than a nested "snapshots" bucket, so we treat it as a
+// map + partition into snapshot vs. non-snapshot keys in-component.
+type DataInventory = Record<string, number>
+
+// Keys the backend emits that are NOT snapshot counts. Used to split
+// the flat inventory into "snapshots" vs "everything else" for the
+// UI. Anything not in this set is treated as a snapshot record type.
+const NON_SNAPSHOT_KEYS = new Set([
+  'sync_jobs',
+  'audit_logs',
+  'anomalies',
+  'recommendations',
+  'risk_scores', // may be absent — safe to list
+  'total_records',
+])
 
 interface RetentionPolicy {
   snapshots_days: number
@@ -133,11 +127,23 @@ export default function PrivacyPage() {
   const inventory = inventoryData?.data_inventory
   const policies = inventoryData?.retention_policies
 
-  // Calculate total records
-  const totalSnapshots = inventory
-    ? Object.values(inventory.snapshots).reduce((sum, count) => sum + count, 0)
-    : 0
-  const totalAnalysis = (inventory?.anomalies || 0) + (inventory?.recommendations || 0) + (inventory?.risk_scores || 0)
+  // Partition the flat inventory dict into snapshot vs non-snapshot
+  // keys. The backend emits `total_records` in the same dict; exclude
+  // it here since we compute our own total to keep the UI honest even
+  // if the backend total ever drifts from the sum of its parts.
+  const snapshotEntries = inventory
+    ? Object.entries(inventory).filter(
+        ([key]) => !NON_SNAPSHOT_KEYS.has(key),
+      )
+    : []
+  const totalSnapshots = snapshotEntries.reduce(
+    (sum, [, count]) => sum + (count || 0),
+    0,
+  )
+  const totalAnalysis =
+    (inventory?.anomalies || 0) +
+    (inventory?.recommendations || 0) +
+    (inventory?.risk_scores || 0)
   const totalRecords =
     totalSnapshots +
     (inventory?.sync_jobs || 0) +
@@ -354,20 +360,19 @@ export default function PrivacyPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {inventory &&
-              Object.entries(inventory.snapshots).map(([key, value]) => (
-                <div
-                  key={key}
-                  className="p-3 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg"
-                >
-                  <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 uppercase">
-                    {key.replace(/_/g, ' ')}
-                  </p>
-                  <p className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mt-1">
-                    {value.toLocaleString()}
-                  </p>
-                </div>
-              ))}
+            {snapshotEntries.map(([key, value]) => (
+              <div
+                key={key}
+                className="p-3 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg"
+              >
+                <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 uppercase">
+                  {key.replace(/_/g, ' ')}
+                </p>
+                <p className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mt-1">
+                  {(value || 0).toLocaleString()}
+                </p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
