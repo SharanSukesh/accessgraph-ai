@@ -30,6 +30,11 @@ python-multipart==0.0.6
 # Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+# Pinned separately from passlib. passlib 1.7.4 is broken against
+# bcrypt 4.x on Python 3.12+ ("error reading bcrypt version"), so
+# app/auth/passwords.py uses `bcrypt` directly rather than through
+# passlib. bcrypt itself is stable and maintained.
+bcrypt>=4.0.0,<5.0.0
 python-dotenv==1.0.0
 cryptography>=42.0.0
 sqlalchemy-utils>=0.41.1
