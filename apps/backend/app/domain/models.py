@@ -1003,6 +1003,54 @@ class OrgUser(Base, TimestampMixin):
         return permission_map.get(permission, False)
 
 
+class AuthToken(Base, TimestampMixin):
+    """Single-use tokens for account activation + password reset.
+
+    Issued when an admin creates a new OrgUser (`purpose='activate'`) or
+    when any user requests a password reset (`purpose='reset_password'`).
+    The `token` column stores the token verbatim (URL-safe random 32
+    bytes → 43 chars base64) since we index-lookup by it directly.
+    That's a deliberate trade-off vs. hashing: single-use + short TTL
+    (24h) means a leaked DB row is only useful within that window,
+    and the lookup path stays a single indexed SELECT.
+
+    Consumed by:
+      - POST /auth/activate  — sets password, marks user verified,
+                                marks token used.
+      - POST /auth/reset-password — same, but doesn't touch is_email_verified.
+    """
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("org_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    token: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )
+    # 'activate' | 'reset_password'
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    # Set when the token is consumed. Nullable — never reset to null
+    # after being set, so a token is one-use forever.
+    used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    user = relationship("OrgUser")
+
+    __table_args__ = (
+        Index("ix_auth_token_lookup", "token"),
+        Index("ix_auth_token_user", "user_id"),
+    )
+
+
 class DeepLinkRedemption(Base, TimestampMixin):
     """
     Records redemption of a deep-link JWT issued to a managed-package quick

@@ -1,15 +1,30 @@
 'use client'
 
 /**
- * Authentication Context
- * Manages user authentication state and session
+ * Authentication Context — email/password + Salesforce OAuth coexistence.
+ *
+ * Two ways in:
+ *   1. Email/password → primary. `loginWithPassword(email, password)`
+ *      sets the JWT cookie via /auth/login-password. The identity in
+ *      that cookie carries `org_user_id` + `is_admin`, which is what
+ *      the admin UI gates on.
+ *   2. Salesforce OAuth → now a POST-LOGIN step, not a login.
+ *      `connectSalesforce()` fires the OAuth redirect. Users typically
+ *      call this AFTER logging in with email/password to attach their
+ *      SF org to their account.
+ *
+ * Two "me" endpoints:
+ *   - `/auth/me`        — org info (works for both paths)
+ *   - `/auth/me-user`   — OrgUser info (email/password sessions only)
+ * We hit them both on mount; me-user's 401 for SF-only sessions is
+ * expected and doesn't break the app.
  */
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api/client'
 
-interface AuthUser {
+interface AuthOrg {
   org_id: string
   org_name: string
   org_domain: string | null
@@ -18,45 +33,62 @@ interface AuthUser {
   instance_url: string | null
 }
 
+interface AuthOrgUser {
+  id: string
+  email: string
+  name: string | null
+  role: string
+  is_admin: boolean
+  is_email_verified: boolean
+  organization_id: string
+}
+
 interface AuthContextType {
-  user: AuthUser | null
+  org: AuthOrg | null
+  orgUser: AuthOrgUser | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (redirectUrl?: string, envOverride?: string) => void
+  isAdmin: boolean
+  loginWithPassword: (email: string, password: string) => Promise<void>
+  connectSalesforce: (envOverride?: string) => void
   logout: () => Promise<void>
   refetch: () => Promise<void>
+
+  // Deprecated aliases kept so existing call sites (Sidebar user menu,
+  // ProtectedRoute etc.) don't break in this PR. `user` still returns
+  // the org shape; `login` now points at the SF-connect path since
+  // that was its behaviour previously.
+  user: AuthOrg | null
+  login: (redirectUrl?: string, envOverride?: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [org, setOrg] = useState<AuthOrg | null>(null)
+  const [orgUser, setOrgUser] = useState<AuthOrgUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Fetch current user
-  const fetchUser = async () => {
-    try {
-      const data = await apiClient.get<AuthUser>('/auth/me')
-      setUser(data)
-    } catch (error) {
-      // Not authenticated
-      setUser(null)
-    } finally {
-      setIsLoading(false)
-    }
+  const fetchAll = async () => {
+    // Both endpoints run in parallel. Either 401 is a valid outcome
+    // (unauthenticated OR authenticated via the other path).
+    const [orgRes, userRes] = await Promise.allSettled([
+      apiClient.get<AuthOrg>('/auth/me'),
+      apiClient.get<AuthOrgUser>('/auth/me-user'),
+    ])
+    setOrg(orgRes.status === 'fulfilled' ? orgRes.value : null)
+    setOrgUser(userRes.status === 'fulfilled' ? userRes.value : null)
+    setIsLoading(false)
   }
 
-  // Check authentication status on mount
   useEffect(() => {
-    fetchUser()
+    fetchAll()
   }, [])
 
-  // Persist 'env' from URL to sessionStorage so it survives the
-  // home -> /login redirect chain (router.push() doesn't carry query params).
-  // The Salesforce package's LWC opens the dashboard with ?env=sandbox when
-  // the underlying SF org is a sandbox/scratch; we need that hint preserved
-  // so login() can route OAuth through test.salesforce.com.
+  // Preserve ?env=... hint from the SF-package deep-link across the
+  // home → /login → /authorize chain (router.push doesn't carry query
+  // params). Unchanged from prior behaviour.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const env = new URLSearchParams(window.location.search).get('env')
@@ -65,16 +97,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const login = (redirectUrl?: string, envOverride?: string) => {
-    // Redirect to Salesforce OAuth.
-    // env resolution order:
-    //   1. envOverride argument (e.g., login page's "sandbox" toggle)
-    //   2. ?env=... in current URL (deep link from the SF package's LWC)
-    //   3. sessionStorage (preserved across the home → /login redirect chain)
-    // The Salesforce package's LWC opens the dashboard with ?env=sandbox
-    // when the underlying SF org is sandbox/scratch, so OAuth routes to
-    // test.salesforce.com instead of login.salesforce.com.
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
+  const loginWithPassword = async (email: string, password: string) => {
+    // POST /auth/login-password sets the httpOnly cookie server-side;
+    // client-visible state gets refreshed by fetchAll below. The
+    // caller (login page) handles navigation on success.
+    await apiClient.post('/auth/login-password', { email, password })
+    await fetchAll()
+  }
+
+  const connectSalesforce = (envOverride?: string) => {
+    // The old `login()` behaviour, renamed to be honest about what it
+    // does: kick a Salesforce OAuth flow. Now called AFTER email/password
+    // login to attach an SF org to the account.
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
     let env: string | null = envOverride ?? null
     let forceLogin = false
     if (typeof window !== 'undefined') {
@@ -83,10 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           new URLSearchParams(window.location.search).get('env') ||
           window.sessionStorage.getItem('accessgraph_env')
       }
-      // After explicit logout, force the Salesforce login screen (rather
-      // than silently re-using the existing SF session). Flag is set in
-      // logout() and consumed (cleared) here so it only fires once.
-      forceLogin = window.sessionStorage.getItem('accessgraph_force_login') === '1'
+      forceLogin =
+        window.sessionStorage.getItem('accessgraph_force_login') === '1'
       if (forceLogin) {
         window.sessionStorage.removeItem('accessgraph_force_login')
       }
@@ -103,16 +137,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      // Mark the next OAuth flow to force the Salesforce login screen.
-      // Salesforce keeps its own session cookie - clearing our JWT cookie
-      // doesn't end that session, so without prompt=login on the next
-      // /authorize call, Salesforce silently re-uses it and the user
-      // can't switch identities.
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem('accessgraph_force_login', '1')
       }
       await apiClient.post('/auth/logout')
-      setUser(null)
+      setOrg(null)
+      setOrgUser(null)
       router.push('/login')
     } catch (error) {
       console.error('Logout failed:', error)
@@ -120,18 +150,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refetch = async () => {
-    await fetchUser()
+    await fetchAll()
   }
+
+  // isAuthenticated is true if EITHER identity path has a session —
+  // email/password (orgUser) OR SF-OAuth-only (org without orgUser).
+  const isAuthenticated = !!org || !!orgUser
+  const isAdmin = !!orgUser?.is_admin
 
   return (
     <AuthContext.Provider
       value={{
-        user,
+        org,
+        orgUser,
         isLoading,
-        isAuthenticated: !!user,
-        login,
+        isAuthenticated,
+        isAdmin,
+        loginWithPassword,
+        connectSalesforce,
         logout,
         refetch,
+        // Deprecated aliases — kept so existing consumers compile.
+        user: org,
+        login: connectSalesforce,
       }}
     >
       {children}

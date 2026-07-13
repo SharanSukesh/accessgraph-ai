@@ -27,6 +27,7 @@ import {
   Layers,
   Boxes,
   Shield,
+  UserPlus,
   LogOut,
   ChevronUp,
   Command,
@@ -65,7 +66,18 @@ import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
 // the SF managed package / older analytics don't break.
 export const navigationSections: {
   label: string
-  items: { name: string; path: string; icon: typeof LayoutDashboard }[]
+  items: {
+    name: string
+    // Either an org-scoped slug (`dashboard`) — prefixed with
+    // `/orgs/{orgId}/` at render — or an absolute path (`/admin/users`)
+    // that ships as-is. The absolute form is used for app-level
+    // surfaces like admin user management.
+    path: string
+    icon: typeof LayoutDashboard
+    // Gate the item on `isAdmin` from AuthContext. Non-admin sessions
+    // see the item filtered out at render time.
+    adminOnly?: boolean
+  }[]
 }[] = [
   {
     label: 'EXPLORE',
@@ -102,6 +114,12 @@ export const navigationSections: {
   {
     label: 'ADMIN',
     items: [
+      {
+        name: 'Users',
+        path: '/admin/users',
+        icon: UserPlus,
+        adminOnly: true,
+      },
       { name: 'Org Chart', path: 'reporting-graph', icon: Users2 },
       { name: 'Privacy', path: 'privacy', icon: Shield },
     ],
@@ -111,7 +129,7 @@ export const navigationSections: {
 export function Sidebar() {
   const pathname = usePathname()
   const queryClient = useQueryClient()
-  const { user, logout } = useAuth()
+  const { user, orgUser, isAdmin, logout } = useAuth()
   const [isExpanded, setIsExpanded] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -133,7 +151,16 @@ export function Sidebar() {
     if (!isExpanded) setUserMenuOpen(false)
   }, [isExpanded])
 
-  const avatarLetter = user?.org_name?.charAt(0).toUpperCase() || 'U'
+  // Prefer the human's own name / email over the org name in the
+  // user-menu label + avatar seed. Falls back to org name for
+  // Salesforce-OAuth-only sessions (no OrgUser row).
+  const identityLabel =
+    orgUser?.name || orgUser?.email || user?.org_name || 'Account'
+  const identitySublabel =
+    orgUser?.email && orgUser?.name
+      ? orgUser.email
+      : user?.org_domain || null
+  const avatarLetter = identityLabel.charAt(0).toUpperCase() || 'U'
   // Local "in flight" tag covers the brief window between clicking the
   // button and the trigger POST returning. Once the new sync job exists,
   // the polling-driven `isJobRunning` below takes over and keeps the
@@ -173,13 +200,28 @@ export function Sidebar() {
   }, [isJobRunning, latestJobStatus])
 
   // Build navigation with current orgId, preserving the section grouping.
-  const navigation = navigationSections.map(section => ({
-    label: section.label,
-    items: section.items.map(item => ({
-      ...item,
-      href: `/orgs/${orgId}/${item.path}`,
-    })),
-  }))
+  // Items whose `path` starts with '/' are treated as absolute app-level
+  // routes (e.g., /admin/users) — everything else is org-scoped and
+  // prefixed with /orgs/{orgId}/.
+  //
+  // The ADMIN section carries an admin-only "Users" item (see
+  // navigationSections above). Non-admin sessions get that item
+  // filtered out here so it never renders — admin-only surfaces are
+  // also enforced by the backend's require_admin dep, so this is UX
+  // gating, not the security perimeter.
+  const navigation = navigationSections
+    .map(section => ({
+      label: section.label,
+      items: section.items
+        .filter(item => !item.adminOnly || isAdmin)
+        .map(item => ({
+          ...item,
+          href: item.path.startsWith('/')
+            ? item.path
+            : `/orgs/${orgId}/${item.path}`,
+        })),
+    }))
+    .filter(section => section.items.length > 0)
 
   // Handle sync button click. The trigger POST returns instantly because
   // sync runs as a background asyncio task; the actual SF metadata pull
@@ -493,7 +535,7 @@ export function Sidebar() {
                   : 'justify-center w-10 h-10',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15',
               )}
-              title={!isExpanded ? (user?.org_name || 'Account') : undefined}
+              title={!isExpanded ? identityLabel : undefined}
               aria-expanded={userMenuOpen}
               aria-haspopup="menu"
             >
@@ -511,11 +553,11 @@ export function Sidebar() {
                 <>
                   <div className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-medium truncate text-grove-ink dark:text-grove-ink-dk">
-                      {user?.org_name || 'Connected'}
+                      {identityLabel}
                     </p>
-                    {user?.org_domain && (
+                    {identitySublabel && (
                       <p className="text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
-                        {user.org_domain}
+                        {identitySublabel}
                       </p>
                     )}
                   </div>

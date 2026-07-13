@@ -85,6 +85,46 @@ class Settings(BaseSettings):
         description="Encrypt sensitive database fields (OAuth tokens, PII)"
     )
 
+    # JWT signing — dedicated key for app JWTs.
+    # Falls back to SALESFORCE_CLIENT_SECRET for backwards compat with
+    # sessions issued before this key was introduced, but new deploys
+    # should set JWT_SECRET_KEY explicitly.
+    JWT_SECRET_KEY: str = Field(
+        default="",
+        description="Signing key for app JWTs (falls back to "
+                    "SALESFORCE_CLIENT_SECRET if unset)."
+    )
+
+    # Email — Resend transactional API (activation emails).
+    # If RESEND_API_KEY is unset, the email sender falls into
+    # log-to-console mode: the full activation URL is written to the
+    # backend logs so an admin can copy it during dev / staging.
+    RESEND_API_KEY: str = Field(
+        default="",
+        description="Resend API key for sending activation + reset emails."
+    )
+    FROM_EMAIL: str = Field(
+        default="onboarding@resend.dev",
+        description="'From' address on transactional emails. Use "
+                    "onboarding@resend.dev in dev; switch to a verified "
+                    "domain address in production."
+    )
+
+    # Bootstrap admin — on backend startup, if no ORG_ADMIN exists,
+    # a user with these credentials is created + verified. Idempotent
+    # — never overwrites an existing admin. Leave both blank on prod
+    # once the admin is provisioned to disable the bootstrap.
+    FIRST_ADMIN_EMAIL: str = Field(
+        default="",
+        description="Bootstrap admin email. Only used if no ORG_ADMIN "
+                    "exists yet at startup."
+    )
+    FIRST_ADMIN_PASSWORD: str = Field(
+        default="",
+        description="Bootstrap admin password. Only used if no ORG_ADMIN "
+                    "exists yet at startup."
+    )
+
     # Deep links from Salesforce Setup
     DEEPLINK_SIGNING_KEY: str = Field(
         default="",

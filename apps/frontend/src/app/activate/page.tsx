@@ -1,28 +1,27 @@
 'use client'
 
 /**
- * Login Page — email + password with User / Admin tabs.
+ * Account activation page.
  *
- * Both tabs POST to the same /auth/login-password endpoint; the tab
- * is purely a UX signal (matches the user's mental model — "I'm an
- * admin, this is where I go"). The backend decides admin status
- * server-side from the OrgUser row, so a regular user can't sneak in
- * via the Admin tab by clicking around.
+ * Landing target for the activation link in the invitation email. URL:
+ * `/activate?token=<token>`. Collects a password (with a confirm
+ * field for the usual typo-safety), POSTs to /auth/activate, and on
+ * success the backend sets the JWT cookie + returns the user; we
+ * refetch AuthContext and route to /.
  *
- * The AnimatedBackground is rendered globally by app/layout.tsx — we
- * don't render a second copy here.
+ * Reuses the same Grove theme + global AnimatedBackground as the
+ * login page — a user arriving from email should feel like they're
+ * still inside the same product.
  */
 
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  LogIn,
   Loader2,
-  User,
-  ShieldCheck,
-  Mail,
   KeyRound,
+  CheckCircle2,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react'
 import {
   Card,
@@ -32,45 +31,51 @@ import {
 } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Logo } from '@/components/shared/Logo'
+import { apiClient } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
-import { cn } from '@/lib/utils/cn'
 
-type LoginTab = 'user' | 'admin'
-
-function LoginContent() {
+function ActivateContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { isAuthenticated, isLoading, isAdmin, loginWithPassword } = useAuth()
-  const redirect = searchParams.get('redirect')
+  const { refetch } = useAuth()
+  const token = searchParams.get('token') || ''
 
-  const [tab, setTab] = useState<LoginTab>('user')
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Already logged in? Bounce to redirect or home. The redirect check
-  // includes isAdmin so an admin session picks up the admin-only
-  // surfaces on the destination page.
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.push(redirect || '/')
+    if (!token) {
+      setError(
+        'No activation token found in the URL. Ask your admin to resend the invite.',
+      )
     }
-  }, [isAuthenticated, isLoading, redirect, router, isAdmin])
+  }, [token])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (submitting) return
     setError(null)
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+    if (password !== confirm) {
+      setError('Passwords do not match.')
+      return
+    }
+
     setSubmitting(true)
     try {
-      await loginWithPassword(email.trim(), password)
-      // Success — AuthContext.loginWithPassword calls fetchAll(),
-      // isAuthenticated flips, the effect above navigates.
+      await apiClient.post('/auth/activate', { token, password })
+      // Success — backend set the JWT cookie. Refresh AuthContext so
+      // the app knows we're logged in, then land on /.
+      await refetch()
+      router.push('/')
     } catch (err: unknown) {
-      const msg = extractErrorMessage(err)
-      setError(msg)
-    } finally {
+      setError(extractErrorMessage(err))
       setSubmitting(false)
     }
   }
@@ -86,13 +91,13 @@ function LoginContent() {
             <Logo size="lg" />
           </div>
           <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-copper-600 dark:text-copper-400 mb-3">
-            Access Intelligence · v0.1
+            Access Intelligence · Activation
           </p>
           <h1 className="text-4xl font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
-            Welcome back
+            Set your password
           </h1>
           <p className="text-grove-ink/70 dark:text-grove-ink-dk/70">
-            Sign in with your AccessGraph account
+            You&apos;re one step away from your AccessGraph account.
           </p>
         </div>
 
@@ -102,73 +107,49 @@ function LoginContent() {
           className="shadow-grove-lift"
           style={{ animation: 'grove-fade-up 500ms ease-out 120ms both' }}
         >
-          <CardHeader className="pb-0">
-            <CardTitle className="text-center tracking-tight text-grove-ink dark:text-grove-ink-dk sr-only">
-              Sign in
+          <CardHeader>
+            <CardTitle className="text-center tracking-tight text-grove-ink dark:text-grove-ink-dk">
+              Activate account
             </CardTitle>
-
-            {/* Tabs — pure UX; both submit to the same endpoint. */}
-            <div className="flex items-center gap-1 border-b border-grove-border dark:border-grove-border-dk -mx-6 px-6">
-              <TabButton
-                active={tab === 'user'}
-                onClick={() => setTab('user')}
-                icon={User}
-              >
-                User
-              </TabButton>
-              <TabButton
-                active={tab === 'admin'}
-                onClick={() => setTab('admin')}
-                icon={ShieldCheck}
-              >
-                Admin
-              </TabButton>
-            </div>
           </CardHeader>
-
           <CardContent className="space-y-4">
-            {tab === 'admin' && (
-              <div className="text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 bg-copper-50 dark:bg-copper-900/15 ring-1 ring-copper-200 dark:ring-copper-900 rounded-md p-3 leading-relaxed">
-                Admin sign-in unlocks user management. Regular users
-                should use the <strong>User</strong> tab — but this
-                form uses the same credentials, so it&apos;s fine if
-                you clicked here by mistake.
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-3">
               <label className="block">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
-                  Email
+                  New password
                 </span>
                 <div className="mt-1 relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/40 dark:text-grove-ink-dk/40" />
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/40 dark:text-grove-ink-dk/40" />
                   <input
-                    type="email"
-                    autoComplete="email"
+                    type="password"
+                    autoComplete="new-password"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@company.com"
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 8 characters"
                     className="w-full pl-9 pr-3 py-2.5 text-sm rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    disabled={!token}
                   />
                 </div>
               </label>
 
               <label className="block">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
-                  Password
+                  Confirm password
                 </span>
                 <div className="mt-1 relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/40 dark:text-grove-ink-dk/40" />
+                  <CheckCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/40 dark:text-grove-ink-dk/40" />
                   <input
                     type="password"
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                     required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    minLength={8}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Re-enter your password"
                     className="w-full pl-9 pr-3 py-2.5 text-sm rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    disabled={!token}
                   />
                 </div>
               </label>
@@ -185,58 +166,27 @@ function LoginContent() {
                 variant="primary"
                 size="lg"
                 className="w-full relative overflow-hidden grove-copper-wash"
-                disabled={submitting || !email || !password}
+                disabled={
+                  submitting || !token || !password || !confirm
+                }
               >
                 {submitting ? (
                   <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                 ) : (
-                  <LogIn className="h-5 w-5 mr-2" />
+                  <Sparkles className="h-5 w-5 mr-2" />
                 )}
-                {submitting ? 'Signing in…' : 'Sign in'}
+                {submitting ? 'Activating…' : 'Activate & sign in'}
               </Button>
             </form>
 
             <p className="text-center text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-              Accounts are created by an admin. If you haven&apos;t
-              received an activation email, ask your admin to resend
-              it.
+              Activation links expire 24 hours after they&apos;re sent.
+              If yours has expired, ask your admin to resend the invite.
             </p>
           </CardContent>
         </Card>
-
-        <div className="mt-8 text-center text-[11px] text-grove-ink/50 dark:text-grove-ink-dk/50 font-mono uppercase tracking-[0.16em]">
-          <p>Access Intelligence · Enterprise-grade</p>
-        </div>
       </div>
     </div>
-  )
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon: Icon,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ComponentType<{ className?: string }>
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-        active
-          ? 'border-primary-700 text-primary-700 dark:border-primary-400 dark:text-primary-400'
-          : 'border-transparent text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-primary-700 dark:hover:text-primary-300 hover:border-grove-border dark:hover:border-grove-border-dk',
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {children}
-    </button>
   )
 }
 
@@ -252,10 +202,10 @@ function extractErrorMessage(err: unknown): string {
     if (typeof d.error === 'string') return d.error
   }
   if (e.message && typeof e.message === 'string') return e.message
-  return 'Login failed. Check your credentials and try again.'
+  return 'Activation failed. The link may be expired or invalid.'
 }
 
-export default function LoginPage() {
+export default function ActivatePage() {
   return (
     <Suspense
       fallback={
@@ -264,7 +214,7 @@ export default function LoginPage() {
         </div>
       }
     >
-      <LoginContent />
+      <ActivateContent />
     </Suspense>
   )
 }

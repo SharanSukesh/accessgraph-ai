@@ -18,13 +18,28 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7  # 7 days
 
 
+def _jwt_secret() -> str:
+    """Choose the JWT signing secret. Prefers the dedicated
+    JWT_SECRET_KEY setting; falls back to SALESFORCE_CLIENT_SECRET so
+    sessions issued before that setting was added remain verifiable.
+    Last-resort fallback is a hardcoded string (dev only) so a
+    zero-config local run doesn't crash."""
+    return (
+        (settings.JWT_SECRET_KEY or "").strip()
+        or (settings.SALESFORCE_CLIENT_SECRET or "").strip()
+        or "change_me_in_production"
+    )
+
+
 def create_access_token(org_id: str, user_info: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     Create JWT access token
 
     Args:
         org_id: Organization ID
-        user_info: User information from Salesforce (user_id, email, etc.)
+        user_info: User information from Salesforce (user_id, email, etc.).
+                   Extra keys `org_user_id`, `is_admin`, `name`, `role` are
+                   also honoured for the email/password auth path.
         expires_delta: Optional custom expiration time
 
     Returns:
@@ -43,11 +58,19 @@ def create_access_token(org_id: str, user_info: dict, expires_delta: Optional[ti
         "exp": expire,
         "iat": datetime.utcnow(),
     }
+    # Email/password auth path adds these claims so the frontend and
+    # authorization deps can short-circuit on identity without a DB
+    # roundtrip. Omitted (undefined) for the legacy SF-OAuth path.
+    if user_info.get("org_user_id") is not None:
+        to_encode["org_user_id"] = user_info["org_user_id"]
+    if user_info.get("is_admin") is not None:
+        to_encode["is_admin"] = bool(user_info["is_admin"])
+    if user_info.get("role") is not None:
+        to_encode["role"] = str(user_info["role"])
+    if user_info.get("name") is not None:
+        to_encode["name"] = user_info["name"]
 
-    # Use Salesforce client secret as JWT secret (since it's already secret)
-    # In production, you might want a separate JWT_SECRET env var
-    secret = settings.SALESFORCE_CLIENT_SECRET or "change_me_in_production"
-
+    secret = _jwt_secret()
     encoded_jwt = jwt.encode(to_encode, secret, algorithm=ALGORITHM)
 
     logger.info(f"Created JWT token for org: {org_id}")
@@ -69,7 +92,7 @@ def verify_token(token: str) -> dict:
         HTTPException: If token is invalid or expired
     """
     try:
-        secret = settings.SALESFORCE_CLIENT_SECRET or "change_me_in_production"
+        secret = _jwt_secret()
         payload = jwt.decode(token, secret, algorithms=[ALGORITHM])
 
         # Check expiration

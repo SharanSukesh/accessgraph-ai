@@ -49,6 +49,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.error(f"Failed to connect to Neo4j: {e}")
 
+    # Bootstrap first admin from env vars, if configured and needed.
+    # Idempotent — only inserts when no ORG_ADMIN exists yet.
+    try:
+        from app.auth.bootstrap import bootstrap_first_admin
+        await bootstrap_first_admin()
+    except Exception:
+        logger.exception("bootstrap: first-admin provisioning failed")
+
     yield
 
     # Shutdown
@@ -135,7 +143,7 @@ async def add_security_headers(request: Request, call_next):
 
 # Include routers
 from app.api.routes import (
-    auth, orgs, users, privacy, package, deeplink,
+    auth, accounts, orgs, users, privacy, package, deeplink,
     equity, reporting_graph, org_analyzer, data_quality,
     change_risk_radar, package_sprawl, restructure, report_sprawl,
     automation_sprawl, license_fit,
@@ -143,6 +151,7 @@ from app.api.routes import (
 
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["authentication"])
+app.include_router(accounts.router, tags=["accounts"])
 app.include_router(orgs.router, tags=["organizations"])
 app.include_router(users.router, tags=["users"])
 app.include_router(privacy.router, tags=["privacy"])
