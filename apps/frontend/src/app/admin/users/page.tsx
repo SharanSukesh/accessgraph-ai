@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Copy,
+  Trash2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Card, CardContent } from '@/components/shared/Card'
@@ -85,6 +86,17 @@ export default function AdminUsersPage() {
   const resendMutation = useMutation<CreateUserResponse, unknown, string>({
     mutationFn: (userId) =>
       apiClient.post(`/auth/users/${userId}/resend-activation`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+  })
+
+  const deleteMutation = useMutation<
+    { deleted: boolean; was_pending: boolean; email: string },
+    unknown,
+    string
+  >({
+    mutationFn: (userId) => apiClient.delete(`/auth/users/${userId}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin', 'users'] })
     },
@@ -229,12 +241,21 @@ export default function AdminUsersPage() {
               key={u.id}
               user={u}
               onResend={(id) => resendMutation.mutate(id)}
+              onDelete={(id) => deleteMutation.mutate(id)}
               resendPending={
                 resendMutation.isPending && resendMutation.variables === u.id
               }
               resendResult={
                 resendMutation.data && resendMutation.variables === u.id
                   ? resendMutation.data
+                  : null
+              }
+              deletePending={
+                deleteMutation.isPending && deleteMutation.variables === u.id
+              }
+              deleteError={
+                deleteMutation.isError && deleteMutation.variables === u.id
+                  ? extractErrorMessage(deleteMutation.error)
                   : null
               }
             />
@@ -250,16 +271,35 @@ export default function AdminUsersPage() {
 function UserRow({
   user,
   onResend,
+  onDelete,
   resendPending,
   resendResult,
+  deletePending,
+  deleteError,
 }: {
   user: OrgUserRow
   onResend: (userId: string) => void
+  onDelete: (userId: string) => void
   resendPending: boolean
   resendResult: CreateUserResponse | null
+  deletePending: boolean
+  deleteError: string | null
 }) {
   const verified = user.is_email_verified
   const roleLabel = ROLE_LABEL[user.role] ?? user.role
+  // Pending invites get 'Cancel invite' language; activated users get
+  // 'Delete account'. Same endpoint under the hood — the label reflects
+  // what the admin thinks they're doing.
+  const isPending = !verified
+  const deleteLabel = isPending ? 'Cancel invite' : 'Delete account'
+  const deleteConfirmText = isPending
+    ? `Cancel the pending invite for ${user.email}? Their activation link will stop working immediately.`
+    : `Permanently delete ${user.email}? They'll lose access on their next request. This can't be undone.`
+  const handleDelete = () => {
+    if (typeof window !== 'undefined' && window.confirm(deleteConfirmText)) {
+      onDelete(user.id)
+    }
+  }
   return (
     <Card variant="bordered" className="p-4">
       <CardContent className="p-0">
@@ -325,7 +365,7 @@ function UserRow({
               variant="ghost"
               size="sm"
               onClick={() => onResend(user.id)}
-              disabled={resendPending}
+              disabled={resendPending || deletePending}
             >
               {resendPending ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -335,7 +375,29 @@ function UserRow({
               Resend
             </Button>
           )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDelete}
+            disabled={deletePending || resendPending}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+          >
+            {deletePending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            {deleteLabel}
+          </Button>
         </div>
+
+        {deleteError && (
+          <div className="mt-3 flex items-start gap-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/15 ring-1 ring-red-200 dark:ring-red-900 rounded-md p-2.5">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{deleteError}</span>
+          </div>
+        )}
 
         {resendResult && (
           <div className="mt-3">

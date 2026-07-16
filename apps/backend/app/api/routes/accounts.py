@@ -578,3 +578,83 @@ async def admin_resend_activation(
             activation_url if not (settings.RESEND_API_KEY or "").strip() else None
         ),
     )
+
+
+@router.delete("/users/{user_id}")
+async def admin_delete_user(
+    user_id: str,
+    admin_id: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_database),
+):
+    """Hard-delete an OrgUser + cascade any auth_tokens.
+
+    Handles both cases uniformly:
+      - Activated user   → account removed, they lose access on their
+                            next request (existing JWT cookies remain
+                            technically valid until expiry, but /auth/me-user
+                            401s because the user row is gone)
+      - Pending invite   → user row + activation token both deleted;
+                            the link in their inbox becomes dead
+
+    Protections:
+      1. An admin can't delete themselves — obvious footgun; there's no
+         'restore' path so we prevent the self-lockout.
+      2. An admin can't delete the bootstrap admin (email matching
+         FIRST_ADMIN_EMAIL). The bootstrap admin gets recreated on next
+         backend restart anyway, so deletion is only transient — but
+         it's confusing to see them vanish + reappear, and locks the
+         rotating-admin operator out until the next boot. Better to
+         refuse and force the operator to change the env var instead.
+    """
+    admin_row = await db.execute(
+        select(OrgUser).where(OrgUser.id == admin_id)
+    )
+    admin = admin_row.scalar_one_or_none()
+    if admin is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin user no longer exists.",
+        )
+
+    if user_id == admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You can't delete your own account.",
+        )
+
+    row = await db.execute(
+        select(OrgUser).where(
+            OrgUser.id == user_id,
+            OrgUser.organization_id == admin.organization_id,
+        )
+    )
+    user = row.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        )
+
+    bootstrap_email = (settings.FIRST_ADMIN_EMAIL or "").strip().lower()
+    if bootstrap_email and user.email.lower() == bootstrap_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This account is provisioned from FIRST_ADMIN_EMAIL "
+                "on the backend and would be recreated on the next "
+                "restart. Change or unset that env var first if you "
+                "want to remove it."
+            ),
+        )
+
+    was_pending = not user.is_email_verified
+    email_for_log = user.email
+    await db.delete(user)
+    await db.commit()
+    logger.info(
+        "auth.admin: %s %s user %s",
+        admin.email,
+        "cancelled pending invite for" if was_pending else "deleted user",
+        email_for_log,
+    )
+    return {"deleted": True, "was_pending": was_pending, "email": email_for_log}
