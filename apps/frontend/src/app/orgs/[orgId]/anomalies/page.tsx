@@ -25,6 +25,7 @@ export default function AnomaliesPage() {
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<string>('')
+  const [categoryFilter, setCategoryFilter] = useState<'' | 'access' | 'session'>('')
   const [selectedAnomaly, setSelectedAnomaly] = useState<any>(null)
 
   const {
@@ -35,6 +36,7 @@ export default function AnomaliesPage() {
     search,
     severity: severityFilter || undefined,
     type: typeFilter || undefined,
+    category: categoryFilter || undefined,
   })
 
   const { data: topUsers } = useTopAnomalousUsers(orgId, 10)
@@ -130,6 +132,47 @@ export default function AnomaliesPage() {
         </Card>
       </div>
 
+      {/* Category tabs — split the ML permission-shape detector (Access)
+          from the LoginHistory rule detector (Session). The two feed
+          different investigative flows: Access anomalies drive access
+          reviews; Session anomalies drive incident response. */}
+      <div className="flex gap-2">
+        {([
+          { key: '', label: 'All', desc: null },
+          {
+            key: 'access',
+            label: 'Access',
+            desc: 'ML detector over permission-shape features',
+          },
+          {
+            key: 'session',
+            label: 'Session',
+            desc: 'LoginHistory rules — impossible travel, new country, brute force, dormant reactivation',
+          },
+        ] as const).map((tab) => {
+          const active = categoryFilter === tab.key
+          const count =
+            tab.key === ''
+              ? anomalies?.length ?? 0
+              : anomalies?.filter((a: any) => (a.category ?? 'access') === tab.key).length ?? 0
+          return (
+            <button
+              key={tab.key || 'all'}
+              onClick={() => setCategoryFilter(tab.key as any)}
+              title={tab.desc ?? undefined}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
+                active
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk border-grove-border dark:border-grove-border-dk hover:border-primary-500'
+              }`}
+            >
+              {tab.label}
+              <span className="ml-2 opacity-80">({isLoading ? '…' : count})</span>
+            </button>
+          )
+        })}
+      </div>
+
       {/* Filters */}
       <Card variant="bordered">
         <CardContent className="py-4">
@@ -159,7 +202,8 @@ export default function AnomaliesPage() {
               <option value="low">Low</option>
             </select>
 
-            {/* Type Filter */}
+            {/* Type Filter — set by the Category tabs above for the
+                Session case; kept as a manual filter for Access sub-types. */}
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
@@ -171,6 +215,7 @@ export default function AnomaliesPage() {
               <option value="dormant_user">Dormant User</option>
               <option value="privilege_escalation">Privilege Escalation</option>
               <option value="sensitive_data">Sensitive Data Access</option>
+              <option value="session_anomaly">Session anomaly</option>
             </select>
           </div>
         </CardContent>
@@ -205,6 +250,15 @@ export default function AnomaliesPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <SeverityBadge severity={anomaly.severity} />
+                            {anomaly.category === 'session' ? (
+                              <Badge variant="warning" size="sm">
+                                Session
+                              </Badge>
+                            ) : (
+                              <Badge variant="info" size="sm">
+                                Access
+                              </Badge>
+                            )}
                             <Badge variant="info" size="sm">
                               {anomaly.type?.replace(/_/g, ' ')}
                             </Badge>

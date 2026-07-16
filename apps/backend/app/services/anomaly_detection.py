@@ -217,9 +217,12 @@ from app.domain.models import (
     FieldPermissionSnapshot,
     ObjectPermissionSnapshot,
     PermissionSetAssignmentSnapshot,
+    SalesforceConnection,
     UserSnapshot,
 )
+from app.salesforce.client import SalesforceAPIClient
 from app.services.effective_access import EffectiveAccessService
+from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +235,41 @@ class AnomalyDetectionService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.access_service = EffectiveAccessService(db)
+
+    async def _build_sf_client(self, org_id: str) -> Optional[SalesforceAPIClient]:
+        """Build a live SalesforceAPIClient for org_id from the stored
+        OAuth connection. Returns None if the org has no connection yet
+        (freshly signed-up org that hasn't finished OAuth); callers
+        should skip live-data detectors in that case.
+        """
+        row = await self.db.execute(
+            select(SalesforceConnection)
+            .where(SalesforceConnection.organization_id == org_id)
+            .order_by(desc(SalesforceConnection.created_at))
+            .limit(1)
+        )
+        conn = row.scalar_one_or_none()
+        if conn is None:
+            logger.info(
+                "org %s has no SalesforceConnection — session-anomaly "
+                "detection skipped.", org_id,
+            )
+            return None
+        return SalesforceAPIClient(
+            instance_url=conn.instance_url,
+            access_token=conn.access_token,
+        )
+
+    async def detect_session_anomalies_for_org(
+        self, org_id: str,
+    ) -> List[AccessAnomaly]:
+        """Convenience: build the SF client from stored OAuth + run the
+        session detector. Returns [] silently if no connection exists.
+        """
+        sf_client = await self._build_sf_client(org_id)
+        if sf_client is None:
+            return []
+        return await self.detect_session_anomalies(org_id, sf_client)
 
         # Sensitive indicators (would come from config in production)
         self.sensitive_objects = ["Quote"]
@@ -259,10 +297,16 @@ class AnomalyDetectionService:
 
         logger.info(f"Running anomaly detection for org: {org_id}")
 
-        # Delete old anomalies for this org to prevent duplicates
+        # Delete old ACCESS anomalies for this org to prevent duplicates.
+        # Scoped to category="access" so a re-run of the access detector
+        # does not wipe out session-anomaly rows (which have their own
+        # separate detector + delete step in detect_session_anomalies).
         from sqlalchemy import delete
         await self.db.execute(
-            delete(AccessAnomaly).where(AccessAnomaly.organization_id == org_id)
+            delete(AccessAnomaly).where(
+                AccessAnomaly.organization_id == org_id,
+                AccessAnomaly.category == "access",
+            )
         )
         await self.db.commit()
 
@@ -408,6 +452,7 @@ class AnomalyDetectionService:
                     features=feature_data[idx],
                     peer_stats=peer_stats,
                     detected_at=datetime.now(timezone.utc),
+                    category="access",
                 )
                 anomalies.append(anomaly)
 
@@ -685,3 +730,292 @@ class AnomalyDetectionService:
             return AnomalySeverity.LOW
         else:
             return AnomalySeverity.INFO
+
+    # ------------------------------------------------------------------
+    # Session anomalies (Roadmap #6)
+    # ------------------------------------------------------------------
+    # Rule-based detector over Salesforce LoginHistory + LoginGeo. Distinct
+    # from the ML detector above (which scores users on permission-shape
+    # features) — this one scores login events on temporal + geographic
+    # patterns to catch account takeover, impossible travel, and dormant-
+    # user re-activation. Records land in the same access_anomalies table
+    # tagged category="session" so the Anomalies UI can filter them.
+    #
+    # Rules v1 (all degrade cleanly when their input signal is missing):
+    #   1. IMPOSSIBLE_TRAVEL — two successful logins for the same user
+    #      from different Countries within 4 hours.
+    #   2. NEW_COUNTRY       — first-ever login from Country X in the last
+    #      30 days, when the user has prior logins from any other country.
+    #   3. NEW_DEVICE        — (Browser, Platform) pair the user has never
+    #      logged in from before.
+    #   4. DORMANT_REACTIVATION — user had no successful login for ≥60d,
+    #      then a successful login in the last 7d.
+    #   5. BRUTE_FORCE_SUCCESS — ≥5 failed logins within 30 min followed
+    #      by a successful login for the same user.
+
+    async def detect_session_anomalies(
+        self, org_id: str, sf_client,
+    ) -> List[AccessAnomaly]:
+        """Rule-based session-anomaly detector. Requires a live
+        SalesforceAPIClient for the org (LoginHistory + LoginGeo pulls
+        run at detection time — no separate snapshot table).
+
+        Best-effort throughout: missing LoginGeo just disables the
+        country-based rules; a per-user rule failure is logged and
+        skipped, not raised.
+        """
+        logger.info(f"Running session-anomaly detection for org: {org_id}")
+
+        from sqlalchemy import delete
+        # Wipe prior session-anomaly rows only. Access-anomaly rows are
+        # untouched — they're managed by detect_anomalies().
+        await self.db.execute(
+            delete(AccessAnomaly).where(
+                AccessAnomaly.organization_id == org_id,
+                AccessAnomaly.category == "session",
+            )
+        )
+        await self.db.commit()
+
+        # Pull the 90-day window. Session anomalies are inherently
+        # short-horizon (impossible travel, brute force) or recent-versus-
+        # historical (new country, dormant reactivation), so 90 days
+        # gives us a reasonable baseline without inflating API cost.
+        try:
+            history = await sf_client.get_login_history(since_days=90)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "LoginHistory fetch failed for org %s: %s — session "
+                "anomaly detection skipped.", org_id, exc,
+            )
+            return []
+        if not history:
+            logger.info("No LoginHistory rows for org %s.", org_id)
+            return []
+
+        try:
+            geo_rows = await sf_client.get_login_geo(since_days=90)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "LoginGeo unavailable for org %s (%s) — country rules skipped.",
+                org_id, exc,
+            )
+            geo_rows = []
+
+        # Index geo by LoginHistoryId so per-login country lookup is O(1).
+        geo_by_login_id: Dict[str, Dict] = {}
+        for g in geo_rows:
+            lid = g.get("LoginHistoryId")
+            if lid:
+                geo_by_login_id[lid] = g
+
+        # Group logins by user (successful only for most rules; failed
+        # kept separately for brute-force).
+        def _parse_ts(iso: Optional[str]) -> Optional[datetime]:
+            if not iso:
+                return None
+            try:
+                # SF returns ISO 8601 with Z suffix.
+                return datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                return None
+
+        by_user_success: Dict[str, List[Dict]] = defaultdict(list)
+        by_user_failed: Dict[str, List[Dict]] = defaultdict(list)
+        for row in history:
+            uid = row.get("UserId")
+            if not uid:
+                continue
+            ts = _parse_ts(row.get("LoginTime"))
+            if ts is None:
+                continue
+            enriched = dict(row)
+            enriched["_ts"] = ts
+            enriched["_geo"] = geo_by_login_id.get(row.get("Id"))
+            if (row.get("Status") or "").lower() == "success":
+                by_user_success[uid].append(enriched)
+            else:
+                by_user_failed[uid].append(enriched)
+
+        # Load the users we've synced so we can attach names (also lets us
+        # filter out session anomalies for users we don't have a record
+        # for — those would show up in the UI as "unknown user").
+        user_result = await self.db.execute(
+            select(UserSnapshot).where(
+                UserSnapshot.organization_id == org_id,
+                UserSnapshot.is_active == True,  # noqa: E712
+            )
+        )
+        active_user_ids = {u.salesforce_id for u in user_result.scalars().all()}
+
+        anomalies: List[AccessAnomaly] = []
+        now = datetime.now(timezone.utc)
+        # Sort per-user by time (ascending) so window comparisons work
+        # left-to-right and "prior" vs "recent" splits are stable.
+        for uid, successes in by_user_success.items():
+            if uid not in active_user_ids:
+                continue
+            successes.sort(key=lambda r: r["_ts"])
+
+            per_user_findings: List[str] = []
+            per_user_features: Dict = {
+                "login_count_90d": len(successes),
+                "failed_count_90d": len(by_user_failed.get(uid, [])),
+            }
+            highest_severity_score = 0.0
+
+            # --- Rule 1: Impossible travel -----------------------------
+            # Two successful logins from different countries within 4h.
+            IMPOSSIBLE_TRAVEL_HOURS = 4
+            for i in range(1, len(successes)):
+                prev, curr = successes[i - 1], successes[i]
+                prev_geo, curr_geo = prev.get("_geo"), curr.get("_geo")
+                if not (prev_geo and curr_geo):
+                    continue
+                prev_country = prev_geo.get("Country")
+                curr_country = curr_geo.get("Country")
+                if not (prev_country and curr_country):
+                    continue
+                if prev_country == curr_country:
+                    continue
+                gap_hours = (curr["_ts"] - prev["_ts"]).total_seconds() / 3600.0
+                if 0 < gap_hours <= IMPOSSIBLE_TRAVEL_HOURS:
+                    per_user_findings.append(
+                        f"Impossible travel: login from "
+                        f"{prev_geo.get('City') or prev_country}, {prev_country} "
+                        f"then {curr_geo.get('City') or curr_country}, {curr_country} "
+                        f"only {gap_hours:.1f}h apart."
+                    )
+                    per_user_features["impossible_travel"] = True
+                    highest_severity_score = max(highest_severity_score, 0.95)
+                    break
+
+            # --- Rule 2: New country (last 30 days) --------------------
+            cutoff_30d = now - _timedelta_days(30)
+            countries_prior: set = set()
+            countries_recent: set = set()
+            for s in successes:
+                geo = s.get("_geo")
+                if not geo:
+                    continue
+                country = geo.get("Country")
+                if not country:
+                    continue
+                if s["_ts"] < cutoff_30d:
+                    countries_prior.add(country)
+                else:
+                    countries_recent.add(country)
+            new_countries = countries_recent - countries_prior
+            # Only fire if user had historical activity from OTHER
+            # countries — otherwise a user's first-ever login trivially
+            # counts as "new" and floods the feed.
+            if new_countries and countries_prior:
+                for c in sorted(new_countries):
+                    per_user_findings.append(
+                        f"New country: first login from {c} in the last 30 days "
+                        f"(previously seen from {', '.join(sorted(countries_prior)) or 'no other country'})."
+                    )
+                per_user_features["new_countries"] = sorted(new_countries)
+                highest_severity_score = max(highest_severity_score, 0.75)
+
+            # --- Rule 3: New device (Browser, Platform) ---------------
+            devices_prior: set = set()
+            devices_recent: set = set()
+            for s in successes:
+                dev = (s.get("Browser") or "unknown", s.get("Platform") or "unknown")
+                if s["_ts"] < cutoff_30d:
+                    devices_prior.add(dev)
+                else:
+                    devices_recent.add(dev)
+            new_devices = devices_recent - devices_prior
+            if new_devices and devices_prior:
+                for browser, platform in sorted(new_devices):
+                    if browser == "unknown" and platform == "unknown":
+                        continue
+                    per_user_findings.append(
+                        f"New device: {browser} on {platform} — not seen in "
+                        "the prior 60 days for this user."
+                    )
+                per_user_features["new_devices"] = [
+                    f"{b}/{p}" for b, p in sorted(new_devices)
+                ]
+                highest_severity_score = max(highest_severity_score, 0.55)
+
+            # --- Rule 4: Dormant reactivation --------------------------
+            # Last successful login before the recent-week window, then a
+            # successful login in the last 7 days after a >=60d gap.
+            cutoff_7d = now - _timedelta_days(7)
+            cutoff_60d = now - _timedelta_days(60)
+            recent_logins = [s for s in successes if s["_ts"] >= cutoff_7d]
+            older_logins = [s for s in successes if s["_ts"] < cutoff_7d]
+            if recent_logins and older_logins:
+                last_older = older_logins[-1]["_ts"]
+                if last_older < cutoff_60d:
+                    dormant_days = (recent_logins[0]["_ts"] - last_older).days
+                    per_user_findings.append(
+                        f"Dormant reactivation: no logins for {dormant_days} days, "
+                        f"then a successful login in the last week."
+                    )
+                    per_user_features["dormant_days"] = dormant_days
+                    highest_severity_score = max(highest_severity_score, 0.7)
+
+            # --- Rule 5: Brute-force success --------------------------
+            # 5+ failures within 30 min followed by a success.
+            BRUTE_FAILURES = 5
+            BRUTE_WINDOW_MIN = 30
+            failures = sorted(
+                by_user_failed.get(uid, []), key=lambda r: r["_ts"],
+            )
+            if failures and successes:
+                for succ in successes:
+                    window_start = succ["_ts"] - _timedelta_minutes(BRUTE_WINDOW_MIN)
+                    recent_fails = [
+                        f for f in failures
+                        if window_start <= f["_ts"] < succ["_ts"]
+                    ]
+                    if len(recent_fails) >= BRUTE_FAILURES:
+                        per_user_findings.append(
+                            f"Brute-force success: {len(recent_fails)} failed "
+                            f"logins in the {BRUTE_WINDOW_MIN} minutes before a "
+                            f"successful login on "
+                            f"{succ['_ts'].strftime('%Y-%m-%d %H:%M UTC')}."
+                        )
+                        per_user_features["brute_force_failure_count"] = len(recent_fails)
+                        highest_severity_score = max(highest_severity_score, 0.9)
+                        break
+
+            if not per_user_findings:
+                continue
+
+            severity = self._determine_severity(
+                highest_severity_score, len(per_user_findings),
+            )
+            anomaly = AccessAnomaly(
+                organization_id=org_id,
+                user_id=uid,
+                anomaly_score=highest_severity_score,
+                severity=severity,
+                reasons=per_user_findings[:5],
+                features=per_user_features,
+                peer_stats={},
+                detected_at=now,
+                category="session",
+            )
+            anomalies.append(anomaly)
+
+        if anomalies:
+            self.db.add_all(anomalies)
+            await self.db.commit()
+
+        logger.info(f"Detected {len(anomalies)} session anomalies")
+        return anomalies
+
+
+def _timedelta_days(n: int):
+    from datetime import timedelta
+    return timedelta(days=n)
+
+
+def _timedelta_minutes(n: int):
+    from datetime import timedelta
+    return timedelta(minutes=n)

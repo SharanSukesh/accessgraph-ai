@@ -266,14 +266,18 @@ class SalesforceAPIClient:
             return None
 
     async def get_login_history(self, since_days: int = 90) -> List[Dict[str, Any]]:
-        """Recent LoginHistory rows for activity analysis.
+        """Recent LoginHistory rows for activity + session-anomaly analysis.
 
-        Returns rows with Id, UserId, LoginTime, Application, Status. The
-        analyzer rolls these up to find users who haven't used the API in
-        a while but still hold the API Enabled perm.
+        Returns rows with Id, UserId, LoginTime, Application, Status,
+        LoginType, SourceIp, Browser, Platform, LoginGeoId. The
+        session-anomaly detector uses these to spot impossible-travel,
+        new-country, dormant-reactivation and brute-force patterns.
+        The Org Analyzer rolls the same rows up to find API-inactive users
+        who still hold the API Enabled perm.
         """
         soql = (
-            "SELECT Id, UserId, LoginTime, Application, Status "
+            "SELECT Id, UserId, LoginTime, Application, Status, "
+            "LoginType, SourceIp, Browser, Platform, LoginGeoId "
             "FROM LoginHistory "
             f"WHERE LoginTime = LAST_N_DAYS:{since_days} "
             "ORDER BY LoginTime DESC"
@@ -285,6 +289,34 @@ class SalesforceAPIClient:
                 "LoginHistory query failed (%s) — skipping API-activity rule.",
                 e.response.status_code,
             )
+            return []
+
+    async def get_login_geo(self, since_days: int = 90) -> List[Dict[str, Any]]:
+        """LoginGeo rows for the same window as `get_login_history`.
+
+        SF's LoginGeo is a separate sObject keyed by LoginHistoryId that
+        carries the resolved geolocation for each login: Country, City,
+        Latitude, Longitude. Some orgs (older sandboxes, certain licence
+        SKUs) have this disabled, in which case we get 0 rows back and
+        the country-based session-anomaly rules degrade cleanly.
+        """
+        soql = (
+            "SELECT Id, LoginHistoryId, LoginTime, Country, CountryIso, "
+            "City, Latitude, Longitude "
+            "FROM LoginGeo "
+            f"WHERE LoginTime = LAST_N_DAYS:{since_days}"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.info(
+                "LoginGeo query failed (%s) — country-based session rules "
+                "will be skipped for this org.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as e:  # noqa: BLE001
+            logger.info("LoginGeo query errored (%s) — skipping.", e)
             return []
 
     async def extract_setup_audit_trail(

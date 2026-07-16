@@ -447,11 +447,15 @@ async def get_user_recommendations(
 async def list_anomalies(
     org_id: str,
     severity: Optional[str] = None,
+    category: Optional[str] = None,
     limit: int = Query(100, le=1000),
     db: AsyncSession = Depends(get_database),
 ):
-    """List anomalies for organization"""
-    # Join with UserSnapshot to get user names
+    """List anomalies for organization.
+
+    `category` filter accepts "access" (ML permission-based detector) or
+    "session" (LoginHistory rule-based detector). Omit to see both.
+    """
     query = (
         select(AccessAnomaly, UserSnapshot.name)
         .join(UserSnapshot, AccessAnomaly.user_id == UserSnapshot.salesforce_id)
@@ -463,11 +467,18 @@ async def list_anomalies(
 
     if severity:
         query = query.where(AccessAnomaly.severity == severity)
+    if category:
+        query = query.where(AccessAnomaly.category == category)
 
     query = query.order_by(AccessAnomaly.anomaly_score.desc()).limit(limit)
 
     result = await db.execute(query)
     anomaly_user_pairs = result.all()
+
+    def _display_title(cat: str, user_name: str) -> str:
+        if cat == "session":
+            return f"Session anomaly detected for {user_name}"
+        return f"Anomalous access pattern detected for {user_name}"
 
     return [
         {
@@ -479,12 +490,15 @@ async def list_anomalies(
             "score": a.anomaly_score,  # Frontend expects 'score'
             "anomaly_score": a.anomaly_score,  # Keep for backwards compatibility
             "severity": a.severity.value,
+            "category": a.category,
             "reasons": a.reasons,
             "detectedAt": a.detected_at.isoformat(),  # Frontend expects camelCase
             "detected_at": a.detected_at.isoformat(),  # Keep for backwards compatibility
-            # Frontend expects these fields for display
-            "type": "excessive_permissions",  # Derived from reasons
-            "title": f"Anomalous access pattern detected for {user_name}",
+            # Type mapping: session anomalies get their own type so the
+            # frontend legend + filter dropdown group them separately from
+            # the ML permission anomalies.
+            "type": "session_anomaly" if a.category == "session" else "excessive_permissions",
+            "title": _display_title(a.category, user_name),
             "description": a.reasons[0] if a.reasons else "Access pattern deviates from peer baseline",
         }
         for a, user_name in anomaly_user_pairs

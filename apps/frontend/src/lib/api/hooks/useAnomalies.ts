@@ -10,6 +10,10 @@ import { endpoints } from '../endpoints'
 interface AnomalyFilters {
   search?: string
   severity?: string
+  // "access" — ML permission-shape detector; "session" — LoginHistory
+  // rule detector (impossible-travel, new-country, dormant reactivation,
+  // brute-force). Omit for both.
+  category?: 'access' | 'session'
   userId?: string
   reasonType?: string
   type?: string
@@ -23,6 +27,7 @@ interface Anomaly {
   userName?: string
   score: number
   severity: string
+  category?: 'access' | 'session'
   reasons: string[]
   type?: string  // Added for frontend display
   title?: string  // Added for frontend display

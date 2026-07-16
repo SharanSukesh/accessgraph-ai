@@ -505,6 +505,18 @@ class AccessAnomaly(Base, TimestampMixin):
         nullable=False
     )
 
+    # category tags the detector this record came from:
+    #   "access"  — existing ML detector over permission/effective-access
+    #               features (Mahalanobis+GMM ensemble). Original behaviour.
+    #   "session" — rule-based detector over LoginHistory (impossible
+    #               travel, new-country, dormant reactivation, brute-force
+    #               success). Shipped in the Session Anomalies feature.
+    # Backfills as "access" for rows written before the column existed;
+    # the frontend uses it as a filter chip on the Anomalies page.
+    category: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="access", default="access",
+    )
+
     # Reasons and context
     reasons: Mapped[list] = mapped_column(JSON, default=list)  # List of reason strings
     features: Mapped[dict] = mapped_column(JSON, default=dict)  # Feature values
@@ -520,6 +532,7 @@ class AccessAnomaly(Base, TimestampMixin):
         Index("ix_anomaly_user", "user_id"),
         Index("ix_anomaly_severity", "severity"),
         Index("ix_anomaly_score", "anomaly_score"),
+        Index("ix_anomaly_category", "category"),
     )
 
     def __repr__(self) -> str:
@@ -2833,3 +2846,60 @@ class RestructurePreservationConstraint(Base, TimestampMixin):
             name="uq_restructure_constraint_run_user_object",
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Compliance Scorecards (Roadmap #8)
+# ---------------------------------------------------------------------------
+# One row per (org, framework, run). The results blob is the full
+# per-control payload — passed/failed, metric, evidence bullets,
+# recommendation, deep-link. Kept in a single JSON column instead of a
+# child table so a run is atomic and the frontend renders in one query.
+
+
+class ComplianceScorecardRun(Base, TimestampMixin):
+    """One run of the Compliance Scorecard for a given framework."""
+    __tablename__ = "compliance_scorecard_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # SOX / SOC2 / HIPAA / GDPR / PCI. Kept as a string so we can add
+    # more frameworks (ISO 27001, NIST CSF, etc.) without a migration.
+    framework: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+    )
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    actor_email: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # Roll-up counts. The frontend header ("18 / 22 controls passing")
+    # reads these; the per-control detail comes from `results`.
+    controls_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    controls_passed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    controls_failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    controls_not_applicable: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    score_pct: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+
+    # results: List[{control_id, name, passed, status, metric,
+    #   metric_value, evidence, recommendation, deep_link,
+    #   category, severity}]
+    results: Mapped[list] = mapped_column(JSON, default=list)
+
+    __table_args__ = (
+        Index("ix_compliance_run_org", "organization_id"),
+        Index("ix_compliance_run_framework", "framework"),
+        Index("ix_compliance_run_snapshot", "snapshot_at"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ComplianceScorecardRun(framework={self.framework}, "
+            f"score={self.score_pct:.1f}%, "
+            f"{self.controls_passed}/{self.controls_total} passed)>"
+        )

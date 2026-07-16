@@ -207,6 +207,14 @@ async def run_analysis(
         anomalies = await anomaly_service.detect_anomalies(org_id)
         results["anomalies_detected"] = len(anomalies)
 
+        # Session anomalies — LoginHistory-based rule detector. Runs a
+        # separate live SF pull inside the service; degrades to [] if the
+        # org has no OAuth connection or if LoginHistory is empty.
+        session_anomalies = await anomaly_service.detect_session_anomalies_for_org(
+            org_id,
+        )
+        results["session_anomalies_detected"] = len(session_anomalies)
+
         # Risk scoring
         risk_service = RiskScoringService(db)
         risk_scores = await risk_service.score_all_users(org_id)
