@@ -465,6 +465,169 @@ class SalesforceAPIClient:
             return []
 
     # ------------------------------------------------------------------
+    # Integration Sprawl extractors — 5 integration surfaces
+    # ------------------------------------------------------------------
+    #
+    # The five sources cover ~95% of what a consultant would enumerate
+    # on a whiteboard as "the integrations in this org":
+    #
+    #   1. ConnectedApplication  — inbound OAuth apps (Slack, Tableau,
+    #                              DataLoader, custom, etc.)
+    #   2. NamedCredential       — outbound HTTP callouts from Apex /
+    #                              Flow / External Services
+    #   3. ExternalDataSource    — Salesforce Connect virtual objects
+    #                              (OData feeds from SAP, external
+    #                              customer masters, etc.)
+    #   4. AuthProvider          — SSO providers (Google, Microsoft,
+    #                              custom SAML)
+    #   5. RemoteSiteSetting     — legacy outbound URL whitelist
+    #                              (predates Named Credentials but
+    #                              still present in older orgs)
+    #
+    # Standard REST for (1), (4), (5); Tooling API for (2), (3).
+
+    async def extract_connected_applications(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """Inbound OAuth-based integrations. Every app that asks users
+        to 'authorize with Salesforce' shows up here.
+
+        Fields available on the standard SObject are limited (Salesforce
+        hides the full OAuth policy behind Tooling / Metadata API); we
+        pull what's queryable and let the sprawl scorer key off the app
+        name to join with LoginHistory.Application for usage data.
+        """
+        soql = (
+            "SELECT Id, Name, StartUrl, MobileStartUrl, "
+            "OptionsAllowAdminApprovedUsersOnly, "
+            "OptionsRefreshTokenValidityMetric "
+            "FROM ConnectedApplication"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "ConnectedApplication query failed (%s) — integration-"
+                "sprawl runs without inbound-OAuth inventory.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "ConnectedApplication query failed (%s)", exc
+            )
+            return []
+
+    async def extract_named_credentials(self) -> List[Dict[str, Any]]:
+        """Outbound HTTP integrations via Tooling API. NamedCredential
+        rows represent Apex / Flow HTTP callouts (Stripe API, internal
+        microservices, ERP webhooks, etc.).
+
+        `Endpoint` is the target URL — worth surfacing in the drilldown
+        so consultants can spot obvious internal-vs-external targets.
+        """
+        soql = (
+            "SELECT Id, DeveloperName, MasterLabel, Endpoint, "
+            "PrincipalType, ProtocolType, "
+            "NamespacePrefix "
+            "FROM NamedCredential"
+        )
+        try:
+            return await self.query_tooling(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "NamedCredential query failed (%s) — integration-"
+                "sprawl runs without outbound-HTTP inventory.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "NamedCredential query failed (%s)", exc
+            )
+            return []
+
+    async def extract_external_data_sources(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """Salesforce Connect / OData virtual objects via Tooling API.
+        Each row is a real-time link into an external system that
+        appears in Salesforce as a virtual SObject (SAP order tables,
+        external customer master, etc.).
+        """
+        soql = (
+            "SELECT Id, DeveloperName, MasterLabel, Type, Endpoint, "
+            "IsWritable, PrincipalType, "
+            "NamespacePrefix "
+            "FROM ExternalDataSource"
+        )
+        try:
+            return await self.query_tooling(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "ExternalDataSource query failed (%s) — integration-"
+                "sprawl runs without Salesforce-Connect inventory.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "ExternalDataSource query failed (%s)", exc
+            )
+            return []
+
+    async def extract_auth_providers(self) -> List[Dict[str, Any]]:
+        """SSO / social login providers. Google, Microsoft, custom SAML
+        etc. — anything users authenticate against instead of a raw
+        Salesforce password.
+        """
+        soql = (
+            "SELECT Id, DeveloperName, FriendlyName, ProviderType "
+            "FROM AuthProvider"
+        )
+        try:
+            return await self.query_all(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "AuthProvider query failed (%s) — integration-sprawl "
+                "runs without SSO inventory.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "AuthProvider query failed (%s)", exc
+            )
+            return []
+
+    async def extract_remote_site_settings(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """Legacy outbound URL whitelist. Predates Named Credentials
+        but still present in older orgs — often a signal that a
+        migration to Named Credentials was never completed.
+        """
+        soql = (
+            "SELECT Id, EndpointUrl, IsActive, DeveloperName, "
+            "Description "
+            "FROM RemoteSiteSetting"
+        )
+        try:
+            return await self.query_tooling(soql)
+        except httpx.HTTPStatusError as e:
+            logger.warning(
+                "RemoteSiteSetting query failed (%s) — integration-"
+                "sprawl runs without legacy-endpoint inventory.",
+                e.response.status_code,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "RemoteSiteSetting query failed (%s)", exc
+            )
+            return []
+
+    # ------------------------------------------------------------------
     # Automation Sprawl extractors (Flows + Apex Triggers)
     # ------------------------------------------------------------------
 

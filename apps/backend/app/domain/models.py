@@ -2135,6 +2135,181 @@ class AutomationInventoryItem(Base, TimestampMixin):
 
 
 # ============================================================================
+# Integration Sprawl — Connected Apps + Named Credentials + External Data
+#                       Sources + Auth Providers + Remote Site Settings
+# ============================================================================
+#
+# Fourth sprawl surface (after Package / Report / Automation). Same
+# inventory-plus-tier-scoring pattern applied to the five integration
+# surfaces Salesforce exposes.
+#
+# Tiers (precedence: broken > stale > overprovisioned > healthy):
+#   - broken:          IsActive=False OR recent auth failures on the
+#                      matching LoginHistory application
+#   - stale:           no LoginHistory activity in 180 days (for
+#                      inbound OAuth apps + SSO providers) OR outbound
+#                      integration inactive with no recent usage
+#                      signal — a fossil in the org
+#   - overprovisioned: reserved for v2; currently maps to unknown
+#   - healthy:         active + recent activity (or, for outbound-only
+#                      surfaces without LoginHistory join, active +
+#                      recent LastModifiedDate)
+
+
+class IntegrationSprawlRun(Base, TimestampMixin):
+    """Header row + rollup counters per Integration Sprawl run.
+    Mirror of ReportSprawlRun / AutomationSprawlRun."""
+    __tablename__ = "integration_sprawl_runs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    snapshot_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    # Per-type counts.
+    connected_apps_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    named_credentials_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    external_data_sources_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    auth_providers_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    remote_sites_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_total: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # Per-tier counts.
+    items_healthy: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_stale: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_broken: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    items_unknown: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    # LoginHistory summary for the KPI strip.
+    logins_180d: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    failed_logins_180d: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    error: Mapped[Optional[str]] = mapped_column(String(500))
+    source_diagnostics: Mapped[dict] = mapped_column(
+        JSON, default=dict
+    )
+
+    items = relationship(
+        "IntegrationInventoryItem",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_integration_sprawl_run_org_time",
+            "organization_id",
+            "snapshot_at",
+        ),
+    )
+
+
+class IntegrationInventoryItem(Base, TimestampMixin):
+    """One row per integration surface at snapshot time.
+
+    `integration_type` discriminates across the five sources — treated
+    uniformly for tier scoring + KPI rollups. Type-specific fields
+    (endpoint URL for outbound; auth-provider ProviderType; etc.) live
+    in the `evidence` JSON so we don't sprout dozens of nullable
+    per-type columns."""
+    __tablename__ = "integration_inventory_items"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("integration_sprawl_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    sf_id: Mapped[str] = mapped_column(String(18), nullable=False)
+    # 'connected_app' | 'named_credential' | 'external_data_source' |
+    # 'auth_provider' | 'remote_site'
+    integration_type: Mapped[str] = mapped_column(
+        String(32), nullable=False
+    )
+    # 'inbound' | 'outbound' | 'sso'
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    developer_name: Mapped[Optional[str]] = mapped_column(String(255))
+    endpoint: Mapped[Optional[str]] = mapped_column(String(500))
+    namespace_prefix: Mapped[Optional[str]] = mapped_column(String(120))
+
+    # State flags — nullable per type (some surfaces don't have an
+    # IsActive concept, in which case we treat as active).
+    is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
+
+    # LoginHistory rollup — only populated for surfaces we can join
+    # against by name (ConnectedApplication, AuthProvider).
+    login_count_180d: Mapped[Optional[int]] = mapped_column(Integer)
+    failed_login_count_180d: Mapped[Optional[int]] = mapped_column(
+        Integer
+    )
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    # Tier: 'healthy' | 'stale' | 'broken' | 'unknown'
+    tier: Mapped[str] = mapped_column(
+        String(16), default="unknown", nullable=False
+    )
+
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+    run = relationship("IntegrationSprawlRun", back_populates="items")
+
+    __table_args__ = (
+        Index(
+            "ix_integration_item_org_run",
+            "organization_id",
+            "run_id",
+        ),
+        UniqueConstraint(
+            "run_id",
+            "sf_id",
+            name="uq_integration_item_run_sfid",
+        ),
+    )
+
+
+# ============================================================================
 # License-to-Persona Fit / Right-Sizing
 # ============================================================================
 #

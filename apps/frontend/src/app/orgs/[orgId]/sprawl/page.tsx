@@ -1,37 +1,46 @@
 'use client'
 
 /**
- * Sprawl — merged Package + Report + Automation inventory.
+ * Sprawl — merged inventory across 4 Salesforce surfaces.
  *
- * Same "tiered inventory" pattern applied to three different Salesforce
- * surfaces:
- *   - Packages    — installed AppExchange packages, tiered active /
- *                   underused / unused.
- *   - Reports     — Reports + Dashboards, tiered live / zombie /
- *                   orphaned / duplicate.
- *   - Automations — Flows + Apex triggers, tiered active / dormant /
- *                   orphaned / broken.
+ * Same "tiered inventory" pattern applied to:
+ *   - Packages     — installed AppExchange packages, tiered active /
+ *                    underused / unused.
+ *   - Reports      — Reports + Dashboards, tiered live / zombie /
+ *                    orphaned / duplicate.
+ *   - Automations  — Flows + Apex triggers, tiered active / dormant /
+ *                    orphaned / broken.
+ *   - Integrations — Connected Apps + Named Credentials + External
+ *                    Data Sources + Auth Providers + Remote Sites,
+ *                    tiered healthy / stale / broken / unknown.
  *
  * A single "Sprawl" landing with a segmented type picker so the
- * consultant doesn't jump between three sidebar entries. Deep-link
- * via `?type=packages|reports|automations`.
+ * consultant doesn't jump between four sidebar entries. Deep-link via
+ * `?type=packages|reports|automations|integrations`.
  *
  * License Fit is deliberately NOT merged in here — the CFO / dollar-
  * savings framing there is qualitatively different from the cleanup-
- * tier framing of these three; keeping it separate preserves both
+ * tier framing of these four; keeping it separate preserves both
  * stories.
  */
 
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Boxes, Package, FileBarChart, Workflow } from 'lucide-react'
+import {
+  Boxes,
+  Package,
+  FileBarChart,
+  Workflow,
+  Plug,
+} from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { cn } from '@/lib/utils/cn'
 import { PackageSprawlView } from '../package-sprawl/view'
 import { ReportSprawlView } from '../report-sprawl/view'
 import { AutomationSprawlView } from '../automation-sprawl/view'
+import { IntegrationSprawlView } from '../integration-sprawl/view'
 
-type SprawlType = 'packages' | 'reports' | 'automations'
+type SprawlType = 'packages' | 'reports' | 'automations' | 'integrations'
 
 export default function SprawlPage() {
   const router = useRouter()
@@ -42,6 +51,8 @@ export default function SprawlPage() {
       ? 'reports'
       : paramType === 'automations'
       ? 'automations'
+      : paramType === 'integrations'
+      ? 'integrations'
       : 'packages'
   const [type, setType] = useState<SprawlType>(initialType)
 
@@ -60,10 +71,10 @@ export default function SprawlPage() {
       <PageHeader
         icon={Boxes}
         title="Sprawl"
-        subtitle="Inventory + tier scoring for installed packages, reports & dashboards, and automations."
+        subtitle="Inventory + tier scoring for installed packages, reports & dashboards, automations, and integrations."
       />
 
-      <div className="flex items-center gap-1 border-b border-grove-border dark:border-grove-border-dk">
+      <div className="flex items-center gap-1 border-b border-grove-border dark:border-grove-border-dk overflow-x-auto">
         <TypeButton
           active={type === 'packages'}
           onClick={() => setType('packages')}
@@ -85,14 +96,23 @@ export default function SprawlPage() {
         >
           Automations
         </TypeButton>
+        <TypeButton
+          active={type === 'integrations'}
+          onClick={() => setType('integrations')}
+          icon={Plug}
+        >
+          Integrations
+        </TypeButton>
       </div>
 
       {type === 'packages' ? (
         <PackageSprawlView embedded />
       ) : type === 'reports' ? (
         <ReportSprawlView embedded />
-      ) : (
+      ) : type === 'automations' ? (
         <AutomationSprawlView embedded />
+      ) : (
+        <IntegrationSprawlView embedded />
       )}
     </div>
   )

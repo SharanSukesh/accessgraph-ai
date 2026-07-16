@@ -125,6 +125,16 @@ export const endpoints = {
   automationSprawlHistory: (orgId: string) =>
     `/orgs/${orgId}/automation-sprawl/history`,
 
+  // Integration Sprawl — Integration Blast Radius / Connected-App Health
+  integrationSprawlRun: (orgId: string) =>
+    `/orgs/${orgId}/integration-sprawl/run`,
+  integrationSprawlLatest: (orgId: string) =>
+    `/orgs/${orgId}/integration-sprawl/latest`,
+  integrationSprawlItems: (orgId: string) =>
+    `/orgs/${orgId}/integration-sprawl/items`,
+  integrationSprawlHistory: (orgId: string) =>
+    `/orgs/${orgId}/integration-sprawl/history`,
+
   // License-to-Persona Fit — right-sizing recommendations + savings
   licenseFitRun: (orgId: string) => `/orgs/${orgId}/license-fit/run`,
   licenseFitLatest: (orgId: string) =>
