@@ -31,6 +31,10 @@ export interface ObjectScore {
   duplicate_clusters: number
   stale_record_count: number
   evidence?: {
+    // "aggregate_soql" for the current metadata-only methodology
+    // (Options A + C — see future_v2_items.md). Sample-based runs
+    // returned no methodology tag; treat absence as legacy.
+    methodology?: 'aggregate_soql'
     gap_fields?: {
       field: string
       missing_pct: number
@@ -39,7 +43,23 @@ export interface ObjectScore {
     }[]
     duplicate_key?: string
     duplicate_examples?: { key: string; count: number }[]
-    stale_examples?: { id: string; last_modified: string }[]
+    // True when SOQL GROUP BY hit the 2000-cluster ceiling — the
+    // real duplicate count for this object may be higher. Prompts
+    // the frontend to show a "Deep Scan (opt-in)" nudge once we
+    // ship the Bulk API mode.
+    duplicates_truncated?: boolean
+    // SF's own active Duplicate Rules for this object + the
+    // DuplicateRecordSet cluster count each has produced. Empty
+    // list = org hasn't configured SF Duplicate Management for this
+    // object.
+    sf_duplicate_rules?: {
+      id: string
+      developer_name: string
+      label: string
+      record_set_count: number
+    }[]
+    sf_duplicate_native_cluster_count?: number
+    stale_record_count?: number
     staleness_cutoff?: string
     note?: string
   }

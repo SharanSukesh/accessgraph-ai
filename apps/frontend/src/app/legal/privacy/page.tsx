@@ -39,7 +39,7 @@ export default function PrivacyPolicyPage() {
                   Permissions-first
                 </p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  We primarily read permission metadata. A few analytics features sample record data — see &quot;What we read&quot; below.
+                  We read permission metadata and aggregate record counts. We do not read record field values — see &quot;What we read&quot; below.
                 </p>
               </div>
             </div>
@@ -107,22 +107,25 @@ export default function PrivacyPolicyPage() {
 
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
-                1.2 Record data we DO read (sampled / aggregated)
+                1.2 Aggregate signals we compute (no record content read)
               </h3>
               <p>
-                A small number of features go beyond metadata. In each case we sample or aggregate — we never bulk-export records.
+                Some analytics features need to know <em>how many</em> records exist or how populated a field is — but they never need the field <em>values</em>. In every case below we use Salesforce&apos;s SOQL aggregate functions (COUNT, GROUP BY) and only the numeric answer comes back to Newton.
               </p>
               <ul className="list-disc pl-6 mt-2 space-y-2">
                 <li>
-                  <strong>Data Quality scoring:</strong> samples up to 500 records per business object (Account, Contact, Lead, Opportunity, Case, etc.) to compute completeness, duplicate detection, and staleness metrics. Only aggregated evidence is stored — top-gap fields, duplicate-key hashes, stale record IDs — not full records.
+                  <strong>Data Quality scoring:</strong> for each business object we run three metadata-only queries: (a) per-field <code>COUNT(field)</code> to compute completeness, (b) <code>GROUP BY natural-key HAVING COUNT(Id) &gt; 1</code> to find duplicate clusters (Salesforce returns only the key value and its count — no record IDs, no other field content), and (c) <code>COUNT() WHERE LastModifiedDate &lt; threshold</code> to count stale rows. We also read Salesforce&apos;s native <code>DuplicateRule</code> configuration and <code>DuplicateRecordSet</code> cluster counts. No record data leaves Salesforce.
                 </li>
                 <li>
-                  <strong>License Fit right-sizing:</strong> reads per-user owner counts for Account / Opportunity / Case / Lead / Contact using aggregate SOQL. No field values are stored.
+                  <strong>License Fit right-sizing:</strong> per-user owner counts for Account / Opportunity / Case / Lead / Contact via aggregate SOQL. No field values are stored.
                 </li>
                 <li>
                   <strong>Change Risk Radar:</strong> reads Salesforce&apos;s SetupAuditTrail — a metadata log of admin changes, not record content.
                 </li>
               </ul>
+              <p className="mt-3 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+                A future opt-in &quot;Deep Scan&quot; mode may read record content via Bulk API for organisations that specifically request full-scan accuracy on multi-million-row objects. That mode is off by default and requires explicit per-org admin activation with a consent modal — see our Data Processing Addendum for the safeguards.
+              </p>
               <p className="mt-3 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
                 All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see. If your Salesforce user cannot access a custom field (for example, PHI or PCI columns), Newton cannot either.
               </p>

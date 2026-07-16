@@ -475,13 +475,13 @@ export default function SecurityPracticesPage() {
                   <Database className="h-5 w-5 text-primary-700 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                      Permissions-first — but not strictly metadata-only
+                      Metadata + aggregate counts only
                     </p>
                     <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 mt-1">
-                      The bulk of Newton&apos;s features analyse Salesforce
-                      permission metadata. A small number of analytics
-                      features do read record-level data — always by
-                      sampling or aggregation, never by full export.
+                      Newton reads Salesforce permission metadata and
+                      aggregate row/field counts. We do not read the values
+                      inside your records. Field-level data never leaves
+                      Salesforce.
                     </p>
                     <p className="text-[11px] font-mono uppercase tracking-wider text-grove-ink/70 dark:text-grove-ink-dk/70 mt-3">
                       Metadata we sync + store
@@ -495,19 +495,22 @@ export default function SecurityPracticesPage() {
                       <li>• Login history (user, timestamp, application name, IP)</li>
                     </ul>
                     <p className="text-[11px] font-mono uppercase tracking-wider text-copper-700 dark:text-copper-400 mt-3">
-                      Record data we DO read (sampled / aggregated)
+                      Aggregate signals we compute (no record content)
                     </p>
                     <ul className="text-sm mt-1 space-y-1">
                       <li>
-                        <strong>Data Quality scoring</strong> — samples up to 500 records per business object (Account, Contact, Lead, Opportunity, Case, etc.) to compute completeness, duplicate, and staleness metrics. Only aggregated evidence is stored (top-gap fields, duplicate key hashes, stale record IDs) — no bulk record export.
+                        <strong>Data Quality scoring</strong> — per-object aggregate SOQL: <code>COUNT(field)</code> for completeness, <code>GROUP BY key HAVING COUNT(Id) &gt; 1</code> for duplicate clusters, <code>COUNT() WHERE LastModifiedDate &lt; threshold</code> for staleness. We also read Salesforce&apos;s native <code>DuplicateRule</code> configuration. Only the numeric answers come back — no record IDs, no field values.
                       </li>
                       <li>
-                        <strong>License Fit</strong> — reads per-user owner counts on Account / Opportunity / Case / Lead / Contact via aggregate SOQL to detect persona mismatch. No field values are stored.
+                        <strong>License Fit</strong> — per-user owner counts on Account / Opportunity / Case / Lead / Contact via aggregate SOQL to detect persona mismatch. No field values are stored.
                       </li>
                       <li>
                         <strong>Change Risk Radar</strong> — reads SetupAuditTrail (an admin-change log). This is metadata about changes, not record content.
                       </li>
                     </ul>
+                    <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80 mt-3">
+                      A future opt-in &quot;Deep Scan&quot; mode may read record content via Salesforce Bulk API for organisations that specifically request full-scan accuracy. That mode is disabled by default; enabling it requires an explicit admin action with a consent modal.
+                    </p>
                     <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80 mt-3">
                       All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see. Custom fields containing regulated data (PHI, PCI) are visible only if that user has access to them.
                     </p>

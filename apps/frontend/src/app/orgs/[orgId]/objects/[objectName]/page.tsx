@@ -7,7 +7,7 @@
 
 import { use} from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Database, Shield, Users, ChevronLeft, Check, X, Sparkles, AlertTriangle, Copy, Clock } from 'lucide-react'
+import { Database, Shield, Users, ChevronLeft, Check, X, Sparkles, AlertTriangle, Copy } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
@@ -521,7 +521,9 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
               <span className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">/ 100</span>
             </div>
             <p className="mt-2 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-              {score.sampled_count.toLocaleString()} of {score.record_count.toLocaleString()} records sampled
+              {score.evidence?.methodology === 'aggregate_soql'
+                ? `${score.record_count.toLocaleString()} records scanned (aggregate SOQL, no record content read)`
+                : `${score.sampled_count.toLocaleString()} of ${score.record_count.toLocaleString()} records sampled`}
             </p>
           </div>
 
@@ -566,7 +568,7 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
         {/* Evidence — 3 columns showing top offenders per component. */}
         {(score.evidence?.gap_fields?.length ||
           score.evidence?.duplicate_examples?.length ||
-          score.evidence?.stale_examples?.length) ? (
+          score.evidence?.sf_duplicate_rules?.length) ? (
           <div className="mt-6 pt-6 border-t border-grove-border dark:border-grove-border-dk grid grid-cols-1 md:grid-cols-3 gap-6">
             <EvidenceList
               icon={AlertTriangle}
@@ -593,25 +595,38 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
             />
             <EvidenceList
               icon={Copy}
-              title="Top duplicate clusters"
+              // Top clusters come from a GROUP BY aggregate — the key
+              // is the shared field VALUE (e.g., a name). If the SF
+              // ceiling of 2000 clusters is hit the truncation flag
+              // is set and we surface it in the caption.
+              title={
+                score.evidence.duplicates_truncated
+                  ? 'Top duplicate clusters (2000+ found — capped)'
+                  : 'Top duplicate clusters'
+              }
               items={
                 score.evidence.duplicate_examples?.map((d) => ({
                   primary: d.key,
                   secondary: `${d.count} records`,
                 })) ?? []
               }
-              emptyLabel="No duplicate clusters in the sample."
+              emptyLabel="No duplicate clusters detected."
             />
+            {/* SF's own Duplicate Rules — if configured, treat as the
+                authoritative resolver. Points admins at Setup instead
+                of us building a merge UI. */}
             <EvidenceList
-              icon={Clock}
-              title="Oldest records"
+              icon={Copy}
+              title="Salesforce Duplicate Rules"
               items={
-                score.evidence.stale_examples?.map((s) => ({
-                  primary: s.id,
-                  secondary: formatDate(s.last_modified),
+                score.evidence.sf_duplicate_rules?.map((r) => ({
+                  primary: r.label || r.developer_name,
+                  secondary: `${r.record_set_count.toLocaleString()} cluster${
+                    r.record_set_count === 1 ? '' : 's'
+                  } detected`,
                 })) ?? []
               }
-              emptyLabel="No stale records in the sample."
+              emptyLabel="No active Duplicate Rules configured in Setup for this object."
             />
           </div>
         ) : null}
@@ -736,15 +751,3 @@ function qualityToneClass(score: number): string {
   return 'text-red-600 dark:text-red-400'
 }
 
-function formatDate(iso?: string): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return iso
-  }
-}

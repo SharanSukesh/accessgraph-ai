@@ -158,7 +158,7 @@ export default function TermsOfServicePage() {
               </li>
             </ul>
             <p className="mt-4 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-              Newton is a permissions-first product. Some analytics features (Data Quality scoring, License Fit right-sizing, Change Risk Radar) do read a limited amount of record-level data — always sampled or aggregated, never bulk-exported. See our{' '}
+              Newton reads Salesforce permission metadata and aggregate row/field counts. Analytics features (Data Quality scoring, License Fit right-sizing, Change Risk Radar) use Salesforce SOQL aggregate functions to compute counts — record field values are not read. A future opt-in &quot;Deep Scan&quot; mode may read record content via Bulk API for organisations that specifically enable it. See our{' '}
               <a href="/legal/privacy" className="text-primary-700 dark:text-primary-400 underline">
                 Privacy Policy
               </a>{' '}

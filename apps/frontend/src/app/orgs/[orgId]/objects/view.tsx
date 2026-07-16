@@ -559,12 +559,12 @@ const SKIP_REASON_LABELS: Record<string, { title: string; hint: string }> = {
     hint: 'The object has zero records — nothing to score against yet.',
   },
   sample_failed: {
-    title: 'Sample query failed',
-    hint: 'The sample SOQL rejected — usually a MALFORMED_QUERY on a compound / restricted field. Check the server log for the failing SOQL.',
+    title: 'Aggregate query failed',
+    hint: 'The aggregate SOQL was rejected — usually a MALFORMED_QUERY on a compound / restricted field, or FLS on a picked field. Check the server log for the failing SOQL.',
   },
   sample_empty: {
-    title: 'Sample returned empty',
-    hint: 'Count said N > 0 but sample came back with no rows — usually row-level sharing filtering everything out.',
+    title: 'Object returned empty',
+    hint: 'COUNT(Id) came back as 0 despite an earlier positive count — usually row-level sharing filtering everything out.',
   },
   error: {
     title: 'Unexpected error',

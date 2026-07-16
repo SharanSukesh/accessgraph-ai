@@ -628,6 +628,166 @@ class SalesforceAPIClient:
             return []
 
     # ------------------------------------------------------------------
+    # Data Quality — aggregate methodology helpers
+    # ------------------------------------------------------------------
+    #
+    # These support the aggregate-SOQL rewrite of Data Quality scoring
+    # (see services/data_quality.py). No sampling, no record content
+    # ever leaves Salesforce — everything's computed via COUNT() +
+    # GROUP BY aggregates. Falls back gracefully on any error.
+
+    async def aggregate_field_populated_counts(
+        self, object_name: str, field_names: List[str]
+    ) -> Optional[Dict[str, int]]:
+        """One aggregate SOQL query that returns the non-null population
+        count for each field on the whole object.
+
+        Query shape:
+            SELECT COUNT(Id) t, COUNT(Name) f_Name, COUNT(Email) f_Email …
+            FROM Contact
+
+        SF returns non-null count per field via `COUNT(field)`. The
+        response is a single record where alias keys map back to
+        field-name via the `f_<name>` prefix. Returns a dict:
+            { "__total__": N, "Name": N, "Email": N, ... }
+
+        Returns None on failure (permission denied, MALFORMED_QUERY,
+        etc.) so the caller can fall back to a safer path.
+        """
+        if not field_names:
+            return None
+        aliases: List[str] = []
+        for name in field_names:
+            # SF aggregate aliases must start with a letter and contain
+            # only letters / digits / underscores. Field names are
+            # already valid SF identifiers so the f_ prefix keeps them
+            # unique + safe.
+            aliases.append(f"COUNT({name}) f_{name}")
+        soql = (
+            f"SELECT COUNT(Id) t, {', '.join(aliases)} "
+            f"FROM {object_name}"
+        )
+        try:
+            resp = await self.query(soql)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "aggregate_field_populated_counts failed for %s: %s",
+                object_name, exc,
+            )
+            return None
+        records = resp.records or []
+        if not records:
+            return None
+        row = records[0]
+        out: Dict[str, int] = {"__total__": int(row.get("t") or 0)}
+        for name in field_names:
+            out[name] = int(row.get(f"f_{name}") or 0)
+        return out
+
+    async def aggregate_duplicate_clusters(
+        self, object_name: str, key_field: str, limit: int = 2000
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Find duplicate clusters via SOQL GROUP BY HAVING COUNT() > 1.
+
+        Query shape:
+            SELECT Name k, COUNT(Id) cnt
+            FROM Contact
+            WHERE Name != null
+            GROUP BY Name
+            HAVING COUNT(Id) > 1
+            LIMIT 2000
+
+        Salesforce evaluates the aggregate across the WHOLE object.
+        The 2000-cluster cap is SF's aggregate result ceiling — a
+        larger enterprise org with >2000 duplicate clusters would need
+        Bulk API deep-scan (see future_v2_items.md). Returns list of
+        `{"key": <value>, "count": <int>}` sorted by count desc, or
+        None on failure.
+        """
+        if not key_field:
+            return None
+        soql = (
+            f"SELECT {key_field} k, COUNT(Id) cnt "
+            f"FROM {object_name} "
+            f"WHERE {key_field} != null "
+            f"GROUP BY {key_field} "
+            f"HAVING COUNT(Id) > 1 "
+            f"LIMIT {limit}"
+        )
+        try:
+            resp = await self.query(soql)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "aggregate_duplicate_clusters failed for %s.%s: %s",
+                object_name, key_field, exc,
+            )
+            return None
+        records = resp.records or []
+        clusters: List[Dict[str, Any]] = []
+        for row in records:
+            key_val = row.get("k")
+            cnt = int(row.get("cnt") or 0)
+            if key_val is None:
+                continue
+            clusters.append({"key": str(key_val), "count": cnt})
+        clusters.sort(key=lambda c: c["count"], reverse=True)
+        return clusters
+
+    async def extract_duplicate_rules(self) -> List[Dict[str, Any]]:
+        """All Salesforce Duplicate Rules configured on the org.
+
+        Powers the Option C enhancement — when an org has SF's native
+        Duplicate Rules configured, we surface their findings instead
+        of / alongside our own aggregate GROUP BY. Rules are the
+        authoritative source since they've been evaluating every
+        insert/update, not just a point-in-time query.
+
+        Returns empty list on any failure (permission or
+        DuplicateRule not being queryable in this org).
+        """
+        soql = (
+            "SELECT Id, DeveloperName, MasterLabel, SobjectType, "
+            "IsActive "
+            "FROM DuplicateRule"
+        )
+        try:
+            return await self.query_all(soql)
+        except Exception as exc:  # noqa: BLE001
+            logger.info("DuplicateRule query failed: %s", exc)
+            return []
+
+    async def aggregate_duplicate_record_sets_by_rule(
+        self,
+    ) -> Dict[str, int]:
+        """Per-rule count of DuplicateRecordSet rows. Rule IDs map to
+        the rows returned by `extract_duplicate_rules`.
+
+        DuplicateRecordSet is created by SF whenever the Duplicate
+        Rules engine detects a match — one row per cluster. Grouping
+        by the rule id gives us a per-rule cluster count without
+        pulling any record content.
+        """
+        soql = (
+            "SELECT DuplicateRuleId, COUNT(Id) cnt "
+            "FROM DuplicateRecordSet "
+            "GROUP BY DuplicateRuleId "
+            "LIMIT 2000"
+        )
+        try:
+            resp = await self.query(soql)
+        except Exception as exc:  # noqa: BLE001
+            logger.info(
+                "aggregate_duplicate_record_sets_by_rule failed: %s", exc,
+            )
+            return {}
+        out: Dict[str, int] = {}
+        for row in (resp.records or []):
+            rid = row.get("DuplicateRuleId")
+            if rid:
+                out[str(rid)] = int(row.get("cnt") or 0)
+        return out
+
+    # ------------------------------------------------------------------
     # Automation Sprawl extractors (Flows + Apex Triggers)
     # ------------------------------------------------------------------
 

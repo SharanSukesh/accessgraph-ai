@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import logging
 import time
-from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -354,20 +353,33 @@ class DataQualityService:
                 f"Failed to resolve analysis targets (global describe): {exc}"
             ) from exc
 
+        # Fetch Salesforce Duplicate Rules once, up front, so per-object
+        # analysis can enrich its own aggregate GROUP BY finding with
+        # SF's authoritative dup-rule counts. Best-effort — failure
+        # (permission denied on DuplicateRule) is silent + non-fatal.
+        sf_dup_rules_by_object, sf_dup_rule_counts = (
+            await self._fetch_sf_duplicate_rules(client)
+        )
+
         results: List[ObjectQualityResult] = []
         # skip_reasons: category → count. Categories match _SkipReason
         # enum below; the frontend surfaces them in a "N objects skipped"
         # tooltip so operators can debug why coverage is low.
         skip_reasons: Dict[str, int] = {}
         logger.info(
-            "data-quality: analysing %d objects for org %s",
+            "data-quality: analysing %d objects for org %s "
+            "(sf_dup_rules: %d rules covering %d objects)",
             len(analysis_targets), self.org_id,
+            sum(len(v) for v in sf_dup_rules_by_object.values()),
+            len(sf_dup_rules_by_object),
         )
         for obj in analysis_targets:
             per_obj_started = time.monotonic()
             try:
                 res, skip_reason = await self._analyze_object(
-                    client, obj["name"], obj["label"], obj["custom"], threshold
+                    client, obj["name"], obj["label"], obj["custom"], threshold,
+                    sf_dup_rules_by_object=sf_dup_rules_by_object,
+                    sf_dup_rule_counts=sf_dup_rule_counts,
                 )
                 per_obj_ms = int((time.monotonic() - per_obj_started) * 1000)
                 if per_obj_ms > 5000:
@@ -498,6 +510,9 @@ class DataQualityService:
         object_label: str,
         is_custom: bool,
         staleness_threshold: datetime,
+        *,
+        sf_dup_rules_by_object: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        sf_dup_rule_counts: Optional[Dict[str, int]] = None,
     ) -> Tuple[Optional[ObjectQualityResult], Optional[str]]:
         """Analyse a single object. Returns (result, skip_reason).
 
@@ -588,83 +603,93 @@ class DataQualityService:
                 },
             ), None
 
-        # ---- Completeness + duplicate sample ------------------------
-        dup_key = DUPLICATE_KEY_FIELDS.get(object_name, "Name")
-        # Make sure dup_key is actually queryable on this object.
-        has_dup_key = any(f.get("name") == dup_key for f in fields)
-        select_fields = ["Id"] + required_names
-        if has_dup_key and dup_key not in select_fields:
-            select_fields.append(dup_key)
-        elif not has_dup_key:
-            # Fall back so we don't blow up on custom objects without Name.
-            dup_key = "Id"
-
-        soql = (
-            f"SELECT {', '.join(select_fields)} FROM {object_name} "
-            f"ORDER BY LastModifiedDate DESC "
-            f"LIMIT {self.sample_size}"
+        # ---- Completeness via aggregate SOQL (Option A) -------------
+        # Replaces the old 500-record sample. This gets EXACT counts
+        # across the entire object using one query — no record data
+        # ever leaves Salesforce, only per-field COUNT(field) numbers.
+        # Feeds the "metadata-only" claim in the legal pages.
+        populated_counts = await client.aggregate_field_populated_counts(
+            object_name, required_names
         )
-        try:
-            sample_resp = await client.query(soql)
-        except Exception as exc:  # noqa: BLE001
-            # Log the SOQL so operators can debug MALFORMED_QUERY /
-            # INVALID_FIELD failures without a rebuild. Truncate the
-            # SOQL to 200 chars so a very wide SELECT list doesn't
-            # spam the log.
+        if populated_counts is None:
             logger.info(
-                "sample query failed for %s: %s | soql=%s",
-                object_name, exc, soql[:200],
+                "aggregate completeness query failed for %s — skipping",
+                object_name,
             )
             return None, SKIP_SAMPLE_FAILED
 
-        # QueryResponse is a Pydantic model — use attribute access, not
-        # .get(). Getting this wrong silently AttributeError'd every
-        # object with records, so only 0-record objects (which return
-        # early before this branch) survived — hence "N objects, all empty".
-        records = sample_resp.records or []
-        sampled = len(records)
-        if sampled == 0:
-            # Count said non-zero but sample returned empty. Can happen
-            # with permission filtering (record-level sharing). Skip.
+        total_records = int(populated_counts.get("__total__", 0))
+        if total_records == 0:
+            # COUNT(Id) said 0 despite the earlier positive count — can
+            # happen with permission filtering / record-level sharing.
             return None, SKIP_SAMPLE_EMPTY
 
-        # Completeness — for each required field, what fraction of the
-        # sample has a non-null value.
         per_field_gap: Dict[str, int] = {}
-        total_slots = 0
         populated_slots = 0
-        for rec in records:
-            for fname in required_names:
-                total_slots += 1
-                val = rec.get(fname)
-                if _is_populated(val):
-                    populated_slots += 1
-                else:
-                    per_field_gap[fname] = per_field_gap.get(fname, 0) + 1
+        total_slots = 0
+        for fname in required_names:
+            got = int(populated_counts.get(fname, 0))
+            missing = max(total_records - got, 0)
+            per_field_gap[fname] = missing
+            populated_slots += got
+            total_slots += total_records
         completeness_pct = (
             (populated_slots / total_slots) * 100.0 if total_slots else 100.0
         )
-        # Fields where >50% of the sample is missing this value.
+        # Fields where >50% of the object is missing this value.
+        gap_threshold = total_records / 2
         fields_with_gaps = sum(
             1 for f in required_names
-            if per_field_gap.get(f, 0) > (sampled / 2 if sampled else 0)
+            if per_field_gap.get(f, 0) > gap_threshold
         )
 
-        # ---- Duplicates on the natural key --------------------------
-        key_counter: Counter[str] = Counter()
-        for rec in records:
-            raw = rec.get(dup_key)
-            if raw is None:
-                continue
-            key = str(raw).strip().lower()
-            if not key:
-                continue
-            key_counter[key] += 1
-        dupe_clusters = [(k, c) for k, c in key_counter.items() if c > 1]
-        # % of sampled records that participate in ANY duplicate cluster.
+        # ---- Duplicates via GROUP BY aggregate (Option A) -----------
+        # SOQL aggregate `GROUP BY key HAVING COUNT(Id) > 1` gives the
+        # exact set of duplicate clusters (up to SF's 2000-cluster
+        # ceiling — see future_v2_items.md for the Bulk API opt-in
+        # that lifts this).
+        dup_key = DUPLICATE_KEY_FIELDS.get(object_name, "Name")
+        has_dup_key = any(f.get("name") == dup_key for f in fields)
+        if not has_dup_key:
+            dup_key = "Id"  # Id is never duplicated; aggregate returns []
+
+        dupe_clusters: List[Tuple[str, int]] = []
+        agg_dupes_truncated = False
+        if dup_key != "Id":
+            agg_dupes = await client.aggregate_duplicate_clusters(
+                object_name, dup_key, limit=2000
+            )
+            if agg_dupes is None:
+                logger.info(
+                    "aggregate duplicate query failed for %s — treating as 0",
+                    object_name,
+                )
+                agg_dupes = []
+            for row in agg_dupes:
+                key_val = row.get("k")
+                cnt = int(row.get("cnt", 0))
+                if key_val is None or cnt < 2:
+                    continue
+                dupe_clusters.append((str(key_val), cnt))
+            agg_dupes_truncated = len(agg_dupes) >= 2000
+
+        # Overlay SF native Duplicate Rules (Option C) — if the org
+        # has active dup rules for this SobjectType, treat SF's own
+        # detected DuplicateRecordSet count as authoritative and
+        # surface both signals in the evidence.
+        sf_rules_for_obj = (sf_dup_rules_by_object or {}).get(object_name, [])
+        sf_native_cluster_count = 0
+        for rule in sf_rules_for_obj:
+            rule_id = rule.get("Id")
+            if rule_id:
+                sf_native_cluster_count += int(
+                    (sf_dup_rule_counts or {}).get(str(rule_id), 0)
+                )
+
         dupe_record_count = sum(c for _, c in dupe_clusters)
         duplicate_pct = (
-            (dupe_record_count / sampled) * 100.0 if sampled else 0.0
+            (dupe_record_count / total_records) * 100.0
+            if total_records else 0.0
         )
 
         # ---- Staleness ----------------------------------------------
@@ -690,11 +715,15 @@ class DataQualityService:
                 per_field_gap=per_field_gap,
                 required_names=required_names,
                 field_meta_by_name=field_meta_by_name,
-                sampled=sampled,
+                total_records=total_records,
                 dupe_clusters=dupe_clusters,
                 dup_key=dup_key,
-                records=records,
+                agg_dupes_truncated=agg_dupes_truncated,
+                sf_dup_rules=sf_rules_for_obj,
+                sf_dup_native_cluster_count=sf_native_cluster_count,
+                sf_dup_rule_counts=sf_dup_rule_counts or {},
                 staleness_threshold=staleness_threshold,
+                stale_count=stale_count,
             )
         except Exception as exc:  # noqa: BLE001
             logger.info(
@@ -703,21 +732,60 @@ class DataQualityService:
             )
             evidence = {"note": "Evidence build failed — see server log."}
 
+        # `sampled_count` is kept on the dataclass for backwards
+        # compat with existing schema; under the new aggregate
+        # methodology the entire object IS the inspected set, so
+        # we report record_count as the "sample" size.
         return ObjectQualityResult(
             object_name=object_name,
             object_label=object_label,
             is_custom=is_custom,
             record_count=int(record_count),
-            sampled_count=sampled,
+            sampled_count=total_records,
             completeness_pct=completeness_pct,
             duplicate_pct=duplicate_pct,
             staleness_pct=staleness_pct,
             fields_inspected=len(required_names),
             fields_with_gaps=fields_with_gaps,
-            duplicate_clusters=len(dupe_clusters),
+            duplicate_clusters=len(dupe_clusters) + (
+                # If SF has its own active dup rules, surface the
+                # higher of "our GROUP BY cluster count" or "SF's
+                # DuplicateRecordSet count" so the number matches
+                # what the admin sees in Setup.
+                max(0, sf_native_cluster_count - len(dupe_clusters))
+                if sf_rules_for_obj else 0
+            ),
             stale_record_count=stale_count,
             evidence=evidence,
         ), None
+
+    # ------------------------------------------------------------------
+    # SF Duplicate Rules (Option C — see future_v2_items.md)
+    # ------------------------------------------------------------------
+
+    async def _fetch_sf_duplicate_rules(
+        self, client: SalesforceAPIClient
+    ) -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[str, int]]:
+        """One-time fetch of Salesforce's own Duplicate Rules and their
+        detected duplicate cluster counts. Cached for the run().
+
+        Returns:
+          - `by_object`: SobjectType (str) → list of active rule rows
+            [{"Id", "DeveloperName", "MasterLabel", "SobjectType", "IsActive"}]
+          - `cluster_counts_by_rule`: rule_id → cluster count from
+            DuplicateRecordSet
+        """
+        rules = await client.extract_duplicate_rules()
+        cluster_counts = await client.aggregate_duplicate_record_sets_by_rule()
+        by_object: Dict[str, List[Dict[str, Any]]] = {}
+        for rule in rules:
+            if not rule.get("IsActive"):
+                continue
+            sobj = rule.get("SobjectType")
+            if not sobj:
+                continue
+            by_object.setdefault(sobj, []).append(rule)
+        return by_object, cluster_counts
 
     # ------------------------------------------------------------------
     # Support
@@ -1026,58 +1094,77 @@ class DataQualityService:
         per_field_gap: Dict[str, int],
         required_names: List[str],
         field_meta_by_name: Dict[str, Dict[str, bool]],
-        sampled: int,
+        total_records: int,
         dupe_clusters: List[Tuple[str, int]],
         dup_key: str,
-        records: List[Dict[str, Any]],
+        agg_dupes_truncated: bool,
+        sf_dup_rules: List[Dict[str, Any]],
+        sf_dup_native_cluster_count: int,
+        sf_dup_rule_counts: Dict[str, int],
         staleness_threshold: datetime,
+        stale_count: int,
     ) -> Dict[str, Any]:
         """Pack up the top offenders per component into a JSON payload
-        the frontend can render without a second query. Each gap entry
-        is tagged with is_custom / is_required so the UI can badge the
-        field's classification alongside its missing-percent.
+        the frontend can render without a second query.
+
+        Aggregate-methodology payload (Options A + C):
+          - Field gap %s are exact across the entire object (COUNT-based),
+            not sample-derived.
+          - Duplicate examples come from SOQL GROUP BY (top 2000 clusters
+            by SF ceiling; `duplicates_truncated` flags if we hit it).
+          - `sf_duplicate_rules` lists SF's own active rules for the
+            object + how many DuplicateRecordSets each has produced,
+            so the drilldown can point admins at Setup instead of asking
+            us to build a resolver UI.
+          - No record IDs or field values are included — pure aggregates.
         """
-        # Top 5 fields with the largest population gap. Each carries
-        # the classification tags so the UI can render "Custom" /
-        # "Required" badges without a second describe call.
+        # Top 5 fields with the largest population gap, exact.
+        gap_rows: List[Dict[str, Any]] = [
+            {
+                "field": name,
+                "missing_pct": round(
+                    (per_field_gap.get(name, 0) / total_records) * 100.0, 1
+                ) if total_records else 0.0,
+                "is_custom": field_meta_by_name.get(name, {}).get("is_custom", False),
+                "is_required": field_meta_by_name.get(name, {}).get("is_required", False),
+            }
+            for name in required_names
+        ]
         top_gaps = sorted(
-            (
-                {
-                    "field": name,
-                    "missing_pct": round(
-                        (per_field_gap.get(name, 0) / sampled) * 100.0, 1
-                    ) if sampled else 0.0,
-                    "is_custom": field_meta_by_name.get(name, {}).get("is_custom", False),
-                    "is_required": field_meta_by_name.get(name, {}).get("is_required", False),
-                }
-                for name in required_names
-            ),
-            key=lambda x: x["missing_pct"],
+            gap_rows,
+            key=lambda x: float(x["missing_pct"]),
             reverse=True,
         )[:5]
 
-        # Top 5 duplicate clusters
+        # Top 5 duplicate clusters by count (from aggregate GROUP BY).
         dup_examples = sorted(dupe_clusters, key=lambda t: t[1], reverse=True)[:5]
 
-        # 3 oldest sampled records — proxy for the stale set.
-        oldest = sorted(
-            (
-                {
-                    "id": r.get("Id"),
-                    "last_modified": r.get("LastModifiedDate"),
-                }
-                for r in records if r.get("LastModifiedDate")
-            ),
-            key=lambda x: x["last_modified"] or "",
-        )[:3]
+        # SF native Duplicate Rules — pass through so the frontend can
+        # deep-link to Setup > Duplicate Rules and show "SF already
+        # tracks this — go resolve there".
+        sf_rules_payload = []
+        for rule in sf_dup_rules:
+            rule_id = rule.get("Id")
+            sf_rules_payload.append({
+                "id": rule_id,
+                "developer_name": rule.get("DeveloperName"),
+                "label": rule.get("MasterLabel"),
+                "record_set_count": int(
+                    sf_dup_rule_counts.get(str(rule_id), 0) if rule_id else 0
+                ),
+            })
 
         return {
+            "methodology": "aggregate_soql",
             "gap_fields": top_gaps,
             "duplicate_key": dup_key,
             "duplicate_examples": [
                 {"key": key, "count": count} for key, count in dup_examples
             ],
-            "stale_examples": oldest,
+            "duplicates_truncated": agg_dupes_truncated,
+            "sf_duplicate_rules": sf_rules_payload,
+            "sf_duplicate_native_cluster_count": sf_dup_native_cluster_count,
+            "stale_record_count": stale_count,
             "staleness_cutoff": staleness_threshold.isoformat(),
         }
 

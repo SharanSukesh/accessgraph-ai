@@ -162,7 +162,7 @@ export default function DPAPage() {
                 <li>Access patterns and usage metadata</li>
               </ul>
               <p className="mt-2 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
-                Note on record content: Newton is a permissions-first product. A small number of analytics features do read record-level data — Data Quality scoring samples up to 500 records per business object to compute completeness / duplicate / staleness metrics, and License Fit reads aggregate owner counts for Account / Opportunity / Case / Lead / Contact. Only aggregated evidence (top-gap fields, duplicate-key hashes, sample record IDs, per-user counts) is stored — never bulk record content.
+                Note on record content: Newton is a metadata + aggregate-count product. Analytics features (Data Quality scoring, License Fit right-sizing) use Salesforce SOQL aggregate functions (COUNT, GROUP BY) to compute row/field counts and duplicate-cluster counts. Only the numeric aggregates come back to Newton — no record IDs, no field values. A future opt-in &quot;Deep Scan&quot; mode may read record content via Salesforce Bulk API for organisations that specifically enable it; that mode is a Customer-triggered processing activity, disabled by default, and requires explicit per-org admin activation with a consent modal.
               </p>
             </div>
 
