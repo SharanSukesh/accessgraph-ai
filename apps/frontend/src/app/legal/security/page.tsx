@@ -14,6 +14,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Database,
+  Clock,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Badge } from '@/components/shared/Badge'
@@ -37,54 +38,163 @@ export default function SecurityPracticesPage() {
       {/* Security Certifications */}
       <Card variant="bordered" className="mb-8 bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800">
         <CardHeader>
-          <CardTitle>Security Certifications & Compliance</CardTitle>
+          <CardTitle>Security Controls & Compliance Posture</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  SOC 2 Type II
-                </p>
-                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  In progress (targeting Q3 2026)
-                </p>
+        <CardContent className="space-y-6">
+          {/* Two-column split — Implemented on the left is what's
+              actually in the code today; Roadmap on the right is
+              honest about what we're working toward. Enterprise
+              reviewers trust this framing more than a wall of green
+              ticks. */}
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60 mb-3">
+              Implemented today
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    GDPR data-subject rights
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Right to access, erasure, portability — enforced by the /orgs/{'{'}id{'}'}/privacy endpoints
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    AES-256 encryption at rest
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    OAuth tokens are AES-256 encrypted via sqlalchemy-utils
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    TLS 1.2+ in transit
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Provided by Railway (backend) + Vercel (frontend) ingress
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Role-based access (RBAC)
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    ORG_ADMIN / ANALYST / VIEWER / AUDITOR + granular per-permission flags
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Audit logging
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Sensitive actions written to an append-only audit_logs table
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Bcrypt password hashing
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Cost factor 12 for the email+password login flow
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Security headers
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    HSTS (when HTTPS enforced), X-Frame-Options, X-Content-Type-Options, CSP, Referrer-Policy
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Admin-invited account model
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    No self-signup — every account requires admin invitation + email activation
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  GDPR Compliant
-                </p>
-                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  Full GDPR Article 17 support
-                </p>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-wider text-copper-600 dark:text-copper-400 mb-3">
+              Roadmap — not yet implemented
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-start space-x-3">
+                <Clock className="h-5 w-5 text-copper-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    SOC 2 Type II
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Program has not started; we do not currently hold this attestation
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <Clock className="h-5 w-5 text-copper-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Salesforce Security Review
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Not yet submitted; app is not on AppExchange
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <Clock className="h-5 w-5 text-copper-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Multi-factor authentication
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    App accounts today are password-only; MFA is a planned addition
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <Clock className="h-5 w-5 text-copper-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Independent penetration testing
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Third-party pentest engagement planned once we reach enterprise pilots
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Salesforce Security Review
-                </p>
-                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  AppExchange security approved
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  CCPA Compliant
-                </p>
-                <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  California privacy rights supported
-                </p>
-              </div>
-            </div>
+            <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60 mt-4 italic">
+              CCPA requests are honored via a request to <a href="mailto:privacy@accessgraphai.com" className="underline">privacy@accessgraphai.com</a>; no California-specific automation is built into the product today.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -107,15 +217,13 @@ export default function SecurityPracticesPage() {
                   fields encrypted using industry-standard AES-256-GCM
                 </li>
                 <li>
-                  <strong>Database Encryption:</strong> PostgreSQL and Neo4j databases use
-                  encrypted volumes
+                  <strong>Database Encryption:</strong> Managed PostgreSQL volumes on Railway are encrypted at rest by the provider
                 </li>
                 <li>
-                  <strong>Key Management:</strong> Encryption keys stored in secure secrets
-                  managers, never in code
+                  <strong>Key Management:</strong> Encryption keys stored as Railway environment variables (secrets), never checked into code
                 </li>
                 <li>
-                  <strong>Key Rotation:</strong> Automatic key rotation every 6-12 months
+                  <strong>Key Rotation:</strong> Manual — operator rotates the key by updating the env var and running the token re-encrypt migration. Scheduled rotation is not yet automated.
                 </li>
               </ul>
             </div>
@@ -127,14 +235,10 @@ export default function SecurityPracticesPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-2">
                 <li>
-                  <strong>TLS 1.3:</strong> All API communication uses TLS 1.3 with perfect
-                  forward secrecy
+                  <strong>TLS 1.2+:</strong> All API communication uses TLS as provided by Railway (backend) + Vercel (frontend) ingress
                 </li>
                 <li>
-                  <strong>HSTS Enabled:</strong> Strict-Transport-Security headers enforce HTTPS
-                </li>
-                <li>
-                  <strong>Certificate Pinning:</strong> Production API uses certificate pinning
+                  <strong>HSTS:</strong> Strict-Transport-Security headers are sent when <code className="text-xs">ENFORCE_HTTPS</code> is set on the backend (recommended production configuration)
                 </li>
                 <li>
                   <strong>Salesforce OAuth:</strong> Secure OAuth 2.0 flow for authentication
@@ -288,18 +392,13 @@ export default function SecurityPracticesPage() {
                   provider
                 </li>
                 <li>
-                  <strong>PostgreSQL:</strong> Managed PostgreSQL with automated backups and
-                  point-in-time recovery
+                  <strong>PostgreSQL:</strong> Railway-managed PostgreSQL with provider-managed backups
                 </li>
                 <li>
-                  <strong>Neo4j:</strong> AuraDB Enterprise for graph database with encryption
+                  <strong>Geographic redundancy:</strong> Single-region today; multi-region is on the roadmap
                 </li>
                 <li>
-                  <strong>Geographic Redundancy:</strong> Multi-region deployment for high
-                  availability
-                </li>
-                <li>
-                  <strong>DDoS Protection:</strong> CloudFlare Enterprise DDoS mitigation
+                  <strong>DDoS mitigation:</strong> Provided by Railway&apos;s ingress layer; we do not run a dedicated WAF or CloudFlare Enterprise
                 </li>
               </ul>
             </div>
@@ -309,10 +408,9 @@ export default function SecurityPracticesPage() {
                 Network Security
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>Private VPC networking for backend services</li>
-                <li>Firewall rules restricting inbound/outbound traffic</li>
-                <li>IP allowlisting for admin access</li>
-                <li>Regular security group audits</li>
+                <li>Backend + database run on Railway&apos;s private networking</li>
+                <li>Frontend served via Vercel&apos;s edge network</li>
+                <li>Admin access uses the same authenticated + role-gated login flow as any other user — no IP allowlist today</li>
               </ul>
             </div>
           </div>
@@ -365,7 +463,7 @@ export default function SecurityPracticesPage() {
 
         <section>
           <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
-            6. Data Minimization
+            6. What Data We Actually Read
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <Card
@@ -374,23 +472,44 @@ export default function SecurityPracticesPage() {
             >
               <CardContent className="py-4">
                 <div className="flex items-start space-x-3">
-                  <Database className="h-5 w-5 text-primary-700 mt-0.5" />
+                  <Database className="h-5 w-5 text-primary-700 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                      We Only Collect Metadata
+                      Permissions-first — but not strictly metadata-only
                     </p>
                     <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 mt-1">
-                      Newton never accesses your actual Salesforce records (Accounts,
-                      Opportunities, Contacts, etc.). We only sync permission metadata:
+                      The bulk of Newton&apos;s features analyse Salesforce
+                      permission metadata. A small number of analytics
+                      features do read record-level data — always by
+                      sampling or aggregation, never by full export.
                     </p>
-                    <ul className="text-sm mt-2 space-y-1">
-                      <li>• User names and emails (for permission analysis)</li>
-                      <li>• Roles, profiles, and permission sets</li>
-                      <li>• Object and field permissions</li>
-                      <li>• Sharing rules and group memberships</li>
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-grove-ink/70 dark:text-grove-ink-dk/70 mt-3">
+                      Metadata we sync + store
+                    </p>
+                    <ul className="text-sm mt-1 space-y-1">
+                      <li>• Users, roles, profiles, permission sets, permission-set groups + assignments</li>
+                      <li>• Object &amp; field permissions</li>
+                      <li>• Sharing rules, group memberships, org-wide defaults</li>
+                      <li>• Account team, opportunity team, and share records (structural, not content)</li>
+                      <li>• Flow, Apex Trigger, Connected App, Named Credential, and Report/Dashboard <em>inventories</em> (name + owner + timestamps)</li>
+                      <li>• Login history (user, timestamp, application name, IP)</li>
                     </ul>
-                    <p className="text-sm text-primary-700 dark:text-primary-400 mt-2 font-medium">
-                      No customer data, no record counts, no actual field values.
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-copper-700 dark:text-copper-400 mt-3">
+                      Record data we DO read (sampled / aggregated)
+                    </p>
+                    <ul className="text-sm mt-1 space-y-1">
+                      <li>
+                        <strong>Data Quality scoring</strong> — samples up to 500 records per business object (Account, Contact, Lead, Opportunity, Case, etc.) to compute completeness, duplicate, and staleness metrics. Only aggregated evidence is stored (top-gap fields, duplicate key hashes, stale record IDs) — no bulk record export.
+                      </li>
+                      <li>
+                        <strong>License Fit</strong> — reads per-user owner counts on Account / Opportunity / Case / Lead / Contact via aggregate SOQL to detect persona mismatch. No field values are stored.
+                      </li>
+                      <li>
+                        <strong>Change Risk Radar</strong> — reads SetupAuditTrail (an admin-change log). This is metadata about changes, not record content.
+                      </li>
+                    </ul>
+                    <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80 mt-3">
+                      All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see. Custom fields containing regulated data (PHI, PCI) are visible only if that user has access to them.
                     </p>
                   </div>
                 </div>
@@ -478,22 +597,24 @@ export default function SecurityPracticesPage() {
             8. Security Testing
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
+            <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+              Newton is an early-stage product, and we&apos;re honest about where our security-testing program stands. Today:
+            </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Quarterly Penetration Testing:</strong> Third-party security audits
+                <strong>Manual code review:</strong> Every change is reviewed by the maintainer before merge
               </li>
               <li>
-                <strong>Automated Vulnerability Scanning:</strong> Daily scans with Snyk/OWASP
-                ZAP
+                <strong>Dependency updates:</strong> Dependencies are updated regularly; GitHub&apos;s built-in security alerts flag known-vulnerable versions
               </li>
               <li>
-                <strong>Code Review:</strong> Security-focused code reviews for all changes
+                <strong>Independent penetration testing:</strong> Not yet — planned once we reach enterprise pilots
               </li>
               <li>
-                <strong>Static Analysis:</strong> SAST tools integrated in CI/CD pipeline
+                <strong>Automated SAST / DAST scanning:</strong> Not yet automated in CI. On the roadmap.
               </li>
               <li>
-                <strong>Bug Bounty:</strong> Public bug bounty program (coming Q4 2026)
+                <strong>Public bug bounty:</strong> Not open today. If you find a vulnerability, please email <a href="mailto:security@accessgraphai.com" className="underline">security@accessgraphai.com</a> and we&apos;ll respond within 5 business days.
               </li>
             </ul>
           </div>
@@ -501,25 +622,21 @@ export default function SecurityPracticesPage() {
 
         <section>
           <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
-            9. Employee Access
+            9. Operator Access
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
+            <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+              Newton is currently maintained by a small team. Production access controls:
+            </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Principle of Least Privilege:</strong> Engineers have minimal access
-                required for their role
+                <strong>Principle of least privilege:</strong> Only the maintainer has production credentials
               </li>
               <li>
-                <strong>Background Checks:</strong> All employees undergo background screening
+                <strong>Access logging:</strong> Railway + Vercel + database provider logs all admin actions
               </li>
               <li>
-                <strong>Security Training:</strong> Annual security awareness training
-              </li>
-              <li>
-                <strong>Access Logging:</strong> All production access logged and audited
-              </li>
-              <li>
-                <strong>MFA Required:</strong> Multi-factor authentication for all accounts
+                <strong>MFA on infrastructure accounts:</strong> Railway, Vercel, GitHub, and email accounts all require MFA. (In-app user accounts are password-only today; MFA is on the roadmap.)
               </li>
             </ul>
           </div>

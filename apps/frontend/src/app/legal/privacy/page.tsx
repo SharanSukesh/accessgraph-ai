@@ -33,13 +33,13 @@ export default function PrivacyPolicyPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start space-x-3">
-              <Database className="h-5 w-5 text-primary-700 mt-0.5" />
+              <Database className="h-5 w-5 text-primary-700 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Metadata Only
+                  Permissions-first
                 </p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  We never access your actual Salesforce records, only permission metadata
+                  We primarily read permission metadata. A few analytics features sample record data — see &quot;What we read&quot; below.
                 </p>
               </div>
             </div>
@@ -96,14 +96,35 @@ export default function PrivacyPolicyPage() {
                 metadata including:
               </p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>User profiles, roles, and permission sets</li>
+                <li>User profiles, roles, permission sets, and permission-set groups</li>
                 <li>Object and field-level permissions</li>
                 <li>Sharing rules and organization-wide defaults</li>
-                <li>Public groups and team memberships</li>
+                <li>Public groups, team memberships, and account/opportunity share records (structural)</li>
+                <li>Login history — user, timestamp, application name, IP address</li>
+                <li>Inventories (name + owner + timestamps only) of Flows, Apex Triggers, Connected Apps, Named Credentials, Reports, and Dashboards</li>
               </ul>
-              <p className="mt-2 font-medium text-primary-700 dark:text-primary-400">
-                Important: We never access or store your actual customer data (Accounts,
-                Opportunities, etc.). We only analyze who can access what.
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                1.2 Record data we DO read (sampled / aggregated)
+              </h3>
+              <p>
+                A small number of features go beyond metadata. In each case we sample or aggregate — we never bulk-export records.
+              </p>
+              <ul className="list-disc pl-6 mt-2 space-y-2">
+                <li>
+                  <strong>Data Quality scoring:</strong> samples up to 500 records per business object (Account, Contact, Lead, Opportunity, Case, etc.) to compute completeness, duplicate detection, and staleness metrics. Only aggregated evidence is stored — top-gap fields, duplicate-key hashes, stale record IDs — not full records.
+                </li>
+                <li>
+                  <strong>License Fit right-sizing:</strong> reads per-user owner counts for Account / Opportunity / Case / Lead / Contact using aggregate SOQL. No field values are stored.
+                </li>
+                <li>
+                  <strong>Change Risk Radar:</strong> reads Salesforce&apos;s SetupAuditTrail — a metadata log of admin changes, not record content.
+                </li>
+              </ul>
+              <p className="mt-3 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+                All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see. If your Salesforce user cannot access a custom field (for example, PHI or PCI columns), Newton cannot either.
               </p>
             </div>
 
@@ -287,23 +308,23 @@ export default function PrivacyPolicyPage() {
             7. Third-Party Services
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
-            <p>We use the following third-party services:</p>
+            <p>Newton relies on the following third-party subprocessors:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Salesforce OAuth:</strong> For secure authentication with your Salesforce
-                org
+                <strong>Salesforce (OAuth + data source):</strong> Newton connects to your Salesforce org over OAuth 2.0. Salesforce is both the source of the data we analyse and a subprocessor for the OAuth token exchange.
               </li>
               <li>
-                <strong>Railway (hosting):</strong> Infrastructure provider, compliant with SOC
-                2, GDPR
+                <strong>Railway (backend hosting + database):</strong> Runs the Newton backend and hosts the managed PostgreSQL database. Data centre region: US. Railway&apos;s security posture: <a href="https://railway.app/legal/security" className="underline">railway.app/legal/security</a>.
               </li>
               <li>
-                <strong>PostgreSQL/Neo4j:</strong> Encrypted database storage
+                <strong>Vercel (frontend hosting):</strong> Serves the Newton web application at app.accessgraphai.com. Vercel&apos;s security posture: <a href="https://vercel.com/legal/privacy-policy" className="underline">vercel.com/legal/privacy-policy</a>.
+              </li>
+              <li>
+                <strong>Resend (transactional email):</strong> Sends account activation and password-reset emails on our behalf. Recipient email addresses + user names + one-time activation URLs are transmitted to Resend&apos;s US API. Resend&apos;s privacy notice: <a href="https://resend.com/legal/privacy-policy" className="underline">resend.com/legal/privacy-policy</a>.
               </li>
             </ul>
-            <p className="mt-2">
-              All third-party services are GDPR-compliant and covered by Data Processing
-              Agreements.
+            <p className="mt-2 text-sm">
+              We will update this list before adding any new subprocessor that materially handles customer data.
             </p>
           </div>
         </section>

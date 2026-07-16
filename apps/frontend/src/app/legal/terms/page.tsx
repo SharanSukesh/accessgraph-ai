@@ -58,9 +58,19 @@ export default function TermsOfServicePage() {
               <li>Visualizes access relationships and sharing rules</li>
               <li>Generates compliance reports and audit trails</li>
             </ul>
-            <p className="mt-4 font-medium">
-              The Service operates as a read-only analysis tool and does not modify your
-              Salesforce configuration.
+            <p className="mt-4 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+              The Service is primarily a read-only analysis tool. Two opt-in features write back to Salesforce when you explicitly use them:
+            </p>
+            <ul className="list-disc pl-6 mt-2 space-y-1 text-sm">
+              <li>
+                <strong>Org Chart editor</strong> — updates User.ManagerId and User.DelegatedApproverId when you drag-and-save an org-chart change
+              </li>
+              <li>
+                <strong>Restructure Studio plan export</strong> — generates a plan that you (the admin) apply manually in Salesforce Setup; the app itself does not push those changes
+              </li>
+            </ul>
+            <p className="mt-2 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+              Every write is initiated by a user action inside the product and audit-logged. The Service never modifies your Salesforce configuration silently or on a schedule.
             </p>
           </div>
         </section>
@@ -147,9 +157,12 @@ export default function TermsOfServicePage() {
                 Agree to our data retention and security practices
               </li>
             </ul>
-            <p className="mt-4 font-medium text-primary-700 dark:text-primary-400">
-              Important: We never access your actual customer records (Accounts, Opportunities,
-              etc.). We only analyze permission structures.
+            <p className="mt-4 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+              Newton is a permissions-first product. Some analytics features (Data Quality scoring, License Fit right-sizing, Change Risk Radar) do read a limited amount of record-level data — always sampled or aggregated, never bulk-exported. See our{' '}
+              <a href="/legal/privacy" className="text-primary-700 dark:text-primary-400 underline">
+                Privacy Policy
+              </a>{' '}
+              for the exact list.
             </p>
           </div>
         </section>
@@ -306,25 +319,14 @@ export default function TermsOfServicePage() {
 
         <section>
           <h2 className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mb-4">
-            12. Salesforce AppExchange Terms
+            12. Salesforce Terms
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              If you installed Newton from the Salesforce AppExchange, you also agree
-              to Salesforce's{' '}
-              <a
-                href="https://appexchange.salesforce.com/appxStore"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary-700 dark:text-primary-400 hover:underline"
-              >
-                AppExchange Terms of Use
-              </a>
-              .
+              Newton is not currently listed on the Salesforce AppExchange. When Newton is submitted for and passes the Salesforce Security Review, this section will be updated to reference the AppExchange Terms of Use.
             </p>
             <p>
-              The Service operates as a connected app and is subject to Salesforce's OAuth
-              policies and API usage limits.
+              In the meantime, the Service operates as a Salesforce Connected App and is subject to Salesforce&apos;s OAuth policies, API usage limits, and the terms of the Salesforce customer agreement you have with Salesforce for your org.
             </p>
           </div>
         </section>

@@ -161,9 +161,8 @@ export default function DPAPage() {
                 <li>IP addresses and user agents (for audit logging)</li>
                 <li>Access patterns and usage metadata</li>
               </ul>
-              <p className="mt-2 font-medium text-copper-600 dark:text-copper-400">
-                Note: The Processor does not process actual customer records (Accounts,
-                Opportunities, etc.) - only permission metadata.
+              <p className="mt-2 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+                Note on record content: Newton is a permissions-first product. A small number of analytics features do read record-level data — Data Quality scoring samples up to 500 records per business object to compute completeness / duplicate / staleness metrics, and License Fit reads aggregate owner counts for Account / Opportunity / Case / Lead / Contact. Only aggregated evidence (top-gap fields, duplicate-key hashes, sample record IDs, per-user counts) is stored — never bulk record content.
               </p>
             </div>
 
@@ -233,12 +232,12 @@ export default function DPAPage() {
                 4.1 Technical Measures
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>AES-256 encryption for Personal Data at rest</li>
-                <li>TLS 1.3 encryption for data in transit</li>
-                <li>Multi-factor authentication for administrative access</li>
-                <li>Automated security patching and vulnerability scanning</li>
-                <li>Role-based access control (RBAC)</li>
-                <li>Comprehensive audit logging</li>
+                <li>AES-256 encryption for OAuth tokens stored at rest (via sqlalchemy-utils EncryptedString)</li>
+                <li>TLS 1.2+ encryption for data in transit (Railway + Vercel ingress)</li>
+                <li>Bcrypt password hashing (cost factor 12) for in-app accounts</li>
+                <li>Role-based access control (ORG_ADMIN / ANALYST / VIEWER / AUDITOR)</li>
+                <li>Comprehensive audit logging of sensitive actions</li>
+                <li>Multi-factor authentication on all infrastructure operator accounts (Railway, Vercel, GitHub, email). MFA on in-app user accounts is on the roadmap but is not currently required.</li>
               </ul>
             </div>
 
@@ -305,35 +304,46 @@ export default function DPAPage() {
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     <tr>
                       <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
+                        Salesforce
+                      </td>
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+                        Source of data + OAuth 2.0 token exchange
+                      </td>
+                      <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
+                        Global
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
                         Railway
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        Infrastructure hosting
+                        Backend hosting + managed PostgreSQL
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        US, EU
+                        US
                       </td>
                     </tr>
                     <tr>
                       <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
-                        PostgreSQL (managed)
+                        Vercel
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        Database storage
+                        Frontend hosting (app.accessgraphai.com)
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        US, EU
+                        US (edge network)
                       </td>
                     </tr>
                     <tr>
                       <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
-                        Neo4j AuraDB
+                        Resend
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        Graph database
+                        Transactional email (account activation, password reset)
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        US, EU
+                        US
                       </td>
                     </tr>
                   </tbody>
@@ -502,9 +512,7 @@ export default function DPAPage() {
                 9.2 Third-Party Audits
               </h3>
               <p>
-                The Processor will provide the Controller with copies of relevant third-party
-                audit reports (e.g., SOC 2 Type II) upon request, subject to reasonable
-                confidentiality obligations.
+                The Processor does not currently hold a SOC 2 Type II or ISO 27001 attestation. Where the Processor obtains such attestations in the future, copies will be made available to the Controller upon request, subject to reasonable confidentiality obligations. In the interim, the Processor will make its subprocessors&apos; publicly available security posture documentation accessible to the Controller.
               </p>
             </div>
           </div>
