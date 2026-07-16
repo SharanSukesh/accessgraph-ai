@@ -144,10 +144,6 @@ DUPLICATE_KEY_FIELDS: Dict[str, str] = {
     "Lead": "Email",
 }
 
-# Sample cap per object. 500 is enough to make completeness / dupe rate
-# statistically meaningful without blowing the SOQL response payload.
-DEFAULT_SAMPLE_SIZE = 500
-
 # Cap on how many non-standard objects we'll analyse in a single run.
 # Salesforce's global describe on a mid-size org can return 400+
 # sObjects; even after filtering shadows (History / Share / Feed) we
@@ -254,12 +250,10 @@ class DataQualityService:
         db: AsyncSession,
         org_id: str,
         *,
-        sample_size: int = DEFAULT_SAMPLE_SIZE,
         staleness_days: int = DEFAULT_STALENESS_DAYS,
     ) -> None:
         self.db = db
         self.org_id = org_id
-        self.sample_size = sample_size
         self.staleness_days = staleness_days
 
     # ------------------------------------------------------------------
@@ -433,7 +427,13 @@ class DataQualityService:
             avg_completeness=_avg(r.completeness_pct for r in scored),
             avg_duplicate_pct=_avg(r.duplicate_pct for r in scored),
             avg_staleness_pct=_avg(r.staleness_pct for r in scored),
-            sample_size=self.sample_size,
+            # sample_size DB column is a legacy hangover from the
+            # 500-record sampling era. Now that we use aggregate SOQL,
+            # "how many records were inspected" is per-object and equal
+            # to record_count — captured on each result row. The column
+            # is kept for schema backwards compat + persisted as 0 to
+            # make it obvious in the raw table that sampling is off.
+            sample_size=0,
             staleness_threshold_days=self.staleness_days,
             duration_ms=int((time.monotonic() - started) * 1000),
             error=skip_error_json,

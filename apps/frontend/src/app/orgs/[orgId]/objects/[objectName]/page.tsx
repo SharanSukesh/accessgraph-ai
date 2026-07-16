@@ -521,9 +521,7 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
               <span className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">/ 100</span>
             </div>
             <p className="mt-2 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-              {score.evidence?.methodology === 'aggregate_soql'
-                ? `${score.record_count.toLocaleString()} records scanned (aggregate SOQL, no record content read)`
-                : `${score.sampled_count.toLocaleString()} of ${score.record_count.toLocaleString()} records sampled`}
+              {score.record_count.toLocaleString()} records scanned (aggregate SOQL, no record content read)
             </p>
           </div>
 
@@ -533,7 +531,7 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
               label="Completeness"
               caption={
                 // "fields_with_gaps" counts fields where MORE than
-                // half the sampled records are missing that value —
+                // half of the records org-wide are missing that value —
                 // "field is empty more often than populated". The
                 // Worst-Populated Fields list below shows the top
                 // offenders regardless of that threshold, so the two

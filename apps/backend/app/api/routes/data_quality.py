@@ -86,7 +86,6 @@ class RunSummary(BaseModel):
     avg_completeness: float
     avg_duplicate_pct: float
     avg_staleness_pct: float
-    sample_size: int
     staleness_threshold_days: int
     has_data: bool
     duration_ms: Optional[int]
@@ -237,7 +236,6 @@ async def get_latest_run(
             avg_completeness=0.0,
             avg_duplicate_pct=0.0,
             avg_staleness_pct=0.0,
-            sample_size=0,
             staleness_threshold_days=0,
             has_data=False,
             duration_ms=None,
@@ -274,7 +272,6 @@ async def get_latest_run(
         avg_completeness=round(run.avg_completeness, 1),
         avg_duplicate_pct=round(run.avg_duplicate_pct, 1),
         avg_staleness_pct=round(run.avg_staleness_pct, 1),
-        sample_size=run.sample_size,
         staleness_threshold_days=run.staleness_threshold_days,
         has_data=True,
         duration_ms=run.duration_ms,

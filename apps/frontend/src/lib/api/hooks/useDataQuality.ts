@@ -74,7 +74,6 @@ export interface DataQualitySummary {
   avg_completeness: number
   avg_duplicate_pct: number
   avg_staleness_pct: number
-  sample_size: number
   staleness_threshold_days: number
   has_data: boolean
   duration_ms: number | null
