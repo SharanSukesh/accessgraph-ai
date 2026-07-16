@@ -27,6 +27,7 @@ import {
   Layers,
   Boxes,
   Shield,
+  ShieldCheck,
   UserPlus,
   LogOut,
   ChevronUp,
@@ -109,6 +110,7 @@ export const navigationSections: {
       { name: 'Restructure Studio', path: 'restructure', icon: Wrench },
       { name: 'Sprawl', path: 'sprawl', icon: Boxes },
       { name: 'License Fit', path: 'license-fit', icon: DollarSign },
+      { name: 'Compliance', path: 'compliance', icon: ShieldCheck },
     ],
   },
   {

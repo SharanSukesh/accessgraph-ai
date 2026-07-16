@@ -125,6 +125,14 @@ export const endpoints = {
   automationSprawlHistory: (orgId: string) =>
     `/orgs/${orgId}/automation-sprawl/history`,
 
+  // Compliance Scorecards — SOX/SOC2/HIPAA/GDPR/PCI one-click reports
+  complianceFrameworks: (orgId: string) =>
+    `/orgs/${orgId}/compliance/frameworks`,
+  complianceRun: (orgId: string, framework: string) =>
+    `/orgs/${orgId}/compliance/${framework}/run`,
+  complianceLatest: (orgId: string, framework: string) =>
+    `/orgs/${orgId}/compliance/${framework}/latest`,
+
   // Integration Sprawl — Integration Blast Radius / Connected-App Health
   integrationSprawlRun: (orgId: string) =>
     `/orgs/${orgId}/integration-sprawl/run`,
