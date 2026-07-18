@@ -70,7 +70,7 @@ export default function V2LoginPage() {
       </div>
 
       {/* Sign-in panel */}
-      <div className="flex flex-1 items-center justify-center bg-grove-canvas px-6 dark:bg-grove-canvas-dk">
+      <div className="flex flex-1 items-center justify-center bg-grove-canvas/80 px-6 dark:bg-grove-canvas-dk/80">
         <Reveal className="w-full max-w-md">
           <div className="mb-8 lg:hidden">
             <Logo variant="full" size="md" className="text-primary-700 dark:text-primary-400" />

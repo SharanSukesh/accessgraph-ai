@@ -64,11 +64,14 @@ export default function EquityPage() {
       <Reveal>
         <V2Card className="p-6">
           <SectionHeading
-            title="Access utility by department"
-            hint="Normalized 0–1 · how much of the access each group needs it can actually reach"
+            title="Access utility — bottom 5 departments"
+            hint="Normalized 0–1 · the groups furthest from the access they need"
           />
           <div className="space-y-1">
-            {EQUITY.groups.map((g) => {
+            {[...EQUITY.groups]
+              .sort((a, b) => a.utility - b.utility)
+              .slice(0, 5)
+              .map((g) => {
               const worst = g.name === WORST_GROUP
               return (
                 <div key={g.name} className="flex items-center gap-3">

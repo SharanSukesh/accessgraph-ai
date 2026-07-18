@@ -3,11 +3,17 @@
 /**
  * v2 Shell — sidebar + topbar chrome for the /v2 tree.
  *
- * Design: the sidebar is permanently deep-forest (both themes) with
- * cream text — the "consulting-firm" move that anchors the brand while
- * the content pane flips light/dark. Copper rail marks the active item;
- * nav groups keep the v1 intent-based IA (EXPLORE / ATTENTION /
- * OPTIMIZE / ADMIN).
+ * Sidebar: permanently deep-forest (both themes), hover-expand
+ * collapsible (72px ↔ 264px) like v1, with the Reconnect / Sync
+ * controls in the footer. Copper rail marks the active item; nav
+ * groups keep the intent-based IA (EXPLORE / ATTENTION / OPTIMIZE /
+ * ADMIN).
+ *
+ * Topbar: client-org context + search pill + theme toggle + avatar
+ * (kept per user feedback — org context lives up top, not in the rail).
+ *
+ * Background: the shell is translucent so the global AnimatedBackground
+ * (drifting node-graph canvas from v1) shows through behind cards.
  */
 
 import { type ReactNode, useState } from 'react'
@@ -18,7 +24,7 @@ import {
   ListChecks, AlertTriangle, Radar,
   Stethoscope, Scale, Wrench, Boxes, DollarSign, ShieldCheck,
   Users2, Shield, UserPlus,
-  Search, Menu, X, Command,
+  Search, Menu, X, Command, Link2, RefreshCw,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/Logo'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
@@ -65,13 +71,25 @@ export const V2_NAV = [
   },
 ]
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({
+  expanded,
+  onNavigate,
+}: {
+  expanded: boolean
+  onNavigate?: () => void
+}) {
   const pathname = usePathname()
   return (
-    <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5 scrollbar-hide">
+    <nav className="flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-hide">
       {V2_NAV.map((section) => (
         <div key={section.label}>
-          <p className="v2-micro px-3 pb-2 text-[#eee8d3]/40">{section.label}</p>
+          <p
+            className={`v2-micro px-3 pb-2 text-[#eee8d3]/40 transition-opacity duration-150 ${
+              expanded ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {section.label}
+          </p>
           <div className="space-y-0.5">
             {section.items.map((item) => {
               const href = `/v2/orgs/${ORG_ID}/${item.path}`
@@ -82,6 +100,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                   key={item.path}
                   href={href}
                   onClick={onNavigate}
+                  title={expanded ? undefined : item.name}
                   className={`v2-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
                     active
                       ? 'is-active bg-[#eee8d3]/[0.08] text-primary-400'
@@ -89,7 +108,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{item.name}</span>
+                  <span
+                    className={`truncate transition-opacity duration-150 ${
+                      expanded ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  >
+                    {item.name}
+                  </span>
                 </Link>
               )
             })}
@@ -100,8 +125,47 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
+/** Sidebar footer — Salesforce connection controls (mock). */
+function SidebarFooter({ expanded }: { expanded: boolean }) {
+  const [syncing, setSyncing] = useState(false)
+  return (
+    <div className="space-y-1 border-t border-[#eee8d3]/10 px-3 py-3">
+      <button
+        title={expanded ? undefined : 'Reconnect to Salesforce'}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[#eee8d3]/70 transition-colors duration-150 hover:bg-[#eee8d3]/[0.05] hover:text-[#eee8d3]"
+      >
+        <Link2 className="h-4 w-4 shrink-0" />
+        <span className={`truncate transition-opacity duration-150 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+          Reconnect to Salesforce
+        </span>
+      </button>
+      <button
+        onClick={() => {
+          setSyncing(true)
+          setTimeout(() => setSyncing(false), 2500)
+        }}
+        title={expanded ? undefined : 'Sync from Salesforce'}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[#eee8d3]/70 transition-colors duration-150 hover:bg-[#eee8d3]/[0.05] hover:text-[#eee8d3]"
+      >
+        <RefreshCw className={`h-4 w-4 shrink-0 ${syncing ? 'animate-spin text-primary-400' : ''}`} />
+        <span className={`truncate transition-opacity duration-150 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+          {syncing ? 'Syncing…' : 'Sync from Salesforce'}
+        </span>
+      </button>
+      <p
+        className={`v2-micro px-3 pt-2 text-[#eee8d3]/35 transition-opacity duration-150 ${
+          expanded ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        Newton · Access Intelligence
+      </p>
+    </div>
+  )
+}
+
 export function V2Shell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const pathname = usePathname()
 
   // Public v2 surfaces (login) render bare — no sidebar/topbar chrome.
@@ -110,19 +174,25 @@ export function V2Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-grove-canvas dark:bg-grove-canvas-dk">
-      {/* Desktop sidebar */}
-      <aside className="v2-sidebar hidden w-[248px] shrink-0 flex-col lg:flex">
-        <div className="flex items-center gap-2 px-5 pb-2 pt-6 text-[#eee8d3]">
-          <Logo variant="full" size="sm" className="text-primary-400" />
-          <span className="v2-micro ml-auto rounded-full bg-copper-500/15 px-2 py-0.5 text-copper-400 ring-1 ring-copper-500/25">
-            v2
-          </span>
+    <div className="flex h-screen overflow-hidden bg-grove-canvas/80 dark:bg-grove-canvas-dk/80">
+      {/* Desktop sidebar — hover-expand 72px ↔ 264px */}
+      <aside
+        onMouseEnter={() => setExpanded(true)}
+        onMouseLeave={() => setExpanded(false)}
+        className={`v2-sidebar hidden shrink-0 flex-col transition-[width] duration-200 ease-out lg:flex ${
+          expanded ? 'w-[264px]' : 'w-[72px]'
+        }`}
+      >
+        <div className="flex h-16 items-center gap-2 overflow-hidden px-4 text-[#eee8d3]">
+          <Logo variant={expanded ? 'full' : 'icon'} size="sm" className="shrink-0 text-primary-400" />
+          {expanded && (
+            <span className="v2-micro ml-auto rounded-full bg-copper-500/15 px-2 py-0.5 text-copper-400 ring-1 ring-copper-500/25">
+              v2
+            </span>
+          )}
         </div>
-        <NavLinks />
-        <div className="border-t border-[#eee8d3]/10 px-5 py-4">
-          <p className="v2-micro text-[#eee8d3]/35">Newton · Access Intelligence</p>
-        </div>
+        <NavLinks expanded={expanded} />
+        <SidebarFooter expanded={expanded} />
       </aside>
 
       {/* Mobile drawer */}
@@ -143,7 +213,8 @@ export function V2Shell({ children }: { children: ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <NavLinks onNavigate={() => setMobileOpen(false)} />
+            <NavLinks expanded onNavigate={() => setMobileOpen(false)} />
+            <SidebarFooter expanded />
           </aside>
         </div>
       )}

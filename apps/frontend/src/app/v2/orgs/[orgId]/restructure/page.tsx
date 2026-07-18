@@ -76,7 +76,7 @@ export default function RestructureStudioPage() {
               <div key={k.label}>
                 <p className="v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">{k.label}</p>
                 <div className="mt-3 flex items-center gap-2.5">
-                  <span className="v2-num text-lg font-medium text-grove-ink/40 line-through decoration-grove-ink/25 dark:text-grove-ink-dk/40 dark:decoration-grove-ink-dk/25">
+                  <span className="v2-num text-lg font-medium text-grove-ink/45 dark:text-grove-ink-dk/45">
                     {k.before}
                   </span>
                   <ArrowRight className="h-4 w-4 shrink-0 text-copper-500 dark:text-copper-400" />

@@ -10,21 +10,21 @@
  */
 
 .v2-root {
-  font-family: var(--font-plex), system-ui, sans-serif;
-  font-feature-settings: 'ss01' on;
+  /* Body type inherits Inter from the root layout — same as v1. */
   -webkit-font-smoothing: antialiased;
 }
 
 /* ---------------------------------------------------------------- type */
 
+/* Display + numerals use the v1 Grove serif stack (Iowan Old Style /
+   Charter / Georgia) — the signature "consulting report" numerals. */
 .v2-display {
-  font-family: var(--font-fraunces), Georgia, serif;
-  font-optical-sizing: auto;
-  letter-spacing: -0.015em;
+  font-family: 'Iowan Old Style', 'Charter', Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
 }
 
 .v2-micro {
-  font-family: var(--font-plex-mono), monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-transform: uppercase;
   letter-spacing: 0.14em;
   font-size: 10px;
@@ -32,9 +32,8 @@
 }
 
 .v2-num {
-  font-family: var(--font-fraunces), Georgia, serif;
+  font-family: 'Iowan Old Style', 'Charter', Georgia, 'Times New Roman', serif;
   font-variant-numeric: tabular-nums lining-nums;
-  font-optical-sizing: auto;
 }
 
 /* ---------------------------------------------------------------- cards */
