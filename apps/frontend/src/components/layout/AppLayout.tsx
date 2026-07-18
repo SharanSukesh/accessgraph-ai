@@ -22,7 +22,10 @@ const PUBLIC_ROUTES = ['/login', '/signup', '/activate']
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
+  // /v2 is the parallel UI-rebuild tree — it ships its own shell
+  // (sidebar, fonts, background) via src/app/v2/layout.tsx, so the v1
+  // chrome must stay out of its way entirely.
+  const isPublicRoute = PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/v2')
 
   if (isPublicRoute) {
     // Public pages (login, etc.) - no sidebar
