@@ -39,7 +39,7 @@ export default function OverviewPage() {
           <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center">
             <div className="flex items-center gap-8">
               <ScoreRing score={OVERVIEW.healthScore} label="Health score" />
-              <div className="hidden h-24 w-px bg-grove-border dark:bg-grove-border-dk sm:block" />
+              <div className="hidden h-24 w-px bg-grove-ink/15 dark:bg-grove-ink-dk/25 sm:block" />
               <div>
                 <p className="v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Identified annual savings

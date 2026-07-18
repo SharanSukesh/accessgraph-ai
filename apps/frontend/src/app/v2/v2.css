@@ -116,13 +116,31 @@
 
 /* ---------------------------------------------------------------- shell */
 
+/* Sidebar follows the theme: warm cream in light mode, deep forest in
+   dark — matching v1 behavior. */
 .v2-sidebar {
+  background:
+    radial-gradient(140% 60% at 0% 0%, rgb(9 66 48 / 0.05) 0%, transparent 60%),
+    #fdfaf1;
+  border-right: 1px solid #e2ddc9;
+}
+.dark .v2-sidebar {
+  background:
+    radial-gradient(140% 60% at 0% 0%, rgb(107 191 149 / 0.07) 0%, transparent 60%),
+    #0a1f17;
+  border-right-color: rgb(238 232 211 / 0.08);
+}
+
+/* Permanent deep-forest panel (login brand side) — theme-independent. */
+.v2-forest {
   background:
     radial-gradient(140% 60% at 0% 0%, rgb(107 191 149 / 0.07) 0%, transparent 60%),
     #0a1f17;
   color: #eee8d3;
 }
 
+/* Every nav item carries a small resting rail (visible even collapsed,
+   like v1) that grows + turns copper when active. */
 .v2-nav-item {
   position: relative;
   transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
@@ -135,15 +153,43 @@
   position: absolute;
   left: 0;
   top: 50%;
-  height: 0;
+  height: 8px;
   width: 3px;
   border-radius: 3px;
-  background: #d8794a;
+  background: rgb(22 34 26 / 0.18);
   transform: translateY(-50%);
-  transition: height 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    height 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 180ms ease;
+}
+.dark .v2-nav-item::before {
+  background: rgb(238 232 211 / 0.22);
 }
 .v2-nav-item.is-active::before {
   height: 60%;
+  background: #c26b47;
+}
+.dark .v2-nav-item.is-active::before {
+  background: #d8794a;
+}
+
+/* Always-visible thin themed scrollbar (sidebar nav + any tall list) —
+   users need to SEE there are more items below the fold. */
+.v2-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(9 66 48 / 0.35) transparent;
+}
+.dark .v2-scroll {
+  scrollbar-color: rgb(107 191 149 / 0.35) transparent;
+}
+.v2-scroll::-webkit-scrollbar { width: 6px; }
+.v2-scroll::-webkit-scrollbar-track { background: transparent; }
+.v2-scroll::-webkit-scrollbar-thumb {
+  background: rgb(9 66 48 / 0.32);
+  border-radius: 9999px;
+}
+.dark .v2-scroll::-webkit-scrollbar-thumb {
+  background: rgb(107 191 149 / 0.35);
 }
 
 /* ---------------------------------------------------------------- motion */

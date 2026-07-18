@@ -28,7 +28,7 @@ export default function V2LoginPage() {
   return (
     <div className="flex min-h-screen">
       {/* Brand panel */}
-      <div className="v2-sidebar relative hidden w-[46%] flex-col justify-between overflow-hidden p-12 lg:flex">
+      <div className="v2-forest relative hidden w-[46%] flex-col justify-between overflow-hidden p-12 lg:flex">
         <div className="v2-dotgrid absolute inset-0 opacity-40" />
         <div className="relative">
           <Logo variant="full" size="md" className="text-primary-400" />

@@ -3,11 +3,11 @@
 /**
  * v2 Shell — sidebar + topbar chrome for the /v2 tree.
  *
- * Sidebar: permanently deep-forest (both themes), hover-expand
- * collapsible (72px ↔ 264px) like v1, with the Reconnect / Sync
- * controls in the footer. Copper rail marks the active item; nav
- * groups keep the intent-based IA (EXPLORE / ATTENTION / OPTIMIZE /
- * ADMIN).
+ * Sidebar: theme-aware (cream in light, deep forest in dark — matches
+ * v1), hover-expand collapsible (72px ↔ 264px), per-item resting rails
+ * visible even when collapsed, division lines between nav sections,
+ * always-visible themed scrollbar, and the Reconnect / Sync controls
+ * in the footer.
  *
  * Topbar: client-org context + search pill + theme toggle + avatar
  * (kept per user feedback — org context lives up top, not in the rail).
@@ -80,11 +80,18 @@ function NavLinks({
 }) {
   const pathname = usePathname()
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-3 py-4 scrollbar-hide">
-      {V2_NAV.map((section) => (
-        <div key={section.label}>
+    <nav className="v2-scroll flex-1 overflow-y-auto overflow-x-hidden px-3 py-2">
+      {V2_NAV.map((section, si) => (
+        <div
+          key={section.label}
+          className={
+            si > 0
+              ? 'mt-3 border-t border-grove-border/80 pt-3 dark:border-[#eee8d3]/10'
+              : 'pt-2'
+          }
+        >
           <p
-            className={`v2-micro px-3 pb-2 text-[#eee8d3]/40 transition-opacity duration-150 ${
+            className={`v2-micro px-3 pb-2 text-grove-ink/40 transition-opacity duration-150 dark:text-[#eee8d3]/40 ${
               expanded ? 'opacity-100' : 'opacity-0'
             }`}
           >
@@ -103,8 +110,8 @@ function NavLinks({
                   title={expanded ? undefined : item.name}
                   className={`v2-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
                     active
-                      ? 'is-active bg-[#eee8d3]/[0.08] text-primary-400'
-                      : 'text-[#eee8d3]/70 hover:bg-[#eee8d3]/[0.05] hover:text-[#eee8d3]'
+                      ? 'is-active bg-primary-700/[0.07] text-primary-700 dark:bg-[#eee8d3]/[0.08] dark:text-primary-400'
+                      : 'text-grove-ink/70 hover:bg-primary-700/[0.05] hover:text-grove-ink dark:text-[#eee8d3]/70 dark:hover:bg-[#eee8d3]/[0.05] dark:hover:text-[#eee8d3]'
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
@@ -128,12 +135,13 @@ function NavLinks({
 /** Sidebar footer — Salesforce connection controls (mock). */
 function SidebarFooter({ expanded }: { expanded: boolean }) {
   const [syncing, setSyncing] = useState(false)
+  const itemCls =
+    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ' +
+    'text-grove-ink/70 hover:bg-primary-700/[0.05] hover:text-grove-ink ' +
+    'dark:text-[#eee8d3]/70 dark:hover:bg-[#eee8d3]/[0.05] dark:hover:text-[#eee8d3]'
   return (
-    <div className="space-y-1 border-t border-[#eee8d3]/10 px-3 py-3">
-      <button
-        title={expanded ? undefined : 'Reconnect to Salesforce'}
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[#eee8d3]/70 transition-colors duration-150 hover:bg-[#eee8d3]/[0.05] hover:text-[#eee8d3]"
-      >
+    <div className="space-y-1 border-t border-grove-border/80 px-3 py-3 dark:border-[#eee8d3]/10">
+      <button title={expanded ? undefined : 'Reconnect to Salesforce'} className={itemCls}>
         <Link2 className="h-4 w-4 shrink-0" />
         <span className={`truncate transition-opacity duration-150 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
           Reconnect to Salesforce
@@ -145,15 +153,19 @@ function SidebarFooter({ expanded }: { expanded: boolean }) {
           setTimeout(() => setSyncing(false), 2500)
         }}
         title={expanded ? undefined : 'Sync from Salesforce'}
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[#eee8d3]/70 transition-colors duration-150 hover:bg-[#eee8d3]/[0.05] hover:text-[#eee8d3]"
+        className={itemCls}
       >
-        <RefreshCw className={`h-4 w-4 shrink-0 ${syncing ? 'animate-spin text-primary-400' : ''}`} />
+        <RefreshCw
+          className={`h-4 w-4 shrink-0 ${
+            syncing ? 'animate-spin text-primary-700 dark:text-primary-400' : ''
+          }`}
+        />
         <span className={`truncate transition-opacity duration-150 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
           {syncing ? 'Syncing…' : 'Sync from Salesforce'}
         </span>
       </button>
       <p
-        className={`v2-micro px-3 pt-2 text-[#eee8d3]/35 transition-opacity duration-150 ${
+        className={`v2-micro px-3 pt-2 text-grove-ink/35 transition-opacity duration-150 dark:text-[#eee8d3]/35 ${
           expanded ? 'opacity-100' : 'opacity-0'
         }`}
       >
@@ -183,10 +195,14 @@ export function V2Shell({ children }: { children: ReactNode }) {
           expanded ? 'w-[264px]' : 'w-[72px]'
         }`}
       >
-        <div className="flex h-16 items-center gap-2 overflow-hidden px-4 text-[#eee8d3]">
-          <Logo variant={expanded ? 'full' : 'icon'} size="sm" className="shrink-0 text-primary-400" />
+        <div className="flex h-16 shrink-0 items-center gap-2 overflow-hidden border-b border-grove-border/80 px-4 text-grove-ink dark:border-[#eee8d3]/10 dark:text-[#eee8d3]">
+          <Logo
+            variant={expanded ? 'full' : 'icon'}
+            size="sm"
+            className="shrink-0 text-primary-700 dark:text-primary-400"
+          />
           {expanded && (
-            <span className="v2-micro ml-auto rounded-full bg-copper-500/15 px-2 py-0.5 text-copper-400 ring-1 ring-copper-500/25">
+            <span className="v2-micro ml-auto rounded-full bg-copper-500/15 px-2 py-0.5 text-copper-600 ring-1 ring-copper-500/25 dark:text-copper-400">
               v2
             </span>
           )}
@@ -203,11 +219,11 @@ export function V2Shell({ children }: { children: ReactNode }) {
             onClick={() => setMobileOpen(false)}
           />
           <aside className="v2-sidebar absolute left-0 top-0 flex h-full w-[280px] flex-col">
-            <div className="flex items-center justify-between px-5 pb-2 pt-6 text-[#eee8d3]">
-              <Logo variant="full" size="sm" className="text-primary-400" />
+            <div className="flex items-center justify-between px-5 pb-2 pt-6 text-grove-ink dark:text-[#eee8d3]">
+              <Logo variant="full" size="sm" className="text-primary-700 dark:text-primary-400" />
               <button
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg p-1.5 text-[#eee8d3]/60 hover:bg-[#eee8d3]/10"
+                className="rounded-lg p-1.5 text-grove-ink/60 hover:bg-grove-ink/10 dark:text-[#eee8d3]/60 dark:hover:bg-[#eee8d3]/10"
                 aria-label="Close navigation"
               >
                 <X className="h-5 w-5" />

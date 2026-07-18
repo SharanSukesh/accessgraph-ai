@@ -121,7 +121,7 @@ export default function CompliancePage() {
                   {' '}controls passing
                 </p>
               </div>
-              <div className="hidden h-24 w-px bg-grove-border dark:bg-grove-border-dk sm:block" />
+              <div className="hidden h-24 w-px bg-grove-ink/15 dark:bg-grove-ink-dk/25 sm:block" />
               <div className="min-w-[220px] flex-1">
                 <p className="v2-micro mb-2 text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Control status

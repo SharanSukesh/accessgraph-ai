@@ -125,7 +125,7 @@ export default function RestructureStudioPage() {
                       fit score
                     </p>
                   </div>
-                  <div className="hidden h-12 w-px bg-grove-border dark:bg-grove-border-dk sm:block" />
+                  <div className="hidden h-12 w-px bg-grove-ink/15 dark:bg-grove-ink-dk/25 sm:block" />
                   <div className="min-w-0 flex-1">
                     <Pill tone="neutral">
                       <span className="v2-micro font-mono">{m.type}</span>

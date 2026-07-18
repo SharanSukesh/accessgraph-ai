@@ -61,7 +61,7 @@ export default function HealthReportPage() {
         <V2Card hero className="p-8">
           <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center">
             <ScoreRing score={HEALTH.score} label="health score" />
-            <div className="hidden h-24 w-px bg-grove-border dark:bg-grove-border-dk lg:block" />
+            <div className="hidden h-24 w-px bg-grove-ink/15 dark:bg-grove-ink-dk/25 lg:block" />
             <div className="max-w-2xl flex-1">
               <p className="v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                 Executive summary

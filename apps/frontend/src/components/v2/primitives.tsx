@@ -347,13 +347,15 @@ export function ScoreRing({
   return (
     <div className={`relative inline-flex items-center justify-center ${className}`} style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
+        {/* Track ring — deliberately higher-contrast than the surface
+            so the unfilled remainder reads clearly in dark mode. */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
           strokeWidth={stroke}
-          className="stroke-grove-canvas dark:stroke-grove-canvas-dk"
+          className="stroke-grove-ink/10 dark:stroke-grove-ink-dk/20"
         />
         <circle
           cx={size / 2}
