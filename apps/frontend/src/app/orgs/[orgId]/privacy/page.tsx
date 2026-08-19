@@ -21,6 +21,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -152,14 +153,18 @@ export default function PrivacyPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Shield}
-        title="Privacy & Data Management"
-        subtitle="GDPR compliance, data retention policies, and privacy controls"
-      />
+      <Reveal>
+        <PageHeader
+          icon={Shield}
+          title="Privacy & Data Management"
+          eyebrow="Admin · data governance"
+          subtitle="GDPR compliance, data retention policies, and privacy controls"
+        />
+      </Reveal>
 
       {/* Data Inventory Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <Stagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StaggerItem>
         <Card variant="bordered" className="bg-primary-50 dark:bg-primary-900/15 border-primary-200 dark:border-primary-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -167,7 +172,7 @@ export default function PrivacyPage() {
                 <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Total Records
                 </p>
-                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
+                <p className="v2-num text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {totalRecords.toLocaleString()}
                 </p>
               </div>
@@ -175,7 +180,9 @@ export default function PrivacyPage() {
             </div>
           </CardContent>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem>
         <Card variant="bordered" className="bg-copper-50 dark:bg-copper-900/10 border-copper-200 dark:border-copper-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -183,7 +190,7 @@ export default function PrivacyPage() {
                 <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Snapshots
                 </p>
-                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
+                <p className="v2-num text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {totalSnapshots.toLocaleString()}
                 </p>
               </div>
@@ -191,7 +198,9 @@ export default function PrivacyPage() {
             </div>
           </CardContent>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem>
         <Card variant="bordered" className="bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -199,7 +208,7 @@ export default function PrivacyPage() {
                 <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Audit Logs
                 </p>
-                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
+                <p className="v2-num text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {(inventory?.audit_logs || 0).toLocaleString()}
                 </p>
               </div>
@@ -207,7 +216,9 @@ export default function PrivacyPage() {
             </div>
           </CardContent>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem>
         <Card variant="bordered" className="bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -215,7 +226,7 @@ export default function PrivacyPage() {
                 <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
                   Analysis Data
                 </p>
-                <p className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
+                <p className="v2-num text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {totalAnalysis.toLocaleString()}
                 </p>
               </div>
@@ -223,9 +234,11 @@ export default function PrivacyPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+        </StaggerItem>
+      </Stagger>
 
       {/* Retention Policies */}
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>Data Retention Policies</CardTitle>
@@ -302,8 +315,10 @@ export default function PrivacyPage() {
           </div>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* Data Management Actions */}
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>Data Management</CardTitle>
@@ -352,33 +367,38 @@ export default function PrivacyPage() {
           </div>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* Detailed Snapshot Inventory */}
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>Detailed Data Inventory</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {snapshotEntries.map(([key, value]) => (
-              <div
-                key={key}
-                className="p-3 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg"
-              >
-                <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 uppercase">
-                  {key.replace(/_/g, ' ')}
-                </p>
-                <p className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mt-1">
-                  {(value || 0).toLocaleString()}
-                </p>
-              </div>
+              <StaggerItem key={key}>
+                <div className="p-3 bg-primary-50/40 dark:bg-primary-900/10 rounded-lg">
+                  <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 uppercase">
+                    {key.replace(/_/g, ' ')}
+                  </p>
+                  <p className="v2-num text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mt-1">
+                    {(value || 0).toLocaleString()}
+                  </p>
+                </div>
+              </StaggerItem>
             ))}
-          </div>
+          </Stagger>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* GDPR Danger Zone */}
-      <Card variant="bordered" className="border-red-200 dark:border-red-800">
+      <Card
+        variant="bordered"
+        className="border-red-200 dark:border-red-800 ring-1 ring-red-300 dark:ring-red-900"
+      >
         <CardHeader>
           <div className="flex items-center space-x-2">
             <AlertTriangle className="h-5 w-5 text-red-600" />

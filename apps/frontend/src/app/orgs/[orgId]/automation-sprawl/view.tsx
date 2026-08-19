@@ -39,6 +39,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useAutomationSprawlLatest,
   useAutomationSprawlItems,
@@ -155,47 +156,57 @@ export function AutomationSprawlView({ embedded = false }: { embedded?: boolean 
       ) : (
         <>
           {/* KPI strip — 5 cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <TierKpi
-              label="Total automations"
-              value={summary.items_total}
-              icon={Workflow}
-              tone="neutral"
-              hint={`${summary.flows_total.toLocaleString()} flow${summary.flows_total === 1 ? '' : 's'} + ${summary.triggers_total.toLocaleString()} trigger${summary.triggers_total === 1 ? '' : 's'}`}
-            />
-            <TierKpi
-              label="Active"
-              value={summary.items_active}
-              icon={Zap}
-              tone="primary"
-              hint="Modified in the last 12 months with an active owner"
-            />
-            <TierKpi
-              label="Dormant"
-              value={summary.items_dormant}
-              icon={PauseCircle}
-              tone="copper"
-              hint={
-                summary.avg_days_since_modified
-                  ? `Avg. ${summary.avg_days_since_modified} days since last modification`
-                  : 'Currently active but not modified in >12 months'
-              }
-            />
-            <TierKpi
-              label="Orphaned"
-              value={summary.items_orphaned}
-              icon={UserX}
-              tone="danger"
-              hint="Last modifier is inactive — no one accountable"
-            />
-            <TierKpi
-              label="Broken"
-              value={summary.items_broken}
-              icon={AlertCircle}
-              tone="danger"
-              hint="Flow out-of-date OR trigger fails to compile — actively causing runtime errors"
-            />
-          </div>
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StaggerItem>
+              <TierKpi
+                label="Total automations"
+                value={summary.items_total}
+                icon={Workflow}
+                tone="neutral"
+                hint={`${summary.flows_total.toLocaleString()} flow${summary.flows_total === 1 ? '' : 's'} + ${summary.triggers_total.toLocaleString()} trigger${summary.triggers_total === 1 ? '' : 's'}`}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Active"
+                value={summary.items_active}
+                icon={Zap}
+                tone="primary"
+                hint="Modified in the last 12 months with an active owner"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Dormant"
+                value={summary.items_dormant}
+                icon={PauseCircle}
+                tone="copper"
+                hint={
+                  summary.avg_days_since_modified
+                    ? `Avg. ${summary.avg_days_since_modified} days since last modification`
+                    : 'Currently active but not modified in >12 months'
+                }
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Orphaned"
+                value={summary.items_orphaned}
+                icon={UserX}
+                tone="danger"
+                hint="Last modifier is inactive — no one accountable"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Broken"
+                value={summary.items_broken}
+                icon={AlertCircle}
+                tone="danger"
+                hint="Flow out-of-date OR trigger fails to compile — actively causing runtime errors"
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Methodology caveat */}
           <Card variant="bordered" className="p-4">
@@ -553,7 +564,7 @@ function TierKpi({
           <p className="text-xs font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
             {label}
           </p>
-          <p className={valueCls}>{value.toLocaleString()}</p>
+          <p className={`v2-num ${valueCls}`}>{value.toLocaleString()}</p>
         </div>
         <div className={wrapperCls}>
           <Icon className={iconCls} />
@@ -669,7 +680,10 @@ function ItemCard({
   const typeLabel = item.item_type === 'flow' ? 'FLOW' : 'APEX TRIGGER'
 
   return (
-    <Card variant="bordered" className={`overflow-hidden ${ringClass}`}>
+    <Card
+      variant="bordered"
+      className={`overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${ringClass}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <TierDot tier={item.tier} />

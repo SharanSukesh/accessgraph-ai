@@ -15,6 +15,7 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 
 export default function UsersPage() {
@@ -41,22 +42,26 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={UsersIcon}
-        title="Users"
-        subtitle="Browse and investigate user access"
-        actions={
-          <Button
-            variant="primary"
-            onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
-          >
-            <GitCompare className="h-4 w-4 mr-2" />
-            Compare Users
-          </Button>
-        }
-      />
+      <Reveal>
+        <PageHeader
+          icon={UsersIcon}
+          title="Users"
+          subtitle="Browse and investigate user access"
+          eyebrow="Explore · people"
+          actions={
+            <Button
+              variant="primary"
+              onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
+            >
+              <GitCompare className="h-4 w-4 mr-2" />
+              Compare Users
+            </Button>
+          }
+        />
+      </Reveal>
 
       {/* Filters */}
+      <Reveal delay={0.05}>
       <Card variant="bordered">
         <CardContent className="py-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -87,8 +92,10 @@ export default function UsersPage() {
           </div>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* Users Table */}
+      <Reveal delay={0.1}>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>
@@ -103,22 +110,22 @@ export default function UsersPage() {
               <table className="w-full">
                 <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       User
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Role
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Profile
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Risk
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-right v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Actions
                     </th>
                   </tr>
@@ -127,7 +134,7 @@ export default function UsersPage() {
                   {users.map((user: any) => (
                     <tr
                       key={user.id}
-                      className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15 cursor-pointer transition-colors"
+                      className="hover:bg-primary-50/60 dark:hover:bg-primary-900/15 cursor-pointer transition-colors duration-150"
                       onClick={() => router.push(`/orgs/${orgId}/users/${user.salesforceUserId}`)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -195,6 +202,7 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+      </Reveal>
     </div>
   )
 }

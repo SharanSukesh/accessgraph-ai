@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -86,11 +87,14 @@ export default function CompliancePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={ShieldCheck}
-        title="Compliance"
-        subtitle="One-click auditor-ready scorecards mapped to SOX, SOC 2, HIPAA, GDPR, and PCI DSS controls"
-      />
+      <Reveal>
+        <PageHeader
+          icon={ShieldCheck}
+          eyebrow="Optimize · assurance"
+          title="Compliance"
+          subtitle="One-click auditor-ready scorecards mapped to SOX, SOC 2, HIPAA, GDPR, and PCI DSS controls"
+        />
+      </Reveal>
 
       {/* Framework picker */}
       <div className="flex flex-wrap gap-2">
@@ -135,15 +139,16 @@ export default function CompliancePage() {
       {scorecardLoading || (busy && !scorecard?.has_data) ? (
         <TableSkeleton rows={6} />
       ) : scorecard?.has_data ? (
-        <div className="space-y-3">
+        <Stagger className="space-y-3">
           {scorecard.results.map((c) => (
-            <ControlCard
-              key={c.control_id}
-              control={c}
-              onOpen={(link) => router.push(link)}
-            />
+            <StaggerItem key={c.control_id}>
+              <ControlCard
+                control={c}
+                onOpen={(link) => router.push(link)}
+              />
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       ) : (
         <EmptyState
           icon="default"
@@ -198,7 +203,7 @@ function ScoreHeader({
                 </span>
               ) : (
                 <>
-                  <span className={`text-5xl font-bold tabular-nums ${scoreColour}`}>
+                  <span className={`v2-num text-5xl font-bold ${scoreColour}`}>
                     {scorecard?.has_data ? `${Math.round(scorePct)}%` : '—'}
                   </span>
                   {scorecard?.has_data && (
@@ -287,7 +292,10 @@ function ControlCard({
     : 'text-grove-ink/40 dark:text-grove-ink-dk/40'
 
   return (
-    <Card variant="bordered">
+    <Card
+      variant="bordered"
+      className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift"
+    >
       <CardContent className="p-5">
         <div className="flex items-start gap-4">
           <Icon className={`h-6 w-6 mt-0.5 flex-shrink-0 ${iconColour}`} />
@@ -296,7 +304,7 @@ function ControlCard({
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${chip.cls}`}>
                 {chip.label}
               </span>
-              <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-grove-ink/50 dark:text-grove-ink-dk/50">
+              <span className="v2-micro text-grove-ink/50 dark:text-grove-ink-dk/50">
                 {control.control_id}
               </span>
               <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-grove-ink/45 dark:text-grove-ink-dk/45">

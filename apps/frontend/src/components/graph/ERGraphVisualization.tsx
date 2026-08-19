@@ -72,51 +72,51 @@ export function ERGraphVisualization({
       {
         selector: 'node',
         style: {
-          'background-color': '#f1f5f9',
+          'background-color': '#eee8d3',
           'background-opacity': 0.95,
           'border-width': 3,
-          'border-color': '#94a3b8',
+          'border-color': '#b8d1c0',
           label: 'data(label)',
           'text-valign': 'center',
           'text-halign': 'center',
           'font-size': '13px',
           'font-weight': '600',
           'font-family': 'Inter, system-ui, sans-serif',
-          color: '#0f172a',
+          color: '#16221a',
           'text-wrap': 'wrap',
           'text-max-width': '110px',
-          'text-outline-color': '#ffffff',
+          'text-outline-color': '#fdfaf1',
           'text-outline-width': 2,
           width: 70,
           height: 70,
         },
       },
-      // User nodes
+      // User nodes — copper (Grove highlight for the person at the center)
       {
         selector: 'node[type="user"]',
         style: {
-          'background-color': '#60a5fa',
-          'border-color': '#3b82f6',
+          'background-color': '#d8794a',
+          'border-color': '#c26b47',
           'border-width': 4,
           shape: 'ellipse',
         },
       },
-      // Profile nodes
+      // Profile nodes — mid evergreen
       {
         selector: 'node[type="profile"]',
         style: {
-          'background-color': '#a78bfa',
-          'border-color': '#8b5cf6',
+          'background-color': '#2e8064',
+          'border-color': '#094230',
           'border-width': 4,
           shape: 'round-rectangle',
         },
       },
-      // Permission set nodes
+      // Permission set nodes — mint
       {
         selector: 'node[type="permission_set"]',
         style: {
-          'background-color': '#22d3ee',
-          'border-color': '#06b6d4',
+          'background-color': '#6bbf95',
+          'border-color': '#146b4a',
           'border-width': 4,
           shape: 'round-rectangle',
         },
@@ -133,12 +133,12 @@ export function ERGraphVisualization({
           shape: 'round-rectangle',
         },
       },
-      // Role nodes
+      // Role nodes — pale sage (evergreen family)
       {
         selector: 'node[type="role"]',
         style: {
-          'background-color': '#fbbf24',
-          'border-color': '#f59e0b',
+          'background-color': '#b8d1c0',
+          'border-color': '#2e8064',
           'border-width': 4,
           shape: 'diamond',
         },
@@ -156,30 +156,30 @@ export function ERGraphVisualization({
           events: 'yes', // Ensure node can receive events
         },
       },
-      // Center node
+      // Center node — copper highlight ring
       {
         selector: 'node.center',
         style: {
           'border-width': 5,
-          'border-color': '#f97316',
+          'border-color': '#c26b47',
           width: 90,
           height: 90,
           'font-size': '15px',
         },
       },
-      // Edges - Default
+      // Edges - Default — low-opacity evergreen
       {
         selector: 'edge',
         style: {
           width: 2.5,
-          'line-color': '#cbd5e1',
-          'target-arrow-color': '#94a3b8',
+          'line-color': 'rgba(46, 128, 100, 0.45)',
+          'target-arrow-color': 'rgba(46, 128, 100, 0.7)',
           'target-arrow-shape': 'triangle',
           'curve-style': 'bezier',
           label: 'data(label)',
           'font-size': '11px',
           'text-rotation': 'autorotate',
-          'text-background-color': '#ffffff',
+          'text-background-color': '#fdfaf1',
           'text-background-opacity': 0.9,
         },
       },
@@ -187,36 +187,36 @@ export function ERGraphVisualization({
       {
         selector: 'edge[type="GRANTS_ACCESS"]',
         style: {
-          'line-color': '#34d399',
-          'target-arrow-color': '#10b981',
+          'line-color': '#2e8064',
+          'target-arrow-color': '#146b4a',
           width: 3,
         },
       },
-      // OBJECT_RELATIONSHIP edges
+      // OBJECT_RELATIONSHIP edges — copper dashed
       {
         selector: 'edge[type="OBJECT_RELATIONSHIP"]',
         style: {
-          'line-color': '#f472b6',
-          'target-arrow-color': '#ec4899',
+          'line-color': '#d8794a',
+          'target-arrow-color': '#c26b47',
           'line-style': 'dashed',
           width: 2,
         },
       },
-      // HAS_PROFILE edge
+      // HAS_PROFILE edge — matches the profile node evergreen
       {
         selector: 'edge[type="HAS_PROFILE"]',
         style: {
-          'line-color': '#a78bfa',
-          'target-arrow-color': '#8b5cf6',
+          'line-color': '#2e8064',
+          'target-arrow-color': '#094230',
           width: 3,
         },
       },
-      // ASSIGNED_PERMISSION_SET edge
+      // ASSIGNED_PERMISSION_SET edge — matches the mint permission-set node
       {
         selector: 'edge[type="ASSIGNED_PERMISSION_SET"]',
         style: {
-          'line-color': '#22d3ee',
-          'target-arrow-color': '#06b6d4',
+          'line-color': '#6bbf95',
+          'target-arrow-color': '#146b4a',
           'line-style': 'dashed',
           width: 2.5,
         },
@@ -232,12 +232,12 @@ export function ERGraphVisualization({
           width: 2.5,
         },
       },
-      // HAS_ROLE edge
+      // HAS_ROLE edge — matches the pale-sage role node
       {
         selector: 'edge[type="HAS_ROLE"]',
         style: {
-          'line-color': '#fbbf24',
-          'target-arrow-color': '#f59e0b',
+          'line-color': '#b8d1c0',
+          'target-arrow-color': '#2e8064',
           width: 3,
         },
       },
@@ -493,7 +493,7 @@ export function ERGraphVisualization({
       {/* Cytoscape container */}
       <div
         ref={containerRef}
-        className="w-full h-full bg-grove-canvas dark:bg-grove-canvas-dk rounded-lg border border-grove-border dark:border-grove-border-dk"
+        className="v2-dotgrid w-full h-full bg-grove-canvas dark:bg-grove-canvas-dk rounded-lg border border-grove-border dark:border-grove-border-dk"
       />
 
       {/* ER Object Cards as HTML overlays */}

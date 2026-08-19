@@ -24,6 +24,7 @@ import {
   Sparkles,
   Loader2,
   AlertTriangle,
+  ArrowRight,
   Scale,
   Users,
   Layers,
@@ -49,6 +50,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import {
   useRestructureLatest,
   useRestructureMoves,
@@ -201,8 +203,10 @@ export default function RestructurePage() {
 
   return (
     <div className="space-y-6">
+      <Reveal>
       <PageHeader
         icon={Wrench}
+        eyebrow="Optimize · org design"
         title="Restructure Studio"
         subtitle={
           <>
@@ -246,6 +250,7 @@ export default function RestructurePage() {
           </div>
         }
       />
+      </Reveal>
 
       <ExplainerCard />
 
@@ -533,19 +538,23 @@ function KpiTile({
         {label}
       </div>
       <div className="flex items-baseline gap-2 mt-1">
-        <span className="text-xl font-semibold text-grove-ink dark:text-grove-ink-dk tabular-nums">
+        <span
+          className={`v2-num ${
+            typeof projected === 'number' &&
+            typeof current === 'number' &&
+            projected !== current
+              ? 'text-base font-medium text-grove-ink/50 dark:text-grove-ink-dk/50'
+              : 'text-xl font-semibold text-grove-ink dark:text-grove-ink-dk'
+          }`}
+        >
           {typeof current === 'number' ? fmt(current) : nullText}
         </span>
         {typeof projected === 'number' &&
           typeof current === 'number' &&
           projected !== current && (
             <>
-              <span className="text-grove-ink/40 dark:text-grove-ink-dk/40">
-                →
-              </span>
-              <span
-                className={`text-xl font-semibold tabular-nums ${deltaCls}`}
-              >
+              <ArrowRight className="h-4 w-4 self-center flex-shrink-0 text-copper-500 dark:text-copper-400" />
+              <span className="v2-num text-2xl font-semibold text-primary-700 dark:text-primary-400">
                 {fmt(projected)}
               </span>
             </>
@@ -707,13 +716,13 @@ function MoveCard({
   return (
     <Card
       variant="bordered"
-      className={
+      className={`transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${
         isAccepted
           ? 'ring-1 ring-grove-mint/40'
           : isRejected
           ? 'opacity-60'
           : ''
-      }
+      }`}
     >
       <CardContent className="py-4">
         <div className="flex items-start gap-3">
@@ -904,7 +913,7 @@ function ImpactChip({
   return (
     <span className={`inline-flex items-center gap-1 ${cls}`}>
       <Icon className="h-3 w-3" />
-      <span className="font-semibold tabular-nums">{value}</span>
+      <span className="v2-num font-semibold">{value}</span>
       <span className="opacity-70">{label}</span>
     </span>
   )

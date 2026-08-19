@@ -41,6 +41,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useReportSprawlLatest,
   useReportSprawlItems,
@@ -156,47 +157,57 @@ export function ReportSprawlView({ embedded = false }: { embedded?: boolean } = 
       ) : (
         <>
           {/* KPI strip — 5 cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <TierKpi
-              label="Total items"
-              value={summary.items_total}
-              icon={FileBarChart}
-              tone="neutral"
-              hint={`${summary.reports_total.toLocaleString()} reports + ${summary.dashboards_total.toLocaleString()} dashboards`}
-            />
-            <TierKpi
-              label="Live"
-              value={summary.items_live}
-              icon={Activity}
-              tone="primary"
-              hint="Referenced within the last 12 months — in active use"
-            />
-            <TierKpi
-              label="Zombie"
-              value={summary.items_zombie}
-              icon={Ghost}
-              tone="copper"
-              hint={
-                summary.avg_days_since_last_view
-                  ? `Avg. ${summary.avg_days_since_last_view} days since view across viewed items`
-                  : 'Not referenced in >12 months — cleanup candidate'
-              }
-            />
-            <TierKpi
-              label="Orphaned"
-              value={summary.items_orphaned}
-              icon={UserX}
-              tone="danger"
-              hint="Owner is inactive — nobody accountable for this item"
-            />
-            <TierKpi
-              label="Duplicate"
-              value={summary.items_duplicate}
-              icon={Copy}
-              tone="danger"
-              hint={`${summary.duplicate_groups} duplicate name group${summary.duplicate_groups === 1 ? '' : 's'} detected`}
-            />
-          </div>
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StaggerItem>
+              <TierKpi
+                label="Total items"
+                value={summary.items_total}
+                icon={FileBarChart}
+                tone="neutral"
+                hint={`${summary.reports_total.toLocaleString()} reports + ${summary.dashboards_total.toLocaleString()} dashboards`}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Live"
+                value={summary.items_live}
+                icon={Activity}
+                tone="primary"
+                hint="Referenced within the last 12 months — in active use"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Zombie"
+                value={summary.items_zombie}
+                icon={Ghost}
+                tone="copper"
+                hint={
+                  summary.avg_days_since_last_view
+                    ? `Avg. ${summary.avg_days_since_last_view} days since view across viewed items`
+                    : 'Not referenced in >12 months — cleanup candidate'
+                }
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Orphaned"
+                value={summary.items_orphaned}
+                icon={UserX}
+                tone="danger"
+                hint="Owner is inactive — nobody accountable for this item"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Duplicate"
+                value={summary.items_duplicate}
+                icon={Copy}
+                tone="danger"
+                hint={`${summary.duplicate_groups} duplicate name group${summary.duplicate_groups === 1 ? '' : 's'} detected`}
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Methodology caveat */}
           <Card variant="bordered" className="p-4">
@@ -484,7 +495,7 @@ function TierKpi({
           <p className="text-xs font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
             {label}
           </p>
-          <p className={valueCls}>{value.toLocaleString()}</p>
+          <p className={`v2-num ${valueCls}`}>{value.toLocaleString()}</p>
         </div>
         <div className={wrapperCls}>
           <Icon className={iconCls} />
@@ -598,7 +609,10 @@ function ItemCard({
     typeof evidence.tier_reason === 'string' ? evidence.tier_reason : null
 
   return (
-    <Card variant="bordered" className={`overflow-hidden ${ringClass}`}>
+    <Card
+      variant="bordered"
+      className={`overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${ringClass}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <TierDot tier={item.tier} />

@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Stagger, StaggerItem } from '@/components/v2/motion'
 import { useObjects } from '@/lib/api/hooks/useObjects'
 import {
   useDataQualityLatest,
@@ -159,7 +160,8 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <Stagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <StaggerItem>
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -175,7 +177,9 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           </div>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem>
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -193,7 +197,9 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           </div>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem>
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -208,7 +214,9 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           </div>
         </Card>
+        </StaggerItem>
 
+        <StaggerItem>
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -226,9 +234,11 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           </div>
         </Card>
+        </StaggerItem>
 
         {/* Data quality KPI — an aggregate view of the per-object scores.
             "Not analysed" state points the user at the header button. */}
+        <StaggerItem>
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -286,7 +296,8 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
             </div>
           </div>
         </Card>
-      </div>
+        </StaggerItem>
+      </Stagger>
 
       {/* Data quality diagnostics — shows scope of the last run: total
           sObjects in the org, how many made the analysis list, and the
@@ -346,25 +357,25 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
               <table className="w-full">
                 <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Object
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       API Name
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Sensitivity
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Users with Access
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Quality
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Anomalies
                     </th>
                   </tr>
@@ -442,9 +453,9 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
 
 /**
  * Cell for the Quality column. Renders "-" for objects not yet analysed
- * (e.g. system objects skipped by the engine), and a coloured badge with
- * the score otherwise. Keeps the row compact — the drill-down lives on
- * the object detail page.
+ * (e.g. system objects skipped by the engine), and a coloured mini-bar
+ * with the score otherwise (Grove Refined v2 look). Keeps the row
+ * compact — the drill-down lives on the object detail page.
  */
 function QualityCell({ score }: { score: ObjectScore | undefined }) {
   if (!score) {
@@ -465,18 +476,34 @@ function QualityCell({ score }: { score: ObjectScore | undefined }) {
   const rounded = Math.round(score.score)
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums ring-1 ${qualityChipClasses(
-        score.score,
-      )}`}
+      className="flex items-center gap-2.5"
       title={`Completeness ${Math.round(
         score.completeness_pct,
       )}% · Dupes ${Math.round(
         score.duplicate_pct,
       )}% · Stale ${Math.round(score.staleness_pct)}%`}
     >
-      {rounded}
+      <span className="w-16 h-1.5 overflow-hidden rounded-full bg-grove-canvas dark:bg-grove-canvas-dk">
+        <span
+          className={`block h-full rounded-full ${qualityBarColor(score.score)}`}
+          style={{ width: `${rounded}%` }}
+        />
+      </span>
+      <span className="v2-num text-xs font-semibold text-grove-ink dark:text-grove-ink-dk">
+        {rounded}
+      </span>
     </span>
   )
+}
+
+/**
+ * Mini-bar fill tone for the Quality column (v2 mock thresholds:
+ * green ≥75, amber ≥60, red below).
+ */
+function qualityBarColor(score: number): string {
+  if (score >= 75) return 'bg-primary-600 dark:bg-primary-400'
+  if (score >= 60) return 'bg-amber-600 dark:bg-amber-400'
+  return 'bg-red-600 dark:bg-red-400'
 }
 
 /**

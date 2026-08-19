@@ -33,6 +33,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Ca
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import {
@@ -102,16 +103,17 @@ export default function ReportingGraphPage() {
   // flip modes without re-mounting Cytoscape.
   const ehRef = useRef<any>(null)
 
-  // Color ramp by role-hierarchy depth: 0 (root) = dark indigo, deeper
-  // = lighter slate. Capped at 6 levels which covers virtually every
-  // real Salesforce role tree. Users without a role get neutral gray.
+  // Color ramp by role-hierarchy depth: 0 (root) = deep evergreen,
+  // deeper = lighter sage/mint. Capped at 6 levels which covers
+  // virtually every real Salesforce role tree. Users without a role
+  // get neutral gray.
   const ROLE_COLORS = [
-    '#1e1b4b', // depth 0 — slate-950 / executive
-    '#3730a3', // depth 1 — VP
-    '#4f46e5', // depth 2 — director
-    '#6366f1', // depth 3 — manager
-    '#818cf8', // depth 4 — lead
-    '#a5b4fc', // depth 5+ — IC
+    '#094230', // depth 0 — deep evergreen / executive
+    '#0d573c', // depth 1 — VP
+    '#146b4a', // depth 2 — director
+    '#2e8064', // depth 3 — manager
+    '#6bbf95', // depth 4 — lead
+    '#b8d1c0', // depth 5+ — IC
   ]
   const colorForDepth = (depth: number | null | undefined): string => {
     if (depth == null) return '#9ca3af'  // gray-400 — no role
@@ -199,8 +201,9 @@ export default function ReportingGraphPage() {
         {
           selector: 'node:selected',
           style: {
-            'background-color': '#facc15',
-            'text-outline-color': '#854d0e',
+            'border-width': 4,
+            'border-color': '#c26b47',
+            'text-outline-color': '#16221a',
           },
         },
         {
@@ -222,15 +225,15 @@ export default function ReportingGraphPage() {
         {
           selector: '.edge-manager',
           style: {
-            'line-color': '#6366f1',
-            'target-arrow-color': '#6366f1',
+            'line-color': '#2e8064',
+            'target-arrow-color': '#2e8064',
           },
         },
         {
           selector: '.edge-delegated',
           style: {
-            'line-color': '#0ea5e9',
-            'target-arrow-color': '#0ea5e9',
+            'line-color': '#c26b47',
+            'target-arrow-color': '#c26b47',
             'line-style': 'dashed',
           },
         },
@@ -711,27 +714,30 @@ export default function ReportingGraphPage() {
         </div>
       )}
 
-      <PageHeader
-        icon={Users2}
-        title="Org Chart"
-        subtitle="Drag from a user to another to set their manager or delegated approver. Save writes back to Salesforce User records."
-        actions={
-          <>
-            <Badge variant={pending.length > 0 ? 'info' : 'default'} size="sm">
-              {pending.length} pending {pending.length === 1 ? 'edit' : 'edits'}
-            </Badge>
-            <Button
-              variant="primary"
-              size="md"
-              disabled={pending.length === 0 || apply.isPending}
-              onClick={() => setConfirmOpen(true)}
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {apply.isPending ? 'Saving…' : `Save changes (${pending.length})`}
-            </Button>
-          </>
-        }
-      />
+      <Reveal>
+        <PageHeader
+          icon={Users2}
+          title="Org Chart"
+          eyebrow="Admin · hierarchy"
+          subtitle="Drag from a user to another to set their manager or delegated approver. Save writes back to Salesforce User records."
+          actions={
+            <>
+              <Badge variant={pending.length > 0 ? 'info' : 'default'} size="sm">
+                {pending.length} pending {pending.length === 1 ? 'edit' : 'edits'}
+              </Badge>
+              <Button
+                variant="primary"
+                size="md"
+                disabled={pending.length === 0 || apply.isPending}
+                onClick={() => setConfirmOpen(true)}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {apply.isPending ? 'Saving…' : `Save changes (${pending.length})`}
+              </Button>
+            </>
+          }
+        />
+      </Reveal>
 
       {/* Tool + edge-mode toolbar. Two independent groups: which CANVAS
           TOOL is active (move vs draw) and, when drawing, which EDGE TYPE

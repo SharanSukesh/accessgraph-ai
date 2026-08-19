@@ -39,6 +39,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useIntegrationSprawlLatest,
   useIntegrationSprawlItems,
@@ -184,47 +185,57 @@ export function IntegrationSprawlView({
       ) : (
         <>
           {/* KPI strip — 5 cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <TierKpi
-              label="Total"
-              value={summary.items_total}
-              icon={Plug}
-              tone="neutral"
-              hint={`${summary.connected_apps_total.toLocaleString()} apps + ${summary.named_credentials_total.toLocaleString()} credentials + ${summary.external_data_sources_total.toLocaleString()} data sources + ${summary.auth_providers_total.toLocaleString()} SSO + ${summary.remote_sites_total.toLocaleString()} legacy sites`}
-            />
-            <TierKpi
-              label="Healthy"
-              value={summary.items_healthy}
-              icon={Activity}
-              tone="primary"
-              hint="Active with recent LoginHistory activity"
-            />
-            <TierKpi
-              label="Stale"
-              value={summary.items_stale}
-              icon={Ghost}
-              tone="copper"
-              hint={`No LoginHistory activity in 180 days — cleanup candidates`}
-            />
-            <TierKpi
-              label="Broken"
-              value={summary.items_broken}
-              icon={AlertCircle}
-              tone="danger"
-              hint={
-                summary.failed_logins_180d > 0
-                  ? `${summary.failed_logins_180d.toLocaleString()} failed logins across all integrations`
-                  : 'Deactivated integrations or repeated auth failures'
-              }
-            />
-            <TierKpi
-              label="Unknown"
-              value={summary.items_unknown}
-              icon={HelpCircle}
-              tone="neutral"
-              hint="Outbound surfaces without direct usage telemetry"
-            />
-          </div>
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StaggerItem>
+              <TierKpi
+                label="Total"
+                value={summary.items_total}
+                icon={Plug}
+                tone="neutral"
+                hint={`${summary.connected_apps_total.toLocaleString()} apps + ${summary.named_credentials_total.toLocaleString()} credentials + ${summary.external_data_sources_total.toLocaleString()} data sources + ${summary.auth_providers_total.toLocaleString()} SSO + ${summary.remote_sites_total.toLocaleString()} legacy sites`}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Healthy"
+                value={summary.items_healthy}
+                icon={Activity}
+                tone="primary"
+                hint="Active with recent LoginHistory activity"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Stale"
+                value={summary.items_stale}
+                icon={Ghost}
+                tone="copper"
+                hint={`No LoginHistory activity in 180 days — cleanup candidates`}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Broken"
+                value={summary.items_broken}
+                icon={AlertCircle}
+                tone="danger"
+                hint={
+                  summary.failed_logins_180d > 0
+                    ? `${summary.failed_logins_180d.toLocaleString()} failed logins across all integrations`
+                    : 'Deactivated integrations or repeated auth failures'
+                }
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Unknown"
+                value={summary.items_unknown}
+                icon={HelpCircle}
+                tone="neutral"
+                hint="Outbound surfaces without direct usage telemetry"
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Methodology caveat */}
           <Card variant="bordered" className="p-4">
@@ -566,7 +577,7 @@ function TierKpi({
           <p className="text-xs font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
             {label}
           </p>
-          <p className={valueCls}>{value.toLocaleString()}</p>
+          <p className={`v2-num ${valueCls}`}>{value.toLocaleString()}</p>
         </div>
         <div className={wrapperCls}>
           <Icon className={iconCls} />
@@ -697,7 +708,10 @@ function ItemCard({
   const TypeIcon = TYPE_ICON[item.integration_type]
 
   return (
-    <Card variant="bordered" className={`overflow-hidden ${ringClass}`}>
+    <Card
+      variant="bordered"
+      className={`overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${ringClass}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <TierDot tier={item.tier} />

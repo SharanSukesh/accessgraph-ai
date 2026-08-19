@@ -13,6 +13,7 @@ import { Button } from '@/components/shared/Button'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
 import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
 import { GraphLegend } from '@/components/graph/GraphLegend'
@@ -85,11 +86,14 @@ export default function GraphExplorerPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Network}
-        title="Graph Explorer"
-        subtitle="Interactive ER-style access visualization — explore users and their permissions"
-      />
+      <Reveal>
+        <PageHeader
+          icon={Network}
+          title="Graph Explorer"
+          eyebrow="Explore · access paths"
+          subtitle="Interactive ER-style access visualization — explore users and their permissions"
+        />
+      </Reveal>
 
       {/* User Search */}
       <Card variant="bordered">

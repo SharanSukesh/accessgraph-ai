@@ -28,6 +28,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
 
 export default function RecommendationsPage() {
@@ -108,88 +109,99 @@ export default function RecommendationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={ListChecks}
-        title="Priority Actions"
-        subtitle="Review and act on security recommendations"
-        actions={
-          <>
-            {selectedIds.size > 0 && (
-              <Badge variant="info">
-                {selectedIds.size} selected
-              </Badge>
-            )}
-            <Button variant="secondary" size="sm" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-          </>
-        }
-      />
+      <Reveal>
+        <PageHeader
+          icon={ListChecks}
+          title="Priority Actions"
+          eyebrow="Attention · triage inbox"
+          subtitle="Review and act on security recommendations"
+          actions={
+            <>
+              {selectedIds.size > 0 && (
+                <Badge variant="info">
+                  {selectedIds.size} selected
+                </Badge>
+              )}
+              <Button variant="secondary" size="sm" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </>
+          }
+        />
+      </Reveal>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Total
-              </p>
-              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                {isLoading ? '...' : recommendations?.length || 0}
-              </p>
+      <Stagger className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  Total
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
+                  {isLoading ? '...' : recommendations?.length || 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
+                <CheckCircle className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
-              <CheckCircle className="h-6 w-6 text-primary-600 dark:text-primary-400" />
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Pending
-              </p>
-              <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
-                {isLoading ? '...' : pendingCount}
-              </p>
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  Pending
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
+                  {isLoading ? '...' : pendingCount}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-orange-100 dark:bg-orange-900">
+                <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-orange-100 dark:bg-orange-900">
-              <Clock className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                In Progress
-              </p>
-              <p className="mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
-                {isLoading ? '...' : inProgressCount}
-              </p>
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  In Progress
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
+                  {isLoading ? '...' : inProgressCount}
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Completed
-              </p>
-              <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
-                {isLoading ? '...' : completedCount}
-              </p>
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  Completed
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
+                  {isLoading ? '...' : completedCount}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
+                <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
-              <Check className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </StaggerItem>
+      </Stagger>
 
       {/* Track filter chips — distinguishes Security (existing) from Equity (GAEA) */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -295,7 +307,7 @@ export default function RecommendationsPage() {
                   {recommendations.map((rec: any) => (
                     <div
                       key={rec.id}
-                      className={`p-4 border rounded-lg transition-all ${
+                      className={`p-4 border rounded-lg transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${
                         selectedRec?.id === rec.id
                           ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                           : 'border-grove-border dark:border-grove-border-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15'

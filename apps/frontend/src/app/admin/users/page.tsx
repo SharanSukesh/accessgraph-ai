@@ -29,6 +29,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -134,18 +135,22 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={UserPlus}
-        title="Users"
-        subtitle="Invite new users to AccessGraph. They'll receive an activation email and set their own password."
-      />
+      <Reveal>
+        <PageHeader
+          icon={UserPlus}
+          title="Users"
+          eyebrow="Admin · access"
+          subtitle="Invite new users to AccessGraph. They'll receive an activation email and set their own password."
+        />
+      </Reveal>
 
       {/* Create user form */}
+      <Reveal>
       <Card variant="bordered" className="p-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="block md:col-span-2">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+              <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
                 Email
               </span>
               <div className="mt-1 relative">
@@ -162,7 +167,7 @@ export default function AdminUsersPage() {
             </label>
 
             <label className="block">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+              <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
                 Name (optional)
               </span>
               <input
@@ -177,7 +182,7 @@ export default function AdminUsersPage() {
 
           <div className="flex items-end gap-3 flex-wrap">
             <label className="block">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+              <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
                 Role
               </span>
               <select
@@ -224,6 +229,7 @@ export default function AdminUsersPage() {
           )}
         </form>
       </Card>
+      </Reveal>
 
       {/* Existing users list */}
       {isLoading ? (
@@ -235,6 +241,7 @@ export default function AdminUsersPage() {
           description="Create the first account using the form above. They'll receive an activation email."
         />
       ) : (
+        <Reveal>
         <div className="space-y-2">
           {users.map((u) => (
             <UserRow
@@ -261,6 +268,7 @@ export default function AdminUsersPage() {
             />
           ))}
         </div>
+        </Reveal>
       )}
     </div>
   )
@@ -301,7 +309,10 @@ function UserRow({
     }
   }
   return (
-    <Card variant="bordered" className="p-4">
+    <Card
+      variant="bordered"
+      className="p-4 transition-colors duration-200 hover:bg-primary-50/40 dark:hover:bg-primary-900/10"
+    >
       <CardContent className="p-0">
         <div className="flex items-center gap-3 flex-wrap">
           <div

@@ -32,6 +32,7 @@ import {
 } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Logo } from '@/components/shared/Logo'
+import { Reveal } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { cn } from '@/lib/utils/cn'
 
@@ -85,10 +86,10 @@ function LoginContent() {
           <div className="flex justify-center mb-6">
             <Logo size="lg" />
           </div>
-          <p className="text-[11px] font-mono uppercase tracking-[0.22em] text-copper-600 dark:text-copper-400 mb-3">
+          <p className="v2-micro text-copper-600 dark:text-copper-400 mb-3">
             Access Intelligence · v0.1
           </p>
-          <h1 className="text-4xl font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
+          <h1 className="v2-display text-4xl font-semibold text-grove-ink dark:text-grove-ink-dk mb-3 tracking-tight text-balance">
             Welcome back
           </h1>
           <p className="text-grove-ink/70 dark:text-grove-ink-dk/70">
@@ -96,11 +97,11 @@ function LoginContent() {
           </p>
         </div>
 
+        <Reveal delay={0.12}>
         <Card
           variant="bordered"
           copperBrackets
           className="shadow-grove-lift"
-          style={{ animation: 'grove-fade-up 500ms ease-out 120ms both' }}
         >
           <CardHeader className="pb-0">
             <CardTitle className="text-center tracking-tight text-grove-ink dark:text-grove-ink-dk sr-only">
@@ -138,7 +139,7 @@ function LoginContent() {
 
             <form onSubmit={handleSubmit} className="space-y-3">
               <label className="block">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+                <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
                   Email
                 </span>
                 <div className="mt-1 relative">
@@ -156,7 +157,7 @@ function LoginContent() {
               </label>
 
               <label className="block">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
+                <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
                   Password
                 </span>
                 <div className="mt-1 relative">
@@ -203,8 +204,9 @@ function LoginContent() {
             </p>
           </CardContent>
         </Card>
+        </Reveal>
 
-        <div className="mt-8 text-center text-[11px] text-grove-ink/50 dark:text-grove-ink-dk/50 font-mono uppercase tracking-[0.16em]">
+        <div className="v2-micro mt-8 text-center text-grove-ink/50 dark:text-grove-ink-dk/50">
           <p>Access Intelligence · Enterprise-grade</p>
         </div>
       </div>

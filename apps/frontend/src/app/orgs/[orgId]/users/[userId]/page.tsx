@@ -29,6 +29,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { Reveal } from '@/components/v2/motion'
 import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
 import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
 import { GraphLegend } from '@/components/graph/GraphLegend'
@@ -89,32 +90,38 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs
-        crumbs={[
-          { label: 'Users', href: `/orgs/${orgId}/users` },
-          { label: user.name },
-        ]}
-      />
-      <PageHeader
-        icon={User}
-        title={user.name}
-        subtitle={user.email}
-        actions={
-          <>
-            {user.riskLevel && (
-              <RiskBadge
-                level={user.riskLevel as 'low' | 'medium' | 'high' | 'critical'}
-              />
-            )}
-            <Badge variant={user.isActive ? 'success' : 'default'}>
-              {user.isActive ? 'Active' : 'Inactive'}
-            </Badge>
-          </>
-        }
-      />
+      <Reveal>
+        <Breadcrumbs
+          crumbs={[
+            { label: 'Users', href: `/orgs/${orgId}/users` },
+            { label: user.name },
+          ]}
+        />
+      </Reveal>
+      <Reveal delay={0.05}>
+        <PageHeader
+          icon={User}
+          title={user.name}
+          subtitle={user.email}
+          eyebrow="Explore · user detail"
+          actions={
+            <>
+              {user.riskLevel && (
+                <RiskBadge
+                  level={user.riskLevel as 'low' | 'medium' | 'high' | 'critical'}
+                />
+              )}
+              <Badge variant={user.isActive ? 'success' : 'default'}>
+                {user.isActive ? 'Active' : 'Inactive'}
+              </Badge>
+            </>
+          }
+        />
+      </Reveal>
 
       {/* User Info Card */}
-      <Card variant="bordered">
+      <Reveal delay={0.1}>
+      <Card variant="bordered" className="v2-card-hero">
         <CardContent className="py-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="flex items-start gap-3">
@@ -166,6 +173,7 @@ export default function UserDetailPage() {
           </div>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="overview">
@@ -202,6 +210,7 @@ export default function UserDetailPage() {
 
         {/* Overview Tab */}
         <TabsContent value="overview">
+          <Reveal>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Risk Overview */}
             <Card variant="bordered">
@@ -224,7 +233,7 @@ export default function UserDetailPage() {
                         Overall Risk Score
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
+                        <div className="v2-num text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
                           {risk.score}
                         </div>
                         <RiskBadge level={risk.level as "low" | "medium" | "high" | "critical"} />
@@ -250,21 +259,21 @@ export default function UserDetailPage() {
                                 <span className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk capitalize">
                                   {factor.factor?.replace(/_/g, ' ')}
                                 </span>
-                                <span className="text-xs font-semibold text-grove-ink/65 dark:text-grove-ink-dk/65">
+                                <span className="v2-num text-xs font-semibold text-grove-ink/65 dark:text-grove-ink-dk/65">
                                   {(factor.score * factor.weight * 100).toFixed(1)} pts
                                 </span>
                               </div>
                               <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
                                 {factor.description}
                               </div>
-                              <div className="flex items-center gap-2 text-xs">
-                                <div className="flex-1 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded-full h-1.5">
+                              <div className="flex items-center gap-3 text-xs">
+                                <div className="flex-1 overflow-hidden bg-grove-canvas dark:bg-grove-canvas-dk rounded-full h-2">
                                   <div
-                                    className="bg-primary-600 h-1.5 rounded-full transition-all"
+                                    className="v2-bar-fill bg-primary-600 dark:bg-primary-400 h-full rounded-full"
                                     style={{ width: `${factor.score * 100}%` }}
                                   />
                                 </div>
-                                <span className="text-grove-ink/55 dark:text-grove-ink-dk/55 min-w-[3rem] text-right">
+                                <span className="v2-num font-semibold text-grove-ink dark:text-grove-ink-dk min-w-[3rem] text-right">
                                   {(factor.score * 100).toFixed(0)}%
                                 </span>
                               </div>
@@ -331,10 +340,12 @@ export default function UserDetailPage() {
               </CardContent>
             </Card>
           </div>
+          </Reveal>
         </TabsContent>
 
         {/* Object Access Tab */}
         <TabsContent value="objects">
+          <Reveal>
           <Card variant="bordered">
             <CardHeader>
               <CardTitle>Object Access Permissions</CardTitle>
@@ -418,10 +429,12 @@ export default function UserDetailPage() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
         </TabsContent>
 
         {/* Field Access Tab */}
         <TabsContent value="fields">
+          <Reveal>
           <Card variant="bordered">
             <CardHeader>
               <CardTitle>Field Access Permissions</CardTitle>
@@ -491,10 +504,12 @@ export default function UserDetailPage() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
         </TabsContent>
 
         {/* Record Access Tab */}
         <TabsContent value="records">
+          <Reveal>
           <Card variant="bordered">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -509,10 +524,12 @@ export default function UserDetailPage() {
               <RecordAccessInfo userId={userId} orgId={orgId} />
             </CardContent>
           </Card>
+          </Reveal>
         </TabsContent>
 
         {/* Graph Tab */}
         <TabsContent value="graph">
+          <Reveal>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Main Graph Area */}
             <div className="lg:col-span-8">
@@ -582,10 +599,12 @@ export default function UserDetailPage() {
               )}
             </div>
           </div>
+          </Reveal>
         </TabsContent>
 
         {/* Anomalies Tab */}
         <TabsContent value="anomalies">
+          <Reveal>
           <Card variant="bordered">
             <CardHeader>
               <CardTitle>Access Anomalies</CardTitle>
@@ -684,10 +703,12 @@ export default function UserDetailPage() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
         </TabsContent>
 
         {/* Recommendations Tab */}
         <TabsContent value="recommendations">
+          <Reveal>
           <Card variant="bordered">
             <CardHeader>
               <CardTitle>Recommendations</CardTitle>
@@ -744,6 +765,7 @@ export default function UserDetailPage() {
               )}
             </CardContent>
           </Card>
+          </Reveal>
         </TabsContent>
       </Tabs>
     </div>

@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
+import { Reveal } from '@/components/v2/motion'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
@@ -50,17 +51,22 @@ export default function UserComparePage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs
-        crumbs={[
-          { label: 'Users', href: `/orgs/${orgId}/users` },
-          { label: 'Compare' },
-        ]}
-      />
-      <PageHeader
-        icon={GitCompare}
-        title="Compare Users"
-        subtitle="Compare permissions and access between multiple users"
-      />
+      <Reveal>
+        <Breadcrumbs
+          crumbs={[
+            { label: 'Users', href: `/orgs/${orgId}/users` },
+            { label: 'Compare' },
+          ]}
+        />
+      </Reveal>
+      <Reveal delay={0.05}>
+        <PageHeader
+          icon={GitCompare}
+          title="Compare Users"
+          subtitle="Compare permissions and access between multiple users"
+          eyebrow="Explore · compare"
+        />
+      </Reveal>
 
       {/* User Selection */}
       <Card variant="bordered">
@@ -201,6 +207,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
   return (
     <div className="space-y-6">
       {/* Object Permissions Comparison */}
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>Object Permissions Comparison</CardTitle>
@@ -210,13 +217,13 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
             <table className="w-full text-sm">
               <thead className="bg-primary-50/40 dark:bg-primary-900/10">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 sticky left-0 bg-primary-50/40 dark:bg-primary-900/10">
+                  <th className="px-4 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55 sticky left-0 bg-primary-50/40 dark:bg-primary-900/10">
                     Object
                   </th>
                   {userIds.map((userId) => (
                     <th
                       key={userId}
-                      className="px-4 py-3 text-center font-medium text-grove-ink/85 dark:text-grove-ink-dk/85"
+                      className="px-4 py-3 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55"
                     >
                       {data.find((d) => d?.userId === userId)?.userName || 'Loading...'}
                     </th>
@@ -301,6 +308,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
           )}
         </CardContent>
       </Card>
+      </Reveal>
     </div>
   )
 }

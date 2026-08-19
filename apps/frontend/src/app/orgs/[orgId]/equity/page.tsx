@@ -31,6 +31,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useEquityDiagnostic,
   useEquityHistory,
@@ -390,8 +391,10 @@ export default function EquityPage() {
 
   return (
     <div className="space-y-6">
+      <Reveal>
       <PageHeader
         icon={Scale}
+        eyebrow="Optimize · fairness"
         title="Equity"
         subtitle={
           <>
@@ -415,6 +418,7 @@ export default function EquityPage() {
           </Button>
         }
       />
+      </Reveal>
 
       {/* Generate-mutation status banners. Without these, a failed run
           was invisible — the user saw the "Computing…" spinner briefly
@@ -507,7 +511,8 @@ export default function EquityPage() {
       )}
 
       {/* Headline metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <Stagger className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StaggerItem className="h-full">
         {(() => {
           // Vacuous 100% detection AND grouping-tier disclosure.
           //
@@ -554,8 +559,8 @@ export default function EquityPage() {
               variant="bordered"
               className={
                 isVacuous
-                  ? 'p-6 ring-1 ring-copper-200 dark:ring-copper-900/60'
-                  : 'p-6'
+                  ? 'p-6 h-full ring-1 ring-copper-200 dark:ring-copper-900/60'
+                  : 'p-6 h-full'
               }
             >
               <div className="flex items-start justify-between">
@@ -617,8 +622,10 @@ export default function EquityPage() {
             </Card>
           )
         })()}
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
+        <StaggerItem className="h-full">
+        <Card variant="bordered" className="p-6 h-full">
           <div>
             <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
               Most disadvantaged
@@ -633,8 +640,10 @@ export default function EquityPage() {
             </p>
           </div>
         </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
+        <StaggerItem className="h-full">
+        <Card variant="bordered" className="p-6 h-full">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
@@ -650,7 +659,8 @@ export default function EquityPage() {
             <UsersIcon className="h-8 w-8 text-grove-ink/50" />
           </div>
         </Card>
-      </div>
+        </StaggerItem>
+      </Stagger>
 
       {/* Per-group utility bars — heading adapts to whichever tier of
           the grouping ladder was used so the axis label is honest. */}
@@ -659,12 +669,16 @@ export default function EquityPage() {
           <CardTitle>
             {(() => {
               const k = diagnostic?.grouping_key ?? 'department'
-              if (k === 'role') return 'Per-role access utility'
-              if (k === 'profile') return 'Per-profile access utility'
-              if (k === 'unassigned') return 'Access utility'
-              return 'Per-department access utility'
+              if (k === 'role') return 'Access utility — bottom 5 roles'
+              if (k === 'profile') return 'Access utility — bottom 5 profiles'
+              if (k === 'unassigned') return 'Access utility — bottom 5'
+              return 'Access utility — bottom 5 departments'
             })()}
           </CardTitle>
+          <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+            The 5 lowest-utility groups — the teams furthest from the access
+            they need
+          </p>
         </CardHeader>
         <CardContent>
           {diagnosticLoading ? (
@@ -676,7 +690,9 @@ export default function EquityPage() {
             />
           ) : (
             <div className="space-y-3">
-              {sortedDepts.map(([dept, util], i) => {
+              {/* Sanctioned render slice: show only the 5 lowest-utility
+                  groups (sortedDepts is already ascending). */}
+              {sortedDepts.slice(0, 5).map(([dept, util], i) => {
                 const widthPct = (util / Math.max(maxUtil, 1e-6)) * 100
                 const isWorst = i === 0 && sortedDepts.length > 1
                 return (
@@ -690,16 +706,16 @@ export default function EquityPage() {
                           </Badge>
                         )}
                       </span>
-                      <span className="text-sm tabular-nums text-grove-ink/65 dark:text-grove-ink-dk/65">
+                      <span className="v2-num text-sm text-right text-grove-ink/65 dark:text-grove-ink-dk/65">
                         {util.toFixed(3)}
                       </span>
                     </div>
-                    <div className="h-2 rounded-full bg-primary-50 dark:bg-primary-900/20 overflow-hidden">
+                    <div className="h-2 rounded-full bg-grove-canvas dark:bg-grove-canvas-dk overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${
+                        className={`h-full rounded-full v2-bar-fill transition-all duration-500 ${
                           isWorst
-                            ? 'bg-orange-500'
-                            : 'bg-primary-600'
+                            ? 'bg-copper-500 dark:bg-copper-400'
+                            : 'bg-primary-600 dark:bg-primary-400'
                         }`}
                         style={{ width: `${widthPct}%` }}
                       />

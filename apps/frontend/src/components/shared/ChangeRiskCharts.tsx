@@ -340,6 +340,7 @@ export function DailyActivityBars({
         return (
           <g
             key={t.date}
+            className="group"
             onMouseEnter={(evt) => {
               onHover?.({ date: t.date, count: t.count })
               updateTip(evt)
@@ -368,6 +369,9 @@ export function DailyActivityBars({
                 width={barWidth}
                 height={barHeight}
                 rx={1.5}
+                // Copper hover highlight — !important so the class wins
+                // over the inline default fill. Default color untouched.
+                className="transition-colors duration-150 group-hover:!fill-[#c26b47] dark:group-hover:!fill-[#d8794a]"
                 style={{ fill, opacity }}
               />
             )}
@@ -590,6 +594,7 @@ export function HourlyActivityBars({
           return (
             <g
               key={h.hour}
+              className="group"
               onMouseEnter={updateTip}
               onMouseMove={updateTip}
               onMouseLeave={() => setTip(null)}
@@ -610,6 +615,9 @@ export function HourlyActivityBars({
                   width={barWidth}
                   height={barHeight}
                   rx={1.5}
+                  // Copper hover highlight — !important beats the inline
+                  // default fill; non-hover colors stay as-is.
+                  className="transition-colors duration-150 group-hover:!fill-[#c26b47] dark:group-hover:!fill-[#d8794a]"
                   style={{ fill, opacity: 0.9 }}
                 />
               )}
@@ -697,10 +705,13 @@ export function HorizontalBarChart({
       {items.map((item) => {
         const pct = (item.value / max) * 100
         const isActive = activeSelection === item.label
-        const barTone =
-          item.tone === 'copper'
-            ? 'bg-copper-500 dark:bg-copper-400'
-            : 'bg-primary-500 dark:bg-primary-400'
+        // Selected bars render copper; hovered rows highlight the bar
+        // copper via group-hover. Default (non-hover) tones unchanged.
+        const barTone = isActive
+          ? 'bg-[#c26b47] dark:bg-[#d8794a]'
+          : item.tone === 'copper'
+            ? 'bg-copper-500 dark:bg-copper-400 group-hover:bg-[#c26b47] dark:group-hover:bg-[#d8794a]'
+            : 'bg-primary-500 dark:bg-primary-400 group-hover:bg-[#c26b47] dark:group-hover:bg-[#d8794a]'
         const rowTone = isActive
           ? 'bg-primary-50/60 dark:bg-primary-900/25'
           : ''
@@ -814,7 +825,7 @@ export function ComponentActivityChart({
         const dim = row.count === 0
         const pct = (row.count / max) * 100
         return (
-          <div key={row.key}>
+          <div key={row.key} className="group">
             <div className="flex items-center justify-between gap-2 mb-1">
               <button
                 type="button"
@@ -844,8 +855,10 @@ export function ComponentActivityChart({
               </span>
             </div>
             <div className="h-1.5 rounded-full bg-grove-border/60 dark:bg-grove-border-dk/60 overflow-hidden">
+              {/* Copper hover highlight — !important so the class wins
+                  over the inline default backgroundColor. */}
               <div
-                className="h-full rounded-full transition-[width] duration-500 ease-out"
+                className="h-full rounded-full transition-[width] duration-500 ease-out group-hover:!bg-[#c26b47] dark:group-hover:!bg-[#d8794a]"
                 style={{
                   width: `${pct}%`,
                   backgroundColor: row.color,

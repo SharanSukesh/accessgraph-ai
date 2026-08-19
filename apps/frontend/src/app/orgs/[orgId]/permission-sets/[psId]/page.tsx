@@ -21,6 +21,7 @@ import { Badge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { Reveal } from '@/components/v2/motion'
 import { usePermissionSetDetail } from '@/lib/api/hooks/usePermissionSets'
 
 export default function PermissionSetDetailPage() {
@@ -201,6 +202,7 @@ export default function PermissionSetDetailPage() {
         </Card>
       )}
 
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -259,7 +261,9 @@ export default function PermissionSetDetailPage() {
           )}
         </CardContent>
       </Card>
+      </Reveal>
 
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -278,9 +282,9 @@ export default function PermissionSetDetailPage() {
               <table className="min-w-full divide-y divide-grove-border dark:divide-grove-border-dk">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Name</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Email</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Assignment</th>
+                    <th className="px-3 py-2 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Name</th>
+                    <th className="px-3 py-2 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Email</th>
+                    <th className="px-3 py-2 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Assignment</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
@@ -305,7 +309,9 @@ export default function PermissionSetDetailPage() {
           )}
         </CardContent>
       </Card>
+      </Reveal>
 
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -324,13 +330,13 @@ export default function PermissionSetDetailPage() {
               <table className="min-w-full divide-y divide-grove-border dark:divide-grove-border-dk">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Object</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">R</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">C</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">E</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">D</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">View All</th>
-                    <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">Modify All</th>
+                    <th className="px-3 py-2 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Object</th>
+                    <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">R</th>
+                    <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">C</th>
+                    <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">E</th>
+                    <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">D</th>
+                    <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">View All</th>
+                    <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Modify All</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
@@ -351,7 +357,9 @@ export default function PermissionSetDetailPage() {
           )}
         </CardContent>
       </Card>
+      </Reveal>
 
+      <Reveal>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -448,10 +456,10 @@ export default function PermissionSetDetailPage() {
                                 <table className="min-w-full divide-y divide-grove-border dark:divide-grove-border-dk">
                                   <thead className="bg-grove-canvas dark:bg-grove-canvas-dk">
                                     <tr>
-                                      <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase">Field</th>
-                                      <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">Read</th>
-                                      <th className="px-3 py-2 text-center text-xs font-medium text-grove-ink/55 uppercase">Edit</th>
-                                      <th className="px-3 py-2 text-left text-xs font-medium text-grove-ink/55 uppercase"></th>
+                                      <th className="px-3 py-2 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Field</th>
+                                      <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Read</th>
+                                      <th className="px-3 py-2 text-center v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Edit</th>
+                                      <th className="px-3 py-2 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55"></th>
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
@@ -496,6 +504,7 @@ export default function PermissionSetDetailPage() {
           )}
         </CardContent>
       </Card>
+      </Reveal>
     </div>
   )
 }

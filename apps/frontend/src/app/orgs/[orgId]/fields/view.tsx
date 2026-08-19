@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { useFields } from '@/lib/api/hooks/useFields'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
@@ -73,6 +74,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
       />}
 
       {/* Summary Cards */}
+      <Reveal>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
@@ -122,8 +124,10 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
           </div>
         </Card>
       </div>
+      </Reveal>
 
       {/* Alphabetical Filter */}
+      <Reveal delay={0.05}>
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>Filter by Starting Letter</CardTitle>
@@ -152,8 +156,10 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
           </div>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* Filters */}
+      <Reveal delay={0.1}>
       <Card variant="bordered">
         <CardContent className="py-4">
           <div className="flex flex-col md:flex-row gap-4">
@@ -186,8 +192,10 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
           </div>
         </CardContent>
       </Card>
+      </Reveal>
 
       {/* Fields Table */}
+      <Reveal delay={0.15}>
       <Card variant="bordered">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -213,22 +221,22 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                 <table className="w-full">
                   <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Field
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Object
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         API Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Properties
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Users
                       </th>
                     </tr>
@@ -362,6 +370,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
           )}
         </CardContent>
       </Card>
+      </Reveal>
     </div>
   )
 }

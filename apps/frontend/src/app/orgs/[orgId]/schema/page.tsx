@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Layers, Database, FileText } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { cn } from '@/lib/utils/cn'
 import { ObjectsView } from '../objects/view'
 import { FieldsView } from '../fields/view'
@@ -47,11 +48,14 @@ export default function SchemaPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Layers}
-        title="Schema"
-        subtitle="Browse Salesforce objects and fields — permissions, access patterns, and field-level security."
-      />
+      <Reveal>
+        <PageHeader
+          icon={Layers}
+          title="Schema"
+          subtitle="Browse Salesforce objects and fields — permissions, access patterns, and field-level security."
+          eyebrow="Explore · metadata"
+        />
+      </Reveal>
 
       <div className="flex items-center gap-1 border-b border-grove-border dark:border-grove-border-dk">
         <TabButton

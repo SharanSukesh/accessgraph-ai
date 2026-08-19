@@ -43,6 +43,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useLicenseFitLatest,
   useLicenseFitItems,
@@ -103,8 +104,10 @@ export default function LicenseFitPage() {
 
   return (
     <div className="space-y-6">
+      <Reveal>
       <PageHeader
         icon={DollarSign}
+        eyebrow="Optimize · spend"
         title="License-to-Persona Fit"
         subtitle={
           summary?.has_data && summary.snapshot_at
@@ -131,6 +134,7 @@ export default function LicenseFitPage() {
           </Button>
         }
       />
+      </Reveal>
 
       {runMutation.isError && (
         <Card variant="bordered" className="p-4 border-red-300 dark:border-red-800">
@@ -164,44 +168,56 @@ export default function LicenseFitPage() {
           <SavingsBanner summary={summary} />
 
           {/* Fit category KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <FitKpi
-              label="Right-sized"
-              value={summary.users_right_sized}
-              tone="primary"
-              hint="Persona matches the assigned SKU"
-            />
-            <FitKpi
-              label="Overbuilt"
-              value={summary.users_overbuilt}
-              tone="copper"
-              hint="Could downgrade to a cheaper SKU"
-            />
-            <FitKpi
-              label="Wrong cloud"
-              value={summary.users_wrong_cloud}
-              tone="danger"
-              hint="Sales SKU acting Service (or vice versa)"
-            />
-            <FitKpi
-              label="Underused"
-              value={summary.users_underused}
-              tone="danger"
-              hint="Paid seat, no login in 90+ days"
-            />
-            <FitKpi
-              label="Inactive billed"
-              value={summary.users_inactive_billed}
-              tone="danger"
-              hint="Deactivated user still on a paid seat"
-            />
-            <FitKpi
-              label="Unknown"
-              value={summary.users_unknown}
-              tone="neutral"
-              hint="Insufficient evidence — manual review recommended"
-            />
-          </div>
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <StaggerItem className="h-full">
+              <FitKpi
+                label="Right-sized"
+                value={summary.users_right_sized}
+                tone="primary"
+                hint="Persona matches the assigned SKU"
+              />
+            </StaggerItem>
+            <StaggerItem className="h-full">
+              <FitKpi
+                label="Overbuilt"
+                value={summary.users_overbuilt}
+                tone="copper"
+                hint="Could downgrade to a cheaper SKU"
+              />
+            </StaggerItem>
+            <StaggerItem className="h-full">
+              <FitKpi
+                label="Wrong cloud"
+                value={summary.users_wrong_cloud}
+                tone="danger"
+                hint="Sales SKU acting Service (or vice versa)"
+              />
+            </StaggerItem>
+            <StaggerItem className="h-full">
+              <FitKpi
+                label="Underused"
+                value={summary.users_underused}
+                tone="danger"
+                hint="Paid seat, no login in 90+ days"
+              />
+            </StaggerItem>
+            <StaggerItem className="h-full">
+              <FitKpi
+                label="Inactive billed"
+                value={summary.users_inactive_billed}
+                tone="danger"
+                hint="Deactivated user still on a paid seat"
+              />
+            </StaggerItem>
+            <StaggerItem className="h-full">
+              <FitKpi
+                label="Unknown"
+                value={summary.users_unknown}
+                tone="neutral"
+                hint="Insufficient evidence — manual review recommended"
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Methodology + pricing caveat */}
           <Card variant="bordered" className="p-4">
@@ -403,7 +419,7 @@ function SavingsBanner({
   return (
     <Card
       variant="bordered"
-      className="p-6 bg-gradient-to-br from-primary-50 to-copper-50 dark:from-primary-950/40 dark:to-copper-950/40 ring-1 ring-primary-200 dark:ring-primary-900"
+      className="v2-card-hero p-6 ring-1 ring-primary-200 dark:ring-primary-900"
     >
       <div className="flex items-center gap-4">
         <div className="p-3 rounded-lg bg-white dark:bg-grove-surface-dk ring-1 ring-primary-200 dark:ring-primary-800">
@@ -414,7 +430,7 @@ function SavingsBanner({
             Projected annual savings
           </div>
           <div className="mt-1 flex items-baseline gap-3">
-            <div className="text-4xl font-bold text-grove-ink dark:text-grove-ink-dk tabular-nums">
+            <div className="v2-num v2-shimmer-text text-5xl font-bold text-grove-ink dark:text-grove-ink-dk">
               {formatUsd(savingsUsd)}
             </div>
             {savingsPct > 0 && (
@@ -484,11 +500,11 @@ function FitKpi({
       ? 'text-2xl font-bold text-primary-700 dark:text-primary-400 tabular-nums'
       : 'text-2xl font-bold text-grove-ink dark:text-grove-ink-dk tabular-nums'
   return (
-    <Card variant="bordered" className="p-4" title={hint}>
+    <Card variant="bordered" className="p-4 h-full" title={hint}>
       <div className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60">
         {label}
       </div>
-      <div className={`mt-1 ${valueCls}`}>{value.toLocaleString()}</div>
+      <div className={`v2-num mt-1 ${valueCls}`}>{value.toLocaleString()}</div>
     </Card>
   )
 }
@@ -586,7 +602,10 @@ function AssessmentCard({
   const savingsUsd = item.annual_savings_cents / 100
 
   return (
-    <Card variant="bordered" className={`overflow-hidden ${ringClass}`}>
+    <Card
+      variant="bordered"
+      className={`overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${ringClass}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <FitDot category={item.fit_category} />
@@ -638,7 +657,7 @@ function AssessmentCard({
                   {item.recommended_license_name}
                 </strong>
                 <ArrowRight className="h-3 w-3 text-primary-600 dark:text-primary-400" />
-                <span className="text-primary-700 dark:text-primary-400 font-semibold tabular-nums">
+                <span className="v2-num text-primary-700 dark:text-primary-400 font-semibold">
                   save {formatUsd(savingsUsd)} / year
                 </span>
               </div>

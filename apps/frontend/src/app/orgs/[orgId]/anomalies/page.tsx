@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 
 export default function AnomaliesPage() {
@@ -61,76 +62,87 @@ export default function AnomaliesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={AlertTriangle}
-        title="Anomalies"
-        subtitle="Review detected access anomalies and unusual patterns"
-      />
+      <Reveal>
+        <PageHeader
+          icon={AlertTriangle}
+          title="Anomalies"
+          eyebrow="Attention · detection"
+          subtitle="Review detected access anomalies and unusual patterns"
+        />
+      </Reveal>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Total Anomalies
-              </p>
-              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                {isLoading ? '...' : anomalies?.length || 0}
-              </p>
+      <Stagger className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  Total Anomalies
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
+                  {isLoading ? '...' : anomalies?.length || 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900">
+                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900">
-              <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Critical
-              </p>
-              <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
-                {isLoading
-                  ? '...'
-                  : anomalies?.filter((a: any) => a.severity === 'critical').length || 0}
-              </p>
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  Critical
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
+                  {isLoading
+                    ? '...'
+                    : anomalies?.filter((a: any) => a.severity === 'critical').length || 0}
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                High
-              </p>
-              <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
-                {isLoading
-                  ? '...'
-                  : anomalies?.filter((a: any) => a.severity === 'high').length || 0}
-              </p>
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  High
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
+                  {isLoading
+                    ? '...'
+                    : anomalies?.filter((a: any) => a.severity === 'high').length || 0}
+                </p>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </StaggerItem>
 
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Affected Users
-              </p>
-              <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                {isLoading ? '...' : topUsers?.length || 0}
-              </p>
+        <StaggerItem>
+          <Card variant="bordered" className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  Affected Users
+                </p>
+                <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
+                  {isLoading ? '...' : topUsers?.length || 0}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
+                <User className="h-6 w-6 text-primary-600 dark:text-primary-400" />
+              </div>
             </div>
-            <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
-              <User className="h-6 w-6 text-primary-600 dark:text-primary-400" />
-            </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </StaggerItem>
+      </Stagger>
 
       {/* Category tabs — split the ML permission-shape detector (Access)
           from the LoginHistory rule detector (Session). The two feed
@@ -240,7 +252,7 @@ export default function AnomaliesPage() {
                     <div
                       key={anomaly.id}
                       onClick={() => setSelectedAnomaly(anomaly)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                      className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift ${
                         selectedAnomaly?.id === anomaly.id
                           ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
                           : 'border-grove-border dark:border-grove-border-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15'
@@ -402,7 +414,7 @@ export default function AnomaliesPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                        <div className="v2-num text-2xl font-bold text-red-600 dark:text-red-400">
                           {typeof user.anomalyScore === 'number'
                             ? user.anomalyScore.toFixed(2)
                             : user.anomalyScore}

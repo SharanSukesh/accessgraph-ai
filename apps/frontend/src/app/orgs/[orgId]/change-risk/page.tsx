@@ -45,6 +45,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   TierDonut,
   TierLegend,
@@ -142,9 +143,11 @@ export default function ChangeRiskPage() {
 
   return (
     <div className="space-y-6">
+      <Reveal>
       <PageHeader
         icon={Radar}
         title="Change-Risk Radar"
+        eyebrow="Attention · change intelligence"
         subtitle={
           summary?.has_data && summary.since && summary.snapshot_at
             ? `Last analysed ${formatRelative(summary.snapshot_at)} · window since ${formatDate(summary.since)}`
@@ -184,6 +187,7 @@ export default function ChangeRiskPage() {
           </div>
         }
       />
+      </Reveal>
 
       {/* Educational intro — teaches the concepts + orients the reader. */}
       <ExplainerCard />
@@ -228,47 +232,56 @@ export default function ChangeRiskPage() {
       {summary?.has_data && (
         <>
           {/* KPI strip. */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <KpiCard
-              label="Events in window"
-              value={summary.events_ingested}
-              icon={Clock}
-              iconTone="primary"
-              hint={
-                summary.since
-                  ? `Total admin changes SF logged since ${formatDate(summary.since)}.`
-                  : undefined
-              }
-            />
-            <KpiCard
-              label="High-blast (≥ 65)"
-              value={summary.high_blast_count}
-              icon={ShieldAlert}
-              iconTone={summary.high_blast_count > 0 ? 'copper' : 'primary'}
-              hint="Changes scoring 65+ — profile edits, permission-set grants, sharing rule tweaks, connected-app installs. These are worth reviewing individually."
-            />
-            <KpiCard
-              label="Unique actors"
-              value={summary.unique_actors}
-              icon={Users}
-              iconTone="primary"
-              hint="Distinct admins who touched something in the window. A small spike here after a normally-quiet period is a signal to investigate."
-            />
-            <KpiCard
-              label="Avg. blast radius"
-              value={Math.round(summary.avg_blast_radius)}
-              icon={Radar}
-              iconTone={
-                summary.avg_blast_radius >= 60 ? 'copper' : 'primary'
-              }
-              hint="Mean 0-100 blast radius across every scored event. Higher = riskier changes on average."
-            />
-          </div>
+          <Stagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <StaggerItem>
+              <KpiCard
+                label="Events in window"
+                value={summary.events_ingested}
+                icon={Clock}
+                iconTone="primary"
+                hint={
+                  summary.since
+                    ? `Total admin changes SF logged since ${formatDate(summary.since)}.`
+                    : undefined
+                }
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <KpiCard
+                label="High-blast (≥ 65)"
+                value={summary.high_blast_count}
+                icon={ShieldAlert}
+                iconTone={summary.high_blast_count > 0 ? 'copper' : 'primary'}
+                hint="Changes scoring 65+ — profile edits, permission-set grants, sharing rule tweaks, connected-app installs. These are worth reviewing individually."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <KpiCard
+                label="Unique actors"
+                value={summary.unique_actors}
+                icon={Users}
+                iconTone="primary"
+                hint="Distinct admins who touched something in the window. A small spike here after a normally-quiet period is a signal to investigate."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <KpiCard
+                label="Avg. blast radius"
+                value={Math.round(summary.avg_blast_radius)}
+                icon={Radar}
+                iconTone={
+                  summary.avg_blast_radius >= 60 ? 'copper' : 'primary'
+                }
+                hint="Mean 0-100 blast radius across every scored event. Higher = riskier changes on average."
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Analytics row — donut + 30-day activity chart. */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Donut + legend */}
-            <Card variant="bordered" className="lg:col-span-2">
+            <Reveal className="lg:col-span-2">
+            <Card variant="bordered">
               <CardContent className="py-5">
                 <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
                   Blast tier distribution
@@ -292,10 +305,12 @@ export default function ChangeRiskPage() {
                 </div>
               </CardContent>
             </Card>
+            </Reveal>
 
             {/* Daily activity histogram — with optional previous-run
                 trend line overlay (empty on first-visit orgs). */}
-            <Card variant="bordered" className="lg:col-span-3">
+            <Reveal className="lg:col-span-3" delay={0.05}>
+            <Card variant="bordered">
               <CardContent className="py-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
@@ -320,6 +335,7 @@ export default function ChangeRiskPage() {
                 </div>
               </CardContent>
             </Card>
+            </Reveal>
           </div>
 
           {/* Hourly distribution — 24 bars showing when during the day
@@ -327,6 +343,7 @@ export default function ChangeRiskPage() {
               can eyeball whether their config catches the deploy
               window they intended. */}
           {summary.rollups?.by_hour && (
+            <Reveal>
             <Card variant="bordered">
               <CardContent className="py-5">
                 <div className="flex items-start gap-3 mb-3">
@@ -355,6 +372,7 @@ export default function ChangeRiskPage() {
                 />
               </CardContent>
             </Card>
+            </Reveal>
           )}
 
           {/* Suspicious-timing callout — only surfaces when off-hours
@@ -382,6 +400,7 @@ export default function ChangeRiskPage() {
               "which component types are getting touched most." */}
           {summary.rollups?.component_activity &&
             Object.keys(summary.rollups.component_activity).length > 0 && (
+              <Reveal>
               <Card variant="bordered">
                 <CardContent className="py-5">
                   <div className="flex items-start gap-3 mb-4">
@@ -406,10 +425,12 @@ export default function ChangeRiskPage() {
                   />
                 </CardContent>
               </Card>
+              </Reveal>
             )}
 
           {/* Rollups: top sections (horizontal bar chart) + actor risk table. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Reveal>
             <Card variant="bordered">
               <CardContent className="py-5">
                 <div className="mb-4">
@@ -436,7 +457,9 @@ export default function ChangeRiskPage() {
                 )}
               </CardContent>
             </Card>
+            </Reveal>
 
+            <Reveal delay={0.05}>
             <Card variant="bordered">
               <CardContent className="py-5">
                 <div className="mb-4">
@@ -458,6 +481,7 @@ export default function ChangeRiskPage() {
                 />
               </CardContent>
             </Card>
+            </Reveal>
           </div>
 
           {/* Tier filter chips. */}
@@ -1438,7 +1462,7 @@ function BlastTierBadge({ tier, score }: { tier: BlastTier; score: number }) {
       title={`Blast radius ${Math.round(score)}/100`}
     >
       {tier}
-      <span className="tabular-nums opacity-70">
+      <span className="v2-num tabular-nums opacity-70">
         {Math.round(score)}
       </span>
     </span>

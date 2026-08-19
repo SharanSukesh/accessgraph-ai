@@ -18,22 +18,25 @@ interface LegendItem {
   description?: string
 }
 
+// Swatch hexes intentionally mirror the Cytoscape stylesheet in
+// ERGraphVisualization (canvas ink is theme-invariant, so no dark:
+// swap here — the graph paints the same colors in both themes).
 const nodeLegend: LegendItem[] = [
   {
     label: NODE_TYPES.USER.label,
-    color: 'bg-primary-600',
+    color: 'bg-[#d8794a]',
     shape: 'ellipse',
     description: 'Salesforce users',
   },
   {
     label: NODE_TYPES.PROFILE.label,
-    color: 'bg-violet-500',
+    color: 'bg-[#2e8064]',
     shape: 'rounded-rectangle',
     description: 'User profiles defining base permissions',
   },
   {
     label: NODE_TYPES.PERMISSION_SET.label,
-    color: 'bg-cyan-500',
+    color: 'bg-[#6bbf95]',
     shape: 'rounded-rectangle',
     description: 'Permission sets granting additional access',
   },
@@ -45,25 +48,25 @@ const nodeLegend: LegendItem[] = [
   },
   {
     label: NODE_TYPES.ROLE.label,
-    color: 'bg-amber-500',
+    color: 'bg-[#b8d1c0]',
     shape: 'diamond',
     description: 'Roles in role hierarchy',
   },
   {
     label: NODE_TYPES.OBJECT.label,
-    color: 'bg-emerald-500',
+    color: 'bg-[#146b4a]',
     shape: 'rounded-rectangle',
     description: 'Salesforce objects (e.g., Account, Opportunity)',
   },
   {
     label: NODE_TYPES.FIELD.label,
-    color: 'bg-lime-400',
+    color: 'bg-[#9ccfb2]',
     shape: 'ellipse',
     description: 'Object fields',
   },
   {
     label: NODE_TYPES.GROUP.label,
-    color: 'bg-pink-500',
+    color: 'bg-[#c26b47]',
     shape: 'hexagon',
     description: 'Public groups',
   },
@@ -72,12 +75,12 @@ const nodeLegend: LegendItem[] = [
 const edgeLegend: LegendItem[] = [
   {
     label: EDGE_TYPES.HAS_PROFILE.label,
-    color: 'border-violet-500',
+    color: 'border-[#2e8064]',
     description: 'User assigned to profile',
   },
   {
     label: EDGE_TYPES.HAS_PERMISSION_SET.label,
-    color: 'border-cyan-500',
+    color: 'border-[#6bbf95]',
     description: 'User has permission set',
   },
   {
@@ -87,42 +90,42 @@ const edgeLegend: LegendItem[] = [
   },
   {
     label: EDGE_TYPES.HAS_ROLE.label,
-    color: 'border-amber-500',
+    color: 'border-[#b8d1c0]',
     description: 'User has role',
   },
   {
     label: EDGE_TYPES.INHERITS_FROM.label,
-    color: 'border-pink-500',
+    color: 'border-[#d8794a]',
     description: 'Role hierarchy inheritance (dashed)',
   },
   {
     label: EDGE_TYPES.CAN_ACCESS.label,
-    color: 'border-emerald-500',
+    color: 'border-[#2e8064]',
     description: 'Can access object',
   },
   {
     label: EDGE_TYPES.CAN_READ.label,
-    color: 'border-lime-400',
+    color: 'border-[#9ccfb2]',
     description: 'Read permission (dotted)',
   },
   {
     label: EDGE_TYPES.CAN_CREATE.label,
-    color: 'border-lime-400',
+    color: 'border-[#9ccfb2]',
     description: 'Create permission (dotted)',
   },
   {
     label: EDGE_TYPES.CAN_EDIT.label,
-    color: 'border-lime-400',
+    color: 'border-[#9ccfb2]',
     description: 'Edit permission (dotted)',
   },
   {
     label: EDGE_TYPES.CAN_DELETE.label,
-    color: 'border-lime-400',
+    color: 'border-[#9ccfb2]',
     description: 'Delete permission (dotted)',
   },
   {
     label: EDGE_TYPES.MEMBER_OF.label,
-    color: 'border-pink-500',
+    color: 'border-[#c26b47]',
     description: 'Member of group',
   },
 ]
@@ -143,7 +146,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
           <div className="space-y-3">
             {/* Compact node legend */}
             <div>
-              <div className="text-xs font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
+              <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
                 Nodes
               </div>
               <div className="flex flex-wrap gap-2">
@@ -160,7 +163,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
 
             {/* Compact edge legend */}
             <div>
-              <div className="text-xs font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
+              <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
                 Relationships
               </div>
               <div className="flex flex-wrap gap-2">
@@ -190,7 +193,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
         <div>
           <button
             onClick={() => setShowNodes(!showNodes)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
+            className="flex items-center justify-between w-full v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
           >
             <span>Node Types</span>
             {showNodes ? (
@@ -224,7 +227,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
         <div>
           <button
             onClick={() => setShowEdges(!showEdges)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
+            className="flex items-center justify-between w-full v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
           >
             <span>Relationship Types</span>
             {showEdges ? (
@@ -256,18 +259,18 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
 
         {/* Special Indicators */}
         <div>
-          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
+          <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
             Special Indicators
           </div>
           <div className="space-y-2">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-red-300 border-4 border-red-500" />
+              <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-[#d8794a] border-4 border-[#c26b47]" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                   Center Node
                 </div>
                 <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
-                  Primary focus of the graph (highlighted with red border)
+                  Primary focus of the graph (highlighted with copper border)
                 </div>
               </div>
             </div>
@@ -287,7 +290,7 @@ export function GraphLegend({ className = '', compact = false }: GraphLegendProp
 
         {/* Line Styles */}
         <div>
-          <div className="text-sm font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
+          <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
             Line Styles
           </div>
           <div className="space-y-2">

@@ -34,6 +34,7 @@ import {
   Plug,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal } from '@/components/v2/motion'
 import { cn } from '@/lib/utils/cn'
 import { PackageSprawlView } from '../package-sprawl/view'
 import { ReportSprawlView } from '../report-sprawl/view'
@@ -68,13 +69,16 @@ export default function SprawlPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={Boxes}
-        title="Sprawl"
-        subtitle="Inventory + tier scoring for installed packages, reports & dashboards, automations, and integrations."
-      />
+      <Reveal>
+        <PageHeader
+          icon={Boxes}
+          title="Sprawl"
+          eyebrow="Optimize · cleanup"
+          subtitle="Inventory + tier scoring for installed packages, reports & dashboards, automations, and integrations."
+        />
+      </Reveal>
 
-      <div className="flex items-center gap-1 border-b border-grove-border dark:border-grove-border-dk overflow-x-auto">
+      <div className="inline-flex items-center gap-1 rounded-xl bg-grove-canvas p-1 ring-1 ring-grove-border dark:bg-grove-canvas-dk dark:ring-grove-border-dk overflow-x-auto max-w-full">
         <TypeButton
           active={type === 'packages'}
           onClick={() => setType('packages')}
@@ -134,10 +138,10 @@ function TypeButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+        'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors',
         active
-          ? 'border-primary-700 text-primary-700 dark:border-primary-400 dark:text-primary-400'
-          : 'border-transparent text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-primary-700 dark:hover:text-primary-300 hover:border-grove-border dark:hover:border-grove-border-dk',
+          ? 'bg-primary-700 text-white dark:bg-primary-400 dark:text-grove-canvas-dk'
+          : 'text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-primary-700 dark:hover:text-primary-300',
       )}
     >
       <Icon className="h-4 w-4" />

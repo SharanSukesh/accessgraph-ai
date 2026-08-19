@@ -68,6 +68,7 @@ import {
 } from '@/lib/api/hooks/useOrgAnalyzer'
 import { endpoints } from '@/lib/api/endpoints'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 
 type Tab = 'overview' | 'findings' | 'savings' | 'trends' | 'price-book'
 
@@ -131,8 +132,10 @@ export default function OrgAnalyzerPage() {
 
   return (
     <div className="space-y-4">
+      <Reveal>
       <PageHeader
         icon={Stethoscope}
+        eyebrow="Optimize · diagnostics"
         title="Health Report"
         subtitle={
           <>
@@ -172,6 +175,7 @@ export default function OrgAnalyzerPage() {
           </>
         }
       />
+      </Reveal>
 
       {/* Toast */}
       {toast && (
@@ -322,11 +326,14 @@ function OverviewTab({
           page. Sits left, with the four secondary stat cards stacked
           to its right so the score reads first at a glance. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Reveal className="h-full">
         <HeroHealthCard
           score={healthScore ?? null}
           rubric={summary.metrics?.org_health_rubric}
         />
-        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+        </Reveal>
+        <Stagger className="lg:col-span-2 grid grid-cols-2 gap-4">
+          <StaggerItem className="h-full">
           <StatCard
             label="Findings"
             value={activeFindings.toString()}
@@ -334,12 +341,16 @@ function OverviewTab({
             icon={AlertTriangle}
             accent="text-primary-700 dark:text-primary-400"
           />
+          </StaggerItem>
+          <StaggerItem className="h-full">
           <StatCard
             label="Est. annual savings"
             value={formatMoneyCents(activeSavings)}
             icon={DollarSign}
-            accent="text-green-600 dark:text-green-400"
+            accent="v2-shimmer-text text-green-600 dark:text-green-400"
           />
+          </StaggerItem>
+          <StaggerItem className="h-full">
           <StatCard
             label="High + Critical"
             value={(
@@ -348,6 +359,8 @@ function OverviewTab({
             icon={AlertCircle}
             accent="text-red-600 dark:text-red-400"
           />
+          </StaggerItem>
+          <StaggerItem className="h-full">
           <StatCard
             label="Last run"
             value={snapshotAt}
@@ -360,7 +373,8 @@ function OverviewTab({
             accent="text-grove-ink/85 dark:text-grove-ink-dk/85"
             small
           />
-        </div>
+          </StaggerItem>
+        </Stagger>
       </div>
 
       {/* Executive summary — narrative paragraph composed at run time.
@@ -383,6 +397,7 @@ function OverviewTab({
       <QuickWinsPanel orgId={orgId} />
 
 
+      <Reveal>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card variant="bordered">
           <CardHeader>
@@ -414,6 +429,7 @@ function OverviewTab({
           </CardContent>
         </Card>
       </div>
+      </Reveal>
 
       <Card variant="bordered">
         <CardHeader>
@@ -451,7 +467,7 @@ function HeroHealthCard({
   const circ = 2 * Math.PI * radius
   const dash = (pct / 100) * circ
   return (
-    <Card variant="bordered" className="overflow-hidden">
+    <Card variant="bordered" className="overflow-hidden h-full">
       <CardContent className="p-6 flex items-center gap-6">
         <div className="relative flex-shrink-0">
           <svg className="w-28 h-28 -rotate-90" viewBox="0 0 120 120" aria-hidden>
@@ -477,7 +493,7 @@ function HeroHealthCard({
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className={`text-3xl font-bold ${accent.text}`}>
+            <span className={`v2-num text-3xl font-bold ${accent.text}`}>
               {score == null ? '—' : score}
             </span>
           </div>
@@ -537,6 +553,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
     return null  // No actionable $-bearing findings → don't show the card.
   }
   return (
+    <Reveal>
     <Card variant="bordered">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
@@ -567,7 +584,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
                   {CATEGORY_LABELS[f.category]}
                 </p>
               </div>
-              <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
+              <span className="v2-num text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
                 {formatMoneyCents(f.estimated_annual_savings_cents)}
               </span>
             </li>
@@ -575,6 +592,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
         </ol>
       </CardContent>
     </Card>
+    </Reveal>
   )
 }
 
@@ -594,13 +612,13 @@ function StatCard({
   small?: boolean
 }) {
   return (
-    <Card variant="bordered">
+    <Card variant="bordered" className="h-full">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs uppercase tracking-wide text-grove-ink/55">{label}</span>
           <Icon className={`h-4 w-4 ${accent}`} />
         </div>
-        <p className={`font-bold ${accent} ${small ? 'text-sm' : 'text-2xl'}`}>
+        <p className={`v2-num font-bold ${accent} ${small ? 'text-sm' : 'text-2xl'}`}>
           {value}
           {subValue && (
             <span className="text-xs font-normal text-grove-ink/55 ml-1">{subValue}</span>
@@ -1239,7 +1257,7 @@ function SavingsTab({ orgId }: { orgId: string }) {
         <CardTitle className="flex items-center justify-between">
           <span>Estimated annual savings — broken down by finding</span>
           {grandTotal > 0 && (
-            <span className="text-base font-mono text-green-700 dark:text-green-400">
+            <span className="v2-num text-base font-semibold text-green-700 dark:text-green-400">
               {formatMoneyCents(grandTotal)}
             </span>
           )}
@@ -1279,7 +1297,7 @@ function SavingsTab({ orgId }: { orgId: string }) {
                           {slot.rows.length === 1 ? 'finding' : 'findings'})
                         </span>
                       </span>
-                      <span className="font-mono font-semibold text-green-700 dark:text-green-400">
+                      <span className="v2-num font-semibold text-green-700 dark:text-green-400">
                         {formatMoneyCents(slot.total)}
                       </span>
                     </div>
@@ -1359,7 +1377,7 @@ function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
             </p>
           ) : null}
         </div>
-        <span className="font-mono text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
+        <span className="v2-num text-sm font-semibold text-green-700 dark:text-green-400 flex-shrink-0">
           {dollars ? formatMoneyCents(dollars) : '—'}
         </span>
       </div>

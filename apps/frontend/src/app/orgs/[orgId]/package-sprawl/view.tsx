@@ -36,6 +36,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   usePackageSprawlLatest,
   usePackageSprawlPackages,
@@ -139,36 +140,44 @@ export function PackageSprawlView({ embedded = false }: { embedded?: boolean } =
       {summary?.has_data && (
         <>
           {/* KPI strip. */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <TierKpi
-              label="Installed"
-              value={summary.packages_total}
-              icon={Package}
-              tone="neutral"
-              hint="Every managed package returned by InstalledSubscriberPackage."
-            />
-            <TierKpi
-              label="Active"
-              value={summary.packages_active}
-              icon={Sparkles}
-              tone="primary"
-              hint="Package's namespace contains >= 5 Apex/Flow/Object components OR at least one licence seat is used. Currently a shallow signal — see the note below the KPI strip for detail."
-            />
-            <TierKpi
-              label="Under-used"
-              value={summary.packages_underused}
-              icon={AlertTriangle}
-              tone="copper"
-              hint="Some components installed (1-4) but no licence usage. Warrants a manual check — could be genuinely light-use or could be surface inventory hiding real dependency."
-            />
-            <TierKpi
-              label="Unused"
-              value={summary.packages_unused}
-              icon={Boxes}
-              tone="danger"
-              hint="Zero components in the namespace AND zero licence seats used. Strong uninstall candidate — but verify against actual code references before pulling the trigger."
-            />
-          </div>
+          <Stagger className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <StaggerItem>
+              <TierKpi
+                label="Installed"
+                value={summary.packages_total}
+                icon={Package}
+                tone="neutral"
+                hint="Every managed package returned by InstalledSubscriberPackage."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Active"
+                value={summary.packages_active}
+                icon={Sparkles}
+                tone="primary"
+                hint="Package's namespace contains >= 5 Apex/Flow/Object components OR at least one licence seat is used. Currently a shallow signal — see the note below the KPI strip for detail."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Under-used"
+                value={summary.packages_underused}
+                icon={AlertTriangle}
+                tone="copper"
+                hint="Some components installed (1-4) but no licence usage. Warrants a manual check — could be genuinely light-use or could be surface inventory hiding real dependency."
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label="Unused"
+                value={summary.packages_unused}
+                icon={Boxes}
+                tone="danger"
+                hint="Zero components in the namespace AND zero licence seats used. Strong uninstall candidate — but verify against actual code references before pulling the trigger."
+              />
+            </StaggerItem>
+          </Stagger>
 
           {/* Methodology caveat — surfaces the honest limitations of
               the current scoring so consultants don't act on it as
@@ -404,7 +413,7 @@ function TierKpi({
           <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
             {label}
           </p>
-          <p className={valueCls}>{value.toLocaleString()}</p>
+          <p className={`v2-num ${valueCls}`}>{value.toLocaleString()}</p>
         </div>
         <div className={wrapperCls}>
           <Icon className={iconCls} />
@@ -471,7 +480,10 @@ function PackageCard({ pkg }: { pkg: InstalledPackage }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <Card variant="bordered">
+    <Card
+      variant="bordered"
+      className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-grove-lift"
+    >
       <CardContent className="py-4">
         {/* Header: full-width click target. Using a real <button>
             keeps keyboard + a11y semantics for free; the visual
