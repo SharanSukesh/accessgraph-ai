@@ -70,12 +70,12 @@ export function MetricCard({
 
       <div className="flex items-start justify-between relative z-10">
         <div className="flex-1">
-          <p className="text-xs font-medium text-grove-ink/70 dark:text-grove-ink-dk/70 uppercase tracking-[0.08em]">
+          <p className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
             {title}
           </p>
           {/* Grove signature — numerals in the serif stack. tabular-nums
               keeps the count-up from re-flowing widths. */}
-          <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk transition-transform duration-200 group-hover:scale-105 tabular-nums tracking-tight">
+          <p className="v2-num mt-2 text-3xl font-semibold text-grove-ink dark:text-grove-ink-dk transition-transform duration-200 group-hover:scale-105 tracking-tight">
             {renderedValue}
           </p>
           {change && (

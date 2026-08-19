@@ -6,7 +6,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Users, AlertTriangle, Shield, Database, Sparkles, Info, LayoutDashboard } from 'lucide-react'
+import Link from 'next/link'
+import { Users, AlertTriangle, Shield, Database, Sparkles, Info, LayoutDashboard, ArrowRight } from 'lucide-react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { MetricCard } from '@/components/shared/MetricCard'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
@@ -16,10 +17,15 @@ import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { RiskBadge, StatusBadge, Badge } from '@/components/shared/Badge'
+// Grove Refined — motion + chart primitives ported from the /v2
+// prototype. Presentational only.
+import { Reveal, Stagger, StaggerItem, CountUp } from '@/components/v2/motion'
+import { ScoreRing, Sparkline } from '@/components/v2/primitives'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
 import { useSyncJobs, useAnalyzeOrg } from '@/lib/api/hooks/useOrgs'
+import { useOrgAnalyzerLatest, useOrgAnalyzerHistory } from '@/lib/api/hooks/useOrgAnalyzer'
 
 export default function DashboardPage() {
   const params = useParams()
@@ -41,6 +47,12 @@ export default function DashboardPage() {
   const { data: recommendations, isLoading: recommendationsLoading, refetch: refetchRecommendations } =
     useRecommendations(orgId)
   const { data: syncJobs } = useSyncJobs(orgId)
+
+  // Grove Refined hero — health score + savings from the latest Health
+  // Report snapshot. Read-only; not part of the page's loading gate so
+  // a missing/slow analyzer summary never blocks the dashboard.
+  const { data: analyzerSummary } = useOrgAnalyzerLatest(orgId)
+  const { data: analyzerHistory } = useOrgAnalyzerHistory(orgId)
 
   // Analysis mutation
   const analyzeOrg = useAnalyzeOrg(orgId)
@@ -90,6 +102,15 @@ export default function DashboardPage() {
   const latestSync = syncJobs?.[0]
   const aiAnalysis = latestSync?.metadata?.ai_analysis
 
+  // Hero inputs — all optional; the hero renders only when the org has
+  // at least one Health Report snapshot.
+  const healthScore: number | undefined = analyzerSummary?.metrics?.org_health_score
+  const savingsCents = analyzerSummary?.active_savings_cents ?? 0
+  const findingsTrend = (analyzerHistory ?? [])
+    .slice()
+    .reverse()
+    .map((h) => h.findings_count)
+
   // Handle manual analysis trigger
   const handleAnalyze = async () => {
     try {
@@ -105,23 +126,76 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        icon={LayoutDashboard}
-        title="Overview"
-        subtitle="Access health overview for your organization"
-        actions={
-          (!anomalies?.length && !recommendations?.length) && (
-            <Button
-              variant="primary"
-              onClick={handleAnalyze}
-              disabled={analyzeOrg.isPending}
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              {analyzeOrg.isPending ? 'Analyzing...' : 'Analyze Access'}
-            </Button>
-          )
-        }
-      />
+      <Reveal>
+        <PageHeader
+          icon={LayoutDashboard}
+          eyebrow="Engagement overview"
+          title="Overview"
+          subtitle="Access health overview for your organization"
+          actions={
+            (!anomalies?.length && !recommendations?.length) && (
+              <Button
+                variant="primary"
+                onClick={handleAnalyze}
+                disabled={analyzeOrg.isPending}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {analyzeOrg.isPending ? 'Analyzing...' : 'Analyze Access'}
+              </Button>
+            )
+          }
+        />
+      </Reveal>
+
+      {/* Grove Refined hero — health score + identified savings from the
+          latest Health Report. Renders only when a snapshot exists;
+          purely presentational (data via existing read-only hooks). */}
+      {analyzerSummary?.has_data && (
+        <Reveal delay={0.05}>
+          <Card variant="bordered" className="v2-card-hero p-8">
+            <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center">
+              <div className="flex items-center gap-8">
+                {healthScore != null && (
+                  <>
+                    <ScoreRing score={Math.round(healthScore)} label="Health score" />
+                    <div className="hidden h-24 w-px bg-grove-ink/15 dark:bg-grove-ink-dk/25 sm:block" />
+                  </>
+                )}
+                <div>
+                  <p className="v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
+                    Identified annual savings
+                  </p>
+                  <p className="v2-num v2-shimmer-text mt-2 text-5xl font-semibold text-grove-ink dark:text-grove-ink-dk">
+                    <CountUp
+                      value={Math.round(savingsCents / 100)}
+                      format={(n) => `$${Math.round(n).toLocaleString()}`}
+                    />
+                  </p>
+                  <p className="mt-2 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+                    across {analyzerSummary.active_findings_count} active findings
+                  </p>
+                </div>
+              </div>
+              <div className="lg:ml-auto">
+                {findingsTrend.length >= 2 && (
+                  <>
+                    <p className="v2-micro mb-2 text-grove-ink/55 dark:text-grove-ink-dk/55">
+                      Findings trend · {findingsTrend.length} runs
+                    </p>
+                    <Sparkline data={findingsTrend} className="h-16 w-48" />
+                  </>
+                )}
+                <Link
+                  href={`/orgs/${orgId}/org-analyzer`}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 transition-colors hover:text-copper-600 dark:text-primary-400 dark:hover:text-copper-400"
+                >
+                  Open Health Report <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </Card>
+        </Reveal>
+      )}
 
       {/* Sync Status Banner */}
       {latestSync && (
@@ -186,46 +260,46 @@ export default function DashboardPage() {
       )}
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        
+      <Stagger className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StaggerItem>
           <MetricCard
             title="Total Users"
             value={totalUsers}
             icon={Users}
             iconColor="text-primary-700 dark:text-primary-400"
           />
-        
-        
+        </StaggerItem>
+        <StaggerItem>
           <MetricCard
             title="High-Risk Users"
             value={highRiskUsers}
             icon={Shield}
             iconColor="text-red-600"
           />
-        
-        
+        </StaggerItem>
+        <StaggerItem>
           <MetricCard
             title="Critical Anomalies"
             value={criticalAnomalies}
             icon={AlertTriangle}
             iconColor="text-orange-600"
           />
-        
-        
+        </StaggerItem>
+        <StaggerItem>
           <MetricCard
             title="Recommendations"
             value={totalRecommendations}
             icon={Database}
             iconColor="text-green-600"
           />
-        
-      </div>
+        </StaggerItem>
+      </Stagger>
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Anomalous Users */}
-        
-          <Card variant="bordered">
+        <Reveal>
+          <Card variant="bordered" className="h-full">
           <CardHeader>
             <CardTitle>Top Anomalous Users</CardTitle>
           </CardHeader>
@@ -273,11 +347,11 @@ export default function DashboardPage() {
             )}
           </CardContent>
           </Card>
-        
+        </Reveal>
 
         {/* Recent Recommendations */}
-        
-          <Card variant="bordered">
+        <Reveal delay={0.08}>
+          <Card variant="bordered" className="h-full">
           <CardHeader>
             <CardTitle>Recent Recommendations</CardTitle>
           </CardHeader>
@@ -312,7 +386,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
           </Card>
-        
+        </Reveal>
       </div>
     </div>
   )

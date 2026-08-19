@@ -29,15 +29,10 @@ import {
   Shield,
   ShieldCheck,
   UserPlus,
-  LogOut,
-  ChevronUp,
-  Command,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
-import { ThemeToggle } from '@/components/shared/ThemeToggle'
-import { openCommandPalette } from '@/components/shared/CommandPalette'
 import { MarqueeLabel } from '@/components/layout/MarqueeLabel'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
@@ -131,38 +126,10 @@ export const navigationSections: {
 export function Sidebar() {
   const pathname = usePathname()
   const queryClient = useQueryClient()
-  const { user, orgUser, isAdmin, logout } = useAuth()
+  // Auth is only needed for nav gating here — the user menu (identity,
+  // sign out) moved to the Topbar with its own useAuth call.
+  const { isAdmin } = useAuth()
   const [isExpanded, setIsExpanded] = useState(false)
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const userMenuRef = useRef<HTMLDivElement>(null)
-
-  // Close the user dropdown when clicking outside it.
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
-
-  // Collapse the dropdown when the whole sidebar collapses, otherwise it
-  // hovers awkwardly disconnected from its trigger.
-  useEffect(() => {
-    if (!isExpanded) setUserMenuOpen(false)
-  }, [isExpanded])
-
-  // Prefer the human's own name / email over the org name in the
-  // user-menu label + avatar seed. Falls back to org name for
-  // Salesforce-OAuth-only sessions (no OrgUser row).
-  const identityLabel =
-    orgUser?.name || orgUser?.email || user?.org_name || 'Account'
-  const identitySublabel =
-    orgUser?.email && orgUser?.name
-      ? orgUser.email
-      : user?.org_domain || null
-  const avatarLetter = identityLabel.charAt(0).toUpperCase() || 'U'
   // Local "in flight" tag covers the brief window between clicking the
   // button and the trigger POST returning. Once the new sync job exists,
   // the polling-driven `isJobRunning` below takes over and keeps the
@@ -307,22 +274,22 @@ export function Sidebar() {
             footer buttons at X=32 (sidebar midline). No scrollbar-gutter
             here — reserving gutter would shift the nav content column
             4px right of the footer column and break icon alignment. */}
-        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden scrollbar-themed">
+        <nav className="flex-1 p-2 overflow-y-auto overflow-x-hidden v2-scroll">
           {navigation.map((section, sectionIdx) => (
             // Fragment wrapper so the inter-section divider is a sibling
             // of the section, not a child that would shrink the section's
             // content column via mx-3 and push its buttons off the
             // sidebar midline.
             <Fragment key={section.label}>
-              {sectionIdx > 0 && !isExpanded && (
-                // Grove hairline divider — its own mx-3 insets the line
-                // without affecting the width of the section that follows.
+              {sectionIdx > 0 && (
+                // Grove hairline divider between sections — always
+                // rendered (expanded AND collapsed) per design review.
                 <div className="my-2 mx-3 h-px bg-grove-border/70 dark:bg-grove-border-dk/70" />
               )}
               <div
               className={cn(
                 'space-y-1',
-                sectionIdx > 0 && isExpanded && 'mt-4',
+                sectionIdx > 0 && isExpanded && 'mt-2',
               )}
             >
               {isExpanded && (
@@ -345,11 +312,12 @@ export function Sidebar() {
                     // hover / active via .grove-rail. Layered under the
                     // background pill so the two accents don't fight.
                     className={cn(
-                      // Grove — evergreen rail cue on the left edge (active +
-                      // hover). The rail is absolutely positioned so it never
-                      // affects icon centering; the button stays 44×44 in
-                      // collapsed mode so every icon sits at the same X.
-                      'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                      // Grove Refined — v2-nav-item paints a small resting
+                      // tick on every item (visible even collapsed) that
+                      // grows into a copper rail on the active item. The
+                      // rail is absolutely positioned so it never affects
+                      // icon centering; the button stays 44×44 collapsed.
+                      'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                       isExpanded
                         ? 'space-x-3 px-4 py-2.5'
                         : 'justify-center w-10 h-10 mx-auto',
@@ -408,7 +376,7 @@ export function Sidebar() {
                 // (copper is Grove's warm accent, so hover reads as attention
                 // without shouting). grove-rail adds the evergreen left cue
                 // that matches the nav-item language above.
-                'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                 isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
                 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
               )}
@@ -435,7 +403,7 @@ export function Sidebar() {
                 // Grove — sync uses the evergreen brand hover, matching
                 // the active-nav language elsewhere. grove-rail cue on the
                 // left edge matches the nav-item language.
-                'grove-rail flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
                 isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
                 isSyncing
                   ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
@@ -470,156 +438,9 @@ export function Sidebar() {
             </div>
           )}
 
-          {/* Quick-search ⌘K — Grove-tinted hover, cream kbd with warm ink */}
-          <div className={cn(
-            "p-2 pt-0 border-t border-grove-border dark:border-grove-border-dk mt-1",
-            isExpanded ? "" : "flex justify-center",
-          )}>
-            {isExpanded ? (
-              <button
-                onClick={openCommandPalette}
-                className="grove-rail group flex items-center w-full rounded-lg text-sm font-medium transition-all duration-200 ease-out px-4 py-3 space-x-3 text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative"
-                aria-label="Open command palette"
-              >
-                <Command className="h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
-                <span className="flex-1 text-left whitespace-nowrap">Quick search</span>
-                <kbd className="text-[10px] font-mono text-grove-ink/60 dark:text-grove-ink-dk/60 border border-grove-border dark:border-grove-border-dk bg-grove-canvas/60 dark:bg-grove-canvas-dk/40 rounded px-1.5 py-0.5">
-                  ⌘K
-                </kbd>
-              </button>
-            ) : (
-              <button
-                onClick={openCommandPalette}
-                className="grove-rail flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-200 ease-out text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15 hover:text-primary-700 dark:hover:text-primary-300 relative group"
-                aria-label="Open command palette"
-                title="Quick search (⌘K)"
-              >
-                <Command className="h-5 w-5 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
-                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
-                  Quick search ⌘K
-                </div>
-              </button>
-            )}
-          </div>
-
-          {/* Theme toggle — adopts the row variant when expanded so it
-              reads as a labelled action; compact icon-only when collapsed. */}
-          <div className={cn(
-            "p-2 pt-0",
-            isExpanded ? "" : "flex justify-center",
-          )}>
-            {isExpanded ? (
-              <ThemeToggle variant="row" />
-            ) : (
-              <ThemeToggle variant="compact" />
-            )}
-          </div>
-
-          {/* User menu — avatar, org name, dropdown for sign out. Lives
-              just above the version stamp so it sits at the natural
-              bottom-left of the app, matching the "expensive product"
-              convention used by Linear / Notion / Vercel. */}
-          <div
-            ref={userMenuRef}
-            className={cn(
-              "relative p-2 border-t border-grove-border dark:border-grove-border-dk",
-              isExpanded ? "" : "flex justify-center",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => isExpanded && setUserMenuOpen(o => !o)}
-              className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded
-                  ? 'space-x-3 px-3 py-2 w-full'
-                  // Fixed 44×44 tile — matches every other footer button.
-                  : 'justify-center w-10 h-10',
-                'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50/60 dark:hover:bg-primary-900/15',
-              )}
-              title={!isExpanded ? identityLabel : undefined}
-              aria-expanded={userMenuOpen}
-              aria-haspopup="menu"
-            >
-              {/* Grove — avatar tile: evergreen ramp with a copper hint on
-                  hover. Ring in cream keeps it lifted off the surface.
-                  Collapsed mode uses a smaller avatar so the tile sits at
-                  the same 44×44 as the other footer icons. */}
-              <div className={cn(
-                "rounded-full bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center shadow-sm flex-shrink-0 ring-2 ring-grove-canvas dark:ring-grove-surface-dk transition-shadow group-hover:shadow-grove-lift",
-                isExpanded ? "w-8 h-8" : "w-7 h-7",
-              )}>
-                <span className="text-grove-canvas text-xs font-semibold">{avatarLetter}</span>
-              </div>
-              {isExpanded && (
-                <>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="text-sm font-medium truncate text-grove-ink dark:text-grove-ink-dk">
-                      {identityLabel}
-                    </p>
-                    {identitySublabel && (
-                      <p className="text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
-                        {identitySublabel}
-                      </p>
-                    )}
-                  </div>
-                  <ChevronUp
-                    className={cn(
-                      'h-4 w-4 text-grove-ink/45 dark:text-grove-ink-dk/45 transition-transform flex-shrink-0',
-                      userMenuOpen ? '' : 'rotate-180',
-                    )}
-                  />
-                </>
-              )}
-
-              {/* Tooltip for collapsed state */}
-              {!isExpanded && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
-                  {user?.org_name || 'Account'}
-                </div>
-              )}
-            </button>
-
-            {/* Dropdown menu (only when expanded — collapsed sidebar
-                relies on the hover-expand to reveal it). Opens UPward
-                so it doesn't get clipped by the page edge. */}
-            {isExpanded && userMenuOpen && (
-              <div className="absolute bottom-full left-2 right-2 mb-1 rounded-md shadow-grove-lift bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk z-50 overflow-hidden">
-                {user && (
-                  <div className="px-4 py-3 border-b border-grove-border dark:border-grove-border-dk">
-                    <p className="text-[10px] text-grove-ink/50 dark:text-grove-ink-dk/50 uppercase tracking-[0.14em] font-mono">
-                      Connected to
-                    </p>
-                    <p
-                      className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk truncate mt-0.5"
-                      title={user.org_name}
-                    >
-                      {user.org_name || 'Unknown Org'}
-                    </p>
-                    {user.org_domain && (
-                      <p
-                        className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 truncate"
-                        title={user.org_domain}
-                      >
-                        {user.org_domain}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setUserMenuOpen(false)
-                    await logout()
-                  }}
-                  className="w-full text-left flex items-center px-4 py-2.5 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 dark:hover:bg-copper-900/20 hover:text-copper-700 dark:hover:text-copper-400 transition-colors"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Quick search, theme toggle, and the user menu moved to the
+              Topbar (Grove Refined) — the sidebar footer now carries only
+              the Salesforce connection controls + version stamp. */}
 
           {/* Version */}
           {isExpanded && (

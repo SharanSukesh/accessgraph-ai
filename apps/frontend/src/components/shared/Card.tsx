@@ -27,28 +27,25 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     // Grove — surfaces sit on the warm cream canvas. Instead of stark
     // white, we lean into the Grove surface token (a light cream, or
     // deep forest in dark mode). Borders are the warm cream hairline.
+    // Grove Refined — default/bordered/elevated compose the v2-card
+    // treatment (layered warm shadow, 1rem radius, hairline border).
+    // Hero keeps the v1 dark-evergreen wash: page content inside hero
+    // cards is styled for light-on-dark and must not flip.
     const variants = {
-      default:
-        'bg-grove-surface dark:bg-grove-surface-dk shadow-sm ' +
-        'transition-all duration-200 ease-out hover:shadow-md',
+      default: 'v2-card',
       bordered:
-        'bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk shadow-sm ' +
-        'transition-all duration-200 ease-out ' +
-        'hover:border-primary-600 dark:hover:border-primary-400 hover:shadow-grove-lift',
-      elevated:
-        'bg-grove-surface dark:bg-grove-surface-dk shadow-grove-lift ring-1 ring-grove-border dark:ring-grove-border-dk ' +
-        'transition-all duration-200 ease-out hover:shadow-grove-hero hover:scale-[1.005]',
-      // Hero — dark evergreen wash + warm cream ink. Used for the Org
-      // Analyzer overview hero, dashboard KPI stack, and other single-
-      // most-important surfaces. Copper wash pulls in via ::before.
+        'v2-card hover:border-primary-600/60 dark:hover:border-primary-400/60 hover:shadow-grove-lift',
+      elevated: 'v2-card shadow-grove-lift hover:shadow-grove-hero hover:scale-[1.005]',
       hero:
-        'bg-primary-700 dark:bg-primary-800 text-grove-canvas ' +
+        'rounded-2xl bg-primary-700 dark:bg-primary-800 text-grove-canvas ' +
         'border border-primary-800 dark:border-primary-900 shadow-grove-hero ' +
         'grove-copper-wash ' +
         'transition-all duration-240 ease-out hover:shadow-grove-hero',
     }
     const interactiveCls = interactive
-      ? 'cursor-pointer grove-hover-lift will-change-transform'
+      ? variant === 'hero'
+        ? 'cursor-pointer grove-hover-lift will-change-transform'
+        : 'cursor-pointer v2-card-lift will-change-transform'
       : ''
     const bracketCls = copperBrackets ? 'grove-brackets' : ''
 
@@ -56,7 +53,6 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'rounded-xl',
           // Hero variant needs relative + overflow-hidden so the copper
           // wash pseudo-element clips to the card shape.
           variant === 'hero' ? 'relative overflow-hidden' : 'overflow-hidden',
@@ -89,7 +85,8 @@ export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadi
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-xl font-semibold text-grove-ink dark:text-grove-ink-dk', className)}
+      // Grove Refined — section titles in the serif display stack.
+      className={cn('v2-display text-xl font-semibold text-grove-ink dark:text-grove-ink-dk', className)}
       {...props}
     />
   )

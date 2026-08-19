@@ -13,6 +13,7 @@
 
 import { usePathname } from 'next/navigation'
 import { Sidebar } from './Sidebar'
+import { Topbar } from './Topbar'
 import { PageTransition } from '@/components/shared/PageTransition'
 import { CommandPalette } from '@/components/shared/CommandPalette'
 
@@ -32,14 +33,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  // Protected pages - sidebar + main content. No more top navbar; the
-  // page itself supplies its own header.
+  // Protected pages — sidebar + topbar + main content (Grove Refined).
+  // The topbar carries org context / search / theme / user menu; the
+  // sidebar keeps nav + Salesforce connection controls.
   return (
     <div className="flex h-screen overflow-hidden bg-grove-canvas/80 dark:bg-grove-canvas-dk/80">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto p-6">
-        <PageTransition>{children}</PageTransition>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Topbar />
+        <main className="v2-main flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-7xl">
+            <PageTransition>{children}</PageTransition>
+          </div>
+        </main>
+      </div>
       {/* Cmd-K palette listens globally; renders nothing until ⌘K is
           pressed or openCommandPalette() is called. */}
       <CommandPalette />
