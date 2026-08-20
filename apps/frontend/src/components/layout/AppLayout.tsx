@@ -18,8 +18,10 @@ import { PageTransition } from '@/components/shared/PageTransition'
 import { CommandPalette } from '@/components/shared/CommandPalette'
 
 // Routes that render without the sidebar chrome. `/activate` is
-// reached from the invitation email before the user has a session.
-const PUBLIC_ROUTES = ['/login', '/signup', '/activate']
+// reached from the invitation email before the user has a session;
+// `/advisor` is the public new-implementation questionnaire (pre-sales
+// surface — no account required).
+const PUBLIC_ROUTES = ['/login', '/signup', '/activate', '/advisor']
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
