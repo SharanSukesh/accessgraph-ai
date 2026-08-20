@@ -69,6 +69,21 @@ import {
 import { endpoints } from '@/lib/api/endpoints'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
+import { useAuth } from '@/lib/auth/AuthContext'
+
+/**
+ * Backend findings carry Setup deeplinks as RELATIVE paths
+ * (/lightning/setup/...). Resolved raw, the browser hits the app's own
+ * domain and 404s — they must be absolutized against the connected
+ * org's My Domain host. Returns null when the domain isn't known so
+ * the caller hides the link instead of shipping a broken one.
+ */
+function sfSetupHref(path: string, orgDomain?: string | null): string | null {
+  if (/^https?:\/\//i.test(path)) return path
+  if (!orgDomain) return null
+  const host = orgDomain.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
+  return `https://${host}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 type Tab = 'overview' | 'findings' | 'savings' | 'trends' | 'price-book'
 
@@ -290,7 +305,7 @@ function OverviewTab({
   const ignoredCount = summary.ignored_findings_count ?? 0
   const healthAccent =
     healthScore == null
-      ? 'text-grove-ink/50'
+      ? 'text-grove-ink/50 dark:text-grove-ink-dk/50'
       : healthScore >= 80
         ? 'text-green-600 dark:text-green-400'
         : healthScore >= 60
@@ -382,7 +397,7 @@ function OverviewTab({
       {summary.executive_summary && (
         <Card variant="bordered">
           <CardContent className="p-4">
-            <p className="text-[10px] uppercase tracking-wider text-grove-ink/55 mb-2">
+            <p className="text-[10px] uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
               Executive summary
             </p>
             <p className="text-sm leading-relaxed text-grove-ink dark:text-grove-ink-dk/85">
@@ -413,7 +428,7 @@ function OverviewTab({
           </CardHeader>
           <CardContent>
             {topCategories.length === 0 ? (
-              <p className="text-sm text-grove-ink/55">No findings.</p>
+              <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">No findings.</p>
             ) : (
               <ul className="space-y-2">
                 {topCategories.map(([cat, count]) => (
@@ -455,7 +470,7 @@ function HeroHealthCard({
 }) {
   const accent =
     score == null
-      ? { ring: 'text-grove-ink/50', text: 'text-grove-ink/50', band: 'No data' }
+      ? { ring: 'text-grove-ink/50 dark:text-grove-ink-dk/50', text: 'text-grove-ink/50 dark:text-grove-ink-dk/50', band: 'No data' }
       : score >= 80
         ? { ring: 'text-green-500', text: 'text-green-600 dark:text-green-400', band: 'Excellent' }
         : score >= 60
@@ -499,7 +514,7 @@ function HeroHealthCard({
           </div>
         </div>
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
+          <p className="text-xs uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
             Org Health Score
           </p>
           <p className={`text-lg font-semibold ${accent.text}`}>{accent.band}</p>
@@ -558,7 +573,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Quick wins — top 5 by annual savings</span>
-          <span className="text-xs font-normal text-grove-ink/55">
+          <span className="text-xs font-normal text-grove-ink/55 dark:text-grove-ink-dk/55">
             Sorted by estimated $/yr
           </span>
         </CardTitle>
@@ -570,7 +585,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
               key={f.id}
               className="py-2.5 flex items-start gap-3 first:pt-0 last:pb-0"
             >
-              <span className="text-xs font-mono text-grove-ink/50 w-5 flex-shrink-0 mt-0.5">
+              <span className="text-xs font-mono text-grove-ink/50 dark:text-grove-ink-dk/50 w-5 flex-shrink-0 mt-0.5">
                 {i + 1}.
               </span>
               <span
@@ -580,7 +595,7 @@ function QuickWinsPanel({ orgId }: { orgId: string }) {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{f.title}</p>
-                <p className="text-xs text-grove-ink/55 truncate">
+                <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
                   {CATEGORY_LABELS[f.category]}
                 </p>
               </div>
@@ -615,13 +630,13 @@ function StatCard({
     <Card variant="bordered" className="h-full">
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs uppercase tracking-wide text-grove-ink/55">{label}</span>
+          <span className="text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">{label}</span>
           <Icon className={`h-4 w-4 ${accent}`} />
         </div>
         <p className={`v2-num font-bold ${accent} ${small ? 'text-sm' : 'text-2xl'}`}>
           {value}
           {subValue && (
-            <span className="text-xs font-normal text-grove-ink/55 ml-1">{subValue}</span>
+            <span className="text-xs font-normal text-grove-ink/55 dark:text-grove-ink-dk/55 ml-1">{subValue}</span>
           )}
         </p>
       </CardContent>
@@ -653,40 +668,152 @@ function SeverityBars({ counts }: { counts: Record<string, number> }) {
   )
 }
 
+/**
+ * Findings-over-time trend chart. Grove-styled line with y-axis ticks,
+ * date labels, a recessive grid, and a cursor-following tooltip
+ * (crosshair + copper dot + date/count card at the nearest run).
+ */
 function Sparkline({ points }: { points: any[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+
   if (!points || points.length === 0) {
     return (
-      <p className="text-sm text-grove-ink/55 italic">
+      <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
         More history needed — run analysis again to start charting trends.
       </p>
     )
   }
-  const w = 600
-  const h = 80
-  const counts = points.map((p: any) => p.findings_count)
-  const max = Math.max(1, ...counts)
-  const step = points.length > 1 ? w / (points.length - 1) : 0
-  const path = counts
-    .map((c: number, i: number) => {
-      const x = i * step
-      const y = h - (c / max) * h
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`
-    })
+
+  // History arrives newest-first; a time axis must run oldest → newest.
+  const sorted = [...points].sort(
+    (a: any, b: any) =>
+      new Date(a.snapshot_at).getTime() - new Date(b.snapshot_at).getTime(),
+  )
+  const counts = sorted.map((p: any) => p.findings_count as number)
+  const rawMax = Math.max(1, ...counts)
+  // Round the axis top up to a friendly number so ticks read cleanly.
+  const yMax = rawMax <= 5 ? rawMax : Math.ceil(rawMax / 5) * 5
+  const n = sorted.length
+  const xPct = (i: number) => (n > 1 ? (i / (n - 1)) * 100 : 50)
+  const yPct = (c: number) => 100 - (c / yMax) * 100
+
+  const line = counts
+    .map((c, i) => `${i === 0 ? 'M' : 'L'} ${xPct(i).toFixed(2)} ${yPct(c).toFixed(2)}`)
     .join(' ')
+  const area = `${line} L ${xPct(n - 1).toFixed(2)} 100 L ${xPct(0).toFixed(2)} 100 Z`
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const rel = (e.clientX - rect.left) / rect.width
+    setHover(Math.max(0, Math.min(n - 1, Math.round(rel * (n - 1)))))
+  }
+
+  const hoverPt = hover != null ? sorted[hover] : null
+
   return (
-    <svg
-      viewBox={`0 0 ${w} ${h}`}
-      className="w-full h-20"
-      preserveAspectRatio="none"
-    >
-      <path d={path} stroke="#6366f1" strokeWidth={2} fill="none" />
-    </svg>
+    <div className="flex gap-2">
+      {/* Y axis labels */}
+      <div className="flex h-32 w-8 flex-col justify-between py-0.5 text-right">
+        {[yMax, Math.round(yMax / 2), 0].map((t, i) => (
+          <span key={i} className="v2-num text-[10px] leading-none text-grove-ink/45 dark:text-grove-ink-dk/45">
+            {t}
+          </span>
+        ))}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        {/* Plot area */}
+        <div
+          className="relative h-32 cursor-crosshair"
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+        >
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 h-full w-full"
+            aria-hidden="true"
+          >
+            {/* Recessive grid at max / mid / baseline */}
+            {[0, 50, 100].map((y) => (
+              <line
+                key={y}
+                x1="0" y1={y} x2="100" y2={y}
+                vectorEffect="non-scaling-stroke"
+                className="stroke-grove-ink/10 dark:stroke-grove-ink-dk/15"
+                strokeWidth="1"
+              />
+            ))}
+            <path d={area} className="fill-primary-600/10 dark:fill-primary-400/10" />
+            <path
+              d={line}
+              fill="none"
+              vectorEffect="non-scaling-stroke"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="stroke-primary-600 dark:stroke-primary-400"
+            />
+          </svg>
+
+          {/* Hover layer — crosshair, copper dot, tooltip near cursor */}
+          {hover != null && hoverPt && (
+            <>
+              <div
+                className="pointer-events-none absolute bottom-0 top-0 w-px bg-grove-ink/20 dark:bg-grove-ink-dk/25"
+                style={{ left: `${xPct(hover)}%` }}
+              />
+              <div
+                className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-copper-500 ring-2 ring-grove-surface dark:bg-copper-400 dark:ring-grove-surface-dk"
+                style={{ left: `${xPct(hover)}%`, top: `${yPct(counts[hover])}%` }}
+              />
+              <div
+                className="pointer-events-none absolute z-10 -translate-y-full whitespace-nowrap rounded-lg border border-grove-border bg-grove-surface px-2.5 py-1.5 text-xs shadow-grove-lift dark:border-grove-border-dk dark:bg-grove-surface-dk"
+                style={{
+                  left: `${xPct(hover)}%`,
+                  top: `${Math.max(yPct(counts[hover]) - 6, 0)}%`,
+                  transform: `translate(${hover > n / 2 ? '-100%' : '8px'}, -100%)`,
+                }}
+              >
+                <p className="v2-micro text-grove-ink/50 dark:text-grove-ink-dk/50">
+                  {fmtDate(hoverPt.snapshot_at)}
+                </p>
+                <p className="v2-num font-semibold text-grove-ink dark:text-grove-ink-dk">
+                  {counts[hover]} finding{counts[hover] === 1 ? '' : 's'}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* X axis labels */}
+        <div className="mt-1.5 flex justify-between">
+          <span className="v2-num text-[10px] text-grove-ink/45 dark:text-grove-ink-dk/45">
+            {fmtDate(sorted[0].snapshot_at)}
+          </span>
+          {n >= 5 && (
+            <span className="v2-num text-[10px] text-grove-ink/45 dark:text-grove-ink-dk/45">
+              {fmtDate(sorted[Math.floor((n - 1) / 2)].snapshot_at)}
+            </span>
+          )}
+          <span className="v2-num text-[10px] text-grove-ink/45 dark:text-grove-ink-dk/45">
+            {fmtDate(sorted[n - 1].snapshot_at)}
+          </span>
+        </div>
+      </div>
+    </div>
   )
 }
 
 // ----------------------------------------------------------- Findings tab
 
 function FindingsTab({ orgId }: { orgId: string }) {
+  // Org My Domain host — needed to absolutize the relative Setup
+  // deeplinks the backend stores on findings.
+  const { user: authUser } = useAuth()
   const [category, setCategory] = useState<FindingCategory | null>(null)
   const [severity, setSeverity] = useState<FindingSeverity | null>(null)
   const [search, setSearch] = useState('')
@@ -791,7 +918,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
         <CardContent>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50" />
+              <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -855,7 +982,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
           {findings.isLoading ? (
             <TableSkeleton rows={6} />
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-grove-ink/55 italic">No findings match.</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">No findings match.</p>
           ) : (
             <ul className="divide-y divide-gray-200 dark:divide-gray-800">
               {filtered.map(f => (
@@ -896,7 +1023,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium">{f.title}</p>
-                      <p className="text-xs text-grove-ink/55 truncate">
+                      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
                         {CATEGORY_LABELS[f.category]} &middot;{' '}
                         {f.affected_count} affected
                         {f.estimated_annual_savings_cents
@@ -922,7 +1049,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
         </CardHeader>
         <CardContent>
           {!refreshedSelected ? (
-            <p className="text-sm text-grove-ink/55 italic">
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
               Pick a finding from the list to see its evidence, recommended
               action, and Salesforce deeplink.
             </p>
@@ -957,7 +1084,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
                     Non-billable
                   </span>
                 )}
-                <span className="text-xs text-grove-ink/55">
+                <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                   {CATEGORY_LABELS[refreshedSelected.category]}
                 </span>
               </div>
@@ -1030,31 +1157,32 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   value={formatMoneyCents(refreshedSelected.estimated_annual_savings_cents)}
                 />
               </div>
-              {refreshedSelected.sf_setup_deeplink && (
-                <a
-                  href={refreshedSelected.sf_setup_deeplink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
-                >
-                  Open in Salesforce Setup
-                  <ArrowRight className="h-3 w-3" />
-                </a>
-              )}
+              {refreshedSelected.sf_setup_deeplink &&
+                sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.org_domain) && (
+                  <a
+                    href={sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.org_domain)!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
+                  >
+                    Open in Salesforce Setup
+                    <ArrowRight className="h-3 w-3" />
+                  </a>
+                )}
               {refreshedSelected.evidence?.cost_calculation && (
                 <CostCalculationCard
                   calc={refreshedSelected.evidence.cost_calculation}
                 />
               )}
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-grove-ink/55 mb-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                   Evidence
                 </p>
                 <pre className="text-[10px] bg-grove-canvas dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk rounded p-2 overflow-auto max-h-64">
                   {JSON.stringify(refreshedSelected.evidence, null, 2)}
                 </pre>
               </div>
-              <p className="text-[10px] text-grove-ink/50 font-mono">
+              <p className="text-[10px] text-grove-ink/50 dark:text-grove-ink-dk/50 font-mono">
                 Code: {refreshedSelected.code}
               </p>
 
@@ -1064,7 +1192,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
               <div className="border-t border-grove-border dark:border-grove-border-dk pt-3">
                 {refreshedSelected.is_ignored ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-grove-ink/55">
+                    <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Ignored
                       {refreshedSelected.ignored_by && (
                         <> by <strong>{refreshedSelected.ignored_by}</strong></>
@@ -1091,10 +1219,10 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-wide text-grove-ink/55">
+                    <p className="text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Ignore this finding
                     </p>
-                    <p className="text-xs text-grove-ink/55">
+                    <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Intentional configuration, out-of-scope, or a known
                       false positive? Ignoring drops it from the report and
                       the savings total. The row is preserved so you can
@@ -1129,7 +1257,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="border border-grove-border dark:border-grove-border-dk rounded p-2">
-      <p className="text-[10px] uppercase tracking-wide text-grove-ink/55">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">{label}</p>
       <p className="text-sm font-semibold">{value}</p>
     </div>
   )
@@ -1265,7 +1393,7 @@ function SavingsTab({ orgId }: { orgId: string }) {
       </CardHeader>
       <CardContent>
         {grouped.length === 0 ? (
-          <p className="text-sm text-grove-ink/55 italic">
+          <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
             No quantifiable savings yet. License-waste findings (inactive
             users, unused seats, oversized licenses) drive most of this
             number — once those rules fire, the math shows up here.
@@ -1287,12 +1415,12 @@ function SavingsTab({ orgId }: { orgId: string }) {
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="font-medium flex items-center gap-1.5">
                         {isOpen ? (
-                          <ChevronDown className="h-4 w-4 text-grove-ink/50" />
+                          <ChevronDown className="h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
                         ) : (
-                          <ChevronRight className="h-4 w-4 text-grove-ink/50" />
+                          <ChevronRight className="h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
                         )}
                         {label}
-                        <span className="text-xs text-grove-ink/55 font-normal">
+                        <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 font-normal">
                           ({slot.rows.length}{' '}
                           {slot.rows.length === 1 ? 'finding' : 'findings'})
                         </span>
@@ -1346,7 +1474,7 @@ function SavingsBreakdownRow({ finding }: { finding: OrgFinding }) {
                     {row.monthly_cents > 0 ? (
                       <> × ${(row.monthly_cents / 100).toFixed(2)}/mo × 12</>
                     ) : (
-                      <span className="italic text-grove-ink/50">
+                      <span className="italic text-grove-ink/50 dark:text-grove-ink-dk/50">
                         {' '}— {row.note ?? 'no monetary impact'}
                       </span>
                     )}
@@ -1398,7 +1526,7 @@ function TrendsTab({ history, summary }: { history: any[]; summary: any }) {
           </CardHeader>
           <CardContent>
             <Sparkline points={history} />
-            <p className="text-xs text-grove-ink/55 mt-2">
+            <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-2">
               {history.length} snapshot{history.length === 1 ? '' : 's'} on file.
             </p>
           </CardContent>
@@ -1427,7 +1555,7 @@ function TrendsTab({ history, summary }: { history: any[]; summary: any }) {
 function LicenseUtilizationTable({ rows }: { rows: any[] }) {
   if (!rows || rows.length === 0) {
     return (
-      <p className="text-sm text-grove-ink/55 italic">
+      <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
         License inventory unavailable. Run analysis to fetch UserLicense
         and PermissionSetLicense from the org.
       </p>
@@ -1439,11 +1567,11 @@ function LicenseUtilizationTable({ rows }: { rows: any[] }) {
     <table className="w-full text-sm">
       <thead>
         <tr className="text-left border-b border-grove-border dark:border-grove-border-dk">
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">License</th>
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 text-right">Used</th>
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 text-right">Total</th>
-          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 text-right">Surplus</th>
-          <th className="py-2 text-xs uppercase tracking-wide text-grove-ink/55">Utilisation</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">License</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55 text-right">Used</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55 text-right">Total</th>
+          <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55 text-right">Surplus</th>
+          <th className="py-2 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">Utilisation</th>
         </tr>
       </thead>
       <tbody>
@@ -1453,7 +1581,7 @@ function LicenseUtilizationTable({ rows }: { rows: any[] }) {
             <tr key={`${r.developer_key}-${i}`} className="border-b border-grove-border/60 dark:border-grove-border-dk">
               <td className="py-2 pr-3">
                 <div className="text-sm">{r.license_name}</div>
-                <div className="text-[10px] text-grove-ink/55">{r.kind} license</div>
+                <div className="text-[10px] text-grove-ink/55 dark:text-grove-ink-dk/55">{r.kind} license</div>
               </td>
               <td className="py-2 pr-3 text-right font-mono text-sm">{r.used}</td>
               <td className="py-2 pr-3 text-right font-mono text-sm">{r.total}</td>
@@ -1531,7 +1659,7 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-grove-ink/55 italic">
+      <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
         Org limits unavailable. Run analysis to fetch them.
       </p>
     )
@@ -1541,7 +1669,7 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
   return (
     <div>
       {totalAcrossAll === 0 && (
-        <p className="text-xs text-grove-ink/55 italic mb-3">
+        <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 italic mb-3">
           Note: every metric below reports 0% used. For a developer / scratch
           org this is normal &mdash; the bars will populate as the org accrues
           real usage.
@@ -1552,7 +1680,7 @@ function LimitsBars({ limits }: { limits: Record<string, any> }) {
           <li key={r.key}>
             <div className="flex items-center justify-between text-sm mb-1">
               <span>{r.label}</span>
-              <span className="text-xs font-mono text-grove-ink/55">
+              <span className="text-xs font-mono text-grove-ink/55 dark:text-grove-ink-dk/55">
                 {_formatLimit(r.key, r.used)} / {_formatLimit(r.key, r.max)}{' '}
                 <span
                   className={
@@ -1647,7 +1775,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
         <CardTitle>License price book</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-grove-ink/55 mb-3">
+        <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mb-3">
           Monthly cost per license SKU in cents. SKUs labelled{' '}
           <span className="font-semibold text-primary-700 dark:text-primary-300">In org</span>{' '}
           are the actual{' '}
@@ -1669,11 +1797,11 @@ function PriceBookTab({ orgId }: { orgId: string }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left border-b border-grove-border dark:border-grove-border-dk">
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">License</th>
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">Source</th>
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">Billed?</th>
-                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55">Cost (cents/mo)</th>
-                <th className="py-2 text-xs uppercase tracking-wide text-grove-ink/55">Cost (USD/mo)</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">License</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">Source</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">Billed?</th>
+                <th className="py-2 pr-3 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">Cost (cents/mo)</th>
+                <th className="py-2 text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">Cost (USD/mo)</th>
                 <th className="py-2"></th>
               </tr>
             </thead>
@@ -1747,7 +1875,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                         }`}
                       />
                     </td>
-                    <td className="py-1 text-xs text-grove-ink/55 font-mono">
+                    <td className="py-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 font-mono">
                       {billed
                         ? `$${(r.monthly_cost_cents / 100).toFixed(2)}`
                         : <span className="italic">bundled — $0</span>
@@ -1756,7 +1884,7 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                     <td className="py-1 text-right">
                       <button
                         onClick={() => handleDelete(i)}
-                        className="text-grove-ink/50 hover:text-red-600"
+                        className="text-grove-ink/50 dark:text-grove-ink-dk/50 hover:text-red-600"
                         title="Remove SKU"
                       >
                         <XIcon className="h-3.5 w-3.5" />
@@ -1867,14 +1995,14 @@ function BrandSettingsModal({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold">Brand settings</h2>
-            <p className="text-xs text-grove-ink/55 mt-1">
+            <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
               White-label the PDF report with your firm logo and accent
               color. Leave blank to use the Newton defaults.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-grove-ink/50 hover:text-grove-ink/70"
+            className="text-grove-ink/50 dark:text-grove-ink-dk/50 hover:text-grove-ink/70 dark:text-grove-ink-dk/70"
             aria-label="Close"
           >
             <XIcon className="h-4 w-4" />
@@ -1883,7 +2011,7 @@ function BrandSettingsModal({
 
         <div className="space-y-4 text-sm">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
+            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
               Firm name
             </label>
             <input
@@ -1894,7 +2022,7 @@ function BrandSettingsModal({
             />
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
+            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
               Accent color (#RRGGBB)
             </label>
             <div className="flex items-center gap-2">
@@ -1915,7 +2043,7 @@ function BrandSettingsModal({
             </div>
           </div>
           <div>
-            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 mb-1">
+            <label className="block text-xs uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
               Firm logo (PNG / JPEG / SVG, 256KB max)
             </label>
             <div className="flex items-center gap-3">
@@ -1935,7 +2063,7 @@ function BrandSettingsModal({
               />
             </div>
             {upload.isPending && (
-              <p className="text-xs text-grove-ink/55 mt-1">Uploading…</p>
+              <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">Uploading…</p>
             )}
             {uploadError && (
               <p className="text-xs text-red-600 dark:text-red-400 mt-1">

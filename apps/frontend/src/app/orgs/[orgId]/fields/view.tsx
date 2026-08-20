@@ -165,7 +165,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <input
                 type="text"
                 placeholder="Search fields..."
@@ -250,7 +250,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <FileText className="h-5 w-5 text-grove-ink/50 mr-3" />
+                            <FileText className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mr-3" />
                             <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                               {field.label}
                             </div>
@@ -258,7 +258,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <Database className="h-4 w-4 text-grove-ink/50" />
+                            <Database className="h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
                             <div className="text-sm text-grove-ink dark:text-grove-ink-dk">
                               {field.objectName}
                             </div>

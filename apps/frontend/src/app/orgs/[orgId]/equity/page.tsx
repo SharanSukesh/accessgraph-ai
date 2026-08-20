@@ -141,21 +141,21 @@ function UserDisparityDrawer({
             </h2>
             <button
               onClick={onClose}
-              className="text-grove-ink/50 hover:text-grove-ink/70 dark:hover:text-grove-border"
+              className="text-grove-ink/50 dark:text-grove-ink-dk/50 hover:text-grove-ink/70 dark:text-grove-ink-dk/70 dark:hover:text-grove-border"
             >
               <XIcon className="h-5 w-5" />
             </button>
           </div>
           {!open ? null : isLoading ? (
-            <p className="text-sm text-grove-ink/55">Loading…</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">Loading…</p>
           ) : error ? (
             <p className="text-sm text-red-600">Failed to load user disparity.</p>
           ) : !data ? (
-            <p className="text-sm text-grove-ink/55">No data.</p>
+            <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">No data.</p>
           ) : (
             <div className="space-y-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-grove-ink/55">
+                <p className="text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Salesforce user
                 </p>
                 <p className="text-sm font-mono text-grove-ink dark:text-grove-ink-dk">
@@ -169,13 +169,13 @@ function UserDisparityDrawer({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-grove-ink/55">Department</p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Department</p>
                   <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.department || '—'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-grove-ink/55">Distance to nearest VIP</p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Distance to nearest VIP</p>
                   <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.distance_to_nearest_vip == null
                       ? '∞ (unreachable)'
@@ -183,25 +183,25 @@ function UserDisparityDrawer({
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-grove-ink/55">This user's utility</p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">This user's utility</p>
                   <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.inverse_distance_utility.toFixed(3)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-grove-ink/55">Dept avg</p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Dept avg</p>
                   <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.department_avg_utility.toFixed(3)}
                   </p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-xs text-grove-ink/55">Org avg (juniors)</p>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Org avg (juniors)</p>
                   <p className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                     {data.org_avg_utility.toFixed(3)}
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-grove-ink/55 italic pt-2 border-t border-grove-border dark:border-grove-border-dk">
+              <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 italic pt-2 border-t border-grove-border dark:border-grove-border-dk">
                 Higher utility = shorter path to a VIP. Lower distance is
                 better. Equity recommendations target users whose utility
                 drags their department's average down.
@@ -656,7 +656,7 @@ export default function EquityPage() {
                 Users identified as opportunity/authority nodes
               </p>
             </div>
-            <UsersIcon className="h-8 w-8 text-grove-ink/50" />
+            <UsersIcon className="h-8 w-8 text-grove-ink/50 dark:text-grove-ink-dk/50" />
           </div>
         </Card>
         </StaggerItem>
@@ -767,7 +767,7 @@ export default function EquityPage() {
             <CardTitle>
               Suggested grants{' '}
               {equityRecs && (
-                <span className="text-sm font-normal text-grove-ink/55">
+                <span className="text-sm font-normal text-grove-ink/55 dark:text-grove-ink-dk/55">
                   ({equityRecs.length})
                 </span>
               )}

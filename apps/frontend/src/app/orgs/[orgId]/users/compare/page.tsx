@@ -290,7 +290,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
                                     D
                                   </Badge>
                                 )}
-                                {!obj && <span className="text-grove-ink/50">-</span>}
+                                {!obj && <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>}
                               </div>
                             </td>
                           )

@@ -820,7 +820,7 @@ export default function ReportingGraphPage() {
           </button>
         </div>
 
-        <div className="ml-auto text-xs text-grove-ink/55 max-w-md text-right">
+        <div className="ml-auto text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 max-w-md text-right">
           {tool === 'move' ? (
             <>
               <strong>Move mode</strong>: click+drag a node to reposition.
@@ -851,7 +851,7 @@ export default function ReportingGraphPage() {
           <CardContent className="flex-1 overflow-y-auto p-0">
             <div className="p-3 sticky top-0 bg-grove-surface dark:bg-grove-canvas-dk z-10 border-b border-grove-border dark:border-grove-border-dk">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50" />
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
                 <input
                   type="text"
                   value={search}
@@ -883,7 +883,7 @@ export default function ReportingGraphPage() {
                     }`}
                   >
                     <div className="font-medium truncate">{n.name}</div>
-                    <div className="text-xs text-grove-ink/55 truncate">
+                    <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
                       {n.department || '—'}
                     </div>
                   </button>
@@ -909,7 +909,7 @@ export default function ReportingGraphPage() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
             {!selectedNode ? (
-              <p className="text-sm text-grove-ink/55 italic">
+              <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
                 Click a node to inspect.
               </p>
             ) : (
@@ -926,39 +926,39 @@ export default function ReportingGraphPage() {
                   />
                   <p className="text-sm font-semibold flex-1 truncate">{selectedNode.name}</p>
                 </div>
-                <p className="text-xs text-grove-ink/55 font-mono break-all">
+                <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 font-mono break-all">
                   {selectedNode.user_sf_id}
                 </p>
                 <dl className="text-xs space-y-1.5">
                   {selectedNode.title && (
                     <div className="flex gap-1.5">
-                      <dt className="text-grove-ink/55 w-20 flex-shrink-0">Title</dt>
+                      <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Title</dt>
                       <dd className="font-medium">{selectedNode.title}</dd>
                     </div>
                   )}
                   <div className="flex gap-1.5">
-                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Department</dt>
+                    <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Department</dt>
                     <dd className="font-medium">{selectedNode.department || '—'}</dd>
                   </div>
                   <div className="flex gap-1.5">
-                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Role</dt>
+                    <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Role</dt>
                     <dd className="font-medium">
-                      {selectedNode.role_name || <span className="text-grove-ink/50">—</span>}
+                      {selectedNode.role_name || <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">—</span>}
                       {selectedNode.role_depth != null && (
-                        <span className="ml-1.5 text-grove-ink/50">
+                        <span className="ml-1.5 text-grove-ink/50 dark:text-grove-ink-dk/50">
                           (depth {selectedNode.role_depth})
                         </span>
                       )}
                     </dd>
                   </div>
                   <div className="flex gap-1.5">
-                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Profile</dt>
+                    <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Profile</dt>
                     <dd className="font-medium">
-                      {selectedNode.profile_name || <span className="text-grove-ink/50">—</span>}
+                      {selectedNode.profile_name || <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">—</span>}
                     </dd>
                   </div>
                   <div className="flex gap-1.5">
-                    <dt className="text-grove-ink/55 w-20 flex-shrink-0">Status</dt>
+                    <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Status</dt>
                     <dd>
                       <Badge
                         variant={selectedNode.is_active ? 'success' : 'default'}
@@ -977,7 +977,7 @@ export default function ReportingGraphPage() {
                 on the canvas edge, but doesn't require finding the edge. */}
             {selectedNode && selectedRelationships && (
               <div className="border-t border-grove-border dark:border-grove-border-dk pt-3 mb-4">
-                <p className="text-xs uppercase tracking-wide text-grove-ink/55 mb-2">
+                <p className="text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
                   Current relationships
                 </p>
                 <ul className="space-y-2">
@@ -997,7 +997,7 @@ export default function ReportingGraphPage() {
                         className="flex items-center gap-2 text-xs"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-grove-ink/55">{label}</p>
+                          <p className="text-grove-ink/55 dark:text-grove-ink-dk/55">{label}</p>
                           {pendingAdd ? (
                             <p className="font-medium text-green-700 dark:text-green-400 truncate">
                               → {pendingAdd.target_name || pendingAdd.new_value} (pending)
@@ -1013,7 +1013,7 @@ export default function ReportingGraphPage() {
                               {slot.committed.target_name}
                             </p>
                           ) : (
-                            <p className="italic text-grove-ink/50">None</p>
+                            <p className="italic text-grove-ink/50 dark:text-grove-ink-dk/50">None</p>
                           )}
                         </div>
                         {/* Action button:
@@ -1057,11 +1057,11 @@ export default function ReportingGraphPage() {
             )}
 
             <div className="border-t border-grove-border dark:border-grove-border-dk pt-3">
-              <p className="text-xs uppercase tracking-wide text-grove-ink/55 mb-2">
+              <p className="text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55 mb-2">
                 Pending edits ({pending.length})
               </p>
               {pending.length === 0 ? (
-                <p className="text-xs text-grove-ink/55 italic">
+                <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 italic">
                   No pending edits. Drag between users to add one.
                 </p>
               ) : (
@@ -1089,7 +1089,7 @@ export default function ReportingGraphPage() {
                           {p.kind === 'remove' ? 'Clear' : 'Set'}{' '}
                           {p.field === 'ManagerId' ? 'manager' : 'delegated approver'}
                         </p>
-                        <p className="text-grove-ink/55">
+                        <p className="text-grove-ink/55 dark:text-grove-ink-dk/55">
                           {p.source_name || p.user_sf_id}
                           {p.kind !== 'remove' && (
                             <>
@@ -1101,7 +1101,7 @@ export default function ReportingGraphPage() {
                       </div>
                       <button
                         onClick={() => handleRevert(p)}
-                        className="text-grove-ink/50 hover:text-grove-ink/70"
+                        className="text-grove-ink/50 dark:text-grove-ink-dk/50 hover:text-grove-ink/70 dark:text-grove-ink-dk/70"
                         title="Revert this edit"
                       >
                         <XIcon className="h-3 w-3" />
@@ -1144,7 +1144,7 @@ export default function ReportingGraphPage() {
                   key={`${p.user_sf_id}::${p.field}`}
                   className="text-grove-ink/85 dark:text-grove-ink-dk/85"
                 >
-                  <span className="text-grove-ink/55">
+                  <span className="text-grove-ink/55 dark:text-grove-ink-dk/55">
                     {p.kind === 'remove' ? 'Clear' : 'Set'} {p.field}:
                   </span>{' '}
                   <strong>{p.source_name || p.user_sf_id}</strong>

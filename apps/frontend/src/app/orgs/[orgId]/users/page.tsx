@@ -67,7 +67,7 @@ export default function UsersPage() {
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <input
                 type="text"
                 placeholder="Search users..."
@@ -168,7 +168,7 @@ export default function UsersPage() {
                         {user.riskLevel ? (
                           <RiskBadge level={user.riskLevel} />
                         ) : (
-                          <span className="text-sm text-grove-ink/50">-</span>
+                          <span className="text-sm text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

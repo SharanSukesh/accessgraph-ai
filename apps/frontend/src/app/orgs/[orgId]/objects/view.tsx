@@ -317,7 +317,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <input
                 type="text"
                 placeholder="Search objects..."
@@ -389,7 +389,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Database className="h-5 w-5 text-grove-ink/50 mr-3" />
+                          <Database className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mr-3" />
                           <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                             {obj.label}
                           </div>
@@ -428,7 +428,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                             {obj.anomalyCount}
                           </Badge>
                         ) : (
-                          <span className="text-sm text-grove-ink/50">-</span>
+                          <span className="text-sm text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>
                         )}
                       </td>
                     </tr>

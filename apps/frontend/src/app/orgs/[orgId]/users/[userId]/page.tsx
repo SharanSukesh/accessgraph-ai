@@ -125,7 +125,7 @@ export default function UserDetailPage() {
         <CardContent className="py-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="flex items-start gap-3">
-              <User className="h-5 w-5 text-grove-ink/50 mt-0.5" />
+              <User className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mt-0.5" />
               <div>
                 <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Salesforce User ID
@@ -136,7 +136,7 @@ export default function UserDetailPage() {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Shield className="h-5 w-5 text-grove-ink/50 mt-0.5" />
+              <Shield className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mt-0.5" />
               <div>
                 <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Profile
@@ -147,7 +147,7 @@ export default function UserDetailPage() {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Key className="h-5 w-5 text-grove-ink/50 mt-0.5" />
+              <Key className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mt-0.5" />
               <div>
                 <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Role
@@ -158,7 +158,7 @@ export default function UserDetailPage() {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Calendar className="h-5 w-5 text-grove-ink/50 mt-0.5" />
+              <Calendar className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mt-0.5" />
               <div>
                 <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">
                   Last Login

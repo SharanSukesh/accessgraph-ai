@@ -237,42 +237,42 @@ export default function ObjectDetailPage() {
                         {profile.read ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.create ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.edit ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.delete ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.viewAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {profile.modifyAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                     </tr>
@@ -335,42 +335,42 @@ export default function ObjectDetailPage() {
                         {ps.read ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.create ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.edit ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.delete ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.viewAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {ps.modifyAll ? (
                           <Check className="h-5 w-5 text-green-600 mx-auto" />
                         ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 mx-auto" />
+                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
                         )}
                       </td>
                     </tr>
@@ -448,7 +448,7 @@ export default function ObjectDetailPage() {
             </div>
           ) : (
             <div className="text-center py-12">
-              <Users className="mx-auto h-12 w-12 text-grove-ink/50" />
+              <Users className="mx-auto h-12 w-12 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <h3 className="mt-2 text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                 No users with access
               </h3>

@@ -429,7 +429,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                           {owd.external_sharing_model ? (
                             getSharingModelBadge(owd.external_sharing_model)
                           ) : (
-                            <span className="text-grove-ink/50 text-xs">N/A</span>
+                            <span className="text-grove-ink/50 dark:text-grove-ink-dk/50 text-xs">N/A</span>
                           )}
                         </td>
                         <td className="px-4 py-2 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">

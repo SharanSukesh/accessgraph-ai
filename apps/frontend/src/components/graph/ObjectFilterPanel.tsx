@@ -63,7 +63,7 @@ export function ObjectFilterPanel({
       <CardContent className="flex-1 overflow-hidden flex flex-col p-4 space-y-4">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
           <input
             type="text"
             placeholder="Search objects..."
@@ -74,7 +74,7 @@ export function ObjectFilterPanel({
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-grove-ink/50 hover:text-grove-ink/70 dark:hover:text-grove-border"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-grove-ink/50 dark:text-grove-ink-dk/50 hover:text-grove-ink/70 dark:text-grove-ink-dk/70 dark:hover:text-grove-border"
             >
               <X className="h-4 w-4" />
             </button>

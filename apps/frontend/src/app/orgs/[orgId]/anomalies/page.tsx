@@ -191,7 +191,7 @@ export default function AnomaliesPage() {
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <input
                 type="text"
                 placeholder="Search anomalies..."
@@ -362,7 +362,7 @@ export default function AnomaliesPage() {
                     <div className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-1">
                       {Object.entries(selectedAnomaly.details).map(([key, value]) => (
                         <div key={key} className="flex justify-between">
-                          <span className="text-grove-ink/55">{key}:</span>
+                          <span className="text-grove-ink/55 dark:text-grove-ink-dk/55">{key}:</span>
                           <span className="font-medium">{String(value)}</span>
                         </div>
                       ))}

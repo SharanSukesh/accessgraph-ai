@@ -125,7 +125,7 @@ export default function PermissionSetDetailPage() {
                 <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalUsers}
                 </div>
-                <div className="text-xs text-grove-ink/55 mt-1">
+                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                   {ps.totalDirectAssignments} direct
                   {ps.totalViaPsgAssignments > 0 && ` + ${ps.totalViaPsgAssignments} via PSG`}
                 </div>
@@ -145,7 +145,7 @@ export default function PermissionSetDetailPage() {
                 <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalObjectsGranted}
                 </div>
-                <div className="text-xs text-grove-ink/55 mt-1">CRUD-level grants</div>
+                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">CRUD-level grants</div>
               </div>
               <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
                 <Database className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -162,7 +162,7 @@ export default function PermissionSetDetailPage() {
                 <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalFieldsGranted}
                 </div>
-                <div className="text-xs text-grove-ink/55 mt-1">Read or Edit FLS</div>
+                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">Read or Edit FLS</div>
               </div>
               <div className="p-3 rounded-lg bg-amber-100 dark:bg-amber-900">
                 <FileText className="h-6 w-6 text-amber-600 dark:text-amber-400" />
@@ -179,7 +179,7 @@ export default function PermissionSetDetailPage() {
                 <div className="text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
                   {ps.totalSystemPermissionsGranted}
                 </div>
-                <div className="text-xs text-grove-ink/55 mt-1">Org-wide privileges</div>
+                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">Org-wide privileges</div>
               </div>
               <div className="p-3 rounded-lg bg-copper-100 dark:bg-copper-900/25">
                 <Settings className="h-6 w-6 text-copper-600 dark:text-copper-400" />
@@ -250,7 +250,7 @@ export default function PermissionSetDetailPage() {
                   </div>
                 </div>
               ))}
-              <p className="text-xs text-grove-ink/55 mt-3">
+              <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-3">
                 Showing the curated set of {' '}
                 <a href="https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_permissionset.htm" target="_blank" rel="noopener noreferrer" className="underline">
                   ~30 most-audited PermissionSet flags
@@ -417,7 +417,7 @@ export default function PermissionSetDetailPage() {
                           className="w-full px-3 py-2 flex items-center justify-between hover:bg-primary-50/40 dark:hover:bg-primary-900/15 text-left"
                         >
                           <div className="flex items-center gap-2">
-                            {isExpanded ? <ChevronDown className="h-4 w-4 text-grove-ink/55" /> : <ChevronRight className="h-4 w-4 text-grove-ink/55" />}
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-grove-ink/55 dark:text-grove-ink-dk/55" /> : <ChevronRight className="h-4 w-4 text-grove-ink/55 dark:text-grove-ink-dk/55" />}
                             <span className="font-mono text-sm text-grove-ink dark:text-grove-ink-dk">{objectName}</span>
                           </div>
                           {isInherited ? (
@@ -437,7 +437,7 @@ export default function PermissionSetDetailPage() {
                                   {' '}Every field on <span className="font-mono">{objectName}</span> is accessible to users with this PS via inherited object-level{' '}
                                   <strong>{inheritedFlags.join(' / ') || 'access'}</strong>.
                                 </p>
-                                <p className="text-xs text-grove-ink/55">
+                                <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                                   Salesforce only stores FieldPermission rows when an admin
                                   explicitly grants or revokes access on a specific field.
                                   Standard fields (Id, Name, etc.) cannot have FLS at all
@@ -481,7 +481,7 @@ export default function PermissionSetDetailPage() {
                                     ))}
                                   </tbody>
                                 </table>
-                                <p className="px-3 py-2 text-xs text-grove-ink/55 border-t border-grove-border dark:border-grove-border-dk">
+                                <p className="px-3 py-2 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 border-t border-grove-border dark:border-grove-border-dk">
                                   These are explicit FLS rows. Other fields on{' '}
                                   <span className="font-mono">{objectName}</span> still inherit{' '}
                                   {inheritedFlags.join(' / ') || 'no access'} from the object-level grant above.
@@ -495,7 +495,7 @@ export default function PermissionSetDetailPage() {
                   })
                 })()}
               </div>
-              <p className="text-xs text-grove-ink/55 mt-3">
+              <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-3">
                 <strong>Explicit FLS</strong> = an admin set field-level security on that field.
                 {' '}<strong>Inherited</strong> = field has no FLS row, so access follows the object's
                 CRUD grant above.

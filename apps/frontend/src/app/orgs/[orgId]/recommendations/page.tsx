@@ -240,7 +240,7 @@ export default function RecommendationsPage() {
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
               <input
                 type="text"
                 placeholder="Search recommendations..."
@@ -362,7 +362,7 @@ export default function RecommendationsPage() {
                                 {rec.title}
                               </h3>
                             </div>
-                            <ChevronRight className="h-5 w-5 text-grove-ink/50 flex-shrink-0" />
+                            <ChevronRight className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 flex-shrink-0" />
                           </div>
                           <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                             {rec.description}

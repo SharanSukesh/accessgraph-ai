@@ -70,7 +70,7 @@ export default function OnboardingPage() {
                         ? 'bg-primary-600 text-white'
                         : idx + 1 === step
                         ? 'bg-primary-100 dark:bg-primary-900 text-primary-600 dark:text-primary-400 ring-4 ring-primary-200 dark:ring-primary-800'
-                        : 'bg-grove-border/60 dark:bg-grove-border-dk/70 text-grove-ink/50'
+                        : 'bg-grove-border/60 dark:bg-grove-border-dk/70 text-grove-ink/50 dark:text-grove-ink-dk/50'
                     }`}
                   >
                     {idx + 1 < step ? (
