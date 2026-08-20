@@ -73,16 +73,21 @@ import { useAuth } from '@/lib/auth/AuthContext'
 
 /**
  * Backend findings carry Setup deeplinks as RELATIVE paths
- * (/lightning/setup/...). Resolved raw, the browser hits the app's own
- * domain and 404s — they must be absolutized against the connected
- * org's My Domain host. Returns null when the domain isn't known so
- * the caller hides the link instead of shipping a broken one.
+ * (/lightning/setup/...). They must be absolutized against the
+ * connected org's FULL instance URL from /auth/me — org_domain is only
+ * the My Domain prefix (e.g. "orgfarm-…-dev-ed") and does not resolve
+ * as a hostname. Returns null when no usable base is known so the
+ * caller hides the link instead of shipping a broken one.
  */
-function sfSetupHref(path: string, orgDomain?: string | null): string | null {
+function sfSetupHref(path: string, instanceUrl?: string | null): string | null {
   if (/^https?:\/\//i.test(path)) return path
-  if (!orgDomain) return null
-  const host = orgDomain.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
-  return `https://${host}${path.startsWith('/') ? path : `/${path}`}`
+  if (!instanceUrl) return null
+  const base = instanceUrl.replace(/\/+$/, '')
+  const withProto = /^https?:\/\//i.test(base) ? base : `https://${base}`
+  // A base without a dot can't be a real hostname (bare My Domain
+  // prefix) — refuse rather than emit a DNS error.
+  if (!withProto.replace(/^https?:\/\//i, '').includes('.')) return null
+  return `${withProto}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 type Tab = 'overview' | 'findings' | 'savings' | 'trends' | 'price-book'
@@ -1158,9 +1163,9 @@ function FindingsTab({ orgId }: { orgId: string }) {
                 />
               </div>
               {refreshedSelected.sf_setup_deeplink &&
-                sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.org_domain) && (
+                sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.instance_url) && (
                   <a
-                    href={sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.org_domain)!}
+                    href={sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.instance_url)!}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
