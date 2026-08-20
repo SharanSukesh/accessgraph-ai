@@ -56,49 +56,46 @@ export default function StartPage() {
           </div>
         </Reveal>
 
-        <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <StaggerItem>
-            <Link
-              href={orgHref}
-              className="group flex h-full flex-col rounded-2xl border border-grove-border bg-grove-surface p-6 shadow-grove-lift transition-all duration-200 hover:-translate-y-1 hover:border-primary-400/60 hover:shadow-grove-hero dark:border-grove-border-dk dark:bg-grove-surface-dk"
-            >
-              <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200 transition-transform duration-200 group-hover:scale-110 dark:bg-primary-900/25 dark:text-primary-400 dark:ring-primary-800">
-                <Database className="h-5 w-5" />
-              </span>
-              <h2 className="v2-display text-xl font-semibold text-grove-ink dark:text-grove-ink-dk">
-                Existing Salesforce org
-              </h2>
-              <p className="mt-2 flex-1 text-sm leading-relaxed text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Connect and analyze a live org — health report, license waste,
-                anomalies, sprawl, compliance, and restructure planning.
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 transition-colors group-hover:text-copper-600 dark:text-primary-400 dark:group-hover:text-copper-400">
-                Open workspace <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </span>
-            </Link>
-          </StaggerItem>
-
-          <StaggerItem>
-            <Link
-              href="/implementation"
-              className="group flex h-full flex-col rounded-2xl border border-grove-border bg-grove-surface p-6 shadow-grove-lift transition-all duration-200 hover:-translate-y-1 hover:border-copper-400/60 hover:shadow-grove-hero dark:border-grove-border-dk dark:bg-grove-surface-dk"
-            >
-              <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-copper-50 text-copper-600 ring-1 ring-copper-200 transition-transform duration-200 group-hover:scale-110 dark:bg-copper-900/25 dark:text-copper-400 dark:ring-copper-800">
-                <Compass className="h-5 w-5" />
-              </span>
-              <h2 className="v2-display text-xl font-semibold text-grove-ink dark:text-grove-ink-dk">
-                New implementation
-              </h2>
-              <p className="mt-2 flex-1 text-sm leading-relaxed text-grove-ink/65 dark:text-grove-ink-dk/65">
-                No Salesforce yet. Answer the requirements questionnaire and get
-                licensing tiers, an editable pricebook, a phased roadmap, and
-                the case for the platform.
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-copper-600 transition-colors group-hover:text-primary-700 dark:text-copper-400 dark:group-hover:text-primary-400">
-                Start planning <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </span>
-            </Link>
-          </StaggerItem>
+        <Stagger className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-stretch">
+          {[
+            {
+              href: orgHref,
+              icon: Database,
+              title: 'Existing Salesforce org',
+              body:
+                'Connect and analyze a live org — health report, license waste, anomalies, sprawl, compliance, and restructure planning.',
+              cta: 'Open workspace',
+            },
+            {
+              href: '/implementation',
+              icon: Compass,
+              title: 'New implementation',
+              body:
+                'No Salesforce yet. Answer the requirements questionnaire and get licensing tiers, an editable pricebook, a phased roadmap, and the case for the platform.',
+              cta: 'Start planning',
+            },
+          ].map((card) => (
+            <StaggerItem key={card.href} className="h-full">
+              <Link
+                href={card.href}
+                className="group flex h-full flex-col rounded-2xl border border-grove-border bg-grove-surface p-6 shadow-grove-lift transition-all duration-200 hover:-translate-y-1 hover:border-primary-400/60 hover:shadow-grove-hero dark:border-grove-border-dk dark:bg-grove-surface-dk"
+              >
+                <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-primary-200 transition-transform duration-200 group-hover:scale-110 dark:bg-primary-900/25 dark:text-primary-400 dark:ring-primary-800">
+                  <card.icon className="h-5 w-5" />
+                </span>
+                <h2 className="v2-display text-xl font-semibold text-grove-ink dark:text-grove-ink-dk">
+                  {card.title}
+                </h2>
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-grove-ink/65 dark:text-grove-ink-dk/65">
+                  {card.body}
+                </p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-primary-700 transition-colors group-hover:text-copper-600 dark:text-primary-400 dark:group-hover:text-copper-400">
+                  {card.cta}{' '}
+                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            </StaggerItem>
+          ))}
         </Stagger>
 
         <p className="v2-micro mt-10 text-center text-grove-ink/40 dark:text-grove-ink-dk/40">
