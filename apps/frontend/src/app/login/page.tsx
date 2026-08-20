@@ -206,25 +206,6 @@ function LoginContent() {
         </Card>
         </Reveal>
 
-        {/* Fork for greenfield clients — no Salesforce org yet. Links to
-            the public New Implementation Advisor questionnaire. */}
-        <Reveal delay={0.15}>
-          <a
-            href="/advisor"
-            className="group mt-4 flex items-center justify-between rounded-xl border border-grove-border bg-grove-surface/70 px-4 py-3 transition-all duration-200 hover:border-copper-400/60 hover:shadow-grove-lift dark:border-grove-border-dk dark:bg-grove-surface-dk/70 dark:hover:border-copper-500/50"
-          >
-            <span className="text-sm text-grove-ink/75 dark:text-grove-ink-dk/75">
-              <span className="font-semibold text-grove-ink dark:text-grove-ink-dk">
-                Planning a new Salesforce implementation?
-              </span>{' '}
-              Find out exactly what to buy.
-            </span>
-            <span className="ml-3 shrink-0 text-sm font-semibold text-copper-600 transition-transform duration-200 group-hover:translate-x-0.5 dark:text-copper-400">
-              →
-            </span>
-          </a>
-        </Reveal>
-
         <div className="v2-micro mt-8 text-center text-grove-ink/50 dark:text-grove-ink-dk/50">
           <p>Access Intelligence · Enterprise-grade</p>
         </div>

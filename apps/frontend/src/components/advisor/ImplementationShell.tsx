@@ -9,15 +9,16 @@
  * the user back to the /start fork.
  */
 
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ListChecks, Layers, Calculator, Cloud, Map,
-  Sparkles, ArrowLeftRight,
+  Sparkles, ArrowLeftRight, Loader2,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/Logo'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
+import { useAuth } from '@/lib/auth/AuthContext'
 
 const NAV = [
   { name: 'Overview', path: 'overview', icon: LayoutDashboard },
@@ -31,6 +32,25 @@ const NAV = [
 
 export function ImplementationShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { isLoading, isAuthenticated } = useAuth()
+
+  // Auth gate for the whole /implementation tree — the advisor is an
+  // account-holder feature, not a public surface. Unauthenticated
+  // visitors (including old /advisor bookmarks) bounce to login.
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login?redirect=/implementation')
+    }
+  }, [isLoading, isAuthenticated, router])
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-10 w-10 animate-spin text-primary-600 dark:text-primary-400" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-grove-canvas/80 dark:bg-grove-canvas-dk/80">
