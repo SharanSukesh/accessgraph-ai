@@ -1,13 +1,20 @@
 /**
- * New Implementation Advisor — recommendation rule engine.
+ * New Implementation Advisor — recommendation rule engine (v1.1).
  *
  * Pure functions: questionnaire answers in, recommendation out. Every
  * rule is a transparent, defensible if-this-then-that a consultant can
- * read aloud to a client — no scoring black box. Prices are Salesforce
- * LIST prices (USD, per user per month unless noted); real contracts
- * negotiate down, which the results page says out loud.
+ * read aloud to a client — no scoring black box.
  *
- * v1 is deliberately frontend-only: nothing here talks to the backend.
+ * v1.1 upgrades over v1:
+ *  - Full tier ladder: Starter Suite → Pro Suite → Enterprise →
+ *    Unlimited → Agentforce 1 (the "elite" AI tier), each with
+ *    concrete discriminating triggers.
+ *  - Explicit per-cloud verdicts (Sales, Service, Field Service,
+ *    Marketing B2B/B2C, Commerce, Experience, Revenue/CPQ, Data
+ *    Cloud, Analytics, industry clouds) with drivers.
+ *
+ * Prices are Salesforce LIST prices (USD, per user per month unless
+ * noted); real contracts negotiate down — the results page says so.
  */
 
 // ---------------------------------------------------------------- answers
@@ -17,17 +24,31 @@ export interface AdvisorAnswers {
   industry:
     | 'tech' | 'finserv' | 'healthcare' | 'manufacturing'
     | 'retail' | 'services' | 'nonprofit' | 'other'
+  audience: 'b2b' | 'b2c' | 'both'
+  // Seats by persona
   salesSeats: number
   serviceSeats: number
+  fieldTechs: number
   marketingSeats: number
   opsSeats: number
   readOnlySeats: number
   partnerUsers: 'none' | 'lt100' | '100-1000' | 'gt1000'
-  useCases: string[]
+  customerPortal: boolean
+  // Needs by domain
+  salesNeeds: string[]
+  serviceNeeds: string[]
+  marketingNeeds: string[]
+  commerceNeeds: string[]
+  platformNeeds: string[]
+  // Data & systems
   dataVolume: 'lt100k' | '100k-1m' | '1m-10m' | 'gt10m'
   integrations: string[]
+  // Governance
   compliance: string[]
   backupRequirement: boolean
+  fullSandbox: boolean
+  supportLevel: 'standard' | 'premier'
+  // Posture
   budget: 'lean' | 'balanced' | 'premium'
   growth: 'flat' | 'moderate' | 'aggressive'
 }
@@ -35,32 +56,72 @@ export interface AdvisorAnswers {
 export const DEFAULT_ANSWERS: AdvisorAnswers = {
   companySize: '25-100',
   industry: 'tech',
+  audience: 'b2b',
   salesSeats: 10,
   serviceSeats: 5,
+  fieldTechs: 0,
   marketingSeats: 2,
   opsSeats: 2,
   readOnlySeats: 5,
   partnerUsers: 'none',
-  useCases: [],
+  customerPortal: false,
+  salesNeeds: [],
+  serviceNeeds: [],
+  marketingNeeds: [],
+  commerceNeeds: [],
+  platformNeeds: [],
   dataVolume: 'lt100k',
   integrations: [],
   compliance: [],
   backupRequirement: false,
+  fullSandbox: false,
+  supportLevel: 'standard',
   budget: 'balanced',
   growth: 'moderate',
 }
 
-export const USE_CASES = [
-  { key: 'pipeline', label: 'Lead & opportunity management' },
-  { key: 'forecasting', label: 'Forecasting & territories' },
-  { key: 'quoting', label: 'Quoting / CPQ' },
-  { key: 'cases', label: 'Case management & support' },
+// Question banks — each chip is a tier or cloud discriminator, noted
+// in the comment beside it.
+
+export const SALES_NEEDS = [
+  { key: 'pipeline', label: 'Lead & opportunity management' }, // Sales Cloud baseline
+  { key: 'forecasting', label: 'Collaborative forecasting' }, // Pro Suite+
+  { key: 'territories', label: 'Territory management' }, // Enterprise+
+  { key: 'quoting', label: 'Quotes & CPQ' }, // Revenue Cloud
+  { key: 'billing', label: 'Billing & subscriptions' }, // Revenue Cloud
+  { key: 'rev-intel', label: 'Revenue intelligence / pipeline AI' }, // Unlimited+/Agentforce
+] as const
+
+export const SERVICE_NEEDS = [
+  { key: 'cases', label: 'Case management' }, // Service Cloud baseline
+  { key: 'omni-phone', label: 'Phone / call center' },
+  { key: 'omni-chat', label: 'Live chat & messaging' }, // omni-channel → Enterprise+
+  { key: 'self-service', label: 'Customer self-service portal' }, // Experience Cloud
   { key: 'knowledge', label: 'Knowledge base' },
-  { key: 'field-service', label: 'Field service / on-site work' },
-  { key: 'email-marketing', label: 'Email marketing & journeys' },
-  { key: 'custom-apps', label: 'Custom apps & objects' },
-  { key: 'analytics', label: 'Advanced analytics & dashboards' },
-  { key: 'approvals', label: 'Approvals & complex automation' },
+  { key: 'slas', label: 'SLAs & entitlements' }, // Enterprise+
+  { key: 'field-service', label: 'On-site / field service' }, // Field Service
+] as const
+
+export const MARKETING_NEEDS = [
+  { key: 'b2b-nurture', label: 'B2B lead nurture & scoring' }, // MC Account Engagement
+  { key: 'b2c-journeys', label: 'B2C journeys at scale (email/SMS/push)' }, // MC Engagement
+  { key: 'personalization', label: 'Web & ad personalization' }, // Data Cloud / MC Personalization
+] as const
+
+export const COMMERCE_NEEDS = [
+  { key: 'b2c-store', label: 'B2C online store' },
+  { key: 'b2b-store', label: 'B2B ordering / reorder portal' },
+] as const
+
+export const PLATFORM_NEEDS = [
+  { key: 'custom-apps', label: 'Custom apps & objects' }, // Enterprise+
+  { key: 'pro-code', label: 'Custom code (Apex / LWC) & CI/CD' }, // Enterprise+
+  { key: 'ai-copilot', label: 'AI assistant / agents (Agentforce)' }, // Agentforce 1
+  { key: 'predictive', label: 'Predictive scoring & Einstein AI' }, // Unlimited+/Agentforce
+  { key: 'data-cloud', label: 'Unify customer data across systems (Data Cloud)' }, // Agentforce 1
+  { key: 'slack', label: 'Deep Slack integration' }, // bundled in Agentforce 1
+  { key: 'analytics', label: 'Advanced analytics (CRM Analytics / Tableau)' },
+  { key: 'approvals', label: 'Approvals & complex automation' }, // Enterprise+
 ] as const
 
 export const INTEGRATIONS = [
@@ -83,13 +144,27 @@ export const COMPLIANCE_OPTIONS = [
 
 // ---------------------------------------------------------------- output
 
+export type Tier =
+  | 'Starter Suite'
+  | 'Pro Suite'
+  | 'Enterprise'
+  | 'Unlimited'
+  | 'Agentforce 1'
+
 export interface LicenseLine {
   persona: string
   product: string
   seats: number
-  unitMonthly: number // USD per user per month (0 = org-level line)
-  annual: number // USD per year for the line
+  unitMonthly: number // USD per user per month (0 = org-level / quoted line)
+  annual: number
   note?: string
+}
+
+export interface CloudRec {
+  cloud: string
+  verdict: 'recommended' | 'consider' | 'not-needed'
+  drivers: string[]
+  pricing: string
 }
 
 export interface AddOn {
@@ -105,9 +180,11 @@ export interface PackageRec {
 }
 
 export interface Recommendation {
-  edition: 'Starter Suite' | 'Professional' | 'Enterprise' | 'Unlimited'
-  editionRationale: string[]
+  tier: Tier
+  tierRationale: string[]
+  tierLadder: { tier: Tier; verdict: string }[]
   perSeat: number
+  clouds: CloudRec[]
   licenses: LicenseLine[]
   addOns: AddOn[]
   packages: PackageRec[]
@@ -117,87 +194,271 @@ export interface Recommendation {
   caveats: string[]
 }
 
-// List prices (USD / user / month) per core edition.
-const EDITION_SEAT_PRICE: Record<Recommendation['edition'], number> = {
+// List prices (USD / user / month) per core tier.
+const TIER_PRICE: Record<Tier, number> = {
   'Starter Suite': 25,
-  Professional: 80,
+  'Pro Suite': 100,
   Enterprise: 165,
   Unlimited: 330,
+  'Agentforce 1': 500,
 }
 
-const PLATFORM_STARTER = 25 // light license for ops / read-only personas
-const MCAE_GROWTH_MONTHLY = 1250 // Marketing Cloud Account Engagement, org-level
-const PARTNER_LOGIN_EST = 10 // Experience Cloud, per login est.
+const PLATFORM_STARTER = 25
+const FIELD_SERVICE_TECH = 165
+const MCAE_GROWTH_MONTHLY = 1250 // MC Account Engagement (B2B), org-level
+const MC_ENGAGEMENT_EST_MONTHLY = 1500 // MC Engagement (B2C), volume-quoted est.
+const PARTNER_LOGIN_EST = 10
 
 // ---------------------------------------------------------------- engine
 
 export function recommend(a: AdvisorAnswers): Recommendation {
   const totalSeats =
-    a.salesSeats + a.serviceSeats + a.marketingSeats + a.opsSeats + a.readOnlySeats
-  const has = (k: string) => a.useCases.includes(k)
+    a.salesSeats + a.serviceSeats + a.fieldTechs + a.marketingSeats +
+    a.opsSeats + a.readOnlySeats
+  const sales = (k: string) => a.salesNeeds.includes(k)
+  const service = (k: string) => a.serviceNeeds.includes(k)
+  const marketing = (k: string) => a.marketingNeeds.includes(k)
+  const commerce = (k: string) => a.commerceNeeds.includes(k)
+  const platform = (k: string) => a.platformNeeds.includes(k)
   const integ = (k: string) => a.integrations.includes(k)
   const regulated = a.compliance.length > 0
   const bigData = a.dataVolume === '1m-10m' || a.dataVolume === 'gt10m'
 
-  // ---- Edition -----------------------------------------------------
-  // Each trigger is a concrete reason Professional won't be enough.
+  // ---- Tier ladder ---------------------------------------------------
+  // Work bottom-up: what disqualifies each tier below the answer?
+
   const enterpriseTriggers: string[] = []
   if (integ('custom-api') || integ('erp') || integ('dwh'))
-    enterpriseTriggers.push('API-based integrations need Enterprise-level API access')
-  if (has('approvals') || has('custom-apps'))
-    enterpriseTriggers.push('Complex automation and custom apps outgrow Professional limits')
-  if (has('forecasting'))
-    enterpriseTriggers.push('Territory management and advanced forecasting are Enterprise features')
+    enterpriseTriggers.push('API-based integrations (ERP, warehouse, custom apps) need Enterprise-level API access')
+  if (platform('pro-code') || platform('custom-apps'))
+    enterpriseTriggers.push('Custom code and custom apps need Enterprise sandboxes and limits')
+  if (platform('approvals'))
+    enterpriseTriggers.push('Complex approvals and flow automation outgrow Pro Suite')
+  if (sales('territories'))
+    enterpriseTriggers.push('Territory management is Enterprise-and-above')
+  if (service('omni-chat') || service('slas'))
+    enterpriseTriggers.push('Omni-channel routing and SLA entitlements need Enterprise Service Cloud')
   if (regulated)
-    enterpriseTriggers.push('Compliance work needs Enterprise audit + security surface')
+    enterpriseTriggers.push('Compliance work needs the Enterprise audit + security surface (and usually Shield)')
   if (totalSeats > 50)
-    enterpriseTriggers.push(`${totalSeats} seats is past the point where Professional stays manageable`)
-  if (a.partnerUsers !== 'none')
-    enterpriseTriggers.push('Partner access (Experience Cloud) pairs with Enterprise')
+    enterpriseTriggers.push(`${totalSeats} seats is past the point where lighter editions stay manageable`)
+  if (a.partnerUsers !== 'none' || a.customerPortal)
+    enterpriseTriggers.push('External portals (Experience Cloud) pair with Enterprise')
   if (bigData)
     enterpriseTriggers.push('Data volumes in the millions need Enterprise storage & API headroom')
 
-  let edition: Recommendation['edition']
-  let editionRationale: string[]
+  const unlimitedTriggers: string[] = []
+  if (a.supportLevel === 'premier')
+    unlimitedTriggers.push('24/7 Premier support is bundled in Unlimited (bought separately it adds ~30% on lower tiers)')
+  if (a.fullSandbox)
+    unlimitedTriggers.push('A full-copy sandbox is included in Unlimited (a ~30% add-on below it)')
+  if (platform('predictive') && !platform('ai-copilot'))
+    unlimitedTriggers.push('Einstein predictive features are native at Unlimited')
+  if (sales('rev-intel'))
+    unlimitedTriggers.push('Revenue intelligence ships with the Unlimited/Agentforce tiers')
+  if (totalSeats >= 250 && a.growth === 'aggressive')
+    unlimitedTriggers.push('At this scale and growth rate, Unlimited\'s higher limits beat piecemeal add-ons')
 
-  if (totalSeats <= 10 && enterpriseTriggers.length === 0) {
-    edition = 'Starter Suite'
-    editionRationale = [
-      'Ten or fewer users with straightforward CRM needs — start light',
-      'Upgrade path to Professional/Enterprise preserves your data',
-    ]
+  const eliteTriggers: string[] = []
+  if (platform('ai-copilot'))
+    eliteTriggers.push('AI assistant / Agentforce agents are the headline of the Agentforce 1 tier')
+  if (platform('data-cloud'))
+    eliteTriggers.push('Data Cloud is bundled in Agentforce 1 (consumption-priced separately below it)')
+  if (platform('slack'))
+    eliteTriggers.push('Slack is included in Agentforce 1')
+  if (platform('predictive') && platform('data-cloud'))
+    eliteTriggers.push('Predictive AI on unified data is exactly the Agentforce 1 bundle')
+
+  let tier: Tier
+  let tierRationale: string[]
+
+  if (eliteTriggers.length >= 2 && a.budget !== 'lean') {
+    tier = 'Agentforce 1'
+    tierRationale = eliteTriggers.slice(0, 4)
   } else if (
-    totalSeats >= 1000 ||
-    (a.budget === 'premium' && totalSeats >= 500) ||
-    (a.growth === 'aggressive' && totalSeats >= 500)
+    (unlimitedTriggers.length >= 2 && totalSeats >= 100) ||
+    (unlimitedTriggers.length >= 1 && a.budget === 'premium' && totalSeats >= 100) ||
+    totalSeats >= 1000
   ) {
-    edition = 'Unlimited'
-    editionRationale = [
-      'At this scale Unlimited\'s bundled support, full sandbox, and higher limits beat buying them piecemeal',
-      ...enterpriseTriggers.slice(0, 2),
+    tier = 'Unlimited'
+    tierRationale = [
+      ...unlimitedTriggers.slice(0, 3),
+      ...(totalSeats >= 1000 ? ['At 1,000+ seats the bundled support and limits pay for themselves'] : []),
     ]
-  } else if (enterpriseTriggers.length <= 1 && totalSeats <= 50 && a.budget === 'lean') {
-    edition = 'Professional'
-    editionRationale = [
-      'Under 50 seats with modest integration needs — Professional covers it',
-      'Half the per-seat cost of Enterprise; revisit at your first API-heavy integration',
+  } else if (enterpriseTriggers.length > 0) {
+    tier = 'Enterprise'
+    tierRationale = enterpriseTriggers.slice(0, 4)
+  } else if (
+    totalSeats > 10 ||
+    sales('forecasting') ||
+    sales('quoting') ||
+    integ('sso')
+  ) {
+    tier = 'Pro Suite'
+    tierRationale = [
+      'Past Starter\'s limits but no Enterprise trigger yet — Pro Suite adds forecasting, quoting basics, and API access at $100/seat',
+      'Revisit at your first custom-code project or API-heavy integration',
     ]
   } else {
-    edition = 'Enterprise'
-    editionRationale =
-      enterpriseTriggers.length > 0
-        ? enterpriseTriggers.slice(0, 4)
-        : ['The consulting default: room to grow without Unlimited pricing']
+    tier = 'Starter Suite'
+    tierRationale = [
+      'Ten or fewer users with straightforward CRM needs — start light at $25/seat',
+      'The upgrade path to Pro Suite / Enterprise preserves all your data',
+    ]
   }
 
-  const perSeat = EDITION_SEAT_PRICE[edition]
+  // Why-not ladder — one line per tier so the client sees the whole map.
+  const order: Tier[] = ['Starter Suite', 'Pro Suite', 'Enterprise', 'Unlimited', 'Agentforce 1']
+  const chosenIdx = order.indexOf(tier)
+  const tierLadder = order.map((t, i) => {
+    if (i === chosenIdx) return { tier: t, verdict: 'Recommended — best fit for your answers' }
+    if (i < chosenIdx) {
+      const blocker =
+        t === 'Starter Suite' ? (totalSeats > 10 ? 'Too small for your seat count' : enterpriseTriggers[0] ?? unlimitedTriggers[0] ?? 'Below your needs')
+        : t === 'Pro Suite' ? (enterpriseTriggers[0] ?? unlimitedTriggers[0] ?? eliteTriggers[0] ?? 'Below your needs')
+        : t === 'Enterprise' ? (unlimitedTriggers[0] ?? eliteTriggers[0] ?? 'Below your needs')
+        : (eliteTriggers[0] ?? 'Below your needs')
+      return { tier: t, verdict: `Undersized: ${blocker}` }
+    }
+    const skip =
+      t === 'Pro Suite' ? 'Skipped — you need more than this tier offers'
+      : t === 'Enterprise' ? 'Not needed yet — no Enterprise trigger in your answers'
+      : t === 'Unlimited'
+      ? unlimitedTriggers.length > 0
+        ? `Worth pricing if: ${unlimitedTriggers[0]}`
+        : 'Not needed — premier support / full sandbox / native Einstein didn\'t come up'
+      : eliteTriggers.length > 0
+      ? `Worth pricing if AI becomes a priority: ${eliteTriggers[0]}`
+      : 'Not needed — no AI/Data Cloud/Slack requirements surfaced'
+    return { tier: t, verdict: skip }
+  })
 
-  // ---- License mix ---------------------------------------------------
+  const perSeat = TIER_PRICE[tier]
+
+  // ---- Cloud verdicts --------------------------------------------------
+  const clouds: CloudRec[] = []
+
+  const salesDrivers = SALES_NEEDS.filter((n) => sales(n.key)).map((n) => n.label)
+  clouds.push({
+    cloud: 'Sales Cloud',
+    verdict: a.salesSeats > 0 || salesDrivers.length > 0 ? 'recommended' : 'not-needed',
+    drivers: salesDrivers.length > 0 ? salesDrivers : a.salesSeats > 0 ? [`${a.salesSeats} sales seats`] : ['No sales team or pipeline needs'],
+    pricing: `$${perSeat}/user/mo at ${tier}`,
+  })
+
+  const serviceDrivers = SERVICE_NEEDS.filter((n) => service(n.key) && n.key !== 'field-service').map((n) => n.label)
+  clouds.push({
+    cloud: 'Service Cloud',
+    verdict: a.serviceSeats > 0 || serviceDrivers.length > 0 ? 'recommended' : 'not-needed',
+    drivers: serviceDrivers.length > 0 ? serviceDrivers : a.serviceSeats > 0 ? [`${a.serviceSeats} service seats`] : ['No support team or case needs'],
+    pricing: `$${perSeat}/user/mo at ${tier}`,
+  })
+
+  const wantsFieldService = a.fieldTechs > 0 || service('field-service')
+  clouds.push({
+    cloud: 'Field Service',
+    verdict: wantsFieldService ? 'recommended' : 'not-needed',
+    drivers: wantsFieldService
+      ? [a.fieldTechs > 0 ? `${a.fieldTechs} field technicians` : 'On-site work selected', 'Scheduling, dispatch, mobile work orders']
+      : ['No on-site/field work'],
+    pricing: `~$${FIELD_SERVICE_TECH}/tech/mo + dispatcher seats`,
+  })
+
+  const b2bMkt = marketing('b2b-nurture')
+  const b2cMkt = marketing('b2c-journeys')
+  clouds.push({
+    cloud: 'Marketing Cloud — Account Engagement (B2B)',
+    verdict: b2bMkt ? 'recommended' : a.audience !== 'b2c' && a.marketingSeats > 0 ? 'consider' : 'not-needed',
+    drivers: b2bMkt ? ['B2B nurture & lead scoring selected'] : ['Only if B2B nurture becomes a motion'],
+    pricing: `From $${MCAE_GROWTH_MONTHLY.toLocaleString()}/mo (10K contacts, org-level)`,
+  })
+  clouds.push({
+    cloud: 'Marketing Cloud — Engagement (B2C)',
+    verdict: b2cMkt ? 'recommended' : a.audience !== 'b2b' && marketing('personalization') ? 'consider' : 'not-needed',
+    drivers: b2cMkt ? ['High-volume B2C journeys (email/SMS/push) selected'] : ['Only for consumer-scale journey volume'],
+    pricing: `From ~$${MC_ENGAGEMENT_EST_MONTHLY.toLocaleString()}/mo, volume-quoted`,
+  })
+
+  const wantsCommerce = a.commerceNeeds.length > 0
+  clouds.push({
+    cloud: 'Commerce Cloud',
+    verdict: wantsCommerce ? 'recommended' : 'not-needed',
+    drivers: wantsCommerce
+      ? COMMERCE_NEEDS.filter((n) => commerce(n.key)).map((n) => n.label)
+      : ['No online selling'],
+    pricing: 'Percentage-of-GMV pricing — quoted',
+  })
+
+  const wantsExperience = a.customerPortal || a.partnerUsers !== 'none' || service('self-service')
+  clouds.push({
+    cloud: 'Experience Cloud (portals)',
+    verdict: wantsExperience ? 'recommended' : 'not-needed',
+    drivers: [
+      ...(a.customerPortal || service('self-service') ? ['Customer self-service portal'] : []),
+      ...(a.partnerUsers !== 'none' ? ['Partner access'] : []),
+    ].length > 0
+      ? [
+          ...(a.customerPortal || service('self-service') ? ['Customer self-service portal'] : []),
+          ...(a.partnerUsers !== 'none' ? ['Partner access'] : []),
+        ]
+      : ['No external users'],
+    pricing: 'Login- or member-based; ~$2/login (customer), ~$10/login (partner)',
+  })
+
+  const wantsRevenue = sales('quoting') || sales('billing')
+  clouds.push({
+    cloud: 'Revenue Cloud (CPQ & Billing)',
+    verdict: wantsRevenue ? 'recommended' : 'not-needed',
+    drivers: wantsRevenue
+      ? SALES_NEEDS.filter((n) => sales(n.key) && ['quoting', 'billing'].includes(n.key)).map((n) => n.label)
+      : ['Formula-field pricing is fine for now'],
+    pricing: '+$75/user/mo on quoting seats',
+  })
+
+  const wantsDataCloud = platform('data-cloud')
+  clouds.push({
+    cloud: 'Data Cloud',
+    verdict: wantsDataCloud ? (tier === 'Agentforce 1' ? 'recommended' : 'consider') : platform('predictive') && bigData ? 'consider' : 'not-needed',
+    drivers: wantsDataCloud
+      ? ['Unifying customer data across systems', ...(tier === 'Agentforce 1' ? ['Bundled in Agentforce 1'] : ['Consumption-priced below Agentforce 1 — scope carefully'])]
+      : ['Not needed until cross-system identity resolution matters'],
+    pricing: tier === 'Agentforce 1' ? 'Included (usage credits) in Agentforce 1' : 'Consumption-based — scope in discovery',
+  })
+
+  clouds.push({
+    cloud: 'CRM Analytics / Tableau',
+    verdict: platform('analytics') ? 'consider' : 'not-needed',
+    drivers: platform('analytics')
+      ? ['Advanced analytics selected — buy for analyst seats only, not org-wide']
+      : ['Standard dashboards cover most teams'],
+    pricing: 'CRM Analytics $140/user/mo · Tableau Creator $75/user/mo',
+  })
+
+  // Industry clouds — flag as consider, never auto-recommend (they
+  // replace core clouds, big decision).
+  const industryCloud =
+    a.industry === 'healthcare' ? 'Health Cloud'
+    : a.industry === 'finserv' ? 'Financial Services Cloud'
+    : a.industry === 'nonprofit' ? 'Nonprofit Cloud'
+    : null
+  if (industryCloud)
+    clouds.push({
+      cloud: industryCloud,
+      verdict: 'consider',
+      drivers: [
+        `Purpose-built objects and workflows for ${a.industry === 'finserv' ? 'financial services' : a.industry}`,
+        'Compare against building the same on core clouds before committing',
+        ...(a.industry === 'nonprofit' ? ['Power of Us program: first 10 seats donated'] : []),
+      ],
+      pricing: 'Industry-cloud pricing — quoted (typically $225–350/user/mo)',
+    })
+
+  // ---- License mix -----------------------------------------------------
   const licenses: LicenseLine[] = []
   if (a.salesSeats > 0)
     licenses.push({
       persona: 'Sales team',
-      product: `Sales Cloud ${edition}`,
+      product: `Sales Cloud ${tier}`,
       seats: a.salesSeats,
       unitMonthly: perSeat,
       annual: a.salesSeats * perSeat * 12,
@@ -205,19 +466,28 @@ export function recommend(a: AdvisorAnswers): Recommendation {
   if (a.serviceSeats > 0)
     licenses.push({
       persona: 'Service / support team',
-      product: `Service Cloud ${edition}`,
+      product: `Service Cloud ${tier}`,
       seats: a.serviceSeats,
       unitMonthly: perSeat,
       annual: a.serviceSeats * perSeat * 12,
     })
+  if (wantsFieldService && a.fieldTechs > 0)
+    licenses.push({
+      persona: 'Field technicians',
+      product: 'Field Service',
+      seats: a.fieldTechs,
+      unitMonthly: FIELD_SERVICE_TECH,
+      annual: a.fieldTechs * FIELD_SERVICE_TECH * 12,
+      note: 'Dispatchers need a Service Cloud + dispatcher license — size in discovery',
+    })
   if (a.marketingSeats > 0)
     licenses.push({
       persona: 'Marketing team',
-      product: `Sales Cloud ${edition}`,
+      product: `Sales Cloud ${tier}`,
       seats: a.marketingSeats,
       unitMonthly: perSeat,
       annual: a.marketingSeats * perSeat * 12,
-      note: 'Core seats; campaign tooling below if selected',
+      note: 'Core seats; campaign platform below if selected',
     })
   if (a.opsSeats > 0)
     licenses.push({
@@ -235,16 +505,25 @@ export function recommend(a: AdvisorAnswers): Recommendation {
       seats: a.readOnlySeats,
       unitMonthly: PLATFORM_STARTER,
       annual: a.readOnlySeats * PLATFORM_STARTER * 12,
-      note: 'Dashboards + records without paying full-seat prices — the #1 overspend Newton finds in existing orgs',
+      note: 'Dashboards without full-seat prices — the #1 overspend Newton finds in existing orgs',
     })
-  if (has('email-marketing'))
+  if (b2bMkt)
     licenses.push({
-      persona: 'Marketing automation',
-      product: 'Marketing Cloud Account Engagement (Growth)',
+      persona: 'Marketing automation (B2B)',
+      product: 'MC Account Engagement (Growth)',
       seats: 1,
       unitMonthly: 0,
       annual: MCAE_GROWTH_MONTHLY * 12,
-      note: 'Org-level subscription, up to 10K contacts',
+      note: 'Org-level, up to 10K contacts',
+    })
+  if (b2cMkt)
+    licenses.push({
+      persona: 'Marketing journeys (B2C)',
+      product: 'MC Engagement',
+      seats: 1,
+      unitMonthly: 0,
+      annual: MC_ENGAGEMENT_EST_MONTHLY * 12,
+      note: 'Volume-quoted estimate — contact/message volume decides real price',
     })
   if (a.partnerUsers !== 'none') {
     const logins = a.partnerUsers === 'lt100' ? 100 : a.partnerUsers === '100-1000' ? 500 : 1500
@@ -254,7 +533,7 @@ export function recommend(a: AdvisorAnswers): Recommendation {
       seats: logins,
       unitMonthly: PARTNER_LOGIN_EST,
       annual: logins * PARTNER_LOGIN_EST * 12,
-      note: 'Login-based estimate — member-based pricing may fit better; size in discovery',
+      note: 'Login-based estimate — member-based pricing may fit better',
     })
   }
 
@@ -263,26 +542,20 @@ export function recommend(a: AdvisorAnswers): Recommendation {
   if (a.compliance.some((c) => ['hipaa', 'pci', 'sox'].includes(c)))
     addOns.push({
       name: 'Salesforce Shield',
-      why: `${a.compliance.join(', ').toUpperCase()} work needs platform encryption, field audit trail, and event monitoring`,
+      why: `${a.compliance.filter((c) => ['hipaa', 'pci', 'sox'].includes(c)).join(', ').toUpperCase()} work needs platform encryption, field audit trail, and event monitoring`,
       estimate: '~30% of net license spend',
     })
-  if (has('quoting'))
+  if (wantsRevenue)
     addOns.push({
       name: 'Revenue Cloud / CPQ',
       why: 'Structured quoting with approval rules beats formula-field pricing from day one',
       estimate: '+$75/user/mo on quoting seats',
     })
-  if (has('field-service'))
+  if (platform('analytics'))
     addOns.push({
-      name: 'Field Service',
-      why: 'Scheduling, dispatch, and mobile work orders for on-site teams',
-      estimate: '+$50–165/user/mo by tier',
-    })
-  if (has('analytics'))
-    addOns.push({
-      name: 'CRM Analytics',
-      why: 'Past-dashboard analytics (AI insights, datasets) for the analytics-heavy roles only',
-      estimate: '+$140/user/mo on analyst seats',
+      name: 'CRM Analytics (or Tableau)',
+      why: 'For the analytics-heavy roles only — most users live in standard dashboards',
+      estimate: '$140/user/mo (CRMA) or $75 (Tableau Creator)',
     })
   if (a.backupRequirement)
     addOns.push({
@@ -290,18 +563,30 @@ export function recommend(a: AdvisorAnswers): Recommendation {
       why: 'A formal backup/DR requirement is cheaper to meet natively than to retrofit',
       estimate: 'Quoted by org size',
     })
-  if (edition === 'Enterprise')
+  if (a.supportLevel === 'premier' && tier !== 'Unlimited' && tier !== 'Agentforce 1')
+    addOns.push({
+      name: 'Premier Success Plan',
+      why: '24/7 support + faster response SLAs (bundled free at Unlimited and above)',
+      estimate: '~30% of net license spend',
+    })
+  if (a.fullSandbox && tier !== 'Unlimited' && tier !== 'Agentforce 1')
     addOns.push({
       name: 'Full sandbox',
-      why: 'One full-copy sandbox for UAT before go-live pays for itself at the first bad deploy avoided',
-      estimate: '~30% of net license spend (partial sandbox included free)',
+      why: 'Full-copy UAT environment (bundled free at Unlimited and above)',
+      estimate: '~30% of net license spend',
+    })
+  if (platform('ai-copilot') && tier !== 'Agentforce 1')
+    addOns.push({
+      name: 'Agentforce / Einstein AI (à la carte)',
+      why: 'You want AI features below the Agentforce 1 tier — priced per conversation/user instead',
+      estimate: '$2/conversation or ~$50–75/user/mo by SKU',
     })
 
   // ---- AppExchange packages -------------------------------------------
   const packages: PackageRec[] = []
   if (integ('esign'))
     packages.push({ name: 'DocuSign eSignature (or Adobe Sign)', category: 'E-signature', why: 'Native quote/contract signing from the record' })
-  if (integ('telephony'))
+  if (integ('telephony') || service('omni-phone'))
     packages.push({ name: 'CTI connector (Amazon Connect / Genesys / Aircall)', category: 'Telephony', why: 'Click-to-dial + call logging on Contact/Case' })
   if (integ('erp'))
     packages.push({ name: 'ERP connector (Breadwinner / Workato / MuleSoft)', category: 'ERP sync', why: 'Two-way invoice & order visibility without swivel-chairing' })
@@ -334,14 +619,17 @@ export function recommend(a: AdvisorAnswers): Recommendation {
 
   const caveats = [
     'All figures are Salesforce LIST prices — enterprise agreements typically land 15–30% below list. Never sign at list.',
-    'Add-on estimates are directional; they are quoted against your negotiated (net) spend, not list.',
+    'Add-on and org-level estimates are directional; they are quoted against your negotiated (net) spend or usage volume.',
     'Seat counts assume named users; revisit personas quarterly — right-sizing is cheaper before renewal than after.',
+    'Tier names follow Salesforce\'s current lineup (Starter/Pro Suite for SMB; Enterprise/Unlimited/Agentforce 1 for the full platform).',
   ]
 
   return {
-    edition,
-    editionRationale,
+    tier,
+    tierRationale,
+    tierLadder,
     perSeat,
+    clouds,
     licenses,
     addOns,
     packages,
