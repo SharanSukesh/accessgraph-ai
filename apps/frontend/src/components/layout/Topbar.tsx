@@ -40,7 +40,10 @@ export function Topbar() {
   const avatarLetter = identityLabel.charAt(0).toUpperCase() || 'U'
 
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b border-grove-border bg-grove-surface/70 px-5 backdrop-blur-sm dark:border-grove-border-dk dark:bg-grove-surface-dk/70">
+    // relative z-40 is load-bearing: backdrop-blur creates a stacking
+    // context at z-auto, which let the page content (later in DOM)
+    // paint OVER the user-menu dropdown — making sign-out unclickable.
+    <header className="relative z-40 flex h-16 shrink-0 items-center gap-4 border-b border-grove-border bg-grove-surface/70 px-5 backdrop-blur-sm dark:border-grove-border-dk dark:bg-grove-surface-dk/70">
       {/* Client-org context */}
       <div className="min-w-0">
         <p className="v2-micro text-grove-ink/45 dark:text-grove-ink-dk/45">

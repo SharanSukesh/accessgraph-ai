@@ -50,25 +50,27 @@ export function ERObjectCard({
     <div
       className={`
         er-card-content
+        overflow-hidden
         bg-grove-surface dark:bg-grove-surface-dk
-        rounded-lg shadow-lg
-        border-2 transition-all
+        rounded-xl
+        border transition-all duration-200
         ${
           isSelected
-            ? 'border-primary-500 shadow-primary-500/50'
-            : 'border-emerald-400 dark:border-emerald-500 hover:border-emerald-500 dark:hover:border-emerald-400'
+            ? 'border-copper-400/80 ring-1 ring-copper-400/30 shadow-grove-hero dark:border-copper-500/70'
+            : 'border-grove-border dark:border-grove-border-dk shadow-grove-lift hover:border-primary-400/60 dark:hover:border-primary-400/50 hover:shadow-grove-hero'
         }
       `}
       style={{ minWidth: '280px', maxWidth: '320px', pointerEvents: 'auto', cursor: 'move' }}
       onMouseDown={onDragStart}
     >
-      {/* Header */}
-      <div className="bg-emerald-500 dark:bg-emerald-600 text-white px-4 py-3 rounded-t-lg">
-        <div className="flex items-center gap-2 mb-1">
-          <GripVertical className="h-4 w-4 flex-shrink-0" />
-          <Database className="h-4 w-4" />
+      {/* Header — soft canvas tint with evergreen ink (the old solid
+          emerald block read as heavy/blocky) */}
+      <div className="bg-grove-canvas/70 dark:bg-grove-canvas-dk/70 border-b border-grove-border dark:border-grove-border-dk px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <GripVertical className="h-3.5 w-3.5 flex-shrink-0 text-grove-ink/35 dark:text-grove-ink-dk/35" />
+          <Database className="h-3.5 w-3.5 text-primary-700 dark:text-primary-400" />
           <h3
-            className="font-bold text-sm flex-1 cursor-pointer"
+            className="font-semibold text-sm flex-1 cursor-pointer text-grove-ink dark:text-grove-ink-dk truncate"
             onClick={(e) => {
               e.stopPropagation() // Prevent drag from firing
               onClick?.()
@@ -82,7 +84,7 @@ export function ERObjectCard({
             {objectPermissions.map((perm) => (
               <span
                 key={perm}
-                className="text-xs px-2 py-0.5 rounded bg-emerald-700 dark:bg-emerald-800 text-white"
+                className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-primary-50 text-primary-700 ring-1 ring-primary-200 dark:bg-primary-900/30 dark:text-primary-400 dark:ring-primary-800"
               >
                 {perm}
               </span>
@@ -160,8 +162,8 @@ export function ERObjectCard({
 
       {/* Footer with field count */}
       {fields.length > 0 && (
-        <div className="px-4 py-2 bg-grove-canvas dark:bg-grove-canvas-dk rounded-b-lg border-t border-grove-border dark:border-grove-border-dk">
-          <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+        <div className="px-4 py-1.5 bg-grove-canvas/70 dark:bg-grove-canvas-dk/70 border-t border-grove-border dark:border-grove-border-dk">
+          <p className="text-[11px] font-mono uppercase tracking-wider text-grove-ink/50 dark:text-grove-ink-dk/50">
             {fields.length} field{fields.length !== 1 ? 's' : ''} accessible
           </p>
         </div>

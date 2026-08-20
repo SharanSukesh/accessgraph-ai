@@ -238,7 +238,7 @@ export function V2Shell({ children }: { children: ReactNode }) {
       {/* Content column */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topbar */}
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-grove-border bg-grove-surface/70 px-5 backdrop-blur-sm dark:border-grove-border-dk dark:bg-grove-surface-dk/70">
+        <header className="relative z-40 flex h-16 shrink-0 items-center gap-4 border-b border-grove-border bg-grove-surface/70 px-5 backdrop-blur-sm dark:border-grove-border-dk dark:bg-grove-surface-dk/70">
           <button
             onClick={() => setMobileOpen(true)}
             className="rounded-lg p-2 text-grove-ink/60 hover:bg-grove-canvas dark:text-grove-ink-dk/60 dark:hover:bg-grove-canvas-dk lg:hidden"

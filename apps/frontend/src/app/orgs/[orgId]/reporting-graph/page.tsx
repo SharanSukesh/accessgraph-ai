@@ -190,36 +190,55 @@ export default function ReportingGraphPage() {
             label: 'data(label)',
             color: '#fff',
             'font-size': 10,
+            'font-family': 'Inter, system-ui, sans-serif',
             'text-valign': 'center',
             'text-halign': 'center',
             'text-outline-color': '#0f172a',
-            'text-outline-width': 1.5,
+            'text-outline-width': 1,
             width: 36,
             height: 36,
+            // Sleek: no default blue tap/selection overlay box; smooth
+            // color/border transitions on state changes. (Typed defs want
+            // transition-duration as a number of ms.)
+            'overlay-opacity': 0,
+            'transition-property': 'background-color, border-color, border-width',
+            'transition-duration': 150,
           },
         },
         {
           selector: 'node:selected',
           style: {
-            'border-width': 4,
+            'border-width': 2.5,
             'border-color': '#c26b47',
             'text-outline-color': '#16221a',
+          },
+        },
+        // Subtle copper tap feedback replaces the default grey block.
+        {
+          selector: ':active',
+          style: {
+            'overlay-opacity': 0.06,
+            'overlay-color': '#c26b47',
+            'overlay-padding': 6,
           },
         },
         {
           selector: 'edge',
           style: {
-            width: 2,
+            width: 1.5,
             'curve-style': 'bezier',
             'target-arrow-shape': 'triangle',
-            'arrow-scale': 1.4,
-            opacity: 0.85,
+            'arrow-scale': 0.8,
+            opacity: 0.8,
             label: 'data(label)',
             'font-size': 8,
+            'font-family': 'Inter, system-ui, sans-serif',
             color: '#6b7280',
             'text-background-color': '#fff',
             'text-background-opacity': 0.85,
+            'text-background-shape': 'roundrectangle',
             'text-background-padding': '2px',
+            'overlay-opacity': 0,
           },
         },
         {

@@ -31,9 +31,15 @@
   font-weight: 500;
 }
 
+/* Numerals — modern sans (inherits Inter from the root layout) with
+   tabular lining figures and tight tracking. The serif numeral
+   experiment read as dated on Windows (Georgia fallback), so numbers
+   are sleek sans; the serif stays reserved for display headings. */
 .v2-num {
-  font-family: 'Iowan Old Style', 'Charter', Georgia, 'Times New Roman', serif;
+  font-family: inherit;
   font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
+  font-feature-settings: 'cv02' on, 'cv03' on, 'cv04' on;
 }
 
 /* ---------------------------------------------------------------- cards */

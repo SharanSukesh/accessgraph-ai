@@ -68,27 +68,51 @@ export function ERGraphVisualization({
   // Get stylesheet for non-object nodes
   const getStylesheet = () => {
     return [
-      // Default node style
+      // Default node style — thin hairline borders + soft fills keep the
+      // canvas sleek; the old 3-4px borders read as blocky.
       {
         selector: 'node',
         style: {
           'background-color': '#eee8d3',
-          'background-opacity': 0.95,
-          'border-width': 3,
+          'background-opacity': 0.92,
+          'border-width': 1.5,
           'border-color': '#b8d1c0',
           label: 'data(label)',
           'text-valign': 'center',
           'text-halign': 'center',
-          'font-size': '13px',
-          'font-weight': '600',
+          'font-size': '12px',
+          'font-weight': '500',
           'font-family': 'Inter, system-ui, sans-serif',
           color: '#16221a',
           'text-wrap': 'wrap',
           'text-max-width': '110px',
           'text-outline-color': '#fdfaf1',
-          'text-outline-width': 2,
-          width: 70,
-          height: 70,
+          'text-outline-width': 1,
+          width: 62,
+          height: 62,
+          // Kill Cytoscape's default blue selection/tap overlay box —
+          // the single biggest "blocky" offender. Selection feedback
+          // comes from the copper border below instead.
+          'overlay-opacity': 0,
+          'transition-property': 'background-color, border-color, border-width',
+          'transition-duration': '150ms',
+        },
+      },
+      // Sleek selection feedback — copper hairline glow, no box.
+      {
+        selector: 'node:selected',
+        style: {
+          'border-width': 2.5,
+          'border-color': '#c26b47',
+        },
+      },
+      // Subtle copper tap-feedback instead of the default grey/blue block.
+      {
+        selector: ':active',
+        style: {
+          'overlay-opacity': 0.06,
+          'overlay-color': '#c26b47',
+          'overlay-padding': 6,
         },
       },
       // User nodes — copper (Grove highlight for the person at the center)
@@ -97,8 +121,10 @@ export function ERGraphVisualization({
         style: {
           'background-color': '#d8794a',
           'border-color': '#c26b47',
-          'border-width': 4,
+          'border-width': 1.5,
           shape: 'ellipse',
+          color: '#fdfaf1',
+          'text-outline-color': '#a2542f',
         },
       },
       // Profile nodes — mid evergreen
@@ -107,8 +133,10 @@ export function ERGraphVisualization({
         style: {
           'background-color': '#2e8064',
           'border-color': '#094230',
-          'border-width': 4,
+          'border-width': 1.5,
           shape: 'round-rectangle',
+          color: '#fdfaf1',
+          'text-outline-color': '#094230',
         },
       },
       // Permission set nodes — mint
@@ -117,7 +145,7 @@ export function ERGraphVisualization({
         style: {
           'background-color': '#6bbf95',
           'border-color': '#146b4a',
-          'border-width': 4,
+          'border-width': 1.5,
           shape: 'round-rectangle',
         },
       },
@@ -128,19 +156,20 @@ export function ERGraphVisualization({
         style: {
           'background-color': '#fecaca',
           'border-color': '#dc2626',
-          'border-width': 4,
+          'border-width': 1.5,
           'border-style': 'dashed',
           shape: 'round-rectangle',
         },
       },
-      // Role nodes — pale sage (evergreen family)
+      // Role nodes — pale sage (evergreen family). round-diamond is the
+      // softened cousin of the old hard diamond.
       {
         selector: 'node[type="role"]',
         style: {
           'background-color': '#b8d1c0',
           'border-color': '#2e8064',
-          'border-width': 4,
-          shape: 'diamond',
+          'border-width': 1.5,
+          shape: 'round-diamond',
         },
       },
       // Object nodes - Invisible but interactive (rendered as HTML overlays)
@@ -160,27 +189,46 @@ export function ERGraphVisualization({
       {
         selector: 'node.center',
         style: {
-          'border-width': 5,
+          'border-width': 2.5,
           'border-color': '#c26b47',
-          width: 90,
-          height: 90,
-          'font-size': '15px',
+          width: 80,
+          height: 80,
+          'font-size': '13px',
         },
       },
-      // Edges - Default — low-opacity evergreen
+      // Edges - Default — hairline low-opacity evergreen with small
+      // arrowheads. Thin lines + scaled-down arrows are what make the
+      // canvas read sleek instead of wiry.
       {
         selector: 'edge',
         style: {
-          width: 2.5,
-          'line-color': 'rgba(46, 128, 100, 0.45)',
-          'target-arrow-color': 'rgba(46, 128, 100, 0.7)',
+          width: 1.5,
+          'line-color': 'rgba(46, 128, 100, 0.4)',
+          'target-arrow-color': 'rgba(46, 128, 100, 0.6)',
           'target-arrow-shape': 'triangle',
+          'arrow-scale': 0.8,
           'curve-style': 'bezier',
           label: 'data(label)',
-          'font-size': '11px',
+          'font-size': '10px',
+          'font-family': 'Inter, system-ui, sans-serif',
+          color: '#16221a',
           'text-rotation': 'autorotate',
           'text-background-color': '#fdfaf1',
-          'text-background-opacity': 0.9,
+          'text-background-opacity': 0.85,
+          'text-background-shape': 'roundrectangle',
+          'text-background-padding': '2px',
+          'overlay-opacity': 0,
+          'transition-property': 'line-color, width',
+          'transition-duration': '150ms',
+        },
+      },
+      // Selected edge — copper, slightly heavier.
+      {
+        selector: 'edge:selected',
+        style: {
+          'line-color': '#c26b47',
+          'target-arrow-color': '#c26b47',
+          width: 2.5,
         },
       },
       // GRANTS_ACCESS edges
@@ -189,7 +237,7 @@ export function ERGraphVisualization({
         style: {
           'line-color': '#2e8064',
           'target-arrow-color': '#146b4a',
-          width: 3,
+          width: 2,
         },
       },
       // OBJECT_RELATIONSHIP edges — copper dashed
@@ -199,7 +247,8 @@ export function ERGraphVisualization({
           'line-color': '#d8794a',
           'target-arrow-color': '#c26b47',
           'line-style': 'dashed',
-          width: 2,
+          'line-dash-pattern': [6, 4],
+          width: 1.5,
         },
       },
       // HAS_PROFILE edge — matches the profile node evergreen
@@ -208,7 +257,7 @@ export function ERGraphVisualization({
         style: {
           'line-color': '#2e8064',
           'target-arrow-color': '#094230',
-          width: 3,
+          width: 2,
         },
       },
       // ASSIGNED_PERMISSION_SET edge — matches the mint permission-set node
@@ -218,7 +267,8 @@ export function ERGraphVisualization({
           'line-color': '#6bbf95',
           'target-arrow-color': '#146b4a',
           'line-style': 'dashed',
-          width: 2.5,
+          'line-dash-pattern': [6, 4],
+          width: 1.75,
         },
       },
       // ASSIGNED_MUTING_PERMISSION_SET edge — red dashed to distinguish from
@@ -229,7 +279,8 @@ export function ERGraphVisualization({
           'line-color': '#dc2626',
           'target-arrow-color': '#dc2626',
           'line-style': 'dashed',
-          width: 2.5,
+          'line-dash-pattern': [6, 4],
+          width: 1.75,
         },
       },
       // HAS_ROLE edge — matches the pale-sage role node
@@ -238,7 +289,7 @@ export function ERGraphVisualization({
         style: {
           'line-color': '#b8d1c0',
           'target-arrow-color': '#2e8064',
-          width: 3,
+          width: 2,
         },
       },
     ]
