@@ -72,22 +72,23 @@ import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 /**
- * Backend findings carry Setup deeplinks as RELATIVE paths
- * (/lightning/setup/...). They must be absolutized against the
- * connected org's FULL instance URL from /auth/me — org_domain is only
- * the My Domain prefix (e.g. "orgfarm-…-dev-ed") and does not resolve
- * as a hostname. Returns null when no usable base is known so the
- * caller hides the link instead of shipping a broken one.
+ * "Open Salesforce" href — just the connected org's instance URL.
+ *
+ * We deliberately do NOT deep-link to per-finding Setup pages: the
+ * Setup host and paths vary by org generation (enhanced domains serve
+ * Setup from *.my.salesforce-setup.com, profile pages moved to
+ * EnhancedProfiles, etc.), so guessed paths break more often than they
+ * help. Opening the org root is always correct; the finding's
+ * recommended-action text tells the admin where to go in Setup.
  */
-function sfSetupHref(path: string, instanceUrl?: string | null): string | null {
-  if (/^https?:\/\//i.test(path)) return path
+function sfOrgHref(instanceUrl?: string | null): string | null {
   if (!instanceUrl) return null
   const base = instanceUrl.replace(/\/+$/, '')
   const withProto = /^https?:\/\//i.test(base) ? base : `https://${base}`
-  // A base without a dot can't be a real hostname (bare My Domain
-  // prefix) — refuse rather than emit a DNS error.
+  // A base without a dot can't be a real hostname — hide the link
+  // rather than emit a DNS error.
   if (!withProto.replace(/^https?:\/\//i, '').includes('.')) return null
-  return `${withProto}${path.startsWith('/') ? path : `/${path}`}`
+  return withProto
 }
 
 type Tab = 'overview' | 'findings' | 'savings' | 'trends' | 'price-book'
@@ -1162,18 +1163,17 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   value={formatMoneyCents(refreshedSelected.estimated_annual_savings_cents)}
                 />
               </div>
-              {refreshedSelected.sf_setup_deeplink &&
-                sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.instance_url) && (
-                  <a
-                    href={sfSetupHref(refreshedSelected.sf_setup_deeplink, authUser?.instance_url)!}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
-                  >
-                    Open in Salesforce Setup
-                    <ArrowRight className="h-3 w-3" />
-                  </a>
-                )}
+              {sfOrgHref(authUser?.instance_url) && (
+                <a
+                  href={sfOrgHref(authUser?.instance_url)!}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
+                >
+                  Open Salesforce
+                  <ArrowRight className="h-3 w-3" />
+                </a>
+              )}
               {refreshedSelected.evidence?.cost_calculation && (
                 <CostCalculationCard
                   calc={refreshedSelected.evidence.cost_calculation}
