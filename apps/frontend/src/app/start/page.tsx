@@ -46,7 +46,9 @@ export default function StartPage() {
       <div className="w-full max-w-2xl">
         <Reveal>
           <div className="mb-10 text-center">
-            <Logo variant="full" size="md" className="mx-auto text-primary-700 dark:text-primary-400" />
+            <div className="flex justify-center">
+              <Logo variant="full" size="md" />
+            </div>
             <p className="v2-micro mt-6 text-copper-600 dark:text-copper-400">Choose your engagement</p>
             <h1 className="v2-display mt-2 text-3xl font-semibold text-grove-ink dark:text-grove-ink-dk">
               What are we working on today?

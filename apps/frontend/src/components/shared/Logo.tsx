@@ -31,14 +31,19 @@ export function Logo({ variant = 'full', className = '', size = 'md' }: LogoProp
   const iconSize = sizes[size].icon
   const textSize = sizes[size].text
 
-  const LogoIcon = () => (
+  // The caller's className applies to the OUTER element only: the svg
+  // for variant="icon", the wrapper div for variant="full". Passing it
+  // to both used to double-apply layout utilities (e.g. mx-auto turned
+  // the icon into a self-centering flex item and split it from the
+  // wordmark).
+  const LogoIcon = ({ svgClassName = '' }: { svgClassName?: string }) => (
     <svg
       width={iconSize}
       height={iconSize}
       viewBox="0 0 100 100"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={`${className} text-primary-700 dark:text-primary-400`}
+      className={`shrink-0 text-primary-700 dark:text-primary-400 ${svgClassName}`}
       aria-hidden
     >
       {/* Outer vertices — the six graph nodes. currentColor lets Tailwind
@@ -82,7 +87,7 @@ export function Logo({ variant = 'full', className = '', size = 'md' }: LogoProp
   )
 
   if (variant === 'icon') {
-    return <LogoIcon />
+    return <LogoIcon svgClassName={className} />
   }
 
   return (
