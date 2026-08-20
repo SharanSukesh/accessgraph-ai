@@ -643,3 +643,147 @@ export function recommend(a: AdvisorAnswers): Recommendation {
 export function fmtUsd(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`
 }
+
+// ---------------------------------------------------------------- roadmap
+
+export interface RoadmapPhase {
+  name: string
+  timeframe: string
+  goal: string
+  items: string[]
+}
+
+/**
+ * Phased go-live plan derived from the answers. Timeframes are
+ * consulting-band estimates, not commitments — the workspace says so.
+ */
+export function buildRoadmap(a: AdvisorAnswers, rec: Recommendation): RoadmapPhase[] {
+  const sales = (k: string) => a.salesNeeds.includes(k)
+  const service = (k: string) => a.serviceNeeds.includes(k)
+  const platform = (k: string) => a.platformNeeds.includes(k)
+  const phases: RoadmapPhase[] = []
+
+  phases.push({
+    name: 'Phase 0 — Foundations',
+    timeframe: 'Weeks 1–2',
+    goal: 'The guardrails that are 10× harder to retrofit later.',
+    items: [
+      'Org setup: naming conventions, permission-set model, role skeleton',
+      ...(a.integrations.includes('sso') ? ['SSO wired (Okta / Entra ID) before the first real login'] : []),
+      'Sandbox strategy + deployment path (change sets or CI/CD)',
+      'Setup Audit Trail review + login IP ranges',
+      ...(a.compliance.length > 0 ? [`Compliance baseline for ${a.compliance.join(', ').toUpperCase()}: Shield scoping, field-audit plan`] : []),
+      'Duplicate rules on Account / Contact / Lead before any data import',
+    ],
+  })
+
+  const coreItems: string[] = []
+  if (a.salesSeats > 0) coreItems.push('Sales Cloud: pipeline stages, lead routing, core reports' + (sales('forecasting') ? ', forecasting' : ''))
+  if (a.serviceSeats > 0) coreItems.push('Service Cloud: case lifecycle, queues' + (service('knowledge') ? ', knowledge base' : '') + (service('slas') ? ', SLA entitlements' : ''))
+  coreItems.push('Data migration: legacy CRM extract → dedupe → import with owner mapping')
+  coreItems.push('Reports & dashboards for each team lead')
+  coreItems.push('Team training + go-live cutover')
+  phases.push({
+    name: 'Phase 1 — Core CRM go-live',
+    timeframe: rec.totalSeats <= 25 ? 'Weeks 3–6' : rec.totalSeats <= 100 ? 'Weeks 3–8' : 'Weeks 3–12',
+    goal: 'Sales and service teams working fully in Salesforce.',
+    items: coreItems,
+  })
+
+  const expansionItems: string[] = []
+  if (a.marketingNeeds.length > 0) expansionItems.push('Marketing: ' + (a.marketingNeeds.includes('b2b-nurture') ? 'Account Engagement nurture + scoring' : 'Engagement journeys') + ', connected to lead flow')
+  if (a.fieldTechs > 0 || service('field-service')) expansionItems.push('Field Service: territories, scheduling policies, mobile app rollout')
+  if (a.customerPortal || service('self-service')) expansionItems.push('Experience Cloud: customer self-service portal (cases + knowledge)')
+  if (a.partnerUsers !== 'none') expansionItems.push('Experience Cloud: partner portal with scoped sharing')
+  if (a.commerceNeeds.length > 0) expansionItems.push('Commerce Cloud storefront build')
+  if (sales('quoting') || sales('billing')) expansionItems.push('Revenue Cloud: CPQ rules, approval matrix' + (sales('billing') ? ', billing' : ''))
+  if (a.integrations.includes('erp')) expansionItems.push('ERP integration live (two-way orders / invoices)')
+  if (a.integrations.includes('dwh')) expansionItems.push('Warehouse sync feeding BI')
+  if (expansionItems.length > 0)
+    phases.push({
+      name: 'Phase 2 — Expansion clouds',
+      timeframe: 'Months 2–4',
+      goal: 'The clouds beyond core CRM, sequenced by dependency.',
+      items: expansionItems,
+    })
+
+  const maturityItems: string[] = []
+  if (platform('ai-copilot')) maturityItems.push('Agentforce: first agent on the highest-volume workflow (usually case deflection)')
+  if (platform('predictive')) maturityItems.push('Einstein scoring on leads/opportunities once 3+ months of data exists')
+  if (platform('data-cloud')) maturityItems.push('Data Cloud identity resolution across systems')
+  if (platform('analytics')) maturityItems.push('CRM Analytics / Tableau for the analyst group')
+  maturityItems.push('Quarterly org-health review (Optimizer + Newton) — licenses, sprawl, access hygiene')
+  phases.push({
+    name: 'Phase 3 — Intelligence & upkeep',
+    timeframe: 'Months 4+',
+    goal: 'AI and analytics once real data exists; hygiene forever.',
+    items: maturityItems,
+  })
+
+  return phases
+}
+
+/** Total implementation-duration band for the header. */
+export function estimateTimeline(a: AdvisorAnswers, rec: Recommendation): string {
+  let weeks = rec.totalSeats <= 25 ? 6 : rec.totalSeats <= 100 ? 8 : rec.totalSeats <= 500 ? 14 : 20
+  const extraClouds =
+    (a.marketingNeeds.length > 0 ? 1 : 0) +
+    (a.commerceNeeds.length > 0 ? 1 : 0) +
+    (a.customerPortal || a.partnerUsers !== 'none' ? 1 : 0) +
+    (a.fieldTechs > 0 ? 1 : 0)
+  weeks += extraClouds * 3
+  if (a.compliance.length > 0) weeks += 2
+  const lo = weeks
+  const hi = Math.round(weeks * 1.5)
+  return `${lo}–${hi} weeks`
+}
+
+// ---------------------------------------------------------------- benefits
+
+export interface Benefit {
+  title: string
+  detail: string
+}
+
+/** "Why Salesforce" story, personalized from the answers. */
+export function buildBenefits(a: AdvisorAnswers, rec: Recommendation): Benefit[] {
+  const out: Benefit[] = [
+    {
+      title: 'One customer record, every team',
+      detail:
+        'Sales, service, and marketing work the same Account/Contact spine — the hand-off gaps between teams (and the spreadsheets that fill them) disappear.',
+    },
+    {
+      title: 'No infrastructure to run',
+      detail:
+        'Three platform releases a year, uptime SLAs, and security patching are Salesforce\'s problem, not your IT team\'s.',
+    },
+    {
+      title: 'The AppExchange escape hatch',
+      detail:
+        'Thousands of vetted add-ons mean "we need X" is usually an install, not a build — your integration list here maps to mature connectors.',
+    },
+  ]
+  if (a.growth !== 'flat')
+    out.push({
+      title: 'Scales without re-platforming',
+      detail: `Your ${a.growth} growth plan means seat counts and data volumes will move — the ${rec.tier} tier absorbs that with license adds, not migrations.`,
+    })
+  if (a.compliance.length > 0)
+    out.push({
+      title: 'Compliance posture out of the box',
+      detail: `${a.compliance.join(', ').toUpperCase()} programs lean on platform certifications (SOC 1/2, ISO 27001) plus Shield's encryption and field-history — evidence your auditors already know how to read.`,
+    })
+  if (a.platformNeeds.includes('ai-copilot') || a.platformNeeds.includes('predictive'))
+    out.push({
+      title: 'AI on your data, not beside it',
+      detail:
+        'Einstein and Agentforce run inside the trust boundary against your CRM data — no export pipelines to an external AI tool.',
+    })
+  out.push({
+    title: 'Hiring is easy',
+    detail:
+      'The admin/developer talent pool is the largest of any CRM — you will never be hostage to one consultancy (including ours).',
+    })
+  return out
+}

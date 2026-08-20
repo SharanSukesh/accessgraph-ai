@@ -17,8 +17,9 @@ export default function HomePage() {
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated && user) {
-        // Redirect to dashboard
-        router.push(`/orgs/${user.org_id}/dashboard`)
+        // Post-login fork: existing-org workspace vs new-implementation
+        // workspace. The chooser at /start presents both.
+        router.push('/start')
       } else {
         // Redirect to login
         router.push('/login')

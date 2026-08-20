@@ -20,15 +20,19 @@ import { CommandPalette } from '@/components/shared/CommandPalette'
 // Routes that render without the sidebar chrome. `/activate` is
 // reached from the invitation email before the user has a session;
 // `/advisor` is the public new-implementation questionnaire (pre-sales
-// surface — no account required).
-const PUBLIC_ROUTES = ['/login', '/signup', '/activate', '/advisor']
+// surface — no account required); `/start` is the post-login mode
+// chooser.
+const PUBLIC_ROUTES = ['/login', '/signup', '/activate', '/advisor', '/start']
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  // /v2 is the parallel UI-rebuild tree — it ships its own shell
-  // (sidebar, fonts, background) via src/app/v2/layout.tsx, so the v1
-  // chrome must stay out of its way entirely.
-  const isPublicRoute = PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/v2')
+  // /v2 (parallel UI prototype) and /implementation (greenfield
+  // workspace) ship their own shells, so the org chrome must stay out
+  // of their way entirely.
+  const isPublicRoute =
+    PUBLIC_ROUTES.includes(pathname) ||
+    pathname.startsWith('/v2') ||
+    pathname.startsWith('/implementation')
 
   if (isPublicRoute) {
     // Public pages (login, etc.) - no sidebar
