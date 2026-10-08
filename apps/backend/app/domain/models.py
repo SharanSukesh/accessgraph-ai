@@ -203,6 +203,9 @@ class SalesforceConnection(Base, TimestampMixin):
     )
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Who authorised the connection and how privileged they are, captured
+    # at connect time (see services/connection_posture.py).
+    connected_as: Mapped[Optional[dict]] = mapped_column(JSON)
     last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Relationships

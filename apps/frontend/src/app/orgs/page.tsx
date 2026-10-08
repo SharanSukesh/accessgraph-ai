@@ -183,9 +183,17 @@ function OrgRow({ org }: { org: Organization }) {
           ) : (
             <Pill tone="copper">Needs reconnect</Pill>
           )}
+          {!org.is_demo && org.is_connected && <PosturePill posture={org.connected_as} />}
+          {org.write_back_enabled && <Pill tone="copper">Write-back on</Pill>}
         </div>
         <p className="mt-1 truncate text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
           {org.domain || org.instance_url || 'No Salesforce domain'}
+          {org.connected_as?.username && (
+            <>
+              <span aria-hidden> · </span>
+              Connected as {org.connected_as.username}
+            </>
+          )}
           <span aria-hidden> · </span>
           {org.last_sync_at
             ? `Last sync ${formatRelativeTime(org.last_sync_at)}${
@@ -198,5 +206,26 @@ function OrgRow({ org }: { org: Organization }) {
       </div>
       <ArrowRight className="h-4 w-4 shrink-0 text-grove-ink/40 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-copper-600 dark:text-grove-ink-dk/40 dark:group-hover:text-copper-400" />
     </Link>
+  )
+}
+
+
+// Steers consultants toward a read-only integration user; see
+// docs/CLIENT_ONBOARDING_SECURITY.md.
+function PosturePill({ posture }: { posture: Organization['connected_as'] }) {
+  if (!posture || posture.assessment_failed) {
+    return <Pill>Connection user unverified</Pill>
+  }
+  if (posture.recommended) {
+    return <Pill tone="mint">Integration user</Pill>
+  }
+  const reasons = [
+    ...(posture.elevated_permissions ?? []),
+    ...(posture.is_integration_user ? [] : ['not an integration licence']),
+  ]
+  return (
+    <span title={`Connected as ${posture.username ?? 'unknown'}: ${reasons.join(', ')}. Reconnect as a read-only integration user.`}>
+      <Pill tone="copper">Elevated connection</Pill>
+    </span>
   )
 }

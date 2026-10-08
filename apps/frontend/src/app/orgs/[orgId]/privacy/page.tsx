@@ -54,6 +54,27 @@ export default function PrivacyPage() {
   const { isAdmin } = useAuth()
   const [packageKey, setPackageKey] = useState<string | null>(null)
 
+  const [writeBackNote, setWriteBackNote] = useState('')
+  const { data: writeBack } = useQuery({
+    queryKey: ['write-back', orgId],
+    queryFn: () =>
+      apiClient.get<{
+        enabled: boolean
+        changed_by?: string
+        changed_at?: string
+        note?: string
+      }>(`/orgs/${orgId}/write-back`),
+  })
+  const writeBackMutation = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiClient.put(`/orgs/${orgId}/write-back`, { enabled, note: writeBackNote }),
+    onSuccess: () => {
+      setWriteBackNote('')
+      queryClient.invalidateQueries({ queryKey: ['write-back', orgId] })
+      queryClient.invalidateQueries({ queryKey: ['orgs'] })
+    },
+  })
+
   const packageKeyMutation = useMutation({
     mutationFn: () =>
       apiClient.post<{ package_key: string }>(`/orgs/${orgId}/package-key`),
@@ -378,6 +399,56 @@ export default function PrivacyPage() {
           </Stagger>
         </CardContent>
       </Card>
+      </Reveal>
+
+      <Reveal>
+        <Card variant="bordered">
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle>Changes to this client&apos;s Salesforce</CardTitle>
+              <Badge variant={writeBack?.enabled ? 'warning' : 'success'}>
+                {writeBack?.enabled ? 'Write-back enabled' : 'Read-only'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+              Newton can set user managers and delegated approvers (Org Chart) and deactivate
+              unused licence holders (Health Report). These stay disabled until the client has
+              approved them in writing. The integration user also needs Manage Users while
+              write-back is on.
+            </p>
+            {writeBack?.changed_by && (
+              <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                Last changed by {writeBack.changed_by}
+                {writeBack.changed_at ? ` on ${new Date(writeBack.changed_at).toLocaleString()}` : ''}
+                {writeBack.note ? `: "${writeBack.note}"` : ''}
+              </p>
+            )}
+            {isAdmin && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                {!writeBack?.enabled && (
+                  <input
+                    value={writeBackNote}
+                    onChange={(e) => setWriteBackNote(e.target.value)}
+                    placeholder="Where is the client's approval? e.g. SOW 2026-14, section 3"
+                    className="flex-1 rounded-lg border border-grove-border bg-transparent px-3 py-2 text-sm dark:border-grove-border-dk"
+                  />
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={
+                    writeBackMutation.isPending || (!writeBack?.enabled && !writeBackNote.trim())
+                  }
+                  onClick={() => writeBackMutation.mutate(!writeBack?.enabled)}
+                >
+                  {writeBack?.enabled ? 'Disable write-back' : 'Enable write-back'}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </Reveal>
 
       {isAdmin && (

@@ -338,18 +338,25 @@ class EffectiveAccessService:
         result = await self.db.execute(
             select(
                 PermissionSetAssignmentSnapshot.permission_set_id,
-                func.coalesce(PermissionSetSnapshot.label, PermissionSetSnapshot.name),
+                func.coalesce(
+                    PermissionSetSnapshot.label,
+                    PermissionSetSnapshot.name,
+                    PermissionSetAssignmentSnapshot.permission_set_id,
+                ),
             )
-            .join(
+            # Outer join: permission set group assignments carry the group's
+            # 0PG id, which has no PermissionSetSnapshot row.
+            .outerjoin(
                 PermissionSetSnapshot,
-                PermissionSetSnapshot.salesforce_id == PermissionSetAssignmentSnapshot.permission_set_id,
+                (PermissionSetSnapshot.salesforce_id == PermissionSetAssignmentSnapshot.permission_set_id)
+                & (PermissionSetSnapshot.organization_id == org_id),
             )
             .where(
                 PermissionSetAssignmentSnapshot.organization_id == org_id,
                 PermissionSetAssignmentSnapshot.assignee_id == user_sf_id,
                 # Salesforce also reports the profile's own permission set
                 # as an assignment; it's already covered as the profile above.
-                PermissionSetSnapshot.is_owned_by_profile == False,  # noqa: E712
+                func.coalesce(PermissionSetSnapshot.is_owned_by_profile, False) == False,  # noqa: E712
             )
         )
         assignments = result.all()

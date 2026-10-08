@@ -72,17 +72,11 @@ class SalesforceOAuthClient:
             "redirect_uri": self.redirect_uri,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
-            # Scope names must match what's configured on the Connected App in
-            # Salesforce or you get 'invalid_scope'. We request:
-            #  - 'full': everything the user has access to (matches the
-            #    'Full access (full)' option in the Connected App scopes UI)
-            #  - 'refresh_token': long-lived refresh token so the user
-            #    doesn't have to re-OAuth every ~2 hours when the access
-            #    token expires (matches 'Perform requests on your behalf at
-            #    any time (refresh_token, offline_access)')
-            # Both must be present on the Connected App's "Selected OAuth
-            # Scopes" list - 'full' alone does NOT include refresh_token.
-            "scope": "full refresh_token",
+            # Least privilege: 'api' covers REST, SOAP, Tooling and Metadata
+            # calls; 'refresh_token' keeps the connection alive. Both must be
+            # in the Connected App's Selected OAuth Scopes or Salesforce
+            # returns invalid_scope.
+            "scope": settings.SALESFORCE_OAUTH_SCOPES,
         }
 
         params["state"] = state

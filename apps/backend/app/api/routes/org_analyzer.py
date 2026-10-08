@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access, require_org_admin
+from app.services.write_back import require_write_back
 from app.domain.models import (
     BrandSettings,
     FindingCategory,
@@ -614,6 +615,7 @@ async def apply_finding_fix(
     Mirrors ReportingGraphService's authz + audit pattern (ORG_ADMIN
     gate + AuditLog row per PATCH).
     """
+    await require_write_back(db, org_id)
     # Load the finding
     finding_q = await db.execute(
         select(OrgFinding).where(

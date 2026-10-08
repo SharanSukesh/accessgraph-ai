@@ -20,6 +20,21 @@ export interface Organization {
   is_sandbox: boolean | null
   last_sync_at: string | null
   last_sync_status: string | null
+  /** Salesforce user the org was connected as; null for connections made before Oct 2026. */
+  connected_as: ConnectionPosture | null
+  write_back_enabled: boolean
+}
+
+export interface ConnectionPosture {
+  user_id?: string
+  username?: string
+  name?: string
+  profile?: string
+  license?: string
+  elevated_permissions?: string[]
+  is_integration_user?: boolean
+  recommended?: boolean
+  assessment_failed?: boolean
 }
 
 /** GET /orgs/{orgId} — the slimmer single-org shape. */

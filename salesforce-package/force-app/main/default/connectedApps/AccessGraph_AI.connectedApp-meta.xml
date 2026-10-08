@@ -9,7 +9,6 @@
         <consumerSecret>REPLACE_WITH_YOUR_CONSUMER_SECRET</consumerSecret>
         <isAdminApproved>false</isAdminApproved>
         <scopes>Api</scopes>
-        <scopes>Web</scopes>
         <scopes>RefreshToken</scopes>
     </oauthConfig>
     <oauthPolicy>

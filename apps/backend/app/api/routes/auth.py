@@ -41,6 +41,7 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.salesforce.oauth import SalesforceOAuthClient
+from app.services.connection_posture import assess_connected_user
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,8 @@ async def callback(
     sf_org_id = id_parts[-2] if len(id_parts) >= 2 else None
     if not sf_org_id:
         return _error_redirect("salesforce_org_unknown")
+    sf_user_id = id_parts[-1] if id_parts else ""
+    posture = await assess_connected_user(token.instance_url, token.access_token, sf_user_id)
 
     connection = (
         await db.execute(
@@ -202,6 +205,7 @@ async def callback(
         if token.refresh_token:
             connection.refresh_token = token.refresh_token
         connection.instance_url = token.instance_url
+        connection.connected_as = posture
         connection.is_active = True
         org_id = connection.organization_id
         existing_org = await db.get(Organization, org_id)
@@ -222,6 +226,7 @@ async def callback(
             organization_id_sf=sf_org_id,
             access_token=token.access_token,
             refresh_token=token.refresh_token,
+            connected_as=posture,
             is_active=True,
         ))
         if not principal.is_admin:
@@ -243,7 +248,12 @@ async def callback(
         request_method="GET",
         request_path=str(request.url.path),
         success=True,
-        context_data={"new_org": is_new_org},
+        context_data={
+            "new_org": is_new_org,
+            "scopes": settings.SALESFORCE_OAUTH_SCOPES,
+            "connected_as": posture.get("username"),
+            "elevated_permissions": posture.get("elevated_permissions"),
+        },
     ))
     await db.commit()
     logger.info("salesforce org %s connected to %s by %s", sf_org_id, org_id, principal.email)

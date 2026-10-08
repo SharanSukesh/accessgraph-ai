@@ -67,6 +67,10 @@ class Settings(BaseSettings):
         default="https://login.salesforce.com",
         description="Salesforce login URL"
     )
+    SALESFORCE_OAUTH_SCOPES: str = Field(
+        default="api refresh_token",
+        description="OAuth scopes requested when connecting a client org. Avoid 'full'."
+    )
 
     # Frontend
     FRONTEND_URL: str = Field(

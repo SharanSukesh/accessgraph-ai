@@ -6,7 +6,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,8 @@ from app.auth.deps import (
     require_org_admin,
 )
 from app.domain.models import (
+    AuditAction,
+    AuditLog,
     OrgAccessGrant,
     Organization,
     SalesforceConnection,
@@ -29,6 +31,7 @@ from app.domain.models import (
 from app.graph.builder import GraphBuilder
 from app.db.neo4j_client import get_neo4j_client
 from app.ingestion.orchestrator import schedule_background_sync
+from app.services.write_back import set_write_back, write_back_enabled
 from app.services.anomaly_detection import AnomalyDetectionService
 from app.services.recommendations import RecommendationEngine
 from app.services.risk_scoring import RiskScoringService
@@ -101,6 +104,8 @@ class AccessibleOrgResponse(BaseModel):
     is_sandbox: Optional[bool]
     last_sync_at: Optional[datetime]
     last_sync_status: Optional[str]
+    connected_as: Optional[dict] = None
+    write_back_enabled: bool = False
 
 
 def _is_sandbox(org: Organization, conn: Optional[SalesforceConnection]) -> Optional[bool]:
@@ -165,6 +170,8 @@ async def list_organizations(
             is_sandbox=_is_sandbox(o, conn),
             last_sync_at=(job.completed_at or job.started_at) if job else None,
             last_sync_status=(job.status.value if hasattr(job.status, "value") else job.status) if job else None,
+            connected_as=conn.connected_as if conn else None,
+            write_back_enabled=write_back_enabled(o),
         ))
     return out
 
@@ -389,3 +396,56 @@ async def rotate_package_key(
     await db.commit()
     logger.info("package key rotated for org %s", org_id)
     return {"package_key": key}
+
+
+class WriteBackUpdate(BaseModel):
+    enabled: bool
+    note: Optional[str] = None
+
+
+@router.get("/{org_id}/write-back")
+async def get_write_back(
+    org_id: str,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+):
+    org = await db.get(Organization, org_id)
+    record = (org.settings or {}).get("write_back") or {"enabled": False}
+    return record
+
+
+@router.put("/{org_id}/write-back")
+async def update_write_back(
+    org_id: str,
+    body: WriteBackUpdate,
+    request: Request,
+    _admin: str = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_database),
+):
+    """Turn Salesforce write-back on or off for this client org. Should
+    reflect the client's written agreement; the note records where."""
+    if body.enabled and not (body.note or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Record where the client approved write-back (e.g. the SOW clause).",
+        )
+    org = await db.get(Organization, org_id)
+    actor = request.state.principal.email
+    record = set_write_back(org, body.enabled, actor, body.note)
+    db.add(AuditLog(
+        organization_id=org_id,
+        user_email=actor,
+        action=AuditAction.UPDATE_SETTINGS,
+        resource_type="write_back_consent",
+        resource_id=org_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        request_method="PUT",
+        request_path=str(request.url.path),
+        success=True,
+        context_data=record,
+    ))
+    await db.commit()
+    logger.warning("write-back %s for org %s by %s", "ENABLED" if body.enabled else "disabled", org_id, actor)
+    return record
+

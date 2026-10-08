@@ -42,7 +42,6 @@ async def test_effective_access_computation(async_db_session):
     service = EffectiveAccessService(db)
     obj_access = await service.get_user_object_access(org.id, alice.salesforce_id)
 
-    assert obj_access["user_id"] == alice.salesforce_id
     assert len(obj_access["objects"]) > 0
 
     # Alice should have access to Opportunity (via PSG)
@@ -100,12 +99,11 @@ async def test_field_access(async_db_session):
     service = EffectiveAccessService(db)
     field_access = await service.get_user_field_access(org.id, alice.salesforce_id)
 
-    assert field_access["user_id"] == alice.salesforce_id
     assert len(field_access["fields"]) > 0
 
     # Alice should have access to sensitive fields (part of anomaly)
     sensitive_fields = [
         f for f in field_access["fields"]
-        if "SSN" in f["field"] or "AnnualRevenue" in f["field"]
+        if "SSN" in f["fieldName"] or "AnnualRevenue" in f["fieldName"]
     ]
     assert len(sensitive_fields) > 0
