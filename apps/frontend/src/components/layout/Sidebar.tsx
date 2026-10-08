@@ -31,7 +31,7 @@ import {
   UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
-import { apiClient } from '@/lib/api/client'
+import { apiClient, ApiError } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
 import { MarqueeLabel } from '@/components/layout/MarqueeLabel'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -161,8 +161,13 @@ export function Sidebar() {
         setSyncMessage('Sync completed.')
         setTimeout(() => setSyncMessage(null), 5000)
       } else if (latestJobStatus === 'failed') {
-        setSyncMessage('Sync failed. Reconnect Salesforce if the issue persists.')
-        setTimeout(() => setSyncMessage(null), 8000)
+        const detail = syncJobs?.[0]?.error_message ?? ''
+        setSyncMessage(
+          /401|Unauthorized|INVALID_SESSION|No active Salesforce connection/i.test(detail)
+            ? 'Sync failed: Salesforce rejected the stored connection. Click Reconnect.'
+            : `Sync failed: ${detail.slice(0, 140) || 'unknown error'}`,
+        )
+        setTimeout(() => setSyncMessage(null), 12000)
       }
     }
     wasRunningRef.current = isJobRunning
@@ -215,9 +220,14 @@ export function Sidebar() {
       // Other dashboard data depends on sync results — refresh those too.
       await queryClient.invalidateQueries({ queryKey: ['orgs', 'detail', orgId] })
     } catch (error) {
-      console.error('Sync failed:', error)
-      setSyncMessage('Sync failed. Please try again.')
-      setTimeout(() => setSyncMessage(null), 5000)
+      const reason =
+        error instanceof ApiError && error.status === 401
+          ? 'your session expired. Sign in again.'
+          : error instanceof ApiError
+            ? error.message
+            : 'please try again.'
+      setSyncMessage(`Sync could not start: ${reason}`)
+      setTimeout(() => setSyncMessage(null), 10000)
     } finally {
       // Only release the local "triggering" tag. isSyncing stays true
       // because isJobRunning is now true (just-created job in pending).
