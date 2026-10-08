@@ -4,18 +4,23 @@ User Access API Routes
 import logging
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
 
 logger = logging.getLogger(__name__)
 
+# Every route on `router` is under /orgs/{org_id}; main.py guards it with
+# require_org_access. Routes without an org in the path go on
+# `recommendations_router` and authorize themselves.
 router = APIRouter()
+recommendations_router = APIRouter()
 
 
 # ============================================================================
@@ -342,7 +347,7 @@ async def explain_object_access(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/orgs/{org_id}/users/{user_sf_id}/risk", response_model=RiskScoreResponse)
+@router.get("/orgs/{org_id}/users/{user_sf_id}/risk")
 async def get_user_risk(
     org_id: str,
     user_sf_id: str,
@@ -600,13 +605,17 @@ async def list_recommendations(
     ]
 
 
-@router.patch(
+@recommendations_router.patch(
     "/recommendations/{rec_id}",
     response_model=RecommendationResponse,
+    dependencies=[Depends(require_credentials)],
 )
 async def update_recommendation_status(
     rec_id: str,
     payload: RecommendationStatusUpdate,
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    package_key: Optional[str] = Header(None, alias=PACKAGE_KEY_HEADER),
     db: AsyncSession = Depends(get_database),
 ):
     """Update a recommendation's status (apply / dismiss / etc).
@@ -626,6 +635,7 @@ async def update_recommendation_status(
     rec = await db.get(Recommendation, rec_id)
     if rec is None:
         raise HTTPException(status_code=404, detail="Recommendation not found")
+    await authorize_org(request, rec.organization_id, db, access_token, package_key)
     rec.status = RecommendationStatus(payload.status)
     await db.commit()
     await db.refresh(rec)
@@ -2034,239 +2044,3 @@ async def get_node_details(
             status_code=500,
             detail=f"Failed to get node details: {str(e)}"
         )
-
-
-@router.get("/orgs/{org_id}/debug/field-permissions")
-async def debug_field_permissions(
-    org_id: str,
-    profile_id: str = Query(..., description="Profile ID to check"),
-    db: AsyncSession = Depends(get_database),
-):
-    """Debug endpoint to check field permissions in database"""
-    from app.domain.models import FieldPermissionSnapshot, PermissionSetSnapshot
-
-    # Find profile-owned permission set
-    ps_query = select(PermissionSetSnapshot).where(
-        PermissionSetSnapshot.organization_id == org_id,
-        PermissionSetSnapshot.profile_id == profile_id,
-        PermissionSetSnapshot.is_owned_by_profile == True
-    )
-    ps_result = await db.execute(ps_query)
-    ps = ps_result.scalar_one_or_none()
-
-    if not ps:
-        return {
-            "error": "No profile-owned permission set found",
-            "profile_id": profile_id
-        }
-
-    # Get ALL field permissions for this permission set (no object filter)
-    field_perms_all_query = select(FieldPermissionSnapshot).where(
-        FieldPermissionSnapshot.organization_id == org_id,
-        FieldPermissionSnapshot.parent_id == ps.salesforce_id
-    ).limit(50)
-    field_perms_all_result = await db.execute(field_perms_all_query)
-    field_perms_all = field_perms_all_result.scalars().all()
-
-    # Get Account field permissions specifically
-    field_perms_account_query = select(FieldPermissionSnapshot).where(
-        FieldPermissionSnapshot.organization_id == org_id,
-        FieldPermissionSnapshot.parent_id == ps.salesforce_id,
-        FieldPermissionSnapshot.sobject_type == "Account"
-    ).limit(20)
-    field_perms_account_result = await db.execute(field_perms_account_query)
-    field_perms_account = field_perms_account_result.scalars().all()
-
-    return {
-        "profile_id": profile_id,
-        "profile_owned_ps_id": ps.salesforce_id,
-        "profile_owned_ps_name": ps.name,
-        "total_field_permissions_all_objects": len(field_perms_all),
-        "total_account_field_permissions": len(field_perms_account),
-        "sample_field_permissions_all": [
-            {
-                "id": fp.salesforce_id,
-                "parent_id": fp.parent_id,
-                "sobject_type": fp.sobject_type,
-                "field": fp.field,
-                "permissions_read": fp.permissions_read,
-                "permissions_edit": fp.permissions_edit,
-            }
-            for fp in field_perms_all
-        ],
-        "sample_account_field_permissions": [
-            {
-                "id": fp.salesforce_id,
-                "parent_id": fp.parent_id,
-                "sobject_type": fp.sobject_type,
-                "field": fp.field,
-                "permissions_read": fp.permissions_read,
-                "permissions_edit": fp.permissions_edit,
-            }
-            for fp in field_perms_account
-        ]
-    }
-
-
-@router.get("/orgs/{org_id}/debug/query-salesforce")
-async def debug_query_salesforce(
-    org_id: str,
-    parent_id: str = Query(..., description="Permission Set ID (ParentId)"),
-    db: AsyncSession = Depends(get_database),
-):
-    """Debug endpoint to query Salesforce directly for field permissions"""
-    from app.domain.models import Organization, SalesforceConnection
-    from app.salesforce.client import SalesforceAPIClient
-
-    # Get org and connection
-    org_query = select(Organization).where(Organization.id == org_id)
-    org_result = await db.execute(org_query)
-    org = org_result.scalar_one_or_none()
-
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    conn_query = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == org_id
-    )
-    conn_result = await db.execute(conn_query)
-    conn = conn_result.scalar_one_or_none()
-
-    if not conn:
-        raise HTTPException(status_code=404, detail="No Salesforce connection found")
-
-    # Query Salesforce directly
-    client = SalesforceAPIClient(
-        instance_url=conn.instance_url,
-        access_token=conn.access_token or "",
-    )
-
-    # Query for Account field permissions for this permission set
-    soql = f"""
-        SELECT Id, ParentId, SobjectType, Field, PermissionsRead, PermissionsEdit
-        FROM FieldPermissions
-        WHERE ParentId = '{parent_id}' AND SobjectType = 'Account'
-        LIMIT 50
-    """
-
-    try:
-        records = await client.query_all(soql)
-        return {
-            "parent_id": parent_id,
-            "soql_query": soql,
-            "total_account_field_permissions": len(records),
-            "sample_field_permissions": records[:20]
-        }
-    except Exception as e:
-        return {
-            "error": str(e),
-            "parent_id": parent_id,
-            "soql_query": soql
-        }
-
-
-
-
-@router.get("/orgs/{org_id}/debug/profile-metadata")
-async def debug_profile_metadata(
-    org_id: str,
-    profile_name: str = Query(..., description="Profile name"),
-    db: AsyncSession = Depends(get_database),
-):
-    """Debug endpoint to test reading Profile metadata via SOAP"""
-    from app.domain.models import Organization, SalesforceConnection
-    from app.salesforce.metadata_client import SalesforceMetadataClient
-
-    # Get org and connection
-    org_query = select(Organization).where(Organization.id == org_id)
-    org_result = await db.execute(org_query)
-    org = org_result.scalar_one_or_none()
-
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    conn_query = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == org_id
-    )
-    conn_result = await db.execute(conn_query)
-    conn = conn_result.scalar_one_or_none()
-
-    if not conn:
-        raise HTTPException(status_code=404, detail="No Salesforce connection found")
-
-    # Create metadata client
-    metadata_client = SalesforceMetadataClient(
-        instance_url=conn.instance_url,
-        access_token=conn.access_token or "",
-    )
-
-    # Try to read profile metadata
-    profile_info = await metadata_client.read_profile_metadata(profile_name)
-
-    if not profile_info:
-        return {"error": f"Profile not found: {profile_name}"}
-
-    # Try SOAP API to get field permissions
-    full_name = profile_info.get("fullName", profile_name)
-    field_permissions = await metadata_client.get_profile_field_permissions_soap(full_name)
-
-    # Filter Account permissions
-    account_perms = [fp for fp in field_permissions if fp.get("SobjectType") == "Account"]
-    account_readable = [fp for fp in account_perms if fp.get("PermissionsRead")]
-
-    return {
-        "profile_name": profile_name,
-        "profile_info": profile_info,
-        "total_field_permissions": len(field_permissions),
-        "total_account_field_permissions": len(account_perms),
-        "account_readable_count": len(account_readable),
-        "account_readable_fields": account_readable,
-        "sample_account_all": account_perms[:20],
-        "sample_other_permissions": [
-            fp for fp in field_permissions if fp.get("SobjectType") != "Account"
-        ][:10]
-    }
-
-
-
-@router.get("/orgs/{org_id}/debug/system-fields")
-async def debug_system_fields(
-    org_id: str,
-    object_name: str = Query(default="Account", description="Object name"),
-    db: AsyncSession = Depends(get_database),
-):
-    """Debug endpoint to get system-required fields for an object"""
-    from app.domain.models import Organization, SalesforceConnection
-    from app.salesforce.client import SalesforceAPIClient
-
-    # Get org and connection
-    org_query = select(Organization).where(Organization.id == org_id)
-    org_result = await db.execute(org_query)
-    org = org_result.scalar_one_or_none()
-
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
-
-    conn_query = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == org_id
-    )
-    conn_result = await db.execute(conn_query)
-    conn = conn_result.scalar_one_or_none()
-
-    if not conn:
-        raise HTTPException(status_code=404, detail="No Salesforce connection found")
-
-    # Create API client
-    client = SalesforceAPIClient(
-        instance_url=conn.instance_url,
-        access_token=conn.access_token or "",
-    )
-
-    # Get system-required fields
-    system_fields = await client.get_system_required_fields(object_name)
-
-    return {
-        "object_name": object_name,
-        "total_system_fields": len(system_fields),
-        "system_fields": system_fields
-    }

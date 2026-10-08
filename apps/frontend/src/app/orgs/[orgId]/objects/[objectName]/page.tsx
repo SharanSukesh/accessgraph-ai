@@ -565,7 +565,7 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
 
         {/* Evidence — 3 columns showing top offenders per component. */}
         {(score.evidence?.gap_fields?.length ||
-          score.evidence?.duplicate_examples?.length ||
+          score.evidence?.duplicate_cluster_sizes?.length ||
           score.evidence?.sf_duplicate_rules?.length) ? (
           <div className="mt-6 pt-6 border-t border-grove-border dark:border-grove-border-dk grid grid-cols-1 md:grid-cols-3 gap-6">
             <EvidenceList
@@ -593,22 +593,24 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
             />
             <EvidenceList
               icon={Copy}
-              // Top clusters come from a GROUP BY aggregate — the key
-              // is the shared field VALUE (e.g., a name). If the SF
-              // ceiling of 2000 clusters is hit the truncation flag
-              // is set and we surface it in the caption.
               title={
                 score.evidence.duplicates_truncated
-                  ? 'Top duplicate clusters (2000+ found — capped)'
-                  : 'Top duplicate clusters'
+                  ? 'Largest duplicate clusters (2000+ found, capped)'
+                  : 'Largest duplicate clusters'
               }
               items={
-                score.evidence.duplicate_examples?.map((d) => ({
-                  primary: d.key,
-                  secondary: `${d.count} records`,
+                score.evidence.duplicate_cluster_sizes?.map((size, i) => ({
+                  primary: `Cluster ${i + 1}`,
+                  secondary: `${size.toLocaleString()} records share the same ${
+                    score.evidence?.duplicate_key ?? 'key'
+                  }`,
                 })) ?? []
               }
-              emptyLabel="No duplicate clusters detected."
+              emptyLabel={
+                score.evidence.duplicates_checked === false
+                  ? 'Duplicate check not available for this object.'
+                  : 'No duplicate clusters detected.'
+              }
             />
             {/* SF's own Duplicate Rules — if configured, treat as the
                 authoritative resolver. Points admins at Setup instead

@@ -16,7 +16,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import ReportInventoryItem, ReportSprawlRun
 from app.services.report_sprawl import ReportSprawlService
 
@@ -124,13 +124,6 @@ class HistoryPoint(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's report-sprawl data.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -153,14 +146,13 @@ async def _latest_run(
 )
 async def run_report_sprawl(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
     """Kick off a report + dashboard sprawl pull synchronously. Larger
     orgs (10k+ items) take 30-60 seconds. Frontend shows a spinner
     until the response arrives."""
-    _enforce_same_org(org_id, current_org_id)
     service = ReportSprawlService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email)
@@ -190,13 +182,12 @@ async def run_report_sprawl(
 )
 async def get_latest_summary(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
     """Rollup for the KPI strip. Returns has_data=False when no run
     has ever been executed for this org so the page can render an
     empty state."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -258,13 +249,12 @@ async def list_items(
     ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> ItemListResponse:
     """Per-item list from the most recent run. Ordered by tier
     actionability (orphaned first) then by staleness (oldest first)
     within tier."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return ItemListResponse(run_id=None, total=0, items=[])
@@ -344,12 +334,11 @@ async def list_items(
 async def get_history(
     org_id: str,
     limit: int = Query(30, ge=1, le=100),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
     """Trend of run-over-run sprawl counters — powers a sparkline
     strip on the summary card."""
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(ReportSprawlRun)
         .where(ReportSprawlRun.organization_id == org_id)

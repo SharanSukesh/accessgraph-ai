@@ -26,8 +26,6 @@ from app.domain.models import (
     AuditAction,
     AuditLog,
     OrgFinding,
-    OrgUser,
-    OrgUserRole,
     UserSnapshot,
 )
 from app.services.salesforce_sync import SalesforceSyncService
@@ -66,26 +64,6 @@ class ApplyFixService:
         self.db = db
         self.org_id = org_id
 
-    async def _authorize_org_admin(self, actor_email: str) -> None:
-        """Same implicit-admin-until-explicit-RBAC pattern as the
-        reporting-graph service. If any OrgUser row exists for this org,
-        the actor must be ORG_ADMIN; otherwise we authorize implicitly
-        on the OAuth handshake.
-        """
-        result = await self.db.execute(
-            select(OrgUser).where(OrgUser.organization_id == self.org_id)
-        )
-        org_users = list(result.scalars().all())
-        for u in org_users:
-            if u.email == actor_email and u.role == OrgUserRole.ORG_ADMIN:
-                return
-        if not org_users:
-            return  # implicit admin
-        raise PermissionError(
-            "Only ORG_ADMIN users can apply org-analyzer fixes for this org. "
-            f"Actor '{actor_email}' is not in the ORG_ADMIN list."
-        )
-
     async def apply_fix(
         self,
         finding: OrgFinding,
@@ -97,7 +75,7 @@ class ApplyFixService:
 
         Args:
             finding: The persisted OrgFinding row.
-            actor_email: For audit attribution + ORG_ADMIN authz.
+            actor_email: For audit attribution (ORG_ADMIN is enforced by the route).
             actor_ip: For audit attribution (request.client.host).
             target_user_sf_ids: Optional subset of sample user ids to act
                 on. None → act on every sample row in the finding's
@@ -116,7 +94,6 @@ class ApplyFixService:
                 ),
             )
 
-        await self._authorize_org_admin(actor_email)
 
         # Get the SF client via the existing sync-service refresh path so
         # we don't ever hit a stale-token 401.

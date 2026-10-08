@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
     # Demo Mode
     DEMO_MODE: bool = Field(
-        default=True,
+        default=False,
         description="Run in demo mode (no Salesforce connection required)"
     )
 
@@ -149,6 +149,25 @@ class Settings(BaseSettings):
         default="*",
         description="Allowed hostnames (comma-separated, '*' allows all)"
     )
+    ENABLE_API_DOCS: bool = Field(
+        default=False,
+        description="Serve /docs, /redoc and /openapi.json. Leave off in production."
+    )
+
+    @property
+    def is_production(self) -> bool:
+        return self.FRONTEND_URL.startswith("https://") and not self.DEMO_MODE
+
+    def security_config_problems(self) -> List[str]:
+        """Settings that are unsafe for a production deployment."""
+        problems = []
+        if not self.JWT_SECRET_KEY.strip():
+            problems.append("JWT_SECRET_KEY is not set")
+        if self.ENABLE_FIELD_ENCRYPTION and not self.DATABASE_ENCRYPTION_KEY:
+            problems.append("DATABASE_ENCRYPTION_KEY is not set; OAuth tokens are stored unencrypted")
+        if self.ENABLE_API_DOCS:
+            problems.append("ENABLE_API_DOCS is on")
+        return problems
 
     @property
     def cors_origins_list(self) -> List[str]:

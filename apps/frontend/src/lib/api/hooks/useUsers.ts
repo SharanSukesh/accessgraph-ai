@@ -3,7 +3,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { apiClient } from '../client'
+import { apiClient, ApiError } from '../client'
 import { endpoints } from '../endpoints'
 import type { ObjectAccess, FieldAccess, AccessExplanation } from '@/lib/types/salesforce'
 
@@ -42,18 +42,44 @@ interface UserDetail extends User {
   recommendationCount?: number
 }
 
-interface RiskScore {
-  userId: string
+export interface RiskGrant {
+  type: 'profile' | 'permission_set' | 'permission_set_group' | string
+  name: string
+}
+
+export interface RiskEvidence {
+  label: string
+  kind?: string
+  severity?: 'critical' | 'high' | 'medium' | 'low' | string
+  category?: string
+  detail?: string | null
+  holders?: number
+  granted_by?: RiskGrant[]
+  expected_for_role?: boolean
+}
+
+export interface RiskFactor {
+  factor: string
+  label?: string
   score: number
-  level: string
-  factors: Array<{
-    factor: string
-    score: number
-    weight: number
-    description: string
-  }>
-  explanation: string
-  calculatedAt: string | null
+  weight: number
+  impact?: number
+  description: string
+  evidence?: RiskEvidence[]
+  evidence_total?: number
+  expected_for_role?: boolean
+}
+
+export interface RiskScore {
+  userId?: string
+  score?: number
+  risk_score?: number
+  level?: string
+  risk_level?: string
+  factors?: RiskFactor[]
+  explanation?: string
+  reason_text?: string
+  calculatedAt?: string | null
 }
 
 interface Recommendation {
@@ -224,7 +250,7 @@ export function useUserRisk(orgId: string, userId: string) {
         return data
       } catch (error: any) {
         // Return null if not found instead of throwing
-        if (error?.response?.status === 404) {
+        if (error instanceof ApiError && error.status === 404) {
           return null
         }
         throw error
@@ -247,7 +273,7 @@ export function useUserAnomalies(orgId: string, userId: string) {
         return data
       } catch (error: any) {
         // Return empty array if not found
-        if (error?.response?.status === 404) {
+        if (error instanceof ApiError && error.status === 404) {
           return []
         }
         throw error
@@ -272,7 +298,7 @@ export function useUserRecommendations(orgId: string, userId: string) {
         return data
       } catch (error: any) {
         // Return empty array if not found
-        if (error?.response?.status === 404) {
+        if (error instanceof ApiError && error.status === 404) {
           return []
         }
         throw error

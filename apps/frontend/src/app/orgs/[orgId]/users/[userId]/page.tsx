@@ -35,6 +35,7 @@ import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
 import { GraphLegend } from '@/components/graph/GraphLegend'
 import { GraphDetailPanel } from '@/components/graph/GraphDetailPanel'
 import { RecordAccessInfo } from '@/components/users/RecordAccessInfo'
+import { RiskFactorBreakdown } from '@/components/users/RiskFactorBreakdown'
 import {
   useUser,
   useUserObjectAccess,
@@ -63,6 +64,15 @@ export default function UserDetailPage() {
   const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
   const { data: recommendations, isLoading: recommendationsLoading } = useUserRecommendations(orgId, userId)
   const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId)
+
+  // The risk endpoint has shipped both camelCase and snake_case shapes.
+  const riskScore = risk?.score ?? risk?.risk_score
+  const riskLevel = (risk?.level ?? risk?.risk_level) as
+    | 'low' | 'medium' | 'high' | 'critical' | undefined
+  const riskReason = risk?.explanation ?? risk?.reason_text
+  const riskFactors = risk?.factors ?? []
+  const hasRiskAssessment =
+    riskScore !== undefined && (risk?.risk_score !== undefined || !!risk?.calculatedAt || riskScore > 0)
 
   if (userError) {
     return (
@@ -226,7 +236,7 @@ export default function UserDetailPage() {
                     <div className="h-4 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded w-3/4" />
                     <div className="h-4 bg-grove-border/60 dark:bg-grove-border-dk/70 rounded w-1/2" />
                   </div>
-                ) : risk && risk.score > 0 ? (
+                ) : hasRiskAssessment ? (
                   <div className="space-y-4">
                     <div>
                       <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
@@ -234,66 +244,26 @@ export default function UserDetailPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="v2-num text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                          {risk.score}
+                          {Math.round(riskScore ?? 0)}
                         </div>
-                        <RiskBadge level={risk.level as "low" | "medium" | "high" | "critical"} />
+                        {riskLevel && <RiskBadge level={riskLevel} />}
                       </div>
-                      {risk.calculatedAt && (
+                      {risk?.calculatedAt && (
                         <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                           Calculated {new Date(risk.calculatedAt).toLocaleString()}
                         </div>
                       )}
                     </div>
-                    {risk.factors && risk.factors.length > 0 && (
-                      <div>
-                        <div className="text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-3">
-                          Risk Factor Breakdown
-                        </div>
-                        <div className="space-y-3">
-                          {risk.factors.map((factor: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 border border-grove-border dark:border-grove-border-dk"
-                            >
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk capitalize">
-                                  {factor.factor?.replace(/_/g, ' ')}
-                                </span>
-                                <span className="v2-num text-xs font-semibold text-grove-ink/65 dark:text-grove-ink-dk/65">
-                                  {(factor.score * factor.weight * 100).toFixed(1)} pts
-                                </span>
-                              </div>
-                              <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
-                                {factor.description}
-                              </div>
-                              <div className="flex items-center gap-3 text-xs">
-                                <div className="flex-1 overflow-hidden bg-grove-canvas dark:bg-grove-canvas-dk rounded-full h-2">
-                                  <div
-                                    className="v2-bar-fill bg-primary-600 dark:bg-primary-400 h-full rounded-full"
-                                    style={{ width: `${factor.score * 100}%` }}
-                                  />
-                                </div>
-                                <span className="v2-num font-semibold text-grove-ink dark:text-grove-ink-dk min-w-[3rem] text-right">
-                                  {(factor.score * 100).toFixed(0)}%
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {risk.explanation && (
-                      <div className="pt-3 border-t border-grove-border dark:border-grove-border-dk">
-                        <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65 whitespace-pre-line">
-                          {risk.explanation}
-                        </div>
-                      </div>
+                    {riskReason && (
+                      <p className="pt-3 border-t border-grove-border dark:border-grove-border-dk text-sm leading-relaxed text-grove-ink/85 dark:text-grove-ink-dk/85 whitespace-pre-line">
+                        {riskReason}
+                      </p>
                     )}
                   </div>
-                ) : risk && risk.score === 0 ? (
+                ) : risk ? (
                   <div className="text-center py-8">
                     <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
-                      {risk.explanation || "No risk assessment available yet. The next sync will generate risk scores."}
+                      {riskReason || "No risk assessment available yet. The next sync will generate risk scores."}
                     </div>
                   </div>
                 ) : (
@@ -341,6 +311,21 @@ export default function UserDetailPage() {
             </Card>
           </div>
           </Reveal>
+          {hasRiskAssessment && riskFactors.length > 0 && (
+            <Reveal delay={0.05}>
+              <Card variant="bordered" className="mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="h-5 w-5" />
+                    Risk Drivers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RiskFactorBreakdown factors={riskFactors} />
+                </CardContent>
+              </Card>
+            </Reveal>
+          )}
         </TabsContent>
 
         {/* Object Access Tab */}

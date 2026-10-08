@@ -46,6 +46,7 @@ export type RecommendationStatus =
   | 'accepted'
   | 'rejected'
   | 'applied'
+  | 'deferred'
 
 // Query Keys
 export const recommendationKeys = {

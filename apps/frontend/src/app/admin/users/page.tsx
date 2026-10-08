@@ -12,6 +12,8 @@
  *   - Create user  → POST /auth/users → activation email sent
  *   - Resend       → POST /auth/users/{id}/resend-activation
  *   - View list    → GET /auth/users
+ *   - Org access   → GET/PUT /auth/users/{id}/orgs (non-admin roles
+ *                    only; org_admin sees every client org)
  */
 
 import { useState } from 'react'
@@ -27,6 +29,8 @@ import {
   RefreshCw,
   Copy,
   Trash2,
+  Building2,
+  Pencil,
 } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal } from '@/components/v2/motion'
@@ -36,6 +40,8 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { apiClient } from '@/lib/api/client'
+import type { Organization } from '@/lib/api/hooks/useOrgs'
+import { useAuth } from '@/lib/auth/AuthContext'
 import { cn } from '@/lib/utils/cn'
 
 // ---------------------------------------------------------------- types
@@ -60,12 +66,19 @@ interface CreateUserBody {
   email: string
   name?: string
   role: 'org_admin' | 'analyst' | 'viewer' | 'auditor'
+  org_ids: string[]
+}
+
+interface OrgAccess {
+  org_ids: string[]
 }
 
 // ---------------------------------------------------------------- page
 
 export default function AdminUsersPage() {
   const qc = useQueryClient()
+  // Admins get every client org from GET /orgs — the grant universe.
+  const { orgs } = useAuth()
 
   const {
     data: users,
@@ -106,6 +119,7 @@ export default function AdminUsersPage() {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState<CreateUserBody['role']>('viewer')
+  const [inviteOrgIds, setInviteOrgIds] = useState<string[]>([])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -115,10 +129,12 @@ export default function AdminUsersPage() {
         email: email.trim(),
         name: name.trim() || undefined,
         role,
+        org_ids: role === 'org_admin' ? [] : inviteOrgIds,
       })
       setEmail('')
       setName('')
       setRole('viewer')
+      setInviteOrgIds([])
     } catch {
       // Error surfaces via createMutation.error below
     }
@@ -215,6 +231,21 @@ export default function AdminUsersPage() {
             </Button>
           </div>
 
+          {role !== 'org_admin' && orgs.length > 0 && (
+            <div>
+              <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">
+                Client org access (optional)
+              </span>
+              <div className="mt-1">
+                <OrgCheckboxList
+                  orgs={orgs}
+                  selected={inviteOrgIds}
+                  onChange={setInviteOrgIds}
+                />
+              </div>
+            </div>
+          )}
+
           {createMutation.isError && (
             <div className="flex items-start gap-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/15 ring-1 ring-red-200 dark:ring-red-900 rounded-md p-2.5">
               <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -247,6 +278,7 @@ export default function AdminUsersPage() {
             <UserRow
               key={u.id}
               user={u}
+              orgs={orgs}
               onResend={(id) => resendMutation.mutate(id)}
               onDelete={(id) => deleteMutation.mutate(id)}
               resendPending={
@@ -278,6 +310,7 @@ export default function AdminUsersPage() {
 
 function UserRow({
   user,
+  orgs,
   onResend,
   onDelete,
   resendPending,
@@ -286,6 +319,7 @@ function UserRow({
   deleteError,
 }: {
   user: OrgUserRow
+  orgs: Organization[]
   onResend: (userId: string) => void
   onDelete: (userId: string) => void
   resendPending: boolean
@@ -403,6 +437,8 @@ function UserRow({
           </Button>
         </div>
 
+        <UserOrgAccess user={user} orgs={orgs} />
+
         {deleteError && (
           <div className="mt-3 flex items-start gap-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/15 ring-1 ring-red-200 dark:ring-red-900 rounded-md p-2.5">
             <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
@@ -417,6 +453,149 @@ function UserRow({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// ---------------------------------------------------------------- org access
+
+function UserOrgAccess({ user, orgs }: { user: OrgUserRow; orgs: Organization[] }) {
+  const qc = useQueryClient()
+  const isAdminRole = user.role === 'org_admin'
+  const queryKey = ['admin', 'users', user.id, 'orgs']
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<string[]>([])
+
+  const { data, isLoading } = useQuery<OrgAccess>({
+    queryKey,
+    queryFn: () => apiClient.get<OrgAccess>(`/auth/users/${user.id}/orgs`),
+    enabled: !isAdminRole,
+    staleTime: 15_000,
+  })
+
+  const saveMutation = useMutation<OrgAccess, unknown, string[]>({
+    mutationFn: (orgIds) =>
+      apiClient.put<OrgAccess>(`/auth/users/${user.id}/orgs`, { org_ids: orgIds }),
+    onSuccess: (result) => {
+      qc.setQueryData(queryKey, result)
+      setEditing(false)
+    },
+  })
+
+  const grantedIds = data?.org_ids ?? []
+  const nameById = new Map(orgs.map((o) => [o.id, o.name]))
+
+  return (
+    <div className="mt-3 border-t border-grove-border pt-3 dark:border-grove-border-dk">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Building2 className="h-3.5 w-3.5 text-grove-ink/45 dark:text-grove-ink-dk/45" />
+        <span className="v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">Org access</span>
+        {isAdminRole ? (
+          <span className="text-grove-ink/75 dark:text-grove-ink-dk/75">All client orgs</span>
+        ) : isLoading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-grove-ink/45" />
+        ) : grantedIds.length === 0 ? (
+          <span className="text-grove-ink/55 dark:text-grove-ink-dk/55">No client orgs</span>
+        ) : (
+          grantedIds.map((id) => (
+            <span
+              key={id}
+              className="rounded-full bg-grove-canvas px-2 py-0.5 text-grove-ink/75 ring-1 ring-grove-border dark:bg-grove-surface-dk dark:text-grove-ink-dk/75 dark:ring-grove-border-dk"
+            >
+              {nameById.get(id) ?? 'Unknown org'}
+            </span>
+          ))
+        )}
+        {!isAdminRole && !editing && !isLoading && (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft(grantedIds)
+              setEditing(true)
+            }}
+            className="ml-auto inline-flex items-center gap-1 font-medium text-primary-700 hover:underline dark:text-primary-400"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit access
+          </button>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 space-y-3">
+          {orgs.length === 0 ? (
+            <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+              No client orgs are connected yet.
+            </p>
+          ) : (
+            <OrgCheckboxList orgs={orgs} selected={draft} onChange={setDraft} />
+          )}
+          {saveMutation.isError && (
+            <div className="flex items-start gap-2 rounded-md bg-red-50 p-2.5 text-xs text-red-700 ring-1 ring-red-200 dark:bg-red-900/15 dark:text-red-400 dark:ring-red-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span className="leading-relaxed">{extractErrorMessage(saveMutation.error)}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => saveMutation.mutate(draft)}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save access
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                saveMutation.reset()
+                setEditing(false)
+              }}
+              disabled={saveMutation.isPending}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OrgCheckboxList({
+  orgs,
+  selected,
+  onChange,
+}: {
+  orgs: Organization[]
+  selected: string[]
+  onChange: (ids: string[]) => void
+}) {
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+  return (
+    <div className="grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2 v2-scroll">
+      {orgs.map((org) => (
+        <label
+          key={org.id}
+          className="flex cursor-pointer items-center gap-2 rounded-md border border-grove-border px-3 py-2 text-sm text-grove-ink transition-colors hover:bg-primary-50/40 dark:border-grove-border-dk dark:text-grove-ink-dk dark:hover:bg-primary-900/15"
+        >
+          <input
+            type="checkbox"
+            checked={selected.includes(org.id)}
+            onChange={() => toggle(org.id)}
+            className="rounded"
+          />
+          <span className="truncate">{org.name}</span>
+          {org.is_sandbox && (
+            <span className="ml-auto text-[10px] font-mono uppercase tracking-wider text-copper-600 dark:text-copper-400">
+              Sandbox
+            </span>
+          )}
+        </label>
+      ))}
+    </div>
   )
 }
 
@@ -493,7 +672,7 @@ function formatRelative(iso: string): string {
 function extractErrorMessage(err: unknown): string {
   if (!err) return 'Something went wrong.'
   const e = err as Record<string, unknown> & { message?: string }
-  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const errorData = (e.data as Record<string, unknown> | undefined) ?? undefined
   const detail = errorData?.detail
   if (typeof detail === 'string') return detail
   if (detail && typeof detail === 'object') {

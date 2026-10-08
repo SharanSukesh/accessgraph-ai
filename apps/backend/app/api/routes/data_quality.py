@@ -25,7 +25,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import DataQualityRun, ObjectQualityScore
 from app.services.data_quality import DataQualityService
 
@@ -125,13 +125,6 @@ class HistoryPoint(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's data-quality results.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -175,7 +168,7 @@ async def run_data_quality(
             "global describe (with a higher per-run cap)."
         ),
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
@@ -187,7 +180,6 @@ async def run_data_quality(
     If runtime grows past ~90s we should switch to the same background
     pattern the sync-job uses (asyncio.create_task + polling endpoint).
     """
-    _enforce_same_org(org_id, current_org_id)
     service = DataQualityService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email, scope=scope)
@@ -218,13 +210,12 @@ async def run_data_quality(
 )
 async def get_latest_run(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
     """Headline stats for the most recent run. Returns has_data=False
     if no run exists yet so the Objects page renders cleanly on first
     visit."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -287,12 +278,11 @@ async def get_latest_run(
 )
 async def list_object_scores(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> ObjectListResponse:
     """Per-object score list from the most recent run — ordered
     worst-first so the Objects page can badge the offenders."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return ObjectListResponse(run_id=None, snapshot_at=None, objects=[])
@@ -311,13 +301,12 @@ async def list_object_scores(
 async def get_object_score(
     org_id: str,
     object_name: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> ObjectScoreResponse:
     """One object's detail — includes the evidence blob (top gap fields,
     duplicate clusters, oldest records) so the object detail page can
     render the drill-down without a second round-trip."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         raise HTTPException(
@@ -348,11 +337,10 @@ async def get_object_score(
 async def get_history(
     org_id: str,
     limit: int = 30,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
     """Score-over-time — powers a small sparkline next to the org KPI."""
-    _enforce_same_org(org_id, current_org_id)
     limit = max(1, min(limit, 100))
     result = await db.execute(
         select(DataQualityRun)

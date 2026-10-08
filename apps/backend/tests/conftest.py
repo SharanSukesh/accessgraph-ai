@@ -1,6 +1,10 @@
 """
 Pytest configuration and fixtures
 """
+import os
+
+os.environ.setdefault("JWT_SECRET_KEY", "test-only-jwt-secret")
+
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker

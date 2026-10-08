@@ -126,9 +126,7 @@ export const navigationSections: {
 export function Sidebar() {
   const pathname = usePathname()
   const queryClient = useQueryClient()
-  // Auth is only needed for nav gating here — the user menu (identity,
-  // sign out) moved to the Topbar with its own useAuth call.
-  const { isAdmin } = useAuth()
+  const { isAdmin, canWrite, currentOrg, connectSalesforce } = useAuth()
   const [isExpanded, setIsExpanded] = useState(false)
   // Local "in flight" tag covers the brief window between clicking the
   // button and the trigger POST returning. Once the new sync job exists,
@@ -138,14 +136,16 @@ export function Sidebar() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   // Extract orgId from current path (e.g., /orgs/abc123/dashboard -> abc123)
-  const orgIdMatch = pathname.match(/\/orgs\/([^/]+)/)
-  const orgId = orgIdMatch ? orgIdMatch[1] : 'demo-org'
+  const orgIdMatch = pathname.match(/^\/orgs\/([^/]+)/)
+  const orgId = orgIdMatch ? orgIdMatch[1] : null
+  // Sync/Reconnect write to the org, so read-only roles don't get them.
+  const showOrgControls = !!orgId && canWrite
 
   // useSyncJobs polls every 5 seconds while the latest job is in
   // pending/running state (see useOrgs.ts:164). We derive the spinner
   // from that — the moment the latest job hits a terminal state
   // (completed / failed / partial), polling stops and the spinner clears.
-  const { data: syncJobs } = useSyncJobs(orgId)
+  const { data: syncJobs } = useSyncJobs(showOrgControls ? orgId : null)
   const latestJobStatus = syncJobs?.[0]?.status
   const isJobRunning = latestJobStatus === 'pending' || latestJobStatus === 'running'
   const isSyncing = isTriggering || isJobRunning
@@ -185,9 +185,12 @@ export function Sidebar() {
         .filter(item => !item.adminOnly || isAdmin)
         .map(item => ({
           ...item,
+          // Without an org in the URL, org-scoped items lead to the picker.
           href: item.path.startsWith('/')
             ? item.path
-            : `/orgs/${orgId}/${item.path}`,
+            : orgId
+              ? `/orgs/${orgId}/${item.path}`
+              : '/orgs',
         })),
     }))
     .filter(section => section.items.length > 0)
@@ -198,6 +201,7 @@ export function Sidebar() {
   // isJobRunning above as soon as the trigger returns — that way the icon
   // animates through the entire backend run, not just the trigger latency.
   const handleSync = async () => {
+    if (!orgId) return
     setIsTriggering(true)
     setSyncMessage(null)
     try {
@@ -221,22 +225,9 @@ export function Sidebar() {
     }
   }
 
-  // Handle reconnect to Salesforce
+  // Sandbox orgs authenticate against test.salesforce.com.
   const handleReconnect = () => {
-    // Redirect to backend OAuth authorization endpoint.
-    // Forward env=sandbox if present in URL or sessionStorage
-    // (so sandbox/scratch orgs go to test.salesforce.com).
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
-    let env: string | null = null
-    if (typeof window !== 'undefined') {
-      env =
-        new URLSearchParams(window.location.search).get('env') ||
-        window.sessionStorage.getItem('accessgraph_env')
-    }
-    const url = env
-      ? `${backendUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
-      : `${backendUrl}/auth/salesforce/authorize`
-    window.location.href = url
+    connectSalesforce(currentOrg?.is_sandbox ? 'sandbox' : 'production')
   }
 
   return (
@@ -367,67 +358,71 @@ export function Sidebar() {
 
         {/* Footer */}
         <div className="border-t border-grove-border dark:border-grove-border-dk">
-          {/* Reconnect Button */}
-          <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
-            <button
-              onClick={handleReconnect}
-              className={cn(
-                // Grove — reconnect keeps its warning-adjacent copper tint
-                // (copper is Grove's warm accent, so hover reads as attention
-                // without shouting). grove-rail adds the evergreen left cue
-                // that matches the nav-item language above.
-                'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
-                'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
-              )}
-              title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
-            >
-              <Link2 className="h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
-              {isExpanded && <span className="whitespace-nowrap">Reconnect to Salesforce</span>}
+          {showOrgControls && (
+            <>
+              {/* Reconnect Button */}
+              <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
+                <button
+                  onClick={handleReconnect}
+                  className={cn(
+                    // Grove — reconnect keeps its warning-adjacent copper tint
+                    // (copper is Grove's warm accent, so hover reads as attention
+                    // without shouting). grove-rail adds the evergreen left cue
+                    // that matches the nav-item language above.
+                    'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                    isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
+                    'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-copper-50 hover:text-copper-700 dark:hover:bg-copper-900/20 dark:hover:text-copper-400'
+                  )}
+                  title={!isExpanded ? 'Reconnect to Salesforce' : undefined}
+                >
+                  <Link2 className="h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400" />
+                  {isExpanded && <span className="whitespace-nowrap">Reconnect to Salesforce</span>}
 
-              {/* Tooltip for collapsed state */}
-              {!isExpanded && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
-                  Reconnect to Salesforce
-                </div>
-              )}
-            </button>
-          </div>
+                  {/* Tooltip for collapsed state */}
+                  {!isExpanded && (
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
+                      Reconnect to Salesforce
+                    </div>
+                  )}
+                </button>
+              </div>
 
-          {/* Sync Button */}
-          <div className={cn("p-2 pt-0", isExpanded ? "" : "flex justify-center")}>
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className={cn(
-                // Grove — sync uses the evergreen brand hover, matching
-                // the active-nav language elsewhere. grove-rail cue on the
-                // left edge matches the nav-item language.
-                'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
-                isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
-                isSyncing
-                  ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
-                  : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
-              )}
-              title={!isExpanded ? 'Sync from Salesforce' : undefined}
-            >
-              <RefreshCw className={cn(
-                "h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out",
-                isSyncing && "animate-spin",
-                // Warm-accent hover only when not actively syncing so the
-                // spin animation stays evergreen (matches brand).
-                !isSyncing && "group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400",
-              )} />
-              {isExpanded && <span className="whitespace-nowrap">Sync from Salesforce</span>}
+              {/* Sync Button */}
+              <div className={cn("p-2 pt-0", isExpanded ? "" : "flex justify-center")}>
+                <button
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className={cn(
+                    // Grove — sync uses the evergreen brand hover, matching
+                    // the active-nav language elsewhere. grove-rail cue on the
+                    // left edge matches the nav-item language.
+                    'v2-nav-item flex items-center rounded-lg text-sm font-medium transition-all duration-200 ease-out relative group',
+                    isExpanded ? 'space-x-3 px-4 py-3 w-full' : 'justify-center w-10 h-10',
+                    isSyncing
+                      ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
+                      : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
+                  )}
+                  title={!isExpanded ? 'Sync from Salesforce' : undefined}
+                >
+                  <RefreshCw className={cn(
+                    "h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out",
+                    isSyncing && "animate-spin",
+                    // Warm-accent hover only when not actively syncing so the
+                    // spin animation stays evergreen (matches brand).
+                    !isSyncing && "group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400",
+                  )} />
+                  {isExpanded && <span className="whitespace-nowrap">Sync from Salesforce</span>}
 
-              {/* Tooltip for collapsed state */}
-              {!isExpanded && (
-                <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
-                  Sync from Salesforce
-                </div>
-              )}
-            </button>
-          </div>
+                  {/* Tooltip for collapsed state */}
+                  {!isExpanded && (
+                    <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
+                      Sync from Salesforce
+                    </div>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Sync Message */}
           {isExpanded && syncMessage && (

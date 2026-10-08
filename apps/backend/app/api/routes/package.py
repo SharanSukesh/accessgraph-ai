@@ -1,17 +1,30 @@
 """
-Salesforce Package API Routes
-Handles package installation notifications and sync triggers from Salesforce
+Salesforce managed package callouts.
+
+The package authenticates with a per-org key (X-Newton-Package-Key)
+that an admin generates in the web app (POST /orgs/{id}/package-key) and
+pastes into the package's settings. /install is the one public endpoint:
+the post-install handler has no key yet, so it may only log, never
+create or modify orgs.
 """
 import logging
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Header, Request
+from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.deps import PACKAGE_KEY_HEADER, package_org_for_salesforce_id, require_credentials, require_credentials
 from app.db.session import get_db
-from app.domain.models import Organization, SalesforceConnection, AuditLog, AuditAction
+from app.domain.models import (
+    AuditAction,
+    AuditLog,
+    SalesforceConnection,
+    SyncJob,
+    SyncStatus,
+)
+from app.ingestion.orchestrator import schedule_background_sync
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +32,15 @@ router = APIRouter(prefix="/package", tags=["package"])
 
 
 class PackageInstallRequest(BaseModel):
-    """Package installation notification from Salesforce"""
-    organizationId: str  # Salesforce Org ID
-    organizationName: str
-    installationType: str  # "new" or "upgrade"
+    organizationId: str
+    organizationName: Optional[str] = None
+    installationType: Optional[str] = None
     previousVersion: Optional[str] = None
-    installDate: str
-    installerEmail: EmailStr
+    installDate: Optional[str] = None
+    installerEmail: Optional[str] = None
 
 
 class SyncTriggerRequest(BaseModel):
-    """Sync trigger request from Salesforce package"""
     organizationId: str
 
 
@@ -37,64 +48,19 @@ class SyncTriggerRequest(BaseModel):
 async def handle_package_installation(
     payload: PackageInstallRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Handle package installation notification from Salesforce.
-
-    This endpoint is called by the AccessGraphPostInstall Apex class
-    after the package is installed in a Salesforce org.
-
-    The Salesforce Org ID lives on SalesforceConnection.organization_id_sf
-    (not on Organization), so we look up the existing org via the
-    connection. If no connection exists yet (OAuth not completed), we
-    create a placeholder Organization that will be linked when OAuth
-    runs in auth.py (which also queries by SalesforceConnection.organization_id_sf).
-
-    Actions:
-    1. Create or update Organization record
-    2. Log installation event
-    3. Return organization ID and next steps (e.g., complete OAuth)
-    """
-    try:
-        # Look for an existing SalesforceConnection with this SF org ID
-        stmt = select(SalesforceConnection).where(
-            SalesforceConnection.organization_id_sf == payload.organizationId
+    """Install notification from AccessGraphPostInstall. Audit-only."""
+    connection = (
+        await db.execute(
+            select(SalesforceConnection).where(
+                SalesforceConnection.organization_id_sf == payload.organizationId
+            )
         )
-        result = await db.execute(stmt)
-        existing_connection = result.scalar_one_or_none()
-
-        if existing_connection:
-            # OAuth already happened previously - reuse the existing Organization
-            org = await db.get(Organization, existing_connection.organization_id)
-            org.name = payload.organizationName  # Update name if changed
-            installation_type = (
-                "upgrade" if payload.installationType == "upgrade" else "reinstall"
-            )
-            logger.info(
-                f"Package {installation_type} for existing org: {org.id} "
-                f"(SF Org: {payload.organizationId})"
-            )
-        else:
-            # No prior OAuth - create a placeholder Organization. The
-            # SalesforceConnection record (with tokens) will be created
-            # when the user completes OAuth in the web app.
-            org = Organization(
-                name=payload.organizationName,
-            )
-            db.add(org)
-            await db.flush()  # populate org.id
-            logger.info(
-                f"New organization placeholder created via package install: {org.id} "
-                f"(SF Org: {payload.organizationId}). Awaiting OAuth completion."
-            )
-            installation_type = "new_install"
-
-        await db.commit()
-
-        # Log installation event
-        audit_log = AuditLog(
-            organization_id=org.id,
+    ).scalar_one_or_none()
+    if connection is not None:
+        db.add(AuditLog(
+            organization_id=connection.organization_id,
             user_email=payload.installerEmail,
             action=AuditAction.CONNECT_SALESFORCE,
             resource_type="package_installation",
@@ -105,218 +71,85 @@ async def handle_package_installation(
             request_method="POST",
             success=True,
             context_data={
-                "installation_type": installation_type,
+                "installation_type": payload.installationType,
                 "previous_version": payload.previousVersion,
-                "install_date": payload.installDate,
-            }
-        )
-        db.add(audit_log)
+            },
+        ))
         await db.commit()
-
-        logger.info(
-            f"Package installation logged for org {org.id} "
-            f"({installation_type}, installer: {payload.installerEmail})"
-        )
-
-        # Return organization details and next steps
-        return {
-            "success": True,
-            "organization_id": org.id,
-            "salesforce_org_id": payload.organizationId,
-            "installation_type": installation_type,
-            "message": "Package installation recorded successfully",
-            "next_steps": {
-                "1_oauth": "Complete OAuth setup at https://app.accessgraphai.com",
-                "2_sync": "Trigger initial permission sync from Salesforce or dashboard",
-                "3_dashboard": f"View analytics at https://app.accessgraphai.com/orgs/{org.id}/dashboard"
-            }
-        }
-
-    except Exception as e:
-        logger.error(
-            f"Failed to process package installation for {payload.organizationId}: {e}",
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to process installation: {str(e)}"
-        )
+    logger.info(
+        "package install notice for SF org %s (known=%s)",
+        payload.organizationId, connection is not None,
+    )
+    return {"success": True}
 
 
-@router.post("/sync-trigger", response_model=Dict[str, Any])
+@router.post("/sync-trigger", response_model=Dict[str, Any], dependencies=[Depends(require_credentials)])
 async def handle_sync_trigger(
     payload: SyncTriggerRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db)
+    package_key: Optional[str] = Header(None, alias=PACKAGE_KEY_HEADER),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Handle sync trigger from Salesforce package.
-
-    This endpoint is called by the AccessGraphConnector.triggerSync()
-    Apex method to initiate a permission sync.
-
-    This is a lightweight endpoint that delegates to the main sync endpoint.
-    """
-    try:
-        # Find SalesforceConnection (and via it, the Organization) by Salesforce Org ID.
-        # The SF Org ID lives on SalesforceConnection.organization_id_sf, not Organization.
-        stmt = select(SalesforceConnection).where(
-            SalesforceConnection.organization_id_sf == payload.organizationId
-        )
-        result = await db.execute(stmt)
-        connection = result.scalar_one_or_none()
-
-        if not connection:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Organization not found: {payload.organizationId}. "
-                       "Please complete OAuth setup first at "
-                       "https://app.accessgraphai.com"
-            )
-
-        if not connection.access_token:
-            raise HTTPException(
-                status_code=403,
-                detail="OAuth connection required. Please authorize at "
-                       "https://app.accessgraphai.com"
-            )
-
-        org = await db.get(Organization, connection.organization_id)
-
-        # Log sync trigger
-        audit_log = AuditLog(
-            organization_id=org.id,
-            action=AuditAction.SYNC_DATA,
-            resource_type="package_sync_trigger",
-            resource_id=org.id,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("User-Agent"),
-            request_path="/package/sync-trigger",
-            request_method="POST",
-            success=True,
-            context_data={
-                "triggered_from": "salesforce_package",
-                "salesforce_org_id": payload.organizationId
-            }
-        )
-        db.add(audit_log)
-        await db.commit()
-
-        logger.info(
-            f"Sync triggered from Salesforce package for org {org.id} "
-            f"(SF Org: {payload.organizationId})"
-        )
-
-        # Schedule sync as a background task and return 202 immediately. The
-        # LWC's wired data refreshes after triggerSync resolves, so seeing
-        # PENDING here lets the user see the sync progressing in the tile
-        # rather than waiting 1-2 minutes for the request to finish before
-        # any UI update.
-        from app.domain.models import SyncJob, SyncStatus
-        from app.ingestion.orchestrator import schedule_background_sync
-
-        sync_job = SyncJob(
-            organization_id=org.id,
-            status=SyncStatus.PENDING,
-        )
-        db.add(sync_job)
-        await db.commit()
-        await db.refresh(sync_job)
-
-        schedule_background_sync(org.id, sync_job.id)
-
-        return {
-            "success": True,
-            "organization_id": org.id,
-            "sync_job_id": sync_job.id,
-            "status": sync_job.status.value if hasattr(sync_job.status, "value") else sync_job.status,
-            "message": "Permission sync initiated successfully",
-            "started_at": (
-                sync_job.started_at.isoformat() if sync_job.started_at else None
-            ),
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(
-            f"Failed to trigger sync for {payload.organizationId}: {e}",
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to trigger sync: {str(e)}"
-        )
+    org = await package_org_for_salesforce_id(db, payload.organizationId, package_key)
+    db.add(AuditLog(
+        organization_id=org.id,
+        action=AuditAction.SYNC_DATA,
+        resource_type="package_sync_trigger",
+        resource_id=org.id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("User-Agent"),
+        request_path="/package/sync-trigger",
+        request_method="POST",
+        success=True,
+        context_data={"triggered_from": "salesforce_package"},
+    ))
+    sync_job = SyncJob(organization_id=org.id, status=SyncStatus.PENDING)
+    db.add(sync_job)
+    await db.commit()
+    await db.refresh(sync_job)
+    schedule_background_sync(org.id, sync_job.id)
+    return {
+        "success": True,
+        "organization_id": org.id,
+        "sync_job_id": sync_job.id,
+        "status": sync_job.status.value,
+    }
 
 
-@router.get("/status/{salesforce_org_id}", response_model=Dict[str, Any])
+@router.get("/status/{salesforce_org_id}", response_model=Dict[str, Any], dependencies=[Depends(require_credentials)])
 async def get_package_status(
     salesforce_org_id: str,
-    db: AsyncSession = Depends(get_db)
+    package_key: Optional[str] = Header(None, alias=PACKAGE_KEY_HEADER),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    Get package installation and configuration status.
-
-    Returns:
-    - Installation status
-    - OAuth connection status
-    - Last sync information
-    - Configuration completeness
-    """
-    try:
-        # Find SalesforceConnection by SF Org ID (which is stored on the connection,
-        # not on Organization). The Organization is reachable via connection.organization_id.
-        stmt = select(SalesforceConnection).where(
-            SalesforceConnection.organization_id_sf == salesforce_org_id
+    org = await package_org_for_salesforce_id(db, salesforce_org_id, package_key)
+    connection = (
+        await db.execute(
+            select(SalesforceConnection).where(
+                SalesforceConnection.organization_id_sf == salesforce_org_id
+            )
         )
-        result = await db.execute(stmt)
-        connection = result.scalar_one_or_none()
-
-        if not connection:
-            return {
-                "installed": False,
-                "message": "Package not installed or organization not found"
-            }
-
-        org = await db.get(Organization, connection.organization_id)
-        oauth_connected = bool(connection.access_token)
-
-        # Get latest sync job
-        from app.domain.models import SyncJob
-        stmt = (
+    ).scalar_one_or_none()
+    latest_sync = (
+        await db.execute(
             select(SyncJob)
             .where(SyncJob.organization_id == org.id)
-            .order_by(SyncJob.started_at.desc())
+            .order_by(SyncJob.created_at.desc())
             .limit(1)
         )
-        result = await db.execute(stmt)
-        latest_sync = result.scalar_one_or_none()
-
-        return {
-            "installed": True,
-            "organization_id": org.id,
-            "salesforce_org_id": salesforce_org_id,
-            "organization_name": org.name,
-            "oauth_connected": oauth_connected,
-            "last_sync": {
-                "job_id": latest_sync.id if latest_sync else None,
-                "status": latest_sync.status if latest_sync else None,
-                "started_at": latest_sync.started_at.isoformat() if latest_sync and latest_sync.started_at else None,
-                "completed_at": latest_sync.completed_at.isoformat() if latest_sync and latest_sync.completed_at else None,
-            } if latest_sync else None,
-            "configuration_complete": oauth_connected,
-            "next_steps": [] if oauth_connected else [
-                "Complete OAuth setup at https://app.accessgraphai.com"
-            ]
-        }
-
-    except Exception as e:
-        logger.error(
-            f"Failed to get package status for {salesforce_org_id}: {e}",
-            exc_info=True
-        )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get status: {str(e)}"
-        )
-
+    ).scalar_one_or_none()
+    oauth_connected = bool(connection and connection.access_token)
+    return {
+        "installed": True,
+        "organization_id": org.id,
+        "salesforce_org_id": salesforce_org_id,
+        "organization_name": org.name,
+        "oauth_connected": oauth_connected,
+        "last_sync": {
+            "job_id": latest_sync.id,
+            "status": latest_sync.status.value,
+            "started_at": latest_sync.started_at.isoformat() if latest_sync.started_at else None,
+            "completed_at": latest_sync.completed_at.isoformat() if latest_sync.completed_at else None,
+        } if latest_sync else None,
+        "configuration_complete": oauth_connected,
+    }

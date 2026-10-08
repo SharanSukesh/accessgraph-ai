@@ -1,6 +1,7 @@
 """
 AccessGraph AI - FastAPI Application Entry Point
 """
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -30,6 +31,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     logger.info("Starting AccessGraph AI Backend Service", extra={"version": "0.1.0"})
 
+    problems = settings.security_config_problems()
+    for problem in problems:
+        logger.error("Security configuration: %s", problem)
+    if settings.is_production and not settings.JWT_SECRET_KEY.strip():
+        raise RuntimeError("Refusing to start: JWT_SECRET_KEY must be set in production")
+
     # Test database connections
     try:
         await test_connection()
@@ -57,7 +64,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("bootstrap: first-admin provisioning failed")
 
+    from app.services.data_retention import retention_loop
+    retention_task = asyncio.create_task(retention_loop())
+
     yield
+
+    retention_task.cancel()
 
     # Shutdown
     logger.info("Shutting down AccessGraph AI Backend Service")
@@ -69,8 +81,10 @@ app = FastAPI(
     title="AccessGraph AI API",
     description="Enterprise Access Intelligence Platform - API Service",
     version="0.1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    # The schema maps every endpoint; keep it off in production.
+    docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if settings.ENABLE_API_DOCS else None,
     lifespan=lifespan,
 )
 
@@ -142,6 +156,9 @@ async def add_security_headers(request: Request, call_next):
 
 
 # Include routers
+from fastapi import Depends
+
+from app.auth.deps import require_org_access
 from app.api.routes import (
     auth, accounts, orgs, users, privacy, package, deeplink,
     equity, reporting_graph, org_analyzer, data_quality,
@@ -153,11 +170,15 @@ app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["authentication"])
 app.include_router(accounts.router, tags=["accounts"])
 app.include_router(orgs.router, tags=["organizations"])
-app.include_router(users.router, tags=["users"])
-app.include_router(privacy.router, tags=["privacy"])
+# Routers whose every path is /orgs/{org_id}/... are guarded as a whole.
+# tests/test_route_auth.py fails if any route is reachable without auth.
+_org_guard = [Depends(require_org_access)]
+app.include_router(users.router, tags=["users"], dependencies=_org_guard)
+app.include_router(users.recommendations_router, tags=["users"])
+app.include_router(privacy.router, tags=["privacy"], dependencies=_org_guard)
 app.include_router(package.router, tags=["package"])
 app.include_router(deeplink.router, tags=["deeplink"])
-app.include_router(equity.router, tags=["equity"])
+app.include_router(equity.router, tags=["equity"], dependencies=_org_guard)
 app.include_router(reporting_graph.router, tags=["reporting-graph"])
 app.include_router(org_analyzer.router, tags=["org-analyzer"])
 app.include_router(data_quality.router, tags=["data-quality"])
@@ -168,7 +189,7 @@ app.include_router(report_sprawl.router, tags=["report-sprawl"])
 app.include_router(automation_sprawl.router, tags=["automation-sprawl"])
 app.include_router(license_fit.router, tags=["license-fit"])
 app.include_router(integration_sprawl.router, tags=["integration-sprawl"])
-app.include_router(compliance.router, tags=["compliance"])
+app.include_router(compliance.router, tags=["compliance"], dependencies=_org_guard)
 
 
 # Global exception handler
@@ -192,5 +213,4 @@ async def root():
         "service": "AccessGraph AI",
         "version": "0.1.0",
         "status": "running",
-        "docs": "/docs"
     }

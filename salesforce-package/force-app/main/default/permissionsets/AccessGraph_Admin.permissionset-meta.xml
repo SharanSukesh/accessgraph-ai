@@ -47,6 +47,11 @@
         <readable>true</readable>
     </fieldPermissions>
     <fieldPermissions>
+        <field>AccessGraph_Settings__c.Package_Key__c</field>
+        <editable>true</editable>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
         <field>AccessGraph_Settings__c.Auto_Sync_Enabled__c</field>
         <editable>true</editable>
         <readable>true</readable>

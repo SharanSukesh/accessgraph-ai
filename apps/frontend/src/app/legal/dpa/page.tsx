@@ -17,11 +17,13 @@ export default function DPAPage() {
           Data Processing Agreement (DPA)
         </h1>
         <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
-          Last updated: {new Date().toLocaleDateString()}
+          Last updated: October 8, 2026
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
           This Data Processing Agreement governs the processing of personal data under GDPR
-          and other applicable data protection laws.
+          and other applicable data protection laws when a Salesforce consultancy operates
+          Newton for a client. The client is the Controller of its Salesforce data; the
+          consultancy operating Newton is the Processor.
         </p>
       </div>
 
@@ -37,7 +39,7 @@ export default function DPAPage() {
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Controller</p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  You (the customer organization)
+                  The client (the organization whose Salesforce org is connected)
                 </p>
               </div>
             </div>
@@ -46,7 +48,7 @@ export default function DPAPage() {
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Processor</p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  Newton (service provider)
+                  The consultancy operating Newton
                 </p>
               </div>
             </div>
@@ -55,7 +57,7 @@ export default function DPAPage() {
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">Data Location</p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  US & EU (with Standard Contractual Clauses)
+                  United States (Standard Contractual Clauses for EEA/UK transfers)
                 </p>
               </div>
             </div>
@@ -86,12 +88,13 @@ export default function DPAPage() {
                 identified or identifiable natural person, as defined in GDPR Article 4(1).
               </li>
               <li>
-                <strong>"Controller"</strong> means the customer organization that determines
-                the purposes and means of processing Personal Data.
+                <strong>"Controller"</strong> means the client organization whose Salesforce
+                org is connected to Newton, which determines the purposes and means of
+                processing Personal Data.
               </li>
               <li>
-                <strong>"Processor"</strong> means Newton, which processes Personal
-                Data on behalf of the Controller.
+                <strong>"Processor"</strong> means the consultancy operating Newton, which
+                processes Personal Data on behalf of the Controller.
               </li>
               <li>
                 <strong>"Sub-processor"</strong> means any third-party service provider
@@ -141,11 +144,18 @@ export default function DPAPage() {
               </h3>
               <p>The Processor processes Personal Data for the following purposes:</p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>Analyzing Salesforce permission and access structures</li>
-                <li>Identifying security anomalies and access risks</li>
-                <li>Generating security recommendations</li>
+                <li>Analyzing Salesforce configuration, permission, and access structures</li>
+                <li>Identifying security risks, including login anomalies such as impossible travel or brute force</li>
+                <li>Generating rule-based findings and recommendations</li>
                 <li>Providing access visualization and reporting</li>
-                <li>Maintaining audit logs for compliance</li>
+                <li>Maintaining audit logs of actions taken in Newton</li>
+                <li>
+                  On explicit instruction from a Newton administrator only: setting a
+                  user&apos;s Manager or Delegated Approver, or deactivating users flagged as
+                  inactive or never-logged-in license holders, in the Controller&apos;s
+                  Salesforce org. These are the only writes Newton makes to Salesforce; each is
+                  audit-logged.
+                </li>
               </ul>
             </div>
 
@@ -155,14 +165,34 @@ export default function DPAPage() {
               </h3>
               <p>The Processor may process the following categories of Personal Data:</p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>User names and email addresses</li>
-                <li>User roles, profiles, and permission assignments</li>
-                <li>Job titles and organizational hierarchy</li>
-                <li>IP addresses and user agents (for audit logging)</li>
-                <li>Access patterns and usage metadata</li>
+                <li>
+                  Salesforce user records: name, username, email, title, department, manager,
+                  delegated approver, active status, created date, last login time, profile,
+                  and role
+                </li>
+                <li>
+                  Salesforce login history for the last 90 days: login time, status,
+                  application, login type, source IP address, browser, platform, and
+                  geolocation (city, country, coordinates). IP addresses and coordinates are
+                  used only in memory and are not stored; city, country, browser, and platform
+                  can appear in stored anomaly explanations.
+                </li>
+                <li>
+                  Salesforce Setup Audit Trail for the last 30 days: who made each
+                  configuration change, when, the section, and Salesforce&apos;s description
+                  text of the change (which can name users)
+                </li>
+                <li>
+                  Permission assignments, group and team membership, and the number of
+                  records owned by each user
+                </li>
+                <li>
+                  Newton account data: name, email, role, bcrypt password hash, and audit log
+                  entries including IP address and user agent
+                </li>
               </ul>
               <p className="mt-2 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
-                Note on record content: Newton is a metadata + aggregate-count product. Analytics features (Data Quality scoring, License Fit right-sizing) use Salesforce SOQL aggregate functions (COUNT, GROUP BY) to compute row/field counts and duplicate-cluster counts. Only the numeric aggregates come back to Newton — no record IDs, no field values. A future opt-in &quot;Deep Scan&quot; mode may read record content via Salesforce Bulk API for organisations that specifically enable it; that mode is a Customer-triggered processing activity, disabled by default, and requires explicit per-org admin activation with a consent modal.
+                Note on record content: Newton does not read or store the contents of business records (for example account names, contact details, opportunity amounts, or case text). It reads aggregate counts over business records — records per object, per-field fill counts, the number and sizes of duplicate clusters (grouped inside Salesforce; the duplicated values are never returned to Newton), stale-record counts, records owned per user, and open opportunities not modified in 60 days. It also reads account/opportunity share rows and team membership; business record IDs from these are replaced with a keyed one-way hash before storage, which allows records to be counted and compared but not identified in Salesforce.
               </p>
             </div>
 
@@ -172,8 +202,12 @@ export default function DPAPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Salesforce users within the Controller's organization</li>
-                <li>Dashboard users accessing the Newton platform</li>
+                <li>Holders of Newton accounts (the Processor&apos;s staff and any Controller staff given access)</li>
               </ul>
+              <p className="mt-2 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+                The Controller&apos;s own customers and contacts are not data subjects of this
+                processing, because business record contents are not read.
+              </p>
             </div>
           </div>
         </section>
@@ -207,7 +241,8 @@ export default function DPAPage() {
                 Assist the Controller in ensuring compliance with GDPR obligations
               </li>
               <li>
-                Delete or return all Personal Data upon termination (at Controller's choice)
+                Delete all Personal Data held for the Controller&apos;s org on request or upon
+                termination (Section 10)
               </li>
               <li>
                 Make available to the Controller all information necessary to demonstrate
@@ -232,12 +267,38 @@ export default function DPAPage() {
                 4.1 Technical Measures
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>AES-256 encryption for OAuth tokens stored at rest (via sqlalchemy-utils EncryptedString)</li>
-                <li>TLS 1.2+ encryption for data in transit (Railway + Vercel ingress)</li>
-                <li>Bcrypt password hashing (cost factor 12) for in-app accounts</li>
-                <li>Role-based access control (ORG_ADMIN / ANALYST / VIEWER / AUDITOR)</li>
-                <li>Comprehensive audit logging of sensitive actions</li>
-                <li>Multi-factor authentication on all infrastructure operator accounts (Railway, Vercel, GitHub, email). MFA on in-app user accounts is on the roadmap but is not currently required.</li>
+                <li>
+                  AES-256 application-level encryption of Salesforce OAuth access and refresh
+                  tokens at rest. Other stored data is not encrypted by Newton at the
+                  application level and relies on the hosting provider&apos;s infrastructure.
+                </li>
+                <li>TLS (HTTPS) for data in transit</li>
+                <li>
+                  Salesforce connection via OAuth 2.0 authorization-code flow with PKCE and a
+                  signed, short-lived state value (CSRF protection)
+                </li>
+                <li>
+                  Individual Newton accounts created only by administrator invitation and
+                  activation; bcrypt password hashing (cost factor 12); rate-limited sign-in
+                </li>
+                <li>Signed, HTTP-only, Secure session cookies with a 7-day expiry</li>
+                <li>
+                  Role-based access control: administrators (all client orgs; the only role
+                  that can delete data, write back to Salesforce, or manage users), analysts
+                  (granted orgs only), viewers and auditors (granted orgs, read-only). Account
+                  status and org access are re-checked server-side on every request.
+                </li>
+                <li>Per-org keys, issued by an administrator, for the Newton Salesforce package</li>
+                <li>
+                  Audit logging of sign-ins, access to sensitive data, syncs, Salesforce
+                  connections, write-backs, and deletions, retained 365 days
+                </li>
+                <li>
+                  Data minimisation: no business record contents; record IDs from sharing data
+                  hashed before storage; login IP addresses and coordinates not stored
+                </li>
+                <li>Automatic deletion of data past its retention period (Section 10)</li>
+                <li>Multi-factor authentication on infrastructure operator accounts (hosting, source control, email). MFA on in-app user accounts is on the roadmap but is not currently required.</li>
               </ul>
             </div>
 
@@ -246,11 +307,14 @@ export default function DPAPage() {
                 4.2 Organizational Measures
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>Security awareness training for all personnel</li>
+                <li>Confidentiality obligations for personnel authorized to process Personal Data</li>
+                <li>Production access limited to the maintainer</li>
                 <li>Incident response procedures</li>
                 <li>Data breach notification process (72-hour requirement)</li>
-                <li>Regular security audits and penetration testing</li>
-                <li>Background checks for employees with data access</li>
+                <li>
+                  No independent security audit or penetration test has been performed to
+                  date; one is planned
+                </li>
               </ul>
             </div>
 
@@ -318,7 +382,7 @@ export default function DPAPage() {
                         Railway
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        Backend hosting + managed PostgreSQL
+                        Backend API hosting + managed PostgreSQL database
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         US
@@ -326,13 +390,13 @@ export default function DPAPage() {
                     </tr>
                     <tr>
                       <td className="px-4 py-3 text-sm text-grove-ink dark:text-grove-ink-dk">
-                        Vercel
+                        Hosting provider
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        Frontend hosting (app.accessgraphai.com)
+                        Web front-end hosting
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        US (edge network)
+                        Available on request
                       </td>
                     </tr>
                     <tr>
@@ -340,7 +404,7 @@ export default function DPAPage() {
                         Resend
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-                        Transactional email (account activation, password reset)
+                        Transactional email (account invitations only)
                       </td>
                       <td className="px-4 py-3 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
                         US
@@ -388,28 +452,32 @@ export default function DPAPage() {
 
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Right of Access (Article 15):</strong> Data inventory available in
-                Privacy Dashboard
+                <strong>Right of Access (Article 15):</strong> The Privacy page in the app
+                shows per-category counts of the records held for the Controller&apos;s org; on
+                request, the Processor exports this inventory to the Controller
               </li>
               <li>
-                <strong>Right to Rectification (Article 16):</strong> Update data by
-                re-syncing with Salesforce
+                <strong>Right to Rectification (Article 16):</strong> Newton&apos;s copy is
+                read from Salesforce; corrections made in Salesforce replace the stored data on
+                the next sync
               </li>
               <li>
-                <strong>Right to Erasure (Article 17):</strong> One-click complete data
-                deletion
+                <strong>Right to Erasure (Article 17):</strong> A Newton administrator can
+                delete the Controller&apos;s org from Newton. This revokes Newton&apos;s OAuth
+                grant in Salesforce and permanently deletes every stored record for that org
+                (all metadata, user data, analyses, reports, audit logs, and settings). It
+                cannot be undone.
               </li>
               <li>
-                <strong>Right to Data Portability (Article 20):</strong> Export data in JSON
-                format
+                <strong>Right to Data Portability (Article 20):</strong> The Personal Data
+                Newton holds is a copy of data that remains in the Controller&apos;s Salesforce
+                org; the Processor can provide the inventory described above
               </li>
               <li>
-                <strong>Right to Object (Article 21):</strong> Stop processing by
-                disconnecting org
-              </li>
-              <li>
-                <strong>Right to Restrict Processing (Article 18):</strong> Pause sync
-                operations
+                <strong>Right to Object / Restrict Processing (Articles 18 and 21):</strong>{' '}
+                Revoking Newton&apos;s connected-app access in Salesforce stops all further
+                reads; data already held then ages out under Section 10, or can be erased
+                immediately as above
               </li>
             </ul>
 
@@ -483,10 +551,16 @@ export default function DPAPage() {
                 8.2 Additional Safeguards
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>AES-256 encryption for all data transfers</li>
-                <li>TLS 1.3 for data in transit</li>
-                <li>Data minimization principles applied</li>
-                <li>GDPR-compliant hosting providers with appropriate certifications</li>
+                <li>TLS (HTTPS) for data in transit</li>
+                <li>
+                  AES-256 encryption of Salesforce OAuth tokens at rest; other stored data
+                  relies on the hosting provider&apos;s infrastructure
+                </li>
+                <li>
+                  Data minimization: no business record contents read; record IDs from sharing
+                  data hashed before storage; login IP addresses and coordinates not stored
+                </li>
+                <li>Automatic deletion under the retention periods in Section 10</li>
               </ul>
             </div>
           </div>
@@ -523,20 +597,50 @@ export default function DPAPage() {
             10. Data Deletion and Return
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
-            <p>
-              Upon termination of the Service Agreement, the Processor shall, at the
-              Controller's choice:
-            </p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>
-                <strong>Delete:</strong> Permanently delete all Personal Data from production
-                and backup systems within 30 days
-              </li>
-              <li>
-                <strong>Return:</strong> Return all Personal Data to the Controller in a
-                structured, commonly used format (JSON)
-              </li>
-            </ul>
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                10.1 Automatic Retention
+              </h3>
+              <p>
+                A daily job deletes data past the following retention periods. A Newton
+                administrator can also run it on demand.
+              </p>
+              <ul className="list-disc pl-6 mt-2 space-y-1">
+                <li>
+                  Salesforce metadata and user data: deleted when not refreshed by a sync for
+                  90 days, so data from a finished engagement ages out automatically
+                </li>
+                <li>
+                  Analysis results (anomalies, risk scores, findings, sprawl, compliance, and
+                  data-quality results): 180 days
+                </li>
+                <li>Audit logs: 365 days</li>
+                <li>Sync history: 30 days (the most recent sync record is kept)</li>
+                <li>
+                  Consultant-authored configuration (price book, report branding, saved
+                  restructure plans, VIP designations) and the Salesforce connection: kept
+                  until the client org is deleted
+                </li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                10.2 Deletion on Request or Termination
+              </h3>
+              <p>
+                On the Controller&apos;s request, or upon termination of the Service Agreement,
+                a Newton administrator deletes the Controller&apos;s org from Newton. This
+                revokes Newton&apos;s OAuth grant in Salesforce and permanently deletes every
+                stored record for that org (all metadata, user data, analyses, reports, audit
+                logs, and settings). It cannot be undone.
+              </p>
+              <p className="mt-2">
+                Before deletion, the Controller may request the inventory described in Section
+                6. The source data remains in the Controller&apos;s Salesforce org.
+              </p>
+            </div>
+
             <p className="mt-4">
               The Processor may retain Personal Data to the extent required by applicable law,
               subject to continuing confidentiality and security obligations.

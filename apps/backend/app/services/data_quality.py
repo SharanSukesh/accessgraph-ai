@@ -648,30 +648,27 @@ class DataQualityService:
         # exact set of duplicate clusters (up to SF's 2000-cluster
         # ceiling — see future_v2_items.md for the Bulk API opt-in
         # that lifts this).
-        dup_key = DUPLICATE_KEY_FIELDS.get(object_name, "Name")
-        has_dup_key = any(f.get("name") == dup_key for f in fields)
-        if not has_dup_key:
-            dup_key = "Id"  # Id is never duplicated; aggregate returns []
+        dup_key: Optional[str] = DUPLICATE_KEY_FIELDS.get(object_name, "Name")
+        dup_key_field = next((f for f in fields if f.get("name") == dup_key), None)
+        if dup_key_field is None or dup_key_field.get("groupable") is False:
+            dup_key = None
 
-        dupe_clusters: List[Tuple[str, int]] = []
+        cluster_sizes: List[int] = []
         agg_dupes_truncated = False
-        if dup_key != "Id":
-            agg_dupes = await client.aggregate_duplicate_clusters(
+        duplicates_checked = False
+        if dup_key:
+            sizes = await client.aggregate_duplicate_cluster_sizes(
                 object_name, dup_key, limit=2000
             )
-            if agg_dupes is None:
+            if sizes is None:
                 logger.info(
-                    "aggregate duplicate query failed for %s — treating as 0",
-                    object_name,
+                    "aggregate duplicate query failed for %s.%s",
+                    object_name, dup_key,
                 )
-                agg_dupes = []
-            for row in agg_dupes:
-                key_val = row.get("k")
-                cnt = int(row.get("cnt", 0))
-                if key_val is None or cnt < 2:
-                    continue
-                dupe_clusters.append((str(key_val), cnt))
-            agg_dupes_truncated = len(agg_dupes) >= 2000
+            else:
+                duplicates_checked = True
+                cluster_sizes = sizes
+                agg_dupes_truncated = len(sizes) >= 2000
 
         # Overlay SF native Duplicate Rules (Option C) — if the org
         # has active dup rules for this SobjectType, treat SF's own
@@ -686,7 +683,7 @@ class DataQualityService:
                     (sf_dup_rule_counts or {}).get(str(rule_id), 0)
                 )
 
-        dupe_record_count = sum(c for _, c in dupe_clusters)
+        dupe_record_count = sum(cluster_sizes)
         duplicate_pct = (
             (dupe_record_count / total_records) * 100.0
             if total_records else 0.0
@@ -716,8 +713,9 @@ class DataQualityService:
                 required_names=required_names,
                 field_meta_by_name=field_meta_by_name,
                 total_records=total_records,
-                dupe_clusters=dupe_clusters,
+                cluster_sizes=cluster_sizes,
                 dup_key=dup_key,
+                duplicates_checked=duplicates_checked,
                 agg_dupes_truncated=agg_dupes_truncated,
                 sf_dup_rules=sf_rules_for_obj,
                 sf_dup_native_cluster_count=sf_native_cluster_count,
@@ -747,12 +745,12 @@ class DataQualityService:
             staleness_pct=staleness_pct,
             fields_inspected=len(required_names),
             fields_with_gaps=fields_with_gaps,
-            duplicate_clusters=len(dupe_clusters) + (
+            duplicate_clusters=len(cluster_sizes) + (
                 # If SF has its own active dup rules, surface the
                 # higher of "our GROUP BY cluster count" or "SF's
                 # DuplicateRecordSet count" so the number matches
                 # what the admin sees in Setup.
-                max(0, sf_native_cluster_count - len(dupe_clusters))
+                max(0, sf_native_cluster_count - len(cluster_sizes))
                 if sf_rules_for_obj else 0
             ),
             stale_record_count=stale_count,
@@ -831,6 +829,11 @@ class DataQualityService:
                 return False
             # Compound + binary types blow up MALFORMED_QUERY.
             if (f.get("type") or "").lower() in UNQUERYABLE_TYPES:
+                return False
+            # Completeness is measured with COUNT(field); long/rich text
+            # and multipicklists can't be aggregated and would fail the
+            # combined query for the whole object.
+            if f.get("aggregatable") is False:
                 return False
             return True
 
@@ -1095,8 +1098,9 @@ class DataQualityService:
         required_names: List[str],
         field_meta_by_name: Dict[str, Dict[str, bool]],
         total_records: int,
-        dupe_clusters: List[Tuple[str, int]],
-        dup_key: str,
+        cluster_sizes: List[int],
+        dup_key: Optional[str],
+        duplicates_checked: bool,
         agg_dupes_truncated: bool,
         sf_dup_rules: List[Dict[str, Any]],
         sf_dup_native_cluster_count: int,
@@ -1110,8 +1114,9 @@ class DataQualityService:
         Aggregate-methodology payload (Options A + C):
           - Field gap %s are exact across the entire object (COUNT-based),
             not sample-derived.
-          - Duplicate examples come from SOQL GROUP BY (top 2000 clusters
-            by SF ceiling; `duplicates_truncated` flags if we hit it).
+          - Duplicate cluster SIZES come from SOQL GROUP BY on a key field
+            that is never selected (top 2000 clusters by SF ceiling;
+            `duplicates_truncated` flags if we hit it).
           - `sf_duplicate_rules` lists SF's own active rules for the
             object + how many DuplicateRecordSets each has produced,
             so the drilldown can point admins at Setup instead of asking
@@ -1136,8 +1141,6 @@ class DataQualityService:
             reverse=True,
         )[:5]
 
-        # Top 5 duplicate clusters by count (from aggregate GROUP BY).
-        dup_examples = sorted(dupe_clusters, key=lambda t: t[1], reverse=True)[:5]
 
         # SF native Duplicate Rules — pass through so the frontend can
         # deep-link to Setup > Duplicate Rules and show "SF already
@@ -1158,9 +1161,8 @@ class DataQualityService:
             "methodology": "aggregate_soql",
             "gap_fields": top_gaps,
             "duplicate_key": dup_key,
-            "duplicate_examples": [
-                {"key": key, "count": count} for key, count in dup_examples
-            ],
+            "duplicates_checked": duplicates_checked,
+            "duplicate_cluster_sizes": cluster_sizes[:5],
             "duplicates_truncated": agg_dupes_truncated,
             "sf_duplicate_rules": sf_rules_payload,
             "sf_duplicate_native_cluster_count": sf_dup_native_cluster_count,

@@ -44,6 +44,7 @@ class SalesforceUser(BaseModel):
     # something like "2026-04-12T15:23:01.000+0000". May be null for
     # users who have never logged in (rare but real).
     LastLoginDate: Optional[str] = None
+    CreatedDate: Optional[str] = None
 
 
 class SalesforceUserRole(BaseModel):

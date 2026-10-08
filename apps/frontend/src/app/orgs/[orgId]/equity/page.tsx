@@ -234,14 +234,14 @@ function formatTimeAgo(iso: string): string {
 
 
 // Pulls the useful message out of whatever the mutation threw. The
-// API client wraps HTTP errors in ApiError with `.errorData` — the
+// API client wraps HTTP errors in ApiError with `.data` — the
 // backend surfaces the traceback message on the `detail` field. Falls
 // through to `err.message` and finally a JSON dump so the user never
 // sees "undefined".
 function formatGenerateError(err: unknown): string {
   if (!err) return 'Unknown error'
   const e = err as Record<string, unknown> & { message?: string }
-  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const errorData = (e.data as Record<string, unknown> | undefined) ?? undefined
   const detail = errorData?.detail
   if (detail && typeof detail === 'object') {
     const d = detail as Record<string, unknown>

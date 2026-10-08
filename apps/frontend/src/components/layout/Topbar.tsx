@@ -3,22 +3,29 @@
 /**
  * Topbar — Grove Refined chrome ported from the /v2 prototype.
  *
- * Client-org context on the left; quick search (⌘K), theme toggle and
- * the user menu on the right. The user menu (identity, connected-org
- * info, sign out) moved here from the Sidebar footer — same AuthContext
- * logic, new position. Purely presentational relocation: no auth or
- * routing behavior changed.
+ * Current client org (from the URL) on the left; quick search (⌘K),
+ * theme toggle and the user menu (identity, role, client-org switcher,
+ * sign out) on the right.
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Search, Command, LogOut, ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { Search, Command, LogOut, ChevronDown, ArrowLeftRight } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { openCommandPalette } from '@/components/shared/CommandPalette'
+import { OrgEnvPill } from '@/components/shared/OrgEnvPill'
 import { useAuth } from '@/lib/auth/AuthContext'
 
+const ROLE_LABELS: Record<string, string> = {
+  org_admin: 'Admin',
+  analyst: 'Analyst',
+  viewer: 'Viewer',
+  auditor: 'Auditor',
+}
+
 export function Topbar() {
-  const { user, orgUser, logout } = useAuth()
+  const { user, currentOrg, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -33,10 +40,8 @@ export function Topbar() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  const identityLabel =
-    orgUser?.name || orgUser?.email || user?.org_name || 'Account'
-  const identitySublabel =
-    orgUser?.email && orgUser?.name ? orgUser.email : user?.org_domain || null
+  const identityLabel = user?.name || user?.email || 'Account'
+  const identitySublabel = user?.name ? user.email : null
   const avatarLetter = identityLabel.charAt(0).toUpperCase() || 'U'
 
   return (
@@ -49,14 +54,29 @@ export function Topbar() {
         <p className="v2-micro text-grove-ink/45 dark:text-grove-ink-dk/45">
           Client org
         </p>
-        <p className="truncate text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
-          {user?.org_name || 'Not connected'}
-          {user?.org_domain && (
-            <span className="ml-2 text-xs font-normal text-grove-ink/50 dark:text-grove-ink-dk/50">
-              {user.org_domain}
-            </span>
-          )}
-        </p>
+        {currentOrg ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="truncate text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+              {currentOrg.name}
+            </p>
+            <OrgEnvPill isSandbox={currentOrg.is_sandbox} />
+            <Link
+              href="/orgs"
+              className="inline-flex shrink-0 items-center gap-1 text-xs text-grove-ink/50 transition-colors hover:text-primary-700 dark:text-grove-ink-dk/50 dark:hover:text-primary-400"
+              title="Switch client org"
+            >
+              <ArrowLeftRight className="h-3 w-3" />
+              Switch
+            </Link>
+          </div>
+        ) : (
+          <Link
+            href="/orgs"
+            className="text-sm font-semibold text-primary-700 hover:underline dark:text-primary-400"
+          >
+            Select a client org
+          </Link>
+        )}
       </div>
 
       <div className="ml-auto flex items-center gap-3">
@@ -113,24 +133,21 @@ export function Topbar() {
               {user && (
                 <div className="border-b border-grove-border px-4 py-3 dark:border-grove-border-dk">
                   <p className="v2-micro text-grove-ink/50 dark:text-grove-ink-dk/50">
-                    Connected to
+                    Role
                   </p>
-                  <p
-                    className="mt-0.5 truncate text-sm font-medium text-grove-ink dark:text-grove-ink-dk"
-                    title={user.org_name}
-                  >
-                    {user.org_name || 'Unknown Org'}
+                  <p className="mt-0.5 text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
+                    {ROLE_LABELS[user.role] ?? user.role}
                   </p>
-                  {user.org_domain && (
-                    <p
-                      className="truncate text-xs text-grove-ink/55 dark:text-grove-ink-dk/55"
-                      title={user.org_domain}
-                    >
-                      {user.org_domain}
-                    </p>
-                  )}
                 </div>
               )}
+              <Link
+                href="/orgs"
+                onClick={() => setMenuOpen(false)}
+                className="flex w-full items-center border-b border-grove-border px-4 py-2.5 text-left text-sm text-grove-ink/85 transition-colors hover:bg-primary-50 hover:text-primary-700 dark:border-grove-border-dk dark:text-grove-ink-dk/85 dark:hover:bg-primary-900/20 dark:hover:text-primary-400"
+              >
+                <ArrowLeftRight className="mr-2 h-4 w-4" />
+                Client orgs
+              </Link>
               <button
                 type="button"
                 onClick={async () => {

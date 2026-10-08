@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access, require_org_admin
 from app.domain.models import ProfileSnapshot, RoleSnapshot, UserSnapshot
 from app.services.reporting_graph_service import (
     ReportingGraphService,
@@ -97,7 +97,7 @@ class ApplyResponse(BaseModel):
 )
 async def get_reporting_graph(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> ReportingGraphResponse:
     """Current manager + delegated-approver edges for the canvas.
@@ -106,12 +106,6 @@ async def get_reporting_graph(
     from nodes but kept on the source side of edges if they appear as a
     subordinate elsewhere — keeps the graph from breaking on archival.
     """
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's reporting graph.",
-        )
-
     users = (await db.execute(
         select(UserSnapshot).where(
             UserSnapshot.organization_id == org_id,
@@ -198,7 +192,7 @@ async def apply_reporting_graph_edits(
     org_id: str,
     payload: ApplyRequest,
     request: Request,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_admin),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> ApplyResponse:
@@ -209,11 +203,6 @@ async def apply_reporting_graph_edits(
     Partial-failure semantics: returns one EditResult per edit; success
     field tells the frontend which to retry / surface as errors.
     """
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot edit another org's reporting graph.",
-        )
     if not payload.edits:
         return ApplyResponse(total=0, succeeded=0, failed=0, results=[])
 

@@ -1016,7 +1016,7 @@ function formatRelative(iso: string): string {
 function formatRunError(err: unknown): string {
   if (!err) return 'Unknown error'
   const e = err as Record<string, unknown> & { message?: string }
-  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const errorData = (e.data as Record<string, unknown> | undefined) ?? undefined
   const detail = errorData?.detail as
     | Record<string, unknown>
     | string

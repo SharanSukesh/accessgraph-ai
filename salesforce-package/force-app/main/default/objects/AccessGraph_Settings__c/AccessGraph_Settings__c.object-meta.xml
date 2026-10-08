@@ -19,6 +19,18 @@
     </fields>
 
     <fields>
+        <fullName>Package_Key__c</fullName>
+        <description>Key issued by Newton (Client org settings, "Generate package key"). Sent as X-Newton-Package-Key on every callout.</description>
+        <externalId>false</externalId>
+        <label>Package Key</label>
+        <length>255</length>
+        <required>false</required>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+
+    <fields>
         <fullName>Organization_ID__c</fullName>
         <description>AccessGraph AI Organization ID (auto-populated on installation)</description>
         <externalId>false</externalId>

@@ -41,7 +41,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import (
     RestructureMove,
     RestructureMoveStatus,
@@ -242,13 +242,6 @@ class ConstraintCreatePayload(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's restructure data.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -324,7 +317,7 @@ async def run_restructure(
         description="Two Roles flagged as merge candidates when their "
                     "member profile+PSet overlap exceeds this.",
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
@@ -335,7 +328,6 @@ async def run_restructure(
     persists everything in one DB transaction. Typical runtime ~2-10s
     depending on org size (dominated by the O(n²) PSet pairs pass).
     """
-    _enforce_same_org(org_id, current_org_id)
 
     service = RestructurePlannerService(
         db,
@@ -371,14 +363,13 @@ async def run_restructure(
 )
 async def get_latest_summary(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
     """Headline stats for the last run. Returns has_data=False when
     no run has ever been created, so the Studio can render an empty
     state cleanly on first visit.
     """
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -459,7 +450,7 @@ async def list_moves(
     ),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> MoveListResponse:
     """Paginated move list from the latest run. Filter chips on the
@@ -467,7 +458,6 @@ async def list_moves(
     applied on the frontend since v1 lists are always fully loaded
     within the 500-cap.
     """
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return MoveListResponse(run_id=None, total=0, moves=[])
@@ -512,12 +502,11 @@ async def list_moves(
 async def get_move(
     org_id: str,
     move_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> MoveResponse:
     """Full move detail — same shape as the list-item response but
     fetched by ID. Used by the Studio's per-move drawer."""
-    _enforce_same_org(org_id, current_org_id)
     move = await _get_move(db, org_id, move_id)
     return MoveResponse.from_orm(move)
 
@@ -530,7 +519,7 @@ async def update_move(
     org_id: str,
     move_id: str,
     payload: MoveUpdatePayload,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> MoveResponse:
@@ -538,7 +527,6 @@ async def update_move(
     so omitted keys leave the row untouched. Status updates get validated
     against the enum before persistence.
     """
-    _enforce_same_org(org_id, current_org_id)
     move = await _get_move(db, org_id, move_id)
 
     updates = payload.model_dump(exclude_unset=True)
@@ -588,7 +576,7 @@ async def deep_analyze_move(
         description="Records to probe per key object for record-level "
                     "impact scoring (Option B). 1000 gives ~3% margin.",
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> MoveResponse:
@@ -603,7 +591,6 @@ async def deep_analyze_move(
     persist an empty result set (no record-level effect) so the UI
     can render "no impact" and skip re-probing.
     """
-    _enforce_same_org(org_id, current_org_id)
     # Verify move existence + org up front so a 404 doesn't come from
     # deep inside the probe service.
     await _get_move(db, org_id, move_id)
@@ -645,11 +632,10 @@ async def list_plans(
         description="Filter to plans under a specific run. Defaults to the "
                     "latest run.",
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[PlanResponse]:
     """List plans for the given (or latest) run."""
-    _enforce_same_org(org_id, current_org_id)
     if run_id is None:
         run = await _latest_run(db, org_id)
         if run is None:
@@ -676,10 +662,9 @@ async def list_plans(
 async def get_plan(
     org_id: str,
     plan_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> PlanResponse:
-    _enforce_same_org(org_id, current_org_id)
     plan = await _get_plan(db, org_id, plan_id)
     return PlanResponse.from_orm(plan)
 
@@ -692,12 +677,11 @@ async def get_plan(
 async def create_plan(
     org_id: str,
     payload: PlanCreatePayload,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> PlanResponse:
     """Create a draft plan for a run."""
-    _enforce_same_org(org_id, current_org_id)
     # Verify the run belongs to this org so we don't get cross-org
     # plan attachment via a spoofed run_id.
     run = await db.execute(
@@ -736,12 +720,11 @@ async def update_plan(
     org_id: str,
     plan_id: str,
     payload: PlanUpdatePayload,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> PlanResponse:
     """Rename, mark approved/archived, or reorder the accepted moves."""
-    _enforce_same_org(org_id, current_org_id)
     plan = await _get_plan(db, org_id, plan_id)
 
     updates = payload.model_dump(exclude_unset=True)
@@ -786,7 +769,7 @@ async def update_plan(
 async def export_plan_csv(
     org_id: str,
     plan_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
     """CSV export of the accepted moves in a plan, in execution order.
@@ -796,7 +779,6 @@ async def export_plan_csv(
     """
     from fastapi.responses import PlainTextResponse
 
-    _enforce_same_org(org_id, current_org_id)
     plan = await _get_plan(db, org_id, plan_id)
 
     header = (
@@ -866,10 +848,9 @@ async def list_constraints(
         description="Filter to constraints under a specific run. Defaults "
                     "to the latest run.",
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[ConstraintResponse]:
-    _enforce_same_org(org_id, current_org_id)
     if run_id is None:
         run = await _latest_run(db, org_id)
         if run is None:
@@ -897,11 +878,10 @@ async def list_constraints(
 async def create_constraint(
     org_id: str,
     payload: ConstraintCreatePayload,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> ConstraintResponse:
-    _enforce_same_org(org_id, current_org_id)
     # Verify the run belongs to this org.
     run = await db.execute(
         select(RestructureRun).where(
@@ -947,10 +927,9 @@ async def create_constraint(
 async def delete_constraint(
     org_id: str,
     constraint_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(RestructurePreservationConstraint).where(
             RestructurePreservationConstraint.id == constraint_id,

@@ -18,7 +18,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import ChangeAuditEvent, ChangeAuditRun
 from app.services.change_risk_radar import ChangeRiskRadarService
 
@@ -119,13 +119,6 @@ class HistoryPoint(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's change-risk data.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -177,7 +170,7 @@ async def run_change_risk(
         description="Comma-separated Python weekday indices "
                     "(Mon=0, Sun=6) that count as business days.",
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
@@ -186,7 +179,6 @@ async def run_change_risk(
     Typically 5-30 seconds. If it grows past ~60s we should move to
     the async background pattern the sync-job uses.
     """
-    _enforce_same_org(org_id, current_org_id)
 
     # Parse the weekday list defensively — any junk falls back to
     # weekdays. Bounded to 0-6 so a mischievous client can't confuse
@@ -237,13 +229,12 @@ async def run_change_risk(
 )
 async def get_latest_summary(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
     """Headline stats for the most recent run — powers the KPI cards
     on the /change-risk page. Returns has_data=False so the page can
     render an empty-state on first visit."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -289,13 +280,12 @@ async def list_events(
     actor: Optional[str] = Query(None, description="Filter by actor name."),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> EventListResponse:
     """Paginated timeline. Orders most-recent first, applies optional
     filters (tier / section / actor).
     """
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return EventListResponse(run_id=None, total=0, events=[])
@@ -337,11 +327,10 @@ async def list_events(
 async def get_history(
     org_id: str,
     limit: int = Query(30, ge=1, le=100),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
     """Score-over-time trend for the sparkline on the KPI card."""
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(ChangeAuditRun)
         .where(ChangeAuditRun.organization_id == org_id)
@@ -369,7 +358,7 @@ async def update_event_review(
     org_id: str,
     event_id: str,
     payload: EventReviewUpdate,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> EventResponse:
@@ -378,7 +367,6 @@ async def update_event_review(
     fields the client explicitly sent get modified — omitting a key
     leaves the existing value alone, sending `null` clears it.
     """
-    _enforce_same_org(org_id, current_org_id)
 
     result = await db.execute(
         select(ChangeAuditEvent).where(

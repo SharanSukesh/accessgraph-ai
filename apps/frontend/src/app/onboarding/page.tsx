@@ -6,14 +6,19 @@
  */
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Building2, ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { Segmented } from '@/components/v2/primitives'
+import { useAuth, type SalesforceEnv } from '@/lib/auth/AuthContext'
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const { canWrite, connectSalesforce } = useAuth()
   const [step, setStep] = useState(1)
+  const [env, setEnv] = useState<SalesforceEnv>('production')
 
   const steps = [
     {
@@ -131,6 +136,22 @@ export default function OnboardingPage() {
                     </li>
                   </ul>
                 </div>
+                <div>
+                  <p className="v2-micro mb-2 text-grove-ink/60 dark:text-grove-ink-dk/60">
+                    Org type
+                  </p>
+                  <Segmented
+                    options={[
+                      { key: 'production', label: 'Production' },
+                      { key: 'sandbox', label: 'Sandbox' },
+                    ]}
+                    value={env}
+                    onChange={(k) => setEnv(k as SalesforceEnv)}
+                  />
+                  <p className="mt-2 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                    Sandboxes sign in through test.salesforce.com.
+                  </p>
+                </div>
               </>
             )}
 
@@ -204,24 +225,13 @@ export default function OnboardingPage() {
           </Button>
           <Button
             variant="primary"
+            disabled={step === 3 && !canWrite}
+            title={step === 3 && !canWrite ? 'Your role is read-only. Ask an admin to connect this org.' : undefined}
             onClick={() => {
               if (step < 3) {
                 setStep(step + 1)
               } else {
-                // Redirect to Salesforce OAuth. Forward env=sandbox if present
-                // in URL or sessionStorage (so sandbox/scratch orgs go to
-                // test.salesforce.com).
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
-                let env: string | null = null
-                if (typeof window !== 'undefined') {
-                  env =
-                    new URLSearchParams(window.location.search).get('env') ||
-                    window.sessionStorage.getItem('accessgraph_env')
-                }
-                const url = env
-                  ? `${apiUrl}/auth/salesforce/authorize?env=${encodeURIComponent(env)}`
-                  : `${apiUrl}/auth/salesforce/authorize`
-                window.location.href = url
+                connectSalesforce(env)
               }
             }}
           >
@@ -233,14 +243,10 @@ export default function OnboardingPage() {
         {/* Help Text */}
         <div className="mt-8 text-center text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 max-w-2xl mx-auto">
           <p>
-            Need help? Check out our{' '}
-            <a href="#" className="text-primary-600 dark:text-primary-400 hover:underline">
-              documentation
-            </a>{' '}
-            or{' '}
-            <a href="#" className="text-primary-600 dark:text-primary-400 hover:underline">
-              contact support
-            </a>
+            Already connected this org?{' '}
+            <Link href="/orgs" className="text-primary-600 dark:text-primary-400 hover:underline">
+              Open it from your client orgs
+            </Link>
           </p>
         </div>
       </div>

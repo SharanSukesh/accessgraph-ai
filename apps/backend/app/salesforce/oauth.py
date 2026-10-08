@@ -6,7 +6,7 @@ import base64
 import hashlib
 import logging
 import secrets
-from typing import Optional, Dict
+from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
@@ -16,10 +16,6 @@ from app.core.config import settings
 from app.salesforce.models import OAuthTokenResponse
 
 logger = logging.getLogger(__name__)
-
-# In-memory store for code verifiers (in production, use Redis/session)
-_code_verifiers: Dict[str, str] = {}
-
 
 class SalesforceOAuthClient:
     """
@@ -39,7 +35,8 @@ class SalesforceOAuthClient:
         self.redirect_uri = redirect_uri or settings.SALESFORCE_REDIRECT_URI
         self.login_url = login_url or settings.SALESFORCE_LOGIN_URL
 
-    def _generate_code_verifier(self) -> str:
+    @staticmethod
+    def generate_code_verifier() -> str:
         """Generate PKCE code verifier"""
         return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
 
@@ -50,14 +47,15 @@ class SalesforceOAuthClient:
 
     def get_authorization_url(
         self,
-        state: Optional[str] = None,
+        state: str,
+        code_verifier: str,
         prompt: Optional[str] = None,
     ) -> str:
         """
         Generate OAuth authorization URL with PKCE
 
         Args:
-            state: Optional state parameter for CSRF protection
+            state: CSRF state, echoed back to the callback
             prompt: Optional OAuth 'prompt' parameter. Pass 'login' to force
                 Salesforce to show the login screen even when an active
                 session exists - used after explicit logout so users can
@@ -66,13 +64,7 @@ class SalesforceOAuthClient:
         Returns:
             Authorization URL
         """
-        # Generate PKCE code verifier and challenge
-        code_verifier = self._generate_code_verifier()
         code_challenge = self._generate_code_challenge(code_verifier)
-
-        # Store code verifier for later use in token exchange
-        if state:
-            _code_verifiers[state] = code_verifier
 
         params = {
             "response_type": "code",
@@ -93,8 +85,7 @@ class SalesforceOAuthClient:
             "scope": "full refresh_token",
         }
 
-        if state:
-            params["state"] = state
+        params["state"] = state
         if prompt:
             params["prompt"] = prompt
 
@@ -106,13 +97,13 @@ class SalesforceOAuthClient:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
     )
-    async def exchange_code_for_token(self, code: str, state: Optional[str] = None) -> OAuthTokenResponse:
+    async def exchange_code_for_token(self, code: str, code_verifier: str) -> OAuthTokenResponse:
         """
         Exchange authorization code for access token with PKCE
 
         Args:
             code: Authorization code from callback
-            state: State parameter to retrieve code verifier
+            code_verifier: PKCE verifier minted at /authorize
 
         Returns:
             OAuthTokenResponse with access_token and refresh_token
@@ -128,13 +119,8 @@ class SalesforceOAuthClient:
             "client_id": self.client_id,
             "client_secret": self.client_secret,
             "redirect_uri": self.redirect_uri,
+            "code_verifier": code_verifier,
         }
-
-        # Add code verifier for PKCE
-        if state and state in _code_verifiers:
-            data["code_verifier"] = _code_verifiers[state]
-            # Clean up the verifier after use
-            del _code_verifiers[state]
 
         async with httpx.AsyncClient() as client:
             response = await client.post(token_url, data=data)

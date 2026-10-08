@@ -16,7 +16,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import AutomationInventoryItem, AutomationSprawlRun
 from app.services.automation_sprawl import AutomationSprawlService
 
@@ -131,13 +131,6 @@ class HistoryPoint(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's automation-sprawl data.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -160,14 +153,13 @@ async def _latest_run(
 )
 async def run_automation_sprawl(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
     """Kick off an automation sprawl pull. Two Tooling API queries
     (FlowDefinitionView + ApexTrigger), so typically 5-15 seconds
     even on large orgs."""
-    _enforce_same_org(org_id, current_org_id)
     service = AutomationSprawlService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email)
@@ -199,12 +191,11 @@ async def run_automation_sprawl(
 )
 async def get_latest_summary(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
     """KPI + tier rollup. has_data=False when no run has ever run
     for this org so the frontend can render an empty state."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -266,12 +257,11 @@ async def list_items(
     ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> ItemListResponse:
     """Per-item list from the latest run. Ordered by tier
     actionability (broken first) then by staleness within tier."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return ItemListResponse(run_id=None, total=0, items=[])
@@ -347,10 +337,9 @@ async def list_items(
 async def get_history(
     org_id: str,
     limit: int = Query(30, ge=1, le=100),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(AutomationSprawlRun)
         .where(AutomationSprawlRun.organization_id == org_id)

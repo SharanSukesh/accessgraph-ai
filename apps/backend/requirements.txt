@@ -10,7 +10,7 @@ pydantic-settings>=2.6.0
 email-validator>=2.0.0
 
 # Database - PostgreSQL / SQLite
-sqlalchemy>=2.0.25
+sqlalchemy>=2.0.25,<2.1  # sqlalchemy-utils (EncryptedString) breaks on 2.1
 # asyncpg requires compilation on Python 3.14 - use psycopg3 instead
 psycopg[binary]>=3.2.0
 aiosqlite>=0.20.0

@@ -5,7 +5,7 @@ The web app's Reporting Graph editor (drag-and-drop Cytoscape canvas)
 collects pending edge edits client-side, then POSTs them here as a batch.
 This service:
 
-  1. Authorizes the actor (must have OrgUserRole.ORG_ADMIN for this org).
+  1. Authorization (ORG_ADMIN) is enforced by the route via require_org_admin.
   2. Refreshes the SF access token if expired.
   3. For each edit, PATCHes the Salesforce User record then updates the
      local UserSnapshot so the equity graph reflects the change immediately
@@ -32,8 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import (
     AuditAction,
     AuditLog,
-    OrgUser,
-    OrgUserRole,
     UserSnapshot,
 )
 from app.services.salesforce_sync import SalesforceSyncService
@@ -76,50 +74,6 @@ class ReportingGraphService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _authorize_org_admin(
-        self, org_id: str, actor_email: str
-    ) -> Optional[OrgUser]:
-        """Authorize the actor for write access on this org's reporting graph.
-
-        Rules, evaluated in order:
-          1. If an OrgUser row exists for (org, email) with ORG_ADMIN role,
-             authorize.
-          2. If the org has NO OrgUser rows at all (RBAC not yet set up —
-             common on fresh installs where nobody's run the bootstrap),
-             authorize implicitly. The OAuth handshake that authenticated
-             the user is itself an admin-grade trust signal.
-          3. Otherwise raise PermissionError → 403.
-
-        This implicit-admin-until-explicit-RBAC pattern matches the
-        early-stage product reality: every customer right now is single-
-        admin per org. Once anyone is explicitly granted ORG_ADMIN, the
-        check becomes strict (no more implicit access).
-        """
-        result = await self.db.execute(
-            select(OrgUser).where(OrgUser.organization_id == org_id)
-        )
-        org_users = list(result.scalars().all())
-
-        # Rule 1: explicit ORG_ADMIN match
-        for u in org_users:
-            if u.email == actor_email and u.role == OrgUserRole.ORG_ADMIN:
-                return u
-
-        # Rule 2: implicit admin (no RBAC configured yet)
-        if not org_users:
-            logger.info(
-                "Reporting graph: no OrgUser RBAC for org %s; allowing "
-                "actor %s under implicit-admin rule.",
-                org_id, actor_email,
-            )
-            return None
-
-        # Rule 3: RBAC is set up but this actor isn't an admin → deny
-        raise PermissionError(
-            "Only ORG_ADMIN users can edit the reporting graph for this org. "
-            f"Actor '{actor_email}' is not in the ORG_ADMIN list for this org."
-        )
-
     async def _prior_value(
         self, org_id: str, user_sf_id: str, field: str
     ) -> Optional[str]:
@@ -151,7 +105,6 @@ class ReportingGraphService:
         failures are visible in app logs but don't pollute the audit trail.
         """
         # Authorization happens once for the whole batch.
-        await self._authorize_org_admin(org_id, actor_email)
 
         # Sanity-validate every edit before any mutation. If any field is
         # outside the allowlist, fail the whole batch (defensive — the

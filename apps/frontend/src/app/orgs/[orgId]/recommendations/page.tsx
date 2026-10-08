@@ -29,12 +29,40 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
-import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
+import {
+  useRecommendations,
+  useUpdateRecommendationStatus,
+  type RecommendationStatus,
+} from '@/lib/api/hooks/useRecommendations'
+import { useAuth } from '@/lib/auth/AuthContext'
+
+// Backend statuses (RecommendationStatus enum) and the triage wording
+// this page uses for them.
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Pending',
+  accepted: 'In progress',
+  applied: 'Completed',
+  rejected: 'Dismissed',
+  deferred: 'Deferred',
+}
+
+const statusBadgeVariant = (status: string) =>
+  status === 'applied'
+    ? 'success'
+    : status === 'accepted'
+    ? 'info'
+    : status === 'rejected' || status === 'deferred'
+    ? 'default'
+    : 'warning'
 
 export default function RecommendationsPage() {
   const params = useParams()
   const router = useRouter()
   const orgId = params.orgId as string
+  const { canWrite } = useAuth()
+  const updateStatus = useUpdateRecommendationStatus()
+  const [bulkPending, setBulkPending] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const [search, setSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState<string>('')
@@ -75,6 +103,36 @@ export default function RecommendationsPage() {
     setSelectedIds(newSet)
   }
 
+  const handleSetStatus = async (status: RecommendationStatus) => {
+    if (!selectedRec) return
+    setActionError(null)
+    try {
+      const updated = await updateStatus.mutateAsync({ recId: selectedRec.id, status })
+      setSelectedRec({ ...selectedRec, status: updated?.status ?? status })
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update the recommendation.')
+    }
+  }
+
+  const handleBulkSetStatus = async (status: RecommendationStatus) => {
+    setActionError(null)
+    setBulkPending(true)
+    const ids = Array.from(selectedIds)
+    const results = await Promise.allSettled(
+      ids.map((recId) => updateStatus.mutateAsync({ recId, status })),
+    )
+    setBulkPending(false)
+    const failedIds = ids.filter((_, i) => results[i].status === 'rejected')
+    // Keep only the failures selected so they can be retried.
+    setSelectedIds(new Set(failedIds))
+    if (failedIds.length > 0) {
+      setActionError(`${failedIds.length} of ${ids.length} recommendations could not be updated.`)
+    }
+    if (selectedRec && ids.includes(selectedRec.id) && !failedIds.includes(selectedRec.id)) {
+      setSelectedRec({ ...selectedRec, status })
+    }
+  }
+
   const handleExport = () => {
     if (!recommendations) return
     const data = recommendations.map((rec: any) => ({
@@ -104,8 +162,8 @@ export default function RecommendationsPage() {
   }
 
   const pendingCount = recommendations?.filter((r: any) => r.status === 'pending').length || 0
-  const inProgressCount = recommendations?.filter((r: any) => r.status === 'in_progress').length || 0
-  const completedCount = recommendations?.filter((r: any) => r.status === 'completed').length || 0
+  const inProgressCount = recommendations?.filter((r: any) => r.status === 'accepted').length || 0
+  const completedCount = recommendations?.filter((r: any) => r.status === 'applied').length || 0
 
   return (
     <div className="space-y-6">
@@ -271,9 +329,10 @@ export default function RecommendationsPage() {
             >
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="dismissed">Dismissed</option>
+              <option value="accepted">In Progress</option>
+              <option value="applied">Completed</option>
+              <option value="rejected">Dismissed</option>
+              <option value="deferred">Deferred</option>
             </select>
           </div>
         </CardContent>
@@ -289,7 +348,7 @@ export default function RecommendationsPage() {
                 <CardTitle>
                   {recommendations ? `${recommendations.length} Recommendations` : 'Recommendations'}
                 </CardTitle>
-                {recommendations && recommendations.length > 0 && (
+                {canWrite && recommendations && recommendations.length > 0 && (
                   <button
                     onClick={handleSelectAll}
                     className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
@@ -314,13 +373,15 @@ export default function RecommendationsPage() {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        {/* Checkbox */}
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(rec.id)}
-                          onChange={() => handleToggleSelect(rec.id)}
-                          className="mt-1 rounded border-grove-border text-primary-600 focus:ring-primary-500"
-                        />
+                        {/* Checkbox — selection only feeds bulk status actions */}
+                        {canWrite && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(rec.id)}
+                            onChange={() => handleToggleSelect(rec.id)}
+                            className="mt-1 rounded border-grove-border text-primary-600 focus:ring-primary-500"
+                          />
+                        )}
 
                         {/* Content */}
                         <div
@@ -343,19 +404,8 @@ export default function RecommendationsPage() {
                                   </Badge>
                                 )}
                                 <SeverityBadge severity={rec.severity} />
-                                <Badge
-                                  variant={
-                                    rec.status === 'completed'
-                                      ? 'success'
-                                      : rec.status === 'in_progress'
-                                      ? 'info'
-                                      : rec.status === 'dismissed'
-                                      ? 'default'
-                                      : 'warning'
-                                  }
-                                  size="sm"
-                                >
-                                  {rec.status?.replace(/_/g, ' ')}
+                                <Badge variant={statusBadgeVariant(rec.status)} size="sm">
+                                  {STATUS_LABEL[rec.status] ?? rec.status}
                                 </Badge>
                               </div>
                               <h3 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
@@ -420,18 +470,8 @@ export default function RecommendationsPage() {
                   <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
                     Status
                   </div>
-                  <Badge
-                    variant={
-                      selectedRec.status === 'completed'
-                        ? 'success'
-                        : selectedRec.status === 'in_progress'
-                        ? 'info'
-                        : selectedRec.status === 'dismissed'
-                        ? 'default'
-                        : 'warning'
-                    }
-                  >
-                    {selectedRec.status?.replace(/_/g, ' ')}
+                  <Badge variant={statusBadgeVariant(selectedRec.status)}>
+                    {STATUS_LABEL[selectedRec.status] ?? selectedRec.status}
                   </Badge>
                 </div>
 
@@ -470,17 +510,37 @@ export default function RecommendationsPage() {
                   </div>
                 )}
 
-                <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk space-y-2">
-                  <Button size="sm" variant="primary" className="w-full">
-                    Mark as In Progress
-                  </Button>
-                  <Button size="sm" variant="secondary" className="w-full">
-                    Mark as Completed
-                  </Button>
-                  <Button size="sm" variant="ghost" className="w-full">
-                    Dismiss
-                  </Button>
-                </div>
+                {canWrite && (
+                  <div className="pt-4 border-t border-grove-border dark:border-grove-border-dk space-y-2">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      className="w-full"
+                      disabled={updateStatus.isPending || selectedRec.status === 'accepted'}
+                      onClick={() => handleSetStatus('accepted')}
+                    >
+                      Mark as In Progress
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="w-full"
+                      disabled={updateStatus.isPending || selectedRec.status === 'applied'}
+                      onClick={() => handleSetStatus('applied')}
+                    >
+                      Mark as Completed
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full"
+                      disabled={updateStatus.isPending || selectedRec.status === 'rejected'}
+                      onClick={() => handleSetStatus('rejected')}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -501,20 +561,47 @@ export default function RecommendationsPage() {
             </Card>
           )}
 
+          {actionError && (
+            <div className="flex items-start gap-2 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/15 ring-1 ring-red-200 dark:ring-red-900 rounded-md p-2.5">
+              <span className="flex-1 leading-relaxed">{actionError}</span>
+              <button type="button" onClick={() => setActionError(null)} aria-label="Dismiss error">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Bulk Actions */}
-          {selectedIds.size > 0 && (
+          {canWrite && selectedIds.size > 0 && (
             <Card variant="bordered">
               <CardHeader>
                 <CardTitle>Bulk Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button size="sm" variant="primary" className="w-full">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="w-full"
+                  disabled={bulkPending}
+                  onClick={() => handleBulkSetStatus('accepted')}
+                >
                   Mark {selectedIds.size} as In Progress
                 </Button>
-                <Button size="sm" variant="secondary" className="w-full">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={bulkPending}
+                  onClick={() => handleBulkSetStatus('applied')}
+                >
                   Mark {selectedIds.size} as Completed
                 </Button>
-                <Button size="sm" variant="ghost" className="w-full">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full"
+                  disabled={bulkPending}
+                  onClick={() => handleBulkSetStatus('rejected')}
+                >
                   Dismiss {selectedIds.size} items
                 </Button>
               </CardContent>

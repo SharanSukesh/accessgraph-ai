@@ -2,7 +2,7 @@
 
 /**
  * Privacy Policy Page
- * GDPR-compliant privacy policy for Newton
+ * Privacy policy for Newton
  */
 
 import { Shield, Database, Lock, Eye, Trash2, FileText } from 'lucide-react'
@@ -17,11 +17,13 @@ export default function PrivacyPolicyPage() {
           Privacy Policy
         </h1>
         <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
-          Last updated: {new Date().toLocaleDateString()}
+          Last updated: October 8, 2026
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
-          Newton is committed to protecting your privacy and complying with GDPR,
-          CCPA, and other data protection regulations.
+          This policy describes what Newton reads from a connected Salesforce org, what it
+          stores, how long it keeps it, and how it can be deleted. Newton is operated by a
+          Salesforce consultancy in client engagements: the client is the data controller for
+          its Salesforce data, and the consultancy operating Newton is the data processor.
         </p>
       </div>
 
@@ -36,10 +38,12 @@ export default function PrivacyPolicyPage() {
               <Database className="h-5 w-5 text-primary-700 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Permissions-first
+                  Configuration, not record contents
                 </p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  We read permission metadata and aggregate record counts. We do not read record field values — see &quot;What we read&quot; below.
+                  We read configuration metadata, data about the org&apos;s Salesforce users
+                  (including login history), and aggregate counts. We do not read or store the
+                  contents of business records — see &quot;Information We Collect&quot; below.
                 </p>
               </div>
             </div>
@@ -47,10 +51,11 @@ export default function PrivacyPolicyPage() {
               <Lock className="h-5 w-5 text-primary-700 mt-0.5" />
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Encrypted Storage
+                  Encrypted Salesforce credentials
                 </p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  All sensitive data is encrypted with AES-256 encryption
+                  Salesforce OAuth tokens are encrypted at rest with AES-256. Data is
+                  transmitted over TLS (HTTPS).
                 </p>
               </div>
             </div>
@@ -58,10 +63,11 @@ export default function PrivacyPolicyPage() {
               <Eye className="h-5 w-5 text-primary-700 mt-0.5" />
               <div>
                 <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Full Transparency
+                  Data inventory
                 </p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  Complete data inventory available in your privacy dashboard
+                  The Privacy page for each client org in the app shows per-category counts of
+                  the records Newton holds
                 </p>
               </div>
             </div>
@@ -72,7 +78,9 @@ export default function PrivacyPolicyPage() {
                   Right to Erasure
                 </p>
                 <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  Delete all your data anytime with one click (GDPR Article 17)
+                  A Newton administrator can delete a client org, which revokes Newton&apos;s
+                  Salesforce access and permanently deletes everything stored for it (GDPR
+                  Article 17)
                 </p>
               </div>
             </div>
@@ -89,70 +97,142 @@ export default function PrivacyPolicyPage() {
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
-                1.1 Salesforce Metadata
+                1.1 Salesforce Configuration Metadata
               </h3>
               <p>
-                When you connect your Salesforce organization, we collect permission and access
-                metadata including:
+                When a client&apos;s Salesforce org is connected, Newton reads and stores its
+                configuration metadata:
               </p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>User profiles, roles, permission sets, and permission-set groups</li>
-                <li>Object and field-level permissions</li>
+                <li>Profiles, permission sets, permission set groups, and their assignments</li>
+                <li>Object permissions and field-level security (FLS)</li>
+                <li>Roles, public groups, and group membership</li>
                 <li>Sharing rules and organization-wide defaults</li>
-                <li>Public groups, team memberships, and account/opportunity share records (structural)</li>
-                <li>Login history — user, timestamp, application name, IP address</li>
-                <li>Inventories (name + owner + timestamps only) of Flows, Apex Triggers, Connected Apps, Named Credentials, Reports, and Dashboards</li>
+                <li>Installed packages</li>
+                <li>Flows, Apex class and trigger names, and Apex test coverage</li>
+                <li>Validation rules and workflow rules</li>
+                <li>Reports and dashboards (name, description, owner, last run date)</li>
+                <li>Connected apps, named credentials, and remote site settings (including endpoint URLs)</li>
+                <li>Org limits and license counts</li>
               </ul>
             </div>
 
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
-                1.2 Aggregate signals we compute (no record content read)
+                1.2 Personal Data About Salesforce Users
               </h3>
               <p>
-                Some analytics features need to know <em>how many</em> records exist or how populated a field is — but they never need the field <em>values</em>. In every case below we use Salesforce&apos;s SOQL aggregate functions (COUNT, GROUP BY) and only the numeric answer comes back to Newton.
+                Newton reads and stores the following about the client&apos;s Salesforce
+                <em> users</em> (the people who log in to the org, not the client&apos;s
+                customers):
+              </p>
+              <ul className="list-disc pl-6 mt-2 space-y-1">
+                <li>Name, username, email, title, and department</li>
+                <li>Manager and delegated approver</li>
+                <li>Active status, created date, and last login time</li>
+                <li>Profile and role</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                1.3 Login History (last 90 days)
+              </h3>
+              <p>
+                To detect login anomalies such as impossible travel or brute-force attempts,
+                Newton reads the last 90 days of Salesforce login history: login time, status,
+                application, login type, source IP address, browser, platform, and geolocation
+                (city, country, and coordinates).
+              </p>
+              <p className="mt-2">
+                Source IP addresses and coordinates are used only in memory during analysis and
+                are not stored. City, country, browser, and platform can appear in the stored
+                explanation of a detected anomaly.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                1.4 Setup Audit Trail (last 30 days)
+              </h3>
+              <p>
+                Newton reads the last 30 days of Salesforce&apos;s Setup Audit Trail: who made
+                each configuration change, when, the Setup section, and Salesforce&apos;s
+                description text of the change. The description text is written by Salesforce
+                and can name users or other items affected by the change.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                1.5 Record-Level Access Structure
+              </h3>
+              <p>
+                Newton reads account and opportunity share rows and account and opportunity
+                team membership, to analyse who can access which records. Business record IDs
+                from these rows are not stored in raw form: each is replaced with a keyed
+                one-way hash before storage. The hash is enough to count and compare records,
+                but not to identify the record in Salesforce.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                1.6 Aggregate Counts Over Business Records
+              </h3>
+              <p>
+                Some analyses need to know <em>how many</em> records exist or how populated a
+                field is. For these, Newton uses Salesforce aggregate queries and receives
+                counts, never record contents:
               </p>
               <ul className="list-disc pl-6 mt-2 space-y-2">
+                <li>Number of records per object</li>
                 <li>
-                  <strong>Data Quality scoring:</strong> for each business object we run three metadata-only queries: (a) per-field <code>COUNT(field)</code> to compute completeness, (b) <code>GROUP BY natural-key HAVING COUNT(Id) &gt; 1</code> to find duplicate clusters (Salesforce returns only the key value and its count — no record IDs, no other field content), and (c) <code>COUNT() WHERE LastModifiedDate &lt; threshold</code> to count stale rows. We also read Salesforce&apos;s native <code>DuplicateRule</code> configuration and <code>DuplicateRecordSet</code> cluster counts. No record data leaves Salesforce.
+                  Per-field fill counts (<code>COUNT</code> of populated values), used for data
+                  completeness scoring
                 </li>
                 <li>
-                  <strong>License Fit right-sizing:</strong> per-user owner counts for Account / Opportunity / Case / Lead / Contact via aggregate SOQL. No field values are stored.
+                  Number and sizes of duplicate clusters. Records are grouped inside
+                  Salesforce; the duplicated values themselves are never returned to Newton.
                 </li>
-                <li>
-                  <strong>Change Risk Radar:</strong> reads Salesforce&apos;s SetupAuditTrail — a metadata log of admin changes, not record content.
-                </li>
-              </ul>
-              <p className="mt-3 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
-                A future opt-in &quot;Deep Scan&quot; mode may read record content via Bulk API for organisations that specifically request full-scan accuracy on multi-million-row objects. That mode is off by default and requires explicit per-org admin activation with a consent modal — see our Data Processing Addendum for the safeguards.
-              </p>
-              <p className="mt-3 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
-                All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see. If your Salesforce user cannot access a custom field (for example, PHI or PCI columns), Newton cannot either.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
-                1.2 Account Information
-              </h3>
-              <p>We collect basic account information when you sign up:</p>
-              <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>Email address (for authentication)</li>
-                <li>Organization name and Salesforce Org ID</li>
-                <li>User names and emails from your Salesforce org</li>
+                <li>Counts of stale records (not modified within a threshold)</li>
+                <li>Number of records owned by each user (used for license right-sizing)</li>
+                <li>Number of open opportunities not modified in 60 days</li>
               </ul>
             </div>
 
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
-                1.3 Usage Data
+                1.7 What We Do Not Read
               </h3>
-              <p>We automatically collect usage information to improve our service:</p>
+              <p>
+                Newton does not read or store the contents of business records — for example
+                account names, contact details, opportunity amounts, or case text. Newton has
+                no feature that reads record contents; if one is ever added, this policy will
+                be updated before it is enabled.
+              </p>
+              <p className="mt-3 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+                All Salesforce queries run under the OAuth session of the Salesforce user who
+                authorised Newton, so Newton can only read what that user can see.
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                1.8 Newton Account Information
+              </h3>
+              <p>For people who sign in to Newton itself, we store:</p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>IP addresses and user agents</li>
-                <li>API access logs</li>
-                <li>Feature usage analytics</li>
+                <li>Name, email address, role, and the client orgs they have been granted</li>
+                <li>A bcrypt hash of their password (never the password itself)</li>
+                <li>
+                  Audit log entries for their sign-ins and sensitive actions, including IP
+                  address and browser user agent (see section 3)
+                </li>
               </ul>
+              <p className="mt-2">
+                Newton does not use third-party analytics or advertising tools.
+              </p>
             </div>
           </div>
         </section>
@@ -162,29 +242,54 @@ export default function PrivacyPolicyPage() {
             2. How We Use Your Information
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
-            <p>We use your data exclusively for the following purposes:</p>
+            <p>We use this data only for the following purposes:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Access Analysis:</strong> Analyze permission structures to identify
-                security risks and anomalies
+                <strong>Access Analysis:</strong> Analyse permission and sharing structures to
+                identify security risks
               </li>
               <li>
-                <strong>Recommendations:</strong> Generate AI-powered security recommendations
+                <strong>Anomaly Detection:</strong> Detect login anomalies (for example
+                impossible travel or brute force) and risky configuration changes
               </li>
               <li>
-                <strong>Visualization:</strong> Create access graphs and reports
+                <strong>Recommendations:</strong> Generate rule-based findings and
+                recommendations for the engagement
               </li>
               <li>
-                <strong>Service Delivery:</strong> Maintain and improve the Newton
-                platform
+                <strong>Visualization and Reporting:</strong> Produce access graphs, org
+                charts, and reports
               </li>
               <li>
-                <strong>Compliance:</strong> Maintain audit logs for security and compliance
+                <strong>Audit:</strong> Maintain an audit log of actions taken in Newton
               </li>
             </ul>
             <p className="mt-4 font-medium text-grove-ink dark:text-grove-ink-dk">
               We never sell or share your data with third parties for marketing purposes.
             </p>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                2.1 Changes Newton Makes in Salesforce
+              </h3>
+              <p>
+                Newton writes to Salesforce in exactly three ways. Each is optional, is
+                performed only when a Newton administrator explicitly takes the action, and is
+                recorded in the audit log:
+              </p>
+              <ul className="list-disc pl-6 mt-2 space-y-1">
+                <li>Setting a user&apos;s Manager (Org Chart editor)</li>
+                <li>Setting a user&apos;s Delegated Approver (Org Chart editor)</li>
+                <li>
+                  Deactivating users flagged as inactive or never-logged-in license holders
+                  (Health Report &quot;apply fix&quot;)
+                </li>
+              </ul>
+              <p className="mt-2">
+                Restructure Studio plans are exported for an administrator to apply manually;
+                Newton does not apply them. Newton writes nothing else to Salesforce.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -194,31 +299,39 @@ export default function PrivacyPolicyPage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              We implement industry-standard security measures to protect your data:
+              Newton applies the following measures. See{' '}
+              <a href="/legal/security" className="text-primary-700 dark:text-primary-400 hover:underline">
+                Security Practices
+              </a>{' '}
+              for detail.
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Encryption:</strong> AES-256 encryption for OAuth tokens and sensitive
-                fields
+                <strong>Encryption:</strong> Salesforce OAuth access and refresh tokens are
+                encrypted at rest with AES-256 (application-level field encryption). Other
+                stored data is not encrypted by Newton at the application level and relies on
+                the hosting provider&apos;s infrastructure.
               </li>
               <li>
-                <strong>Transport Security:</strong> TLS 1.3 for all data in transit
+                <strong>Transport Security:</strong> Data is transmitted over TLS (HTTPS)
               </li>
               <li>
-                <strong>Access Controls:</strong> Role-based access control (RBAC) for
-                dashboard users
+                <strong>Access Controls:</strong> Individual, administrator-invited Newton
+                accounts with roles; non-administrators can see only the client orgs they have
+                been granted. Account status and org access are re-checked server-side on every
+                request.
               </li>
               <li>
-                <strong>Audit Logging:</strong> Comprehensive logging of all data access and
-                modifications
+                <strong>Audit Logging:</strong> Sign-ins, access to sensitive data, syncs,
+                Salesforce connections, write-backs to Salesforce, and deletions are recorded
               </li>
               <li>
-                <strong>Security Headers:</strong> HSTS, CSP, and other security headers on all
-                responses
+                <strong>Security Headers:</strong> HSTS (when HTTPS is enforced), CSP, and
+                other security headers on API responses
               </li>
               <li>
-                <strong>Regular Audits:</strong> Periodic security assessments and penetration
-                testing
+                <strong>Independent Testing:</strong> No independent security assessment or
+                penetration test has been performed to date
               </li>
             </ul>
           </div>
@@ -229,28 +342,32 @@ export default function PrivacyPolicyPage() {
             4. Data Retention
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
-            <p>We automatically delete old data according to these retention policies:</p>
+            <p>
+              A daily job deletes data according to these retention periods. A Newton
+              administrator can also run it on demand.
+            </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Permission Snapshots:</strong> 90 days
+                <strong>Salesforce metadata and user data:</strong> deleted when not refreshed
+                by a sync for 90 days, so data from a finished engagement ages out
+                automatically
               </li>
               <li>
-                <strong>Audit Logs:</strong> 365 days (required for compliance)
+                <strong>Analysis results:</strong> 180 days (anomalies, risk scores, findings,
+                and sprawl, compliance, and data-quality results)
               </li>
               <li>
-                <strong>Sync Jobs:</strong> 30 days
+                <strong>Audit Logs:</strong> 365 days
               </li>
               <li>
-                <strong>Analysis Data:</strong> 180 days (anomalies and recommendations)
+                <strong>Sync History:</strong> 30 days (the most recent sync record is kept)
+              </li>
+              <li>
+                <strong>Consultant-authored configuration and the Salesforce connection:</strong>{' '}
+                kept until the client org is deleted (price book, report branding, saved
+                restructure plans, and VIP designations)
               </li>
             </ul>
-            <p className="mt-4">
-              You can manually delete old data or adjust retention periods in your{' '}
-              <a href="/privacy" className="text-primary-700 dark:text-primary-400 hover:underline">
-                Privacy Dashboard
-              </a>
-              .
-            </p>
           </div>
         </section>
 
@@ -260,31 +377,31 @@ export default function PrivacyPolicyPage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              Under GDPR and similar regulations, you have the following rights:
+              The client, as data controller, can exercise the following through the
+              consultancy operating Newton. Requests from individual Salesforce users should be
+              made to the client, which can forward them.
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Right to Access:</strong> View all data we store about your organization
-                in the Privacy Dashboard
+                <strong>Right to Access:</strong> The Privacy page in the app shows per-category
+                counts of what Newton holds for the org; on request, the consultancy can export
+                this inventory
               </li>
               <li>
-                <strong>Right to Rectification:</strong> Update incorrect information by
-                re-syncing with Salesforce
+                <strong>Right to Rectification:</strong> Newton&apos;s copy is read from
+                Salesforce; corrections made in Salesforce replace the stored data on the next
+                sync
               </li>
               <li>
-                <strong>Right to Erasure:</strong> Delete all data with one click (GDPR Article
-                17)
+                <strong>Right to Erasure:</strong> A Newton administrator can delete the client
+                org. This revokes Newton&apos;s OAuth grant in Salesforce and permanently
+                deletes every stored record for that org — metadata, user data, analyses,
+                reports, audit logs, and settings. It cannot be undone. (GDPR Article 17)
               </li>
               <li>
-                <strong>Right to Data Portability:</strong> Export your data in JSON format
-              </li>
-              <li>
-                <strong>Right to Object:</strong> Stop processing by disconnecting your Salesforce
-                org
-              </li>
-              <li>
-                <strong>Right to Restrict Processing:</strong> Pause sync operations while
-                maintaining data
+                <strong>Right to Object / Restrict Processing:</strong> Revoking Newton&apos;s
+                connected-app access in Salesforce stops all further reads; data already held
+                then ages out under section 4, or can be deleted immediately as above
               </li>
             </ul>
           </div>
@@ -295,13 +412,14 @@ export default function PrivacyPolicyPage() {
             6. Cookies and Tracking
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
-            <p>We use minimal cookies for:</p>
+            <p>We use only the cookies needed to operate the service:</p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Authentication (session tokens)</li>
-              <li>User preferences (theme, language)</li>
+              <li>A signed, HTTP-only, Secure session cookie with a 7-day expiry</li>
+              <li>A short-lived cookie used during the Salesforce connection (OAuth) flow</li>
             </ul>
             <p className="mt-2">
-              We do not use third-party tracking cookies or advertising pixels.
+              Display preferences are kept in your browser&apos;s local storage, not in
+              cookies. We do not use third-party tracking cookies or advertising pixels.
             </p>
           </div>
         </section>
@@ -311,19 +429,26 @@ export default function PrivacyPolicyPage() {
             7. Third-Party Services
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
-            <p>Newton relies on the following third-party subprocessors:</p>
+            <p>Newton relies on the following third parties:</p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Salesforce (OAuth + data source):</strong> Newton connects to your Salesforce org over OAuth 2.0. Salesforce is both the source of the data we analyse and a subprocessor for the OAuth token exchange.
+                <strong>Salesforce (data source):</strong> Newton connects to the client&apos;s
+                Salesforce org over OAuth 2.0. Salesforce is the source of the data Newton
+                analyses.
               </li>
               <li>
-                <strong>Railway (backend hosting + database):</strong> Runs the Newton backend and hosts the managed PostgreSQL database. Data centre region: US. Railway&apos;s security posture: <a href="https://railway.app/legal/security" className="underline">railway.app/legal/security</a>.
+                <strong>Railway (application hosting + database):</strong> Runs the Newton
+                backend API and hosts the PostgreSQL database. Data centre region: US.
+                Railway&apos;s security posture: <a href="https://railway.app/legal/security" className="underline">railway.app/legal/security</a>.
               </li>
               <li>
-                <strong>Vercel (frontend hosting):</strong> Serves the Newton web application at app.accessgraphai.com. Vercel&apos;s security posture: <a href="https://vercel.com/legal/privacy-policy" className="underline">vercel.com/legal/privacy-policy</a>.
+                <strong>Web front end:</strong> The Newton web application is served by our
+                hosting provider.
               </li>
               <li>
-                <strong>Resend (transactional email):</strong> Sends account activation and password-reset emails on our behalf. Recipient email addresses + user names + one-time activation URLs are transmitted to Resend&apos;s US API. Resend&apos;s privacy notice: <a href="https://resend.com/legal/privacy-policy" className="underline">resend.com/legal/privacy-policy</a>.
+                <strong>Resend (transactional email):</strong> Sends account invitation emails
+                only. The recipient&apos;s email address, name, and one-time activation link
+                are transmitted to Resend. Resend&apos;s privacy notice: <a href="https://resend.com/legal/privacy-policy" className="underline">resend.com/legal/privacy-policy</a>.
               </li>
             </ul>
             <p className="mt-2 text-sm">
@@ -338,13 +463,20 @@ export default function PrivacyPolicyPage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              Your data may be processed in data centers located in the United States and
-              Europe. We ensure adequate protection through:
+              Newton&apos;s database is hosted in the United States. Where personal data from
+              the EEA or UK is transferred, protection relies on:
             </p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Standard Contractual Clauses (SCCs)</li>
-              <li>GDPR-compliant hosting providers</li>
-              <li>Encryption of all data in transit and at rest</li>
+              <li>Standard Contractual Clauses (SCCs), as set out in the Data Processing Agreement</li>
+              <li>TLS (HTTPS) for data in transit</li>
+              <li>
+                AES-256 encryption of Salesforce OAuth tokens at rest; other stored data relies
+                on the hosting provider&apos;s infrastructure
+              </li>
+              <li>
+                Data minimisation: no business record contents, hashed record IDs, and login IP
+                addresses and coordinates not stored
+              </li>
             </ul>
           </div>
         </section>
@@ -360,8 +492,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Updating the "Last updated" date at the top</li>
-              <li>Sending an email notification to your registered address</li>
-              <li>Displaying a notice in the dashboard</li>
+              <li>Notifying client contacts for active engagements by email</li>
             </ul>
           </div>
         </section>

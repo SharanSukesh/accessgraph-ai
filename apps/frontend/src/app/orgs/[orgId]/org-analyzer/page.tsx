@@ -819,7 +819,7 @@ function Sparkline({ points }: { points: any[] }) {
 function FindingsTab({ orgId }: { orgId: string }) {
   // Org My Domain host — needed to absolutize the relative Setup
   // deeplinks the backend stores on findings.
-  const { user: authUser } = useAuth()
+  const { currentOrg } = useAuth()
   const [category, setCategory] = useState<FindingCategory | null>(null)
   const [severity, setSeverity] = useState<FindingSeverity | null>(null)
   const [search, setSearch] = useState('')
@@ -1163,9 +1163,9 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   value={formatMoneyCents(refreshedSelected.estimated_annual_savings_cents)}
                 />
               </div>
-              {sfOrgHref(authUser?.instance_url) && (
+              {sfOrgHref(currentOrg?.instance_url) && (
                 <a
-                  href={sfOrgHref(authUser?.instance_url)!}
+                  href={sfOrgHref(currentOrg?.instance_url)!}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-primary-700 dark:text-primary-400 hover:underline"
@@ -2061,7 +2061,7 @@ function BrandSettingsModal({
               )}
               <input
                 type="file"
-                accept="image/png,image/jpeg,image/svg+xml"
+                accept="image/png,image/jpeg"
                 onChange={handleUpload}
                 className="text-xs"
                 disabled={upload.isPending}

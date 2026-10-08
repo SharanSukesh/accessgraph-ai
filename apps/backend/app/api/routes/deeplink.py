@@ -27,18 +27,20 @@ redemptions with the same jti return 409.
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.deps import PACKAGE_KEY_HEADER, package_org_for_salesforce_id, require_credentials
 from app.core.config import settings
 from app.db.session import get_db
 from app.domain.models import (
     DeepLinkRedemption,
     Organization,
-    SalesforceConnection,
 )
 from app.services.deeplink_tokens import (
     DeepLinkInvalid,
@@ -72,28 +74,15 @@ class RedeemResponse(BaseModel):
     organizationId: str
 
 
-@router.post("/issue", response_model=IssueResponse)
+@router.post("/issue", response_model=IssueResponse, dependencies=[Depends(require_credentials)])
 async def issue_deep_link(
     payload: IssueRequest,
+    package_key: Optional[str] = Header(None, alias=PACKAGE_KEY_HEADER),
     db: AsyncSession = Depends(get_db),
 ) -> IssueResponse:
-    """Mint a deep-link JWT for a Setup-page LWC button click."""
-    # Resolve SF Org ID -> internal org UUID via SalesforceConnection.
-    conn_query = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id_sf == payload.salesforceOrgId
-    )
-    conn = (await db.execute(conn_query)).scalar_one_or_none()
-    if not conn:
-        # Org isn't onboarded yet — admin needs to complete OAuth in the
-        # web app first. Same pattern as /package/sync-trigger.
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Org not registered with AccessGraph AI. Complete OAuth setup first.",
-        )
-
-    org = await db.get(Organization, conn.organization_id)
-    if not org:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Org record missing")
+    """Mint a deep-link JWT for a Setup-page LWC button click. Package-key
+    authenticated; the link only lands for Newton users granted the org."""
+    org = await package_org_for_salesforce_id(db, payload.salesforceOrgId, package_key)
 
     token = issue_token(
         org_id=org.id,

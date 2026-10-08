@@ -19,16 +19,15 @@ ACCESS_TOKEN_EXPIRE_DAYS = 7  # 7 days
 
 
 def _jwt_secret() -> str:
-    """Choose the JWT signing secret. Prefers the dedicated
-    JWT_SECRET_KEY setting; falls back to SALESFORCE_CLIENT_SECRET so
-    sessions issued before that setting was added remain verifiable.
-    Last-resort fallback is a hardcoded string (dev only) so a
-    zero-config local run doesn't crash."""
-    return (
-        (settings.JWT_SECRET_KEY or "").strip()
-        or (settings.SALESFORCE_CLIENT_SECRET or "").strip()
-        or "change_me_in_production"
-    )
+    """JWT signing secret. Production refuses to start without
+    JWT_SECRET_KEY (see main.lifespan); the fixed fallback only exists so
+    a zero-config local run works."""
+    secret = (settings.JWT_SECRET_KEY or "").strip()
+    if secret:
+        return secret
+    if settings.is_production:
+        raise RuntimeError("JWT_SECRET_KEY must be set in production")
+    return "local-dev-only-jwt-secret"
 
 
 def create_access_token(org_id: str, user_info: dict, expires_delta: Optional[timedelta] = None) -> str:

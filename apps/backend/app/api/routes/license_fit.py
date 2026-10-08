@@ -17,7 +17,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import LicenseFitAssessment, LicenseFitRun
 from app.services.license_fit import LicenseFitService
 
@@ -129,13 +129,6 @@ class HistoryPoint(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's license-fit data.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -158,14 +151,13 @@ async def _latest_run(
 )
 async def run_license_fit(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
     """Kick off a right-sizing analysis. Reads user snapshots +
     profile join + a few aggregate SOQLs (owner counts per key
     SObject). Usually 5-30 seconds."""
-    _enforce_same_org(org_id, current_org_id)
     service = LicenseFitService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email)
@@ -195,10 +187,9 @@ async def run_license_fit(
 )
 async def get_latest_summary(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -266,12 +257,11 @@ async def list_assessments(
     ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> AssessmentListResponse:
     """Per-user assessments, sorted by annual savings (highest first)
     so the consultant's list is naturally actionable."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return AssessmentListResponse(run_id=None, total=0, items=[])
@@ -332,10 +322,9 @@ async def list_assessments(
 async def get_history(
     org_id: str,
     limit: int = Query(30, ge=1, le=100),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(LicenseFitRun)
         .where(LicenseFitRun.organization_id == org_id)

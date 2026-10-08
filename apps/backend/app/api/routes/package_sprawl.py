@@ -16,7 +16,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import InstalledPackage, PackageSprawlRun
 from app.services.package_sprawl import PackageSprawlService
 
@@ -120,13 +120,6 @@ class HistoryPoint(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's package-sprawl data.",
-        )
-
 
 async def _latest_run(
     db: AsyncSession, org_id: str
@@ -149,13 +142,12 @@ async def _latest_run(
 )
 async def run_package_sprawl(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
     """Kick off a package-sprawl pull synchronously. Typically 5-30
     seconds depending on the number of installed packages."""
-    _enforce_same_org(org_id, current_org_id)
     service = PackageSprawlService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email)
@@ -183,12 +175,11 @@ async def run_package_sprawl(
 )
 async def get_latest_summary(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> RunSummary:
     """Headline stats for the last run. Returns has_data=False when
     no run exists so the page can render an empty state."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return RunSummary(
@@ -232,12 +223,11 @@ async def list_packages(
         pattern="^(active|underused|unused)$",
         description="Filter to a single tier.",
     ),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> PackageListResponse:
     """Per-package list from the most recent run. Ordered unused-first
     so consultants see the actionable items at the top."""
-    _enforce_same_org(org_id, current_org_id)
     run = await _latest_run(db, org_id)
     if run is None:
         return PackageListResponse(run_id=None, packages=[])
@@ -277,11 +267,10 @@ async def list_packages(
 async def get_history(
     org_id: str,
     limit: int = Query(30, ge=1, le=100),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
     """Score-over-time trend."""
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(PackageSprawlRun)
         .where(PackageSprawlRun.organization_id == org_id)

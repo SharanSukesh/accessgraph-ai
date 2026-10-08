@@ -193,7 +193,7 @@ function ActivateContent() {
 function extractErrorMessage(err: unknown): string {
   if (!err) return 'Something went wrong. Try again.'
   const e = err as Record<string, unknown> & { message?: string }
-  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const errorData = (e.data as Record<string, unknown> | undefined) ?? undefined
   const detail = errorData?.detail
   if (typeof detail === 'string') return detail
   if (detail && typeof detail === 'object') {

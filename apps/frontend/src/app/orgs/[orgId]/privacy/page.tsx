@@ -16,6 +16,7 @@ import {
   FileText,
   CheckCircle,
   Info,
+  KeyRound,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
@@ -26,24 +27,16 @@ import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
+import { useAuth } from '@/lib/auth/AuthContext'
 
-// Flat dict returned by GET /orgs/{id}/privacy/inventory. The backend
-// (DataRetentionService.get_data_inventory) returns one key per record
-// class rather than a nested "snapshots" bucket, so we treat it as a
-// map + partition into snapshot vs. non-snapshot keys in-component.
-type DataInventory = Record<string, number>
+// GET /orgs/{id}/privacy/inventory groups every org-scoped table by its
+// retention class, so the inventory is complete by construction.
+type RetentionCategory = 'salesforce_mirror' | 'analysis' | 'audit' | 'sync' | 'config'
 
-// Keys the backend emits that are NOT snapshot counts. Used to split
-// the flat inventory into "snapshots" vs "everything else" for the
-// UI. Anything not in this set is treated as a snapshot record type.
-const NON_SNAPSHOT_KEYS = new Set([
-  'sync_jobs',
-  'audit_logs',
-  'anomalies',
-  'recommendations',
-  'risk_scores', // may be absent — safe to list
-  'total_records',
-])
+interface DataInventory {
+  categories: Partial<Record<RetentionCategory, Record<string, number>>>
+  total_records: number
+}
 
 interface RetentionPolicy {
   snapshots_days: number
@@ -58,6 +51,14 @@ export default function PrivacyPage() {
   const queryClient = useQueryClient()
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [showDangerZone, setShowDangerZone] = useState(false)
+  const { isAdmin } = useAuth()
+  const [packageKey, setPackageKey] = useState<string | null>(null)
+
+  const packageKeyMutation = useMutation({
+    mutationFn: () =>
+      apiClient.post<{ package_key: string }>(`/orgs/${orgId}/package-key`),
+    onSuccess: (res) => setPackageKey(res.package_key),
+  })
 
   // Fetch data inventory
   const {
@@ -108,7 +109,7 @@ export default function PrivacyPage() {
     },
     onSuccess: () => {
       // Redirect to home after deletion
-      window.location.href = '/'
+      window.location.href = '/orgs'
     },
   })
 
@@ -128,28 +129,13 @@ export default function PrivacyPage() {
   const inventory = inventoryData?.data_inventory
   const policies = inventoryData?.retention_policies
 
-  // Partition the flat inventory dict into snapshot vs non-snapshot
-  // keys. The backend emits `total_records` in the same dict; exclude
-  // it here since we compute our own total to keep the UI honest even
-  // if the backend total ever drifts from the sum of its parts.
-  const snapshotEntries = inventory
-    ? Object.entries(inventory).filter(
-        ([key]) => !NON_SNAPSHOT_KEYS.has(key),
-      )
-    : []
-  const totalSnapshots = snapshotEntries.reduce(
-    (sum, [, count]) => sum + (count || 0),
-    0,
-  )
-  const totalAnalysis =
-    (inventory?.anomalies || 0) +
-    (inventory?.recommendations || 0) +
-    (inventory?.risk_scores || 0)
-  const totalRecords =
-    totalSnapshots +
-    (inventory?.sync_jobs || 0) +
-    (inventory?.audit_logs || 0) +
-    totalAnalysis
+  const sumCategory = (c: RetentionCategory) =>
+    Object.values(inventory?.categories?.[c] ?? {}).reduce((a, b) => a + (b || 0), 0)
+  const snapshotEntries = Object.entries(inventory?.categories?.salesforce_mirror ?? {})
+  const totalSnapshots = sumCategory('salesforce_mirror')
+  const totalAnalysis = sumCategory('analysis')
+  const totalAudit = sumCategory('audit')
+  const totalRecords = inventory?.total_records ?? 0
 
   return (
     <div className="space-y-6">
@@ -209,7 +195,7 @@ export default function PrivacyPage() {
                   Audit Logs
                 </p>
                 <p className="v2-num text-2xl font-bold text-grove-ink dark:text-grove-ink-dk mt-1">
-                  {(inventory?.audit_logs || 0).toLocaleString()}
+                  {totalAudit.toLocaleString()}
                 </p>
               </div>
               <Shield className="h-8 w-8 text-green-600" />
@@ -253,7 +239,7 @@ export default function PrivacyPage() {
                     Snapshots
                   </p>
                   <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-                    User permissions, roles, profiles, sharing rules
+                    Salesforce users and access metadata not refreshed by a sync within this window
                   </p>
                 </div>
               </div>
@@ -304,7 +290,7 @@ export default function PrivacyPage() {
                     Analysis Data
                   </p>
                   <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-                    Anomalies, recommendations, risk scores
+                    Anomalies, risk scores, findings, sprawl and compliance results
                   </p>
                 </div>
               </div>
@@ -394,6 +380,46 @@ export default function PrivacyPage() {
       </Card>
       </Reveal>
 
+      {isAdmin && (
+        <Reveal>
+          <Card variant="bordered">
+            <CardHeader>
+              <CardTitle>Salesforce package key</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+                The Newton managed package authenticates with this key. Paste it into
+                Setup &gt; Custom Settings &gt; AccessGraph Settings &gt; Package Key in
+                the client org. Generating a new key immediately disables the previous one.
+              </p>
+              {packageKey ? (
+                <div className="space-y-2">
+                  <code className="block break-all rounded-lg bg-primary-50/60 p-3 font-mono text-xs text-grove-ink dark:bg-primary-900/20 dark:text-grove-ink-dk">
+                    {packageKey}
+                  </code>
+                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                    Copy it now. It is not shown again.
+                  </p>
+                </div>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => packageKeyMutation.mutate()}
+                  disabled={packageKeyMutation.isPending}
+                >
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  {packageKeyMutation.isPending ? 'Generating…' : 'Generate package key'}
+                </Button>
+              )}
+              {packageKeyMutation.isError && (
+                <p className="text-sm text-red-600">Could not generate a key. Try again.</p>
+              )}
+            </CardContent>
+          </Card>
+        </Reveal>
+      )}
+
       {/* GDPR Danger Zone */}
       <Card
         variant="bordered"
@@ -417,9 +443,9 @@ export default function PrivacyPage() {
                     GDPR Right to Erasure (Article 17)
                   </p>
                   <p className="text-sm text-red-800 dark:text-red-400 mt-1">
-                    This action will permanently delete ALL data for this organization, including
-                    snapshots, audit logs, sync jobs, anomalies, and recommendations. This action
-                    cannot be undone.
+                    Permanently deletes everything Newton holds for this client org (metadata
+                    snapshots, analyses, reports, audit logs and settings) and revokes Newton's
+                    access to the org in Salesforce. This cannot be undone.
                   </p>
                 </div>
               </div>

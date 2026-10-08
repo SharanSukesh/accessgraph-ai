@@ -36,7 +36,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, get_current_org
+from app.auth.deps import get_current_actor_email, require_org_access, require_org_admin
 from app.domain.models import (
     BrandSettings,
     FindingCategory,
@@ -201,13 +201,6 @@ class RunResponse(BaseModel):
 # ---------------------------------------------------------------- helpers
 
 
-def _enforce_same_org(org_id: str, current_org_id: str) -> None:
-    if org_id != current_org_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot access another org's analyzer data.",
-        )
-
 
 async def _latest_snapshot(
     db: AsyncSession, org_id: str
@@ -230,7 +223,7 @@ async def _latest_snapshot(
 )
 async def run_org_analyzer(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> RunResponse:
@@ -240,7 +233,6 @@ async def run_org_analyzer(
     heavy data is already in our snapshots. Push to a background job if
     runtime grows beyond ~60s.
     """
-    _enforce_same_org(org_id, current_org_id)
     service = OrgAnalyzerService(db, org_id)
     try:
         snapshot = await service.run(actor_email=actor_email)
@@ -264,7 +256,7 @@ async def run_org_analyzer(
 )
 async def get_latest_snapshot(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> SnapshotSummary:
     """Headline summary of the most recent analyzer run.
@@ -272,7 +264,6 @@ async def get_latest_snapshot(
     Returns an empty-but-valid payload if the analyzer has never run for
     this org, so the dashboard renders cleanly on first visit.
     """
-    _enforce_same_org(org_id, current_org_id)
     snap = await _latest_snapshot(db, org_id)
     if snap is None:
         return SnapshotSummary(
@@ -340,10 +331,9 @@ async def list_findings(
     ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> FindingsPage:
-    _enforce_same_org(org_id, current_org_id)
     snap = await _latest_snapshot(db, org_id)
     if snap is None:
         return FindingsPage(total=0, snapshot_id=None, findings=[])
@@ -392,7 +382,7 @@ async def export_findings_csv(
     category: Optional[str] = Query(default=None),
     severity: Optional[str] = Query(default=None),
     include_ignored: bool = Query(default=False),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> StreamingResponse:
     """CSV export of the latest snapshot's findings.
@@ -402,7 +392,6 @@ async def export_findings_csv(
     download URL. Streams via StreamingResponse so we don't buffer the
     whole CSV in memory for huge orgs.
     """
-    _enforce_same_org(org_id, current_org_id)
     snap = await _latest_snapshot(db, org_id)
     if snap is None:
         # Return an empty CSV with headers so the downloaded file isn't
@@ -501,10 +490,9 @@ def _csv_row(f: OrgFinding, snap: OrgAnalysisSnapshot) -> List[str]:
 async def get_finding(
     org_id: str,
     finding_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> FindingResponse:
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(OrgFinding).where(
             OrgFinding.organization_id == org_id,
@@ -525,7 +513,7 @@ async def ignore_finding(
     org_id: str,
     finding_id: str,
     payload: IgnoreFindingRequest,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> FindingResponse:
@@ -535,7 +523,6 @@ async def ignore_finding(
     headline savings number, and are visually demoted in the report.
     The row stays in the database with an audit trail of who/when/why.
     """
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(OrgFinding).where(
             OrgFinding.organization_id == org_id,
@@ -560,12 +547,11 @@ async def ignore_finding(
 async def unignore_finding(
     org_id: str,
     finding_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> FindingResponse:
     """Restore a previously-ignored finding to the active list."""
-    _enforce_same_org(org_id, current_org_id)
     # actor_email dep enforces auth; not logged for unignore.
     del actor_email
     result = await db.execute(
@@ -614,7 +600,7 @@ async def apply_finding_fix(
     finding_id: str,
     payload: ApplyFixRequest,
     request: Request,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_admin),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> ApplyFixResponse:
@@ -628,7 +614,6 @@ async def apply_finding_fix(
     Mirrors ReportingGraphService's authz + audit pattern (ORG_ADMIN
     gate + AuditLog row per PATCH).
     """
-    _enforce_same_org(org_id, current_org_id)
     # Load the finding
     finding_q = await db.execute(
         select(OrgFinding).where(
@@ -680,7 +665,8 @@ class BrandUpdate(BaseModel):
 
 _HEX_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _MAX_LOGO_BYTES = 256 * 1024  # 256KB cap
-_ALLOWED_LOGO_MIMES = {"image/png", "image/jpeg", "image/svg+xml"}
+# SVG is excluded: it can carry script and would be served from the API origin.
+_ALLOWED_LOGO_MIMES = {"image/png", "image/jpeg"}
 
 
 def _validate_accent(hex_: Optional[str]) -> Optional[str]:
@@ -707,7 +693,7 @@ async def _get_brand_row(db: AsyncSession, org_id: str) -> Optional[BrandSetting
 )
 async def get_brand(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> BrandRow:
     """Read brand settings (firm name + accent + whether a logo is set).
@@ -715,7 +701,6 @@ async def get_brand(
     The logo bytes themselves come from a separate /brand/logo endpoint
     so JSON payloads stay small.
     """
-    _enforce_same_org(org_id, current_org_id)
     row = await _get_brand_row(db, org_id)
     if row is None:
         return BrandRow(firm_name=None, accent_hex=None, has_logo=False)
@@ -733,12 +718,11 @@ async def get_brand(
 async def update_brand(
     org_id: str,
     payload: BrandUpdate,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> BrandRow:
     """Upsert firm name + accent color. Logo lives at /brand/logo."""
-    _enforce_same_org(org_id, current_org_id)
     accent = _validate_accent(payload.accent_hex)
     row = await _get_brand_row(db, org_id)
     if row is None:
@@ -768,19 +752,18 @@ async def update_brand(
 async def upload_brand_logo(
     org_id: str,
     file: UploadFile = File(...),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> BrandRow:
     """Upload the firm logo. Stored as bytes on the brand_settings row
-    (no object-store dep). 256KB max; PNG / JPEG / SVG only."""
-    _enforce_same_org(org_id, current_org_id)
+    (no object-store dep). 256KB max; PNG / JPEG only."""
     if file.content_type not in _ALLOWED_LOGO_MIMES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                f"Unsupported logo type {file.content_type!r}. Use PNG, "
-                "JPEG, or SVG."
+                f"Unsupported logo type {file.content_type!r}. Use PNG "
+                "or JPEG."
             ),
         )
     data = await file.read()
@@ -814,11 +797,10 @@ async def upload_brand_logo(
 @router.get("/orgs/{org_id}/org-analyzer/brand/logo")
 async def get_brand_logo(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> Response:
     """Stream the firm logo bytes back. 404 if no logo set."""
-    _enforce_same_org(org_id, current_org_id)
     row = await _get_brand_row(db, org_id)
     if not row or not row.logo_bytes:
         raise HTTPException(status_code=404, detail="No brand logo set.")
@@ -835,10 +817,9 @@ async def get_brand_logo(
 async def get_history(
     org_id: str,
     limit: int = Query(default=30, ge=1, le=200),
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> List[HistoryPoint]:
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(OrgAnalysisSnapshot)
         .where(OrgAnalysisSnapshot.organization_id == org_id)
@@ -865,7 +846,7 @@ async def get_history(
 )
 async def get_price_book(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> PriceBookResponse:
     """Returns the price book, prioritised in this order:
@@ -880,7 +861,6 @@ async def get_price_book(
     The response is read-only — no rows are persisted until the admin
     explicitly PUTs the price book.
     """
-    _enforce_same_org(org_id, current_org_id)
     result = await db.execute(
         select(LicensePriceBook).where(
             LicensePriceBook.organization_id == org_id
@@ -988,7 +968,7 @@ async def get_price_book(
 async def update_price_book(
     org_id: str,
     payload: PriceBookUpdate,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     actor_email: str = Depends(get_current_actor_email),
     db: AsyncSession = Depends(get_database),
 ) -> PriceBookResponse:
@@ -998,7 +978,6 @@ async def update_price_book(
     To remove an override, send an empty list (we clear all overrides and
     fall back to defaults).
     """
-    _enforce_same_org(org_id, current_org_id)
     existing_result = await db.execute(
         select(LicensePriceBook).where(
             LicensePriceBook.organization_id == org_id
@@ -1030,7 +1009,7 @@ async def update_price_book(
             ))
 
     await db.commit()
-    return await get_price_book(org_id, current_org_id, db)
+    return await get_price_book(org_id, org_id, db)
 
 
 @router.get(
@@ -1038,11 +1017,10 @@ async def update_price_book(
 )
 async def download_report(
     org_id: str,
-    current_org_id: str = Depends(get_current_org),
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> StreamingResponse:
     """Stream a server-rendered PDF of the latest analyzer findings."""
-    _enforce_same_org(org_id, current_org_id)
     snap = await _latest_snapshot(db, org_id)
     if snap is None:
         raise HTTPException(

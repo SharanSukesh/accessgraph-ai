@@ -1,204 +1,264 @@
 """
-Authentication Dependencies
-FastAPI dependencies for protected routes
+Authentication and authorization dependencies.
+
+Every session is a Newton user (OrgUser) signed in with email + password.
+The JWT only identifies the user; role, active status and org access are
+re-read from the database on every request, so deactivating or demoting
+someone takes effect immediately rather than when their 7-day token ends.
+
+Org access:
+  - ORG_ADMIN users can open every client org.
+  - Everyone else needs an OrgAccessGrant for that org.
+  - VIEWER / AUDITOR are read-only (GET/HEAD/OPTIONS).
+  - Destructive actions (Salesforce write-back, data deletion) need
+    ORG_ADMIN via `require_org_admin`.
+
+The Salesforce managed package authenticates with a per-org key in the
+X-Newton-Package-Key header instead of a cookie; it is accepted only on
+the org it was issued for.
 """
+import hashlib
+import hmac
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
-from fastapi import Cookie, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.jwt import get_org_id_from_token
+from app.api.deps import get_database
+from app.auth.jwt import verify_token
+from app.domain.models import (
+    OrgAccessGrant,
+    Organization,
+    OrgUser,
+    OrgUserRole,
+    SalesforceConnection,
+)
 
 logger = logging.getLogger(__name__)
 
+PACKAGE_KEY_HEADER = "X-Newton-Package-Key"
+READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+READ_ONLY_ROLES = {OrgUserRole.VIEWER, OrgUserRole.AUDITOR}
 
-async def get_current_org(access_token: Optional[str] = Cookie(None)) -> str:
-    """
-    Get current organization ID from JWT cookie
 
-    This dependency can be used to protect routes that require authentication.
+@dataclass(frozen=True)
+class Principal:
+    user_id: str
+    email: str
+    name: Optional[str]
+    role: OrgUserRole
+    home_org_id: str
+    via_package: bool = False
 
-    Args:
-        access_token: JWT token from httpOnly cookie
+    @property
+    def is_admin(self) -> bool:
+        return self.role == OrgUserRole.ORG_ADMIN
 
-    Returns:
-        Organization ID
 
-    Raises:
-        HTTPException: If not authenticated or token invalid
-    """
+def _unauthorized(detail: str = "Not authenticated. Please log in.") -> HTTPException:
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+
+def hash_package_key(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+async def _load_user(db: AsyncSession, access_token: Optional[str]) -> OrgUser:
     if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please log in.",
-        )
-
-    try:
-        org_id = get_org_id_from_token(access_token)
-        return org_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
-        )
-
-
-async def get_current_actor_email(access_token: Optional[str] = Cookie(None)) -> str:
-    """Return an actor identifier from the JWT for audit attribution.
-
-    Used by mutating endpoints (write-back, reporting-graph apply). We
-    prefer the email claim, but Salesforce's OAuth token response does
-    not return an email — the `id` field is a userinfo URL we don't
-    follow today — so older JWTs have email=None. To avoid bricking
-    write-back for every existing session, we fall back to:
-      1. `email`             (set once we wire userinfo fetch on login)
-      2. `user_id`           (Salesforce user id, always present)
-      3. `sf-org:<org_id>`   (last resort, never None for an auth'd req)
-
-    The actual ORG_ADMIN authorization happens later in the service;
-    this dep only feeds audit logs.
-    """
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please log in.",
-        )
-    from app.auth.jwt import verify_token
-    try:
-        payload = verify_token(access_token)
-        email = payload.get("email")
-        if email:
-            return email
-        user_id = payload.get("user_id")
-        if user_id:
-            return f"sf-user:{user_id}"
-        org_id = payload.get("org_id")
-        if org_id:
-            return f"sf-org:{org_id}"
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has no usable identity claim.",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
-        )
-
-
-async def get_current_org_optional(access_token: Optional[str] = Cookie(None)) -> Optional[str]:
-    """
-    Get current organization ID from JWT cookie (optional)
-
-    This dependency allows routes to work with or without authentication.
-
-    Args:
-        access_token: JWT token from httpOnly cookie
-
-    Returns:
-        Organization ID if authenticated, None otherwise
-    """
-    if not access_token:
-        return None
-
-    try:
-        org_id = get_org_id_from_token(access_token)
-        return org_id
-    except Exception:
-        return None
-
-
-# ----------------------------------------------------------------------
-# Email/password auth path — OrgUser-based dependencies.
-# ----------------------------------------------------------------------
-
-
-async def get_current_org_user_id(
-    access_token: Optional[str] = Cookie(None),
-) -> str:
-    """Return the OrgUser primary-key id from the JWT.
-
-    Only valid for JWTs issued via the email/password login flow (which
-    stamps `org_user_id` on the token). Salesforce-OAuth JWTs won't
-    have this claim; use `get_current_org` for those.
-
-    Raises 401 if the token is missing / invalid / doesn't carry an
-    org_user_id (i.e., the caller isn't authenticated via email+password).
-    """
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please log in.",
-        )
-    from app.auth.jwt import verify_token
+        raise _unauthorized()
     try:
         payload = verify_token(access_token)
     except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
-        )
+        raise _unauthorized("Session expired or invalid. Please log in again.")
     org_user_id = payload.get("org_user_id")
     if not org_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=(
-                "Session is not an email/password session. Sign in "
-                "with your email + password to access this endpoint."
-            ),
-        )
-    return org_user_id
+        # Pre-2026-10 Salesforce-OAuth sessions carried no user identity.
+        raise _unauthorized("Please sign in with your email and password.")
+    user = (
+        await db.execute(select(OrgUser).where(OrgUser.id == org_user_id))
+    ).scalar_one_or_none()
+    if user is None or not user.is_active or not user.password_hash:
+        raise _unauthorized("This account is no longer active.")
+    return user
 
 
-async def require_admin(
+async def get_principal(
+    request: Request,
     access_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_database),
+) -> Principal:
+    user = await _load_user(db, access_token)
+    principal = Principal(
+        user_id=user.id,
+        email=user.email,
+        name=user.name,
+        role=user.role,
+        home_org_id=user.organization_id,
+    )
+    request.state.principal = principal
+    return principal
+
+
+async def user_can_access_org(db: AsyncSession, principal: Principal, org_id: str) -> bool:
+    if principal.is_admin:
+        return True
+    grant = (
+        await db.execute(
+            select(OrgAccessGrant.id).where(
+                OrgAccessGrant.org_user_id == principal.user_id,
+                OrgAccessGrant.organization_id == org_id,
+            )
+        )
+    ).scalar_one_or_none()
+    return grant is not None
+
+
+async def package_org_for_salesforce_id(
+    db: AsyncSession, salesforce_org_id: str, package_key: Optional[str]
+) -> Organization:
+    """Resolve the org a package callout is for, keyed by its 00D id, and
+    verify the package key. Same 401 for unknown org and wrong key."""
+    if not package_key:
+        raise _unauthorized("Missing package key.")
+    connection = (
+        await db.execute(
+            select(SalesforceConnection).where(
+                SalesforceConnection.organization_id_sf == salesforce_org_id
+            )
+        )
+    ).scalar_one_or_none()
+    org = await db.get(Organization, connection.organization_id) if connection else None
+    if (
+        org is None
+        or not org.package_key_hash
+        or not hmac.compare_digest(org.package_key_hash, hash_package_key(package_key))
+    ):
+        raise _unauthorized("Invalid package key.")
+    return org
+
+
+async def _package_principal(
+    db: AsyncSession, org_id: str, package_key: str
+) -> Optional[Principal]:
+    org = (
+        await db.execute(select(Organization).where(Organization.id == org_id))
+    ).scalar_one_or_none()
+    if org is None or not org.package_key_hash:
+        return None
+    if not hmac.compare_digest(org.package_key_hash, hash_package_key(package_key)):
+        return None
+    return Principal(
+        user_id=f"package:{org_id}",
+        email=f"salesforce-package@{org_id}",
+        name="Salesforce package",
+        role=OrgUserRole.ANALYST,
+        home_org_id=org_id,
+        via_package=True,
+    )
+
+
+async def authorize_org(
+    request: Request,
+    org_id: str,
+    db: AsyncSession,
+    access_token: Optional[str],
+    package_key: Optional[str],
+) -> Principal:
+    if package_key and not access_token:
+        principal = await _package_principal(db, org_id, package_key)
+        if principal is None:
+            raise _unauthorized("Invalid package key for this org.")
+        request.state.principal = principal
+        return principal
+
+    user = await _load_user(db, access_token)
+    principal = Principal(
+        user_id=user.id,
+        email=user.email,
+        name=user.name,
+        role=user.role,
+        home_org_id=user.organization_id,
+    )
+    request.state.principal = principal
+
+    org_exists = (
+        await db.execute(select(Organization.id).where(Organization.id == org_id))
+    ).scalar_one_or_none()
+    # Same 404 whether the org is missing or not granted, so org ids
+    # can't be probed.
+    if (
+        org_exists is None
+        or org_id == principal.home_org_id
+        or not await user_can_access_org(db, principal, org_id)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    if request.method not in READ_METHODS and principal.role in READ_ONLY_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your role is read-only for this org.",
+        )
+    return principal
+
+
+async def require_org_access(
+    org_id: str,
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    package_key: Optional[str] = Header(None, alias=PACKAGE_KEY_HEADER),
+    db: AsyncSession = Depends(get_database),
 ) -> str:
-    """Gate a route to callers whose JWT carries `is_admin=true`.
+    """Path-param `org_id` must be an org the caller may open. Returns org_id."""
+    await authorize_org(request, org_id, db, access_token, package_key)
+    return org_id
 
-    Returns the caller's org_user_id on success so admin-only handlers
-    don't need a second dep to know who did the mutation. Raises 403
-    when the token is present but not admin; 401 when the token is
-    missing or invalid.
 
-    Does NOT double-check the OrgUser row against the DB — the JWT
-    was signed by us with the is_admin claim baked in at login, so
-    trusting it saves a query per admin request. Revocation is handled
-    by session expiry (7 days) + explicit logout.
-    """
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated. Please log in.",
-        )
-    from app.auth.jwt import verify_token
-    try:
-        payload = verify_token(access_token)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Authentication error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
-        )
-    if not payload.get("is_admin"):
+async def require_org_admin(
+    org_id: str,
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_database),
+) -> str:
+    """Org access plus ORG_ADMIN. Package keys are never enough here."""
+    principal = await authorize_org(request, org_id, db, access_token, None)
+    if not principal.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required for this action.",
         )
-    org_user_id = payload.get("org_user_id")
-    if not org_user_id:
+    return org_id
+
+
+async def get_current_actor_email(
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
+    db: AsyncSession = Depends(get_database),
+) -> str:
+    """Audit identity of the caller. Identifies only; pair with an org dependency."""
+    principal: Optional[Principal] = getattr(request.state, "principal", None)
+    if principal is None:
+        principal = await get_principal(request, access_token, db)
+    return principal.email
+
+
+async def require_credentials(
+    access_token: Optional[str] = Cookie(None),
+    package_key: Optional[str] = Header(None, alias=PACKAGE_KEY_HEADER),
+) -> None:
+    """Cheap pre-check for routes that authorize in the handler: rejects
+    anonymous callers before body validation or any lookup."""
+    if not access_token and not package_key:
+        raise _unauthorized()
+
+
+async def require_admin(principal: Principal = Depends(get_principal)) -> str:
+    """Newton-wide admin (user management). Returns the admin's user id."""
+    if not principal.is_admin:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Admin claim present but token is missing org_user_id.",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required for this action.",
         )
-    return org_user_id
+    return principal.user_id

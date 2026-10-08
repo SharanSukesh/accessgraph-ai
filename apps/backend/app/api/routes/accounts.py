@@ -32,19 +32,20 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import require_admin
+from app.auth.deps import Principal, get_principal, require_admin
 from app.auth.email import send_activation_email
-from app.auth.jwt import create_access_token, verify_token
+from app.auth.jwt import create_access_token
+from app.auth.rate_limit import login_failure_limiter, login_ip_limiter
 from app.auth.passwords import hash_password, verify_password
 from app.core.config import settings
-from app.domain.models import AuthToken, OrgUser, OrgUserRole
+from app.domain.models import AuthToken, OrgAccessGrant, Organization, OrgUser, OrgUserRole
 
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,9 @@ class CreateUserRequest(BaseModel):
         pattern="^(org_admin|analyst|viewer|auditor)$",
         description="OrgUserRole enum value (lowercase).",
     )
+    # Client orgs a non-admin may open. Admins see every org regardless.
+    # Omitted on a re-invite leaves existing grants untouched.
+    org_ids: Optional[List[str]] = None
 
 
 class UserResponse(BaseModel):
@@ -198,6 +202,7 @@ def _serialize_user(u: OrgUser) -> UserResponse:
 @router.post("/login-password")
 async def login_with_password(
     body: LoginRequest,
+    request: Request,
     db: AsyncSession = Depends(get_database),
 ):
     """Authenticate via email + password. Rejects unverified accounts
@@ -209,12 +214,20 @@ async def login_with_password(
     # into the login form still finds a row stored as "foo@bar.com".
     from sqlalchemy import func
 
+    email_key = body.email.strip().lower()
+    ip_key = request.client.host if request.client else "unknown"
+    login_ip_limiter.check(ip_key)
+    login_failure_limiter.check(email_key)
+    login_ip_limiter.hit(ip_key)
+
     row = await db.execute(
-        select(OrgUser).where(
-            func.lower(OrgUser.email) == body.email.strip().lower()
-        )
+        select(OrgUser)
+        .where(func.lower(OrgUser.email) == email_key)
+        .order_by(OrgUser.created_at)
     )
-    user = row.scalar_one_or_none()
+    user = row.scalars().first()
+    if user is None or not user.password_hash or not verify_password(body.password, user.password_hash):
+        login_failure_limiter.hit(email_key)
     if user is None:
         # Same message + same latency for user-not-found vs. wrong-password
         # so a caller can't enumerate accounts by response time. bcrypt
@@ -250,6 +263,7 @@ async def login_with_password(
                 "before signing in."
             ),
         )
+    login_failure_limiter.reset(email_key)
     user.last_login_at = _now_utc()
     await db.commit()
     logger.info("auth.login: %s (admin=%s)", user.email, user.role)
@@ -310,37 +324,11 @@ async def activate_account(
 
 @router.get("/me-user", response_model=MeUserResponse)
 async def get_me_user(
-    access_token: Optional[str] = Cookie(None),
+    principal: Principal = Depends(get_principal),
     db: AsyncSession = Depends(get_database),
 ):
-    """Return the current OrgUser + is_admin flag. Used by the
-    frontend AuthContext to decide whether to render admin UI. Returns
-    401 if the JWT is missing / invalid / doesn't carry an
-    org_user_id (i.e., session is Salesforce-OAuth-only)."""
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated.",
-        )
-    try:
-        payload = verify_token(access_token)
-    except HTTPException:
-        raise
-    org_user_id = payload.get("org_user_id")
-    if not org_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session is not an email/password session.",
-        )
-    row = await db.execute(
-        select(OrgUser).where(OrgUser.id == org_user_id)
-    )
-    user = row.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User no longer exists.",
-        )
+    """Current Newton user, re-read from the database."""
+    user = await db.get(OrgUser, principal.user_id)
     return MeUserResponse(
         id=user.id,
         email=user.email,
@@ -430,6 +418,9 @@ async def admin_create_user(
     )
     for old in prior.scalars().all():
         old.used_at = _now_utc()
+
+    if body.org_ids is not None:
+        await _set_user_orgs(db, user, body.org_ids, granted_by=admin.id)
 
     token_value = _generate_activation_token()
     token = AuthToken(
@@ -658,3 +649,75 @@ async def admin_delete_user(
         email_for_log,
     )
     return {"deleted": True, "was_pending": was_pending, "email": email_for_log}
+
+
+class OrgAccessResponse(BaseModel):
+    org_ids: List[str]
+
+
+class OrgAccessUpdate(BaseModel):
+    org_ids: List[str]
+
+
+async def _set_user_orgs(
+    db: AsyncSession, user: OrgUser, org_ids: List[str], *, granted_by: str
+) -> List[str]:
+    wanted = set(org_ids) - {user.organization_id}
+    if wanted:
+        found = set(
+            (await db.execute(select(Organization.id).where(Organization.id.in_(wanted))))
+            .scalars().all()
+        )
+        missing = wanted - found
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Unknown org ids: {sorted(missing)}")
+    current = {
+        g.organization_id: g
+        for g in (
+            await db.execute(select(OrgAccessGrant).where(OrgAccessGrant.org_user_id == user.id))
+        ).scalars().all()
+    }
+    for org_id, grant in current.items():
+        if org_id not in wanted:
+            await db.delete(grant)
+    for org_id in wanted - current.keys():
+        db.add(OrgAccessGrant(org_user_id=user.id, organization_id=org_id, granted_by=granted_by))
+    return sorted(wanted)
+
+
+async def _user_in_admin_scope(db: AsyncSession, admin_id: str, user_id: str) -> OrgUser:
+    admin = await db.get(OrgUser, admin_id)
+    user = await db.get(OrgUser, user_id)
+    if admin is None or user is None or user.organization_id != admin.organization_id:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return user
+
+
+@router.get("/users/{user_id}/orgs", response_model=OrgAccessResponse)
+async def admin_get_user_orgs(
+    user_id: str,
+    admin_id: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_database),
+):
+    user = await _user_in_admin_scope(db, admin_id, user_id)
+    grants = (
+        await db.execute(
+            select(OrgAccessGrant.organization_id).where(OrgAccessGrant.org_user_id == user.id)
+        )
+    ).scalars().all()
+    return OrgAccessResponse(org_ids=sorted(grants))
+
+
+@router.put("/users/{user_id}/orgs", response_model=OrgAccessResponse)
+async def admin_set_user_orgs(
+    user_id: str,
+    body: OrgAccessUpdate,
+    admin_id: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_database),
+):
+    """Replace the set of client orgs this user may open."""
+    user = await _user_in_admin_scope(db, admin_id, user_id)
+    org_ids = await _set_user_orgs(db, user, body.org_ids, granted_by=admin_id)
+    await db.commit()
+    logger.info("auth.admin: %s set org access for %s -> %d orgs", admin_id, user.email, len(org_ids))
+    return OrgAccessResponse(org_ids=org_ids)

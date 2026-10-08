@@ -536,8 +536,8 @@ function formatRunError(err: unknown): string {
   if (!err) return 'Unknown error'
   const e = err as Record<string, unknown> & { message?: string }
 
-  // Newton API client: { status, errorData: { detail: ... } }
-  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  // Newton API client: { status, data: { detail: ... } }
+  const errorData = (e.data as Record<string, unknown> | undefined) ?? undefined
   const detail = errorData?.detail as Record<string, unknown> | string | undefined
 
   if (detail && typeof detail === 'object') {

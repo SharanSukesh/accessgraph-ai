@@ -16,13 +16,20 @@ import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { PageTransition } from '@/components/shared/PageTransition'
 import { CommandPalette } from '@/components/shared/CommandPalette'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 
 // Routes that render without the sidebar chrome. `/activate` is
 // reached from the invitation email before the user has a session;
 // `/advisor` is the public new-implementation questionnaire (pre-sales
 // surface — no account required); `/start` is the post-login mode
-// chooser.
-const PUBLIC_ROUTES = ['/login', '/signup', '/activate', '/advisor', '/start']
+// chooser and `/orgs` the client-org picker (exact match only — the
+// org-scoped `/orgs/{id}/...` pages keep the shell).
+const PUBLIC_ROUTES = ['/login', '/signup', '/activate', '/advisor', '/start', '/orgs']
+
+// Shell routes that need a session. /legal and /deeplink also use the
+// shell but must stay reachable signed-out (the deep-link destination
+// then lands here and bounces through /login?redirect=...).
+const AUTH_PREFIXES = ['/orgs/', '/admin', '/onboarding']
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -42,7 +49,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Protected pages — sidebar + topbar + main content (Grove Refined).
   // The topbar carries org context / search / theme / user menu; the
   // sidebar keeps nav + Salesforce connection controls.
-  return (
+  const shell = (
     <div className="flex h-screen overflow-hidden bg-grove-canvas/80 dark:bg-grove-canvas-dk/80">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -57,5 +64,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           pressed or openCommandPalette() is called. */}
       <CommandPalette />
     </div>
+  )
+
+  return AUTH_PREFIXES.some((p) => pathname.startsWith(p)) ? (
+    <ProtectedRoute>{shell}</ProtectedRoute>
+  ) : (
+    shell
   )
 }

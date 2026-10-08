@@ -48,7 +48,11 @@ function LoginContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    searchParams.get('error') === 'session_expired'
+      ? 'Your session expired while connecting Salesforce. Sign in and connect again.'
+      : null,
+  )
 
   // Already logged in? Bounce to redirect or home. The redirect check
   // includes isAdmin so an admin session picks up the admin-only
@@ -245,7 +249,7 @@ function TabButton({
 function extractErrorMessage(err: unknown): string {
   if (!err) return 'Something went wrong. Try again.'
   const e = err as Record<string, unknown> & { message?: string }
-  const errorData = (e.errorData as Record<string, unknown> | undefined) ?? undefined
+  const errorData = (e.data as Record<string, unknown> | undefined) ?? undefined
   const detail = errorData?.detail
   if (typeof detail === 'string') return detail
   if (detail && typeof detail === 'object') {

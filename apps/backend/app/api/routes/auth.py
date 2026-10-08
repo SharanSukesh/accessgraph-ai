@@ -1,21 +1,45 @@
 """
-Salesforce OAuth Authentication Routes
-Handles OAuth 2.0 web server flow for Salesforce
+Salesforce connection (OAuth) and session routes.
+
+Connecting Salesforce is an action a signed-in Newton user takes on behalf
+of a client org; it never creates or replaces the user's session. The
+callback stores the client org's tokens and grants the connecting user
+access to that org.
+
+CSRF/PKCE: /authorize mints a random state and PKCE verifier and keeps
+both in a short-lived signed cookie scoped to /auth/salesforce. The
+callback only proceeds when the returned state matches that cookie.
 """
 import logging
 import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, status
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse, RedirectResponse
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.jwt import create_access_token
+from app.auth.deps import (
+    READ_ONLY_ROLES,
+    Principal,
+    get_principal,
+    require_org_access,
+    require_org_admin,
+)
+from app.auth.jwt import ALGORITHM, _jwt_secret
 from app.core.config import settings
-from app.domain.models import Organization, SalesforceConnection
+from app.domain.models import (
+    AuditAction,
+    AuditLog,
+    OrgAccessGrant,
+    Organization,
+    SalesforceConnection,
+)
+from app.salesforce.client import SalesforceAPIClient
 from app.salesforce.oauth import SalesforceOAuthClient
 
 logger = logging.getLogger(__name__)
@@ -23,528 +47,293 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth")
 salesforce_router = APIRouter(prefix="/salesforce")
 
-
-# ============================================================================
-# Request/Response Models
-# ============================================================================
-
-
-class OAuthCallbackResponse(BaseModel):
-    """Response after successful OAuth"""
-    org_id: str
-    org_name: str
-    instance_url: str
-    message: str
+OAUTH_COOKIE = "sf_oauth"
+OAUTH_COOKIE_PATH = "/auth/salesforce"
+OAUTH_COOKIE_TTL = timedelta(minutes=10)
+SANDBOX_LOGIN_URL = "https://test.salesforce.com"
 
 
-class RefreshTokenRequest(BaseModel):
-    """Request to refresh access token"""
-    org_id: str
+def _frontend(path: str) -> str:
+    return f"{settings.FRONTEND_URL.rstrip('/')}{path}"
 
 
-# ============================================================================
-# OAuth Endpoints
-# ============================================================================
+def _error_redirect(code: str) -> RedirectResponse:
+    response = RedirectResponse(url=_frontend(f"/start?error={quote(code)}"))
+    response.delete_cookie(OAUTH_COOKIE, path=OAUTH_COOKIE_PATH)
+    return response
 
 
 @salesforce_router.get("/authorize")
 async def authorize(
-    return_url: Optional[str] = Query(None, description="URL to redirect after auth"),
     env: Optional[str] = Query(
-        None,
-        description="Salesforce environment: 'sandbox' (test.salesforce.com) or 'production' (login.salesforce.com). Defaults to production."
+        None, description="'sandbox' for test.salesforce.com; omitted for production."
     ),
     prompt: Optional[str] = Query(
-        None,
-        description="OAuth prompt parameter. Pass 'login' to force Salesforce to show the login screen even when a session exists - used after explicit logout so users can switch identities."
+        None, description="Forwarded to Salesforce, e.g. 'login' to force the login screen."
     ),
+    principal: Principal = Depends(get_principal),
 ):
-    """
-    Initiate Salesforce OAuth flow
-
-    This endpoint redirects the user to Salesforce login page.
-    After successful login, Salesforce will redirect back to /callback endpoint.
-
-    Query Parameters:
-        return_url: Optional URL to redirect to after successful authentication
-        env: 'sandbox' to use test.salesforce.com (for sandbox orgs and scratch orgs)
-             'production' or omitted to use login.salesforce.com (for production orgs).
-
-    Returns:
-        Redirect to Salesforce authorization page
-    """
+    """Start connecting a client Salesforce org. Requires a Newton session."""
+    if principal.role in READ_ONLY_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your role cannot connect Salesforce orgs.",
+        )
     if not settings.SALESFORCE_CLIENT_ID or not settings.SALESFORCE_CLIENT_SECRET:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Salesforce OAuth not configured. Please set SALESFORCE_CLIENT_ID and SALESFORCE_CLIENT_SECRET in environment variables."
+            detail="Salesforce OAuth is not configured on this server.",
         )
 
-    # Resolve login URL based on env parameter.
-    # Sandbox/scratch orgs require test.salesforce.com; production uses login.salesforce.com.
     is_sandbox = (env or "").lower() in ("sandbox", "scratch", "test")
-    login_url = "https://test.salesforce.com" if is_sandbox else None
-
-    # Generate CSRF token. Prefix with env marker so the callback knows which
-    # login URL to use for the token exchange (must match the authorize URL).
-    state_token = secrets.token_urlsafe(32)
-    state = f"sb_{state_token}" if is_sandbox else state_token
-
-    # Forward the OAuth 'prompt' parameter through to Salesforce.
-    # The frontend passes prompt=login after explicit logout so users can
-    # switch identities (without it, Salesforce silently re-uses the
-    # active session and re-logs the same user in).
+    state = secrets.token_urlsafe(32)
+    verifier = SalesforceOAuthClient.generate_code_verifier()
+    oauth_client = SalesforceOAuthClient(login_url=SANDBOX_LOGIN_URL if is_sandbox else None)
     sf_prompt = prompt if prompt in ("login", "consent", "select_account") else None
-
-    # Create OAuth client and get authorization URL
-    oauth_client = SalesforceOAuthClient(login_url=login_url)
-    auth_url = oauth_client.get_authorization_url(state=state, prompt=sf_prompt)
-
-    logger.info(
-        "Initiating OAuth flow",
-        extra={"state": state, "env": env or "production", "prompt": sf_prompt},
+    auth_url = oauth_client.get_authorization_url(
+        state=state, code_verifier=verifier, prompt=sf_prompt
     )
 
-    return RedirectResponse(url=auth_url)
+    flow = jwt.encode(
+        {
+            "state": state,
+            "verifier": verifier,
+            "sandbox": is_sandbox,
+            "uid": principal.user_id,
+            "exp": datetime.now(timezone.utc) + OAUTH_COOKIE_TTL,
+        },
+        _jwt_secret(),
+        algorithm=ALGORITHM,
+    )
+    response = RedirectResponse(url=auth_url)
+    response.set_cookie(
+        key=OAUTH_COOKIE,
+        value=flow,
+        httponly=True,
+        secure=settings.FRONTEND_URL.startswith("https://"),
+        samesite="lax",
+        max_age=int(OAUTH_COOKIE_TTL.total_seconds()),
+        path=OAUTH_COOKIE_PATH,
+    )
+    logger.info("salesforce connect started by %s (sandbox=%s)", principal.email, is_sandbox)
+    return response
+
+
+async def _fetch_org_name(instance_url: str, access_token: str) -> Optional[str]:
+    try:
+        info = await SalesforceAPIClient(instance_url, access_token).extract_organization()
+        return (info or {}).get("Name")
+    except Exception:  # noqa: BLE001 — naming is cosmetic
+        logger.info("could not read Organization.Name after connect", exc_info=True)
+        return None
 
 
 @salesforce_router.get("/callback")
 async def callback(
-    code: str = Query(..., description="Authorization code from Salesforce"),
-    state: Optional[str] = Query(None, description="CSRF protection state"),
+    request: Request,
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    sf_oauth: Optional[str] = Cookie(None),
+    access_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_database),
 ):
-    """
-    OAuth callback endpoint
-
-    Salesforce redirects here after user authorizes the app.
-    This endpoint exchanges the authorization code for access/refresh tokens
-    and creates or updates the organization in the database.
-
-    Query Parameters:
-        code: Authorization code from Salesforce
-        state: State parameter for CSRF protection
-
-    Returns:
-        Organization details or redirects to frontend
-    """
+    """Salesforce redirects here after the consultant approves access."""
+    if error:
+        return _error_redirect("salesforce_denied")
+    if not code or not state or not sf_oauth:
+        return _error_redirect("oauth_state_missing")
     try:
-        # Validate state parameter (in production, verify against stored value)
-        if not state:
-            logger.warning("OAuth callback received without state parameter")
+        flow = jwt.decode(sf_oauth, _jwt_secret(), algorithms=[ALGORITHM])
+    except JWTError:
+        return _error_redirect("oauth_state_expired")
+    if not secrets.compare_digest(flow.get("state", ""), state):
+        return _error_redirect("oauth_state_mismatch")
 
-        # If the state was minted with the sandbox env marker, exchange the code
-        # against test.salesforce.com instead of login.salesforce.com. The token
-        # endpoint must match the authorize endpoint or token exchange returns 400.
-        is_sandbox = state and state.startswith("sb_")
-        login_url = "https://test.salesforce.com" if is_sandbox else None
-
-        # Exchange code for tokens (with state for PKCE)
-        oauth_client = SalesforceOAuthClient(login_url=login_url)
-        token_response = await oauth_client.exchange_code_for_token(code, state)
-
-        logger.info(
-            "Successfully exchanged code for tokens",
-            extra={"instance_url": token_response.instance_url}
-        )
-
-        # Extract org info from instance URL
-        # Example: https://na1.salesforce.com -> na1
-        instance_url = token_response.instance_url
-        org_domain = instance_url.replace("https://", "").replace("http://", "").split(".")[0]
-
-        # Get org ID from token response (if available)
-        # Salesforce returns organization_id in the token response (format: 00D... ID)
-        sf_org_id = getattr(token_response, 'id', '').split('/')[-2] if hasattr(token_response, 'id') else None
-
-        # Check if connection already exists
-        existing_connection = None
-        is_new_org = False
-        if sf_org_id:
-            stmt = select(SalesforceConnection).where(SalesforceConnection.organization_id_sf == sf_org_id)
-            result = await db.execute(stmt)
-            existing_connection = result.scalar_one_or_none()
-
-        if existing_connection:
-            # Update existing connection with new tokens
-            existing_connection.access_token = token_response.access_token
-            existing_connection.refresh_token = token_response.refresh_token
-            existing_connection.instance_url = instance_url
-            existing_connection.is_active = True
-            await db.commit()
-            await db.refresh(existing_connection)
-
-            org_id = existing_connection.organization_id
-            logger.info(f"Updated existing connection for org: {org_id}")
-        else:
-            # Create new organization
-            is_new_org = True
-            org = Organization(
-                name=f"Salesforce Org ({org_domain})",
-                domain=org_domain,
-                is_demo=False,
-            )
-            db.add(org)
-            await db.flush()  # Get org.id
-
-            # Create Salesforce connection
-            sf_connection = SalesforceConnection(
-                organization_id=org.id,
-                instance_url=instance_url,
-                organization_id_sf=sf_org_id,
-                access_token=token_response.access_token,
-                refresh_token=token_response.refresh_token,
-                is_active=True,
-            )
-            db.add(sf_connection)
-            await db.commit()
-            await db.refresh(org)
-
-            org_id = org.id
-            logger.info(f"Created new org: {org_id}")
-
-        # Extract user info from token response for JWT
-        user_info = {
-            "user_id": getattr(token_response, 'id', '').split('/')[-1] if hasattr(token_response, 'id') else None,
-            "email": getattr(token_response, 'email', None),
-            "organization_id": sf_org_id,
-        }
-
-        # Create JWT session token
-        jwt_token = create_access_token(org_id=org_id, user_info=user_info)
-
-        # Use the configured frontend URL (defaults to https://app.accessgraphai.com,
-        # overridable via FRONTEND_URL env var for local dev or alternate environments).
-        frontend_url = settings.FRONTEND_URL.rstrip("/")
-
-        # Add initial_sync flag for new orgs
-        redirect_url = f"{frontend_url}/orgs/{org_id}/dashboard?connected=true"
-        if is_new_org:
-            redirect_url += "&initial_sync=true"
-
-        logger.info(f"Redirecting to frontend: {redirect_url}")
-
-        # Create redirect response with JWT cookie
-        response = RedirectResponse(url=redirect_url)
-
-        # Use Secure cookies whenever we're not on localhost (production HTTPS)
-        is_production = redirect_url.startswith("https://")
-
-        response.set_cookie(
-            key="access_token",
-            value=jwt_token,
-            httponly=True,
-            secure=is_production,  # HTTPS only in production
-            samesite="lax",
-            max_age=604800,  # 7 days
-            domain=None,  # Let browser handle domain
-        )
-
-        return response
-
+    # The user who started the flow must still be the one signed in.
+    try:
+        principal = await get_principal(request, access_token, db)
     except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"OAuth callback error: {e}", exc_info=True)
+        response = RedirectResponse(url=_frontend("/login?error=session_expired"))
+        response.delete_cookie(OAUTH_COOKIE, path=OAUTH_COOKIE_PATH)
+        return response
+    if principal.user_id != flow.get("uid"):
+        return _error_redirect("oauth_user_mismatch")
 
-        # Redirect to frontend error page using configured FRONTEND_URL
-        frontend_url = settings.FRONTEND_URL.rstrip("/")
-        error_url = f"{frontend_url}/?error=oauth_failed&message={str(e)}"
-
-        return RedirectResponse(url=error_url)
-
-
-@salesforce_router.post("/refresh")
-async def refresh_token(
-    request: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_database),
-):
-    """
-    Refresh access token using refresh token
-
-    This endpoint is called when the access token expires (typically after 2 hours).
-    It uses the refresh token to get a new access token without requiring user login.
-
-    Request Body:
-        org_id: Organization ID to refresh token for
-
-    Returns:
-        Success message
-    """
-    # Get organization and its active Salesforce connection
-    stmt = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == request.org_id,
-        SalesforceConnection.is_active == True
+    oauth_client = SalesforceOAuthClient(
+        login_url=SANDBOX_LOGIN_URL if flow.get("sandbox") else None
     )
-    result = await db.execute(stmt)
-    sf_connection = result.scalar_one_or_none()
-
-    if not sf_connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No active Salesforce connection found for organization {request.org_id}"
-        )
-
-    if not sf_connection.refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No refresh token available for this connection"
-        )
-
     try:
-        # Refresh the token
-        oauth_client = SalesforceOAuthClient()
-        token_response = await oauth_client.refresh_access_token(sf_connection.refresh_token)
+        token = await oauth_client.exchange_code_for_token(code, flow["verifier"])
+    except Exception:  # noqa: BLE001
+        logger.exception("salesforce token exchange failed")
+        return _error_redirect("token_exchange_failed")
 
-        # Update connection with new access token
-        sf_connection.access_token = token_response.access_token
+    # Identity URL: https://login.salesforce.com/id/<00D org id>/<005 user id>
+    id_parts = token.id.rstrip("/").split("/")
+    sf_org_id = id_parts[-2] if len(id_parts) >= 2 else None
+    if not sf_org_id:
+        return _error_redirect("salesforce_org_unknown")
 
-        # Refresh token might be rotated
-        if hasattr(token_response, 'refresh_token') and token_response.refresh_token:
-            sf_connection.refresh_token = token_response.refresh_token
-
-        await db.commit()
-
-        logger.info(f"Refreshed access token for org: {request.org_id}")
-
-        return {
-            "message": "Access token refreshed successfully",
-            "org_id": request.org_id
-        }
-
-    except Exception as e:
-        logger.error(f"Token refresh error for org {request.org_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to refresh token: {str(e)}"
+    connection = (
+        await db.execute(
+            select(SalesforceConnection).where(
+                SalesforceConnection.organization_id_sf == sf_org_id
+            )
         )
+    ).scalar_one_or_none()
+    org_name = await _fetch_org_name(token.instance_url, token.access_token)
+
+    is_new_org = connection is None
+    if connection is not None:
+        if not principal.is_admin:
+            granted = (
+                await db.execute(
+                    select(OrgAccessGrant.id).where(
+                        OrgAccessGrant.org_user_id == principal.user_id,
+                        OrgAccessGrant.organization_id == connection.organization_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if granted is None:
+                # Re-connecting an org you weren't given would hijack its tokens.
+                return _error_redirect("org_not_granted")
+        connection.access_token = token.access_token
+        if token.refresh_token:
+            connection.refresh_token = token.refresh_token
+        connection.instance_url = token.instance_url
+        connection.is_active = True
+        org_id = connection.organization_id
+        existing_org = await db.get(Organization, org_id)
+        existing_org.settings = {**(existing_org.settings or {}), "is_sandbox": bool(flow.get("sandbox"))}
+    else:
+        domain = token.instance_url.replace("https://", "").split(".")[0]
+        org = Organization(
+            name=org_name or f"Salesforce Org ({domain})",
+            domain=domain,
+            is_demo=False,
+            settings={"is_sandbox": bool(flow.get("sandbox"))},
+        )
+        db.add(org)
+        await db.flush()
+        db.add(SalesforceConnection(
+            organization_id=org.id,
+            instance_url=token.instance_url,
+            organization_id_sf=sf_org_id,
+            access_token=token.access_token,
+            refresh_token=token.refresh_token,
+            is_active=True,
+        ))
+        if not principal.is_admin:
+            db.add(OrgAccessGrant(
+                org_user_id=principal.user_id,
+                organization_id=org.id,
+                granted_by=principal.user_id,
+            ))
+        org_id = org.id
+
+    db.add(AuditLog(
+        organization_id=org_id,
+        user_email=principal.email,
+        action=AuditAction.CONNECT_SALESFORCE,
+        resource_type="salesforce_connection",
+        resource_id=sf_org_id,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        request_method="GET",
+        request_path=str(request.url.path),
+        success=True,
+        context_data={"new_org": is_new_org},
+    ))
+    await db.commit()
+    logger.info("salesforce org %s connected to %s by %s", sf_org_id, org_id, principal.email)
+
+    redirect = f"/orgs/{org_id}/dashboard?connected=true"
+    if is_new_org:
+        redirect += "&initial_sync=true"
+    response = RedirectResponse(url=_frontend(redirect))
+    response.delete_cookie(OAUTH_COOKIE, path=OAUTH_COOKIE_PATH)
+    return response
 
 
 @salesforce_router.post("/disconnect/{org_id}")
 async def disconnect_org(
     org_id: str,
+    _admin: str = Depends(require_org_admin),
     db: AsyncSession = Depends(get_database),
 ):
-    """
-    Disconnect Salesforce organization
-
-    This revokes the access token and deactivates the connection.
-
-    Path Parameters:
-        org_id: Organization ID to disconnect
-
-    Returns:
-        Success message
-    """
-    # Get active Salesforce connection
-    stmt = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == org_id,
-        SalesforceConnection.is_active == True
-    )
-    result = await db.execute(stmt)
-    sf_connection = result.scalar_one_or_none()
-
-    if not sf_connection:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No active Salesforce connection found for organization {org_id}"
+    """Revoke Newton's Salesforce grant for this org and forget the tokens."""
+    connection = (
+        await db.execute(
+            select(SalesforceConnection).where(
+                SalesforceConnection.organization_id == org_id,
+                SalesforceConnection.is_active == True,  # noqa: E712
+            )
         )
+    ).scalar_one_or_none()
+    if connection is None:
+        raise HTTPException(status_code=404, detail="No active Salesforce connection.")
 
-    try:
-        # Revoke access token
-        if sf_connection.access_token:
-            oauth_client = SalesforceOAuthClient()
-            await oauth_client.revoke_token(sf_connection.access_token)
+    revoked = await revoke_connection(connection)
+    connection.is_active = False
+    connection.access_token = None
+    connection.refresh_token = None
+    await db.commit()
+    return {"org_id": org_id, "revoked_at_salesforce": revoked}
 
-        # Deactivate connection and clear tokens
-        sf_connection.is_active = False
-        sf_connection.access_token = None
-        sf_connection.refresh_token = None
 
-        await db.commit()
-
-        logger.info(f"Disconnected org: {org_id}")
-
-        return {
-            "message": "Organization disconnected successfully",
-            "org_id": org_id
-        }
-
-    except Exception as e:
-        logger.error(f"Disconnect error for org {org_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to disconnect organization: {str(e)}"
-        )
+async def revoke_connection(connection: SalesforceConnection) -> bool:
+    """Revoke at Salesforce. Revoking the refresh token ends the whole
+    grant, including any access tokens issued from it."""
+    token = connection.refresh_token or connection.access_token
+    if not token:
+        return False
+    oauth_client = SalesforceOAuthClient(login_url=connection.instance_url)
+    return await oauth_client.revoke_token(token)
 
 
 @salesforce_router.get("/status/{org_id}")
 async def get_auth_status(
     org_id: str,
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
-    """
-    Get OAuth connection status for an organization
-
-    Path Parameters:
-        org_id: Organization ID
-
-    Returns:
-        Connection status
-    """
-    # Get organization
-    stmt = select(Organization).where(Organization.id == org_id)
-    result = await db.execute(stmt)
-    org = result.scalar_one_or_none()
-
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Organization {org_id} not found"
+    org = await db.get(Organization, org_id)
+    connection = (
+        await db.execute(
+            select(SalesforceConnection).where(
+                SalesforceConnection.organization_id == org_id,
+                SalesforceConnection.is_active == True,  # noqa: E712
+            )
         )
-
-    # Get active Salesforce connection
-    stmt = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == org_id,
-        SalesforceConnection.is_active == True
-    )
-    result = await db.execute(stmt)
-    sf_connection = result.scalar_one_or_none()
-
-    is_connected = sf_connection is not None and sf_connection.access_token is not None
-
+    ).scalar_one_or_none()
+    is_connected = connection is not None and connection.access_token is not None
     return {
         "org_id": org_id,
-        "org_name": org.name,
+        "org_name": org.name if org else None,
         "is_connected": is_connected,
-        "is_demo": org.is_demo,
-        "instance_url": sf_connection.instance_url if sf_connection else None,
-        "requires_reauth": sf_connection is not None and not is_connected,
+        "is_demo": org.is_demo if org else False,
+        "instance_url": connection.instance_url if connection else None,
+        "requires_reauth": connection is not None and not is_connected,
     }
-
-
-# ============================================================================
-# Session Management Endpoints
-# ============================================================================
 
 
 @router.post("/logout")
 async def logout():
-    """
-    Logout and clear session
-
-    This endpoint clears the JWT session cookie.
-
-    Returns:
-        Success message and response with cleared cookie
-    """
-    response = {"message": "Logged out successfully"}
-
-    # Create response and clear the cookie
-    from fastapi.responses import JSONResponse
-    json_response = JSONResponse(content=response)
-    json_response.delete_cookie(key="access_token")
-
-    logger.info("User logged out")
-
-    return json_response
-
-
-@router.get("/verify")
-async def verify_session(access_token: Optional[str] = Cookie(None)):
-    """
-    Verify if user has valid session
-
-    This endpoint checks if the JWT token in the cookie is valid.
-
-    Returns:
-        Authentication status
-    """
-    from app.auth.jwt import verify_token
-
-    if not access_token:
-        return {
-            "authenticated": False,
-            "message": "No session token found"
-        }
-
-    try:
-        payload = verify_token(access_token)
-        return {
-            "authenticated": True,
-            "org_id": payload.get("org_id"),
-            "user_id": payload.get("user_id"),
-        }
-    except HTTPException:
-        return {
-            "authenticated": False,
-            "message": "Invalid or expired session"
-        }
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    response.delete_cookie(key="access_token", path="/")
+    return response
 
 
 @router.get("/me")
-async def get_current_user(
-    access_token: Optional[str] = Cookie(None),
-    authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_database),
-):
-    """
-    Get current user information
-
-    This endpoint returns information about the currently authenticated user.
-    Supports both cookie-based and header-based authentication.
-
-    Returns:
-        User and organization information
-
-    Raises:
-        HTTPException: If not authenticated
-    """
-    from app.auth.jwt import get_org_id_from_token
-
-    # Try to get token from Authorization header first (for cross-domain)
-    token = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.replace("Bearer ", "")
-    elif access_token:
-        token = access_token
-
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
-
-    # Get org ID from token
-    org_id = get_org_id_from_token(token)
-
-    # Get organization details
-    stmt = select(Organization).where(Organization.id == org_id)
-    result = await db.execute(stmt)
-    org = result.scalar_one_or_none()
-
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
-        )
-
-    # Get Salesforce connection
-    stmt = select(SalesforceConnection).where(
-        SalesforceConnection.organization_id == org_id,
-        SalesforceConnection.is_active == True
-    )
-    result = await db.execute(stmt)
-    sf_connection = result.scalar_one_or_none()
-
+async def get_current_user(principal: Principal = Depends(get_principal)):
     return {
-        "org_id": org.id,
-        "org_name": org.name,
-        "org_domain": org.domain,
-        "is_demo": org.is_demo,
-        "is_connected": sf_connection is not None and sf_connection.access_token is not None,
-        "instance_url": sf_connection.instance_url if sf_connection else None,
+        "id": principal.user_id,
+        "email": principal.email,
+        "name": principal.name,
+        "role": principal.role.value,
+        "is_admin": principal.is_admin,
     }
 
 
-# Include the Salesforce router in the main router
 router.include_router(salesforce_router)

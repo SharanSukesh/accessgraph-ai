@@ -184,11 +184,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
         org_id = extract_org_id(path)
         resource_type, resource_id = extract_resource_info(path)
 
-        # TODO: Extract user email from session/JWT token
-        # For now, we'll use None (anonymous)
-        user_email = None
-        user_id = None
-
         # Process the request
         response = None
         error_message = None
@@ -210,6 +205,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
             try:
                 if action and org_id:  # Only log if we have meaningful data
                     duration_ms = int((time.time() - start_time) * 1000)
+                    # Set by the auth dependencies; absent for rejected requests.
+                    principal = getattr(request.state, "principal", None)
+                    user_email = principal.email if principal else None
+                    user_id = principal.user_id[:36] if principal else None
 
                     await self._create_audit_log(
                         organization_id=org_id,

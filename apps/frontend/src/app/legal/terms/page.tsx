@@ -16,7 +16,7 @@ export default function TermsOfServicePage() {
           Terms of Service
         </h1>
         <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
-          Last updated: {new Date().toLocaleDateString()}
+          Last updated: October 8, 2026
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
           Please read these terms carefully before using Newton.
@@ -52,25 +52,28 @@ export default function TermsOfServicePage() {
               platform that:
             </p>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Analyzes your Salesforce organization's permission structure</li>
-              <li>Identifies security anomalies and excessive access rights</li>
-              <li>Provides AI-powered recommendations for access optimization</li>
+              <li>Analyzes a Salesforce organization's configuration and permission structure</li>
+              <li>Identifies security anomalies, login anomalies, and excessive access rights</li>
+              <li>Provides rule-based findings and recommendations</li>
               <li>Visualizes access relationships and sharing rules</li>
-              <li>Generates compliance reports and audit trails</li>
+              <li>Generates reports and keeps an audit log of actions taken in the Service</li>
             </ul>
             <p className="mt-4 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-              The Service is primarily a read-only analysis tool. Two opt-in features write back to Salesforce when you explicitly use them:
+              The Service is primarily a read-only analysis tool. It writes to Salesforce in exactly three ways, all optional:
             </p>
             <ul className="list-disc pl-6 mt-2 space-y-1 text-sm">
               <li>
-                <strong>Org Chart editor</strong> — updates User.ManagerId and User.DelegatedApproverId when you drag-and-save an org-chart change
+                <strong>Org Chart editor</strong> — sets a user&apos;s Manager (User.ManagerId)
               </li>
               <li>
-                <strong>Restructure Studio plan export</strong> — generates a plan that you (the admin) apply manually in Salesforce Setup; the app itself does not push those changes
+                <strong>Org Chart editor</strong> — sets a user&apos;s Delegated Approver (User.DelegatedApproverId)
+              </li>
+              <li>
+                <strong>Health Report &quot;apply fix&quot;</strong> — deactivates users flagged as inactive or never-logged-in license holders
               </li>
             </ul>
             <p className="mt-2 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-              Every write is initiated by a user action inside the product and audit-logged. The Service never modifies your Salesforce configuration silently or on a schedule.
+              Each write is performed only when a Newton administrator explicitly takes the action, and each is audit-logged. Restructure Studio plans are exported for an administrator to apply manually in Salesforce Setup; the Service does not apply them. The Service writes nothing else to Salesforce and makes no changes on a schedule.
             </p>
           </div>
         </section>
@@ -81,15 +84,18 @@ export default function TermsOfServicePage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              To use the Service, you must connect a valid Salesforce organization through
-              OAuth authentication. You agree to:
+              Access to the Service requires an individual Newton account, created only by
+              administrator invitation and activation. A Salesforce organization is connected
+              to the Service through OAuth by a user authorised to grant that access. You
+              agree to:
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                Provide accurate and complete information during registration
+                Provide accurate and complete information when activating your account
               </li>
               <li>
-                Maintain the security of your Salesforce credentials
+                Keep your Newton password and your Salesforce credentials secure, and not
+                share your account
               </li>
               <li>
                 Notify us immediately of any unauthorized access to your account
@@ -137,7 +143,7 @@ export default function TermsOfServicePage() {
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
             <p>
-              The Service collects and processes Salesforce metadata as described in our{' '}
+              The Service collects and processes Salesforce data as described in our{' '}
               <a
                 href="/legal/privacy"
                 className="text-primary-700 dark:text-primary-400 hover:underline"
@@ -148,7 +154,9 @@ export default function TermsOfServicePage() {
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                Authorize us to access your Salesforce organization's permission metadata
+                Authorize us to read the Salesforce configuration metadata, user data, login
+                history, Setup Audit Trail, and aggregate record counts described in the
+                Privacy Policy
               </li>
               <li>
                 Confirm you have the necessary rights to share this data with us
@@ -158,7 +166,7 @@ export default function TermsOfServicePage() {
               </li>
             </ul>
             <p className="mt-4 text-sm text-grove-ink/85 dark:text-grove-ink-dk/85">
-              Newton reads Salesforce permission metadata and aggregate row/field counts. Analytics features (Data Quality scoring, License Fit right-sizing, Change Risk Radar) use Salesforce SOQL aggregate functions to compute counts — record field values are not read. A future opt-in &quot;Deep Scan&quot; mode may read record content via Bulk API for organisations that specifically enable it. See our{' '}
+              Newton reads Salesforce configuration metadata, personal data about the org&apos;s Salesforce users (including 90 days of login history with location data), the last 30 days of the Setup Audit Trail, record-sharing structure (with record IDs hashed before storage), and aggregate counts over business records. It does not read or store the contents of business records. See our{' '}
               <a href="/legal/privacy" className="text-primary-700 dark:text-primary-400 underline">
                 Privacy Policy
               </a>{' '}
@@ -291,8 +299,11 @@ export default function TermsOfServicePage() {
                 11.1 By You
               </h3>
               <p>
-                You may terminate your account at any time by disconnecting your Salesforce
-                organization or using the "Delete All Data" feature in your Privacy Dashboard.
+                You may stop the Service&apos;s access at any time by revoking Newton&apos;s
+                connected-app access in Salesforce, or by asking for your organization to be
+                deleted from Newton. Deletion is performed by a Newton administrator; it revokes
+                Newton&apos;s OAuth grant in Salesforce and permanently deletes all data stored
+                for that organization. It cannot be undone.
               </p>
             </div>
             <div>
@@ -309,9 +320,12 @@ export default function TermsOfServicePage() {
                 11.3 Effect of Termination
               </h3>
               <p>
-                Upon termination, we will delete your data according to our retention
-                policies. You may request immediate deletion under GDPR Article 17 (Right to
-                Erasure).
+                Upon termination, data ages out under our retention policies: Salesforce
+                metadata and user data are deleted once they have not been refreshed by a sync
+                for 90 days, analysis results after 180 days, and audit logs after 365 days. The
+                Salesforce connection and consultant-authored configuration are kept until the
+                organization is deleted. You may request immediate deletion of everything held
+                for your organization under GDPR Article 17 (Right to Erasure).
               </p>
             </div>
           </div>
@@ -359,8 +373,7 @@ export default function TermsOfServicePage() {
             </p>
             <ul className="list-disc pl-6 space-y-1">
               <li>Updating the "Last updated" date</li>
-              <li>Sending email notification</li>
-              <li>Displaying a notice in the dashboard</li>
+              <li>Notifying client contacts for active engagements by email</li>
             </ul>
             <p className="mt-2">
               Continued use of the Service after changes constitutes acceptance of the new

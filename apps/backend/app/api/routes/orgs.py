@@ -2,6 +2,7 @@
 Organization & Sync API Routes
 """
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -11,7 +12,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.domain.models import Organization, SyncJob, SyncStatus
+from app.auth.deps import (
+    Principal,
+    get_principal,
+    hash_package_key,
+    require_org_access,
+    require_org_admin,
+)
+from app.domain.models import (
+    OrgAccessGrant,
+    Organization,
+    SalesforceConnection,
+    SyncJob,
+    SyncStatus,
+)
 from app.graph.builder import GraphBuilder
 from app.db.neo4j_client import get_neo4j_client
 from app.ingestion.orchestrator import schedule_background_sync
@@ -27,12 +41,6 @@ router = APIRouter(prefix="/orgs")
 # ============================================================================
 # Request/Response Models
 # ============================================================================
-
-
-class CreateOrgRequest(BaseModel):
-    name: str
-    domain: Optional[str] = None
-    is_demo: bool = True
 
 
 class OrgResponse(BaseModel):
@@ -82,46 +90,89 @@ class SyncJobResponse(BaseModel):
 # ============================================================================
 
 
-@router.post("", response_model=OrgResponse, status_code=status.HTTP_201_CREATED)
-async def create_organization(
-    request: CreateOrgRequest,
-    db: AsyncSession = Depends(get_database),
-):
-    """Create new organization"""
-    org = Organization(
-        name=request.name,
-        domain=request.domain,
-        is_demo=request.is_demo,
-    )
-    db.add(org)
-    await db.commit()
-    await db.refresh(org)
-
-    logger.info(f"Created organization: {org.name} (id={org.id})")
-    return org
+class AccessibleOrgResponse(BaseModel):
+    id: str
+    name: str
+    domain: Optional[str]
+    is_demo: bool
+    created_at: datetime
+    is_connected: bool
+    instance_url: Optional[str]
+    is_sandbox: Optional[bool]
+    last_sync_at: Optional[datetime]
+    last_sync_status: Optional[str]
 
 
-@router.get("", response_model=List[OrgResponse])
+def _is_sandbox(org: Organization, conn: Optional[SalesforceConnection]) -> Optional[bool]:
+    recorded = (org.settings or {}).get("is_sandbox")
+    if recorded is not None:
+        return bool(recorded)
+    # Orgs connected before the flag was recorded: infer from My Domain.
+    if conn and conn.instance_url:
+        return ".sandbox." in conn.instance_url or "--" in conn.instance_url
+    return None
+
+
+@router.get("", response_model=List[AccessibleOrgResponse])
 async def list_organizations(
+    principal: Principal = Depends(get_principal),
     db: AsyncSession = Depends(get_database),
 ):
-    """List all organizations (excludes demo orgs when DEMO_MODE=false)"""
-    from app.core.config import settings
+    """Client orgs the signed-in user may open (admins: all)."""
+    query = select(Organization).where(Organization.id != principal.home_org_id)
+    if not principal.is_admin:
+        query = query.join(
+            OrgAccessGrant, OrgAccessGrant.organization_id == Organization.id
+        ).where(OrgAccessGrant.org_user_id == principal.user_id)
+    orgs = (await db.execute(query.order_by(Organization.name))).scalars().all()
+    org_ids = [o.id for o in orgs]
+    if not org_ids:
+        return []
 
-    query = select(Organization)
+    connections = {
+        c.organization_id: c
+        for c in (
+            await db.execute(
+                select(SalesforceConnection).where(
+                    SalesforceConnection.organization_id.in_(org_ids),
+                    SalesforceConnection.is_active == True,  # noqa: E712
+                )
+            )
+        ).scalars().all()
+    }
+    latest_jobs: dict = {}
+    for job in (
+        await db.execute(
+            select(SyncJob)
+            .where(SyncJob.organization_id.in_(org_ids))
+            .order_by(SyncJob.created_at.desc())
+        )
+    ).scalars().all():
+        latest_jobs.setdefault(job.organization_id, job)
 
-    # Filter out demo orgs if not in demo mode
-    if not settings.DEMO_MODE:
-        query = query.where(Organization.is_demo == False)
-
-    result = await db.execute(query)
-    orgs = result.scalars().all()
-    return orgs
+    out = []
+    for o in orgs:
+        conn = connections.get(o.id)
+        job = latest_jobs.get(o.id)
+        out.append(AccessibleOrgResponse(
+            id=o.id,
+            name=o.name,
+            domain=o.domain,
+            is_demo=o.is_demo,
+            created_at=o.created_at,
+            is_connected=bool(conn and conn.access_token),
+            instance_url=conn.instance_url if conn else None,
+            is_sandbox=_is_sandbox(o, conn),
+            last_sync_at=(job.completed_at or job.started_at) if job else None,
+            last_sync_status=(job.status.value if hasattr(job.status, "value") else job.status) if job else None,
+        ))
+    return out
 
 
 @router.get("/{org_id}", response_model=OrgResponse)
 async def get_organization(
     org_id: str,
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
     """Get organization by ID"""
@@ -134,6 +185,7 @@ async def get_organization(
 @router.post("/{org_id}/sync", response_model=SyncJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def trigger_sync(
     org_id: str,
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
     """
@@ -165,6 +217,7 @@ async def trigger_sync(
 @router.post("/{org_id}/build-graph", status_code=status.HTTP_202_ACCEPTED)
 async def build_graph(
     org_id: str,
+    _org: str = Depends(require_org_access),
     rebuild: bool = False,
     db: AsyncSession = Depends(get_database),
 ):
@@ -187,6 +240,7 @@ async def build_graph(
 @router.post("/{org_id}/analyze", status_code=status.HTTP_202_ACCEPTED)
 async def run_analysis(
     org_id: str,
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
     """
@@ -235,6 +289,7 @@ async def run_analysis(
 @router.get("/{org_id}/diagnostic")
 async def diagnostic_permissions(
     org_id: str,
+    _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ):
     """Diagnostic endpoint to check if permissions are in database"""
@@ -305,6 +360,7 @@ async def diagnostic_permissions(
 @router.get("/{org_id}/sync-jobs", response_model=List[SyncJobResponse])
 async def list_sync_jobs(
     org_id: str,
+    _org: str = Depends(require_org_access),
     limit: int = 10,
     db: AsyncSession = Depends(get_database),
 ):
@@ -317,3 +373,19 @@ async def list_sync_jobs(
     )
     jobs = result.scalars().all()
     return [SyncJobResponse.model_validate(job) for job in jobs]
+
+
+@router.post("/{org_id}/package-key")
+async def rotate_package_key(
+    org_id: str,
+    _admin: str = Depends(require_org_admin),
+    db: AsyncSession = Depends(get_database),
+):
+    """Issue a new key for the Salesforce managed package. Shown once;
+    any previously issued key stops working immediately."""
+    org = await db.get(Organization, org_id)
+    key = f"nwk_{secrets.token_urlsafe(32)}"
+    org.package_key_hash = hash_package_key(key)
+    await db.commit()
+    logger.info("package key rotated for org %s", org_id)
+    return {"package_key": key}

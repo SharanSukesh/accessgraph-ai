@@ -41,8 +41,11 @@ export interface ObjectScore {
       is_custom?: boolean
       is_required?: boolean
     }[]
-    duplicate_key?: string
-    duplicate_examples?: { key: string; count: number }[]
+    duplicate_key?: string | null
+    duplicates_checked?: boolean
+    // Sizes of the largest duplicate clusters. The duplicated values
+    // themselves are never pulled from Salesforce.
+    duplicate_cluster_sizes?: number[]
     // True when SOQL GROUP BY hit the 2000-cluster ceiling — the
     // real duplicate count for this object may be higher. Prompts
     // the frontend to show a "Deep Scan (opt-in)" nudge once we

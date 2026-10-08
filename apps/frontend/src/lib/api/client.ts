@@ -5,11 +5,6 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-// Debug: Log API URL on client side
-if (typeof window !== 'undefined') {
-  console.log('API_BASE_URL:', API_BASE_URL)
-}
-
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -61,11 +56,6 @@ class ApiClient {
       ...fetchConfig.headers,
     }
 
-    // Debug logging
-    if (typeof window !== 'undefined' && endpoint.includes('anomalies')) {
-      console.log('API Request:', { url, params, method: fetchConfig.method || 'GET' })
-    }
-
     try {
       const response = await fetch(url, {
         ...fetchConfig,
@@ -103,11 +93,6 @@ class ApiClient {
 
       // Parse JSON response
       const data = await response.json()
-
-      // Debug logging for anomalies endpoint
-      if (typeof window !== 'undefined' && endpoint.includes('anomalies')) {
-        console.log('API Response:', { url, data, dataLength: Array.isArray(data) ? data.length : 'not an array' })
-      }
 
       return data as T
     } catch (error) {

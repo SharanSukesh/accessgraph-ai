@@ -21,7 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Index,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy_utils import EncryptedType
 from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 
@@ -29,6 +29,7 @@ from app.db.types import EncryptedString
 
 from app.db.base import Base, TimestampMixin
 from app.core.config import settings
+from app.core.pseudonymize import pseudonymize_record_id
 
 
 def generate_uuid() -> str:
@@ -157,6 +158,9 @@ class Organization(Base, TimestampMixin):
     domain: Mapped[Optional[str]] = mapped_column(String(255))
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    # SHA-256 of the per-org key the Salesforce managed package sends in
+    # X-Newton-Package-Key. The plaintext is shown once to an admin.
+    package_key_hash: Mapped[Optional[str]] = mapped_column(String(64))
 
     # Relationships
     salesforce_connections = relationship("SalesforceConnection", back_populates="organization", cascade="all, delete-orphan")
@@ -715,6 +719,10 @@ class AccountShareSnapshot(Base, TimestampMixin):
         Index("ix_account_share_cause", "row_cause"),
     )
 
+    @validates("account_id")
+    def _pseudonymize_account_id(self, _key, value):
+        return pseudonymize_record_id(value)
+
     def __repr__(self) -> str:
         return f"<AccountShareSnapshot(account={self.account_id}, user={self.user_or_group_id}, cause={self.row_cause})>"
 
@@ -741,6 +749,10 @@ class OpportunityShareSnapshot(Base, TimestampMixin):
         Index("ix_opp_share_opp", "opportunity_id"),
         Index("ix_opp_share_user", "user_or_group_id"),
     )
+
+    @validates("opportunity_id")
+    def _pseudonymize_opportunity_id(self, _key, value):
+        return pseudonymize_record_id(value)
 
 
 class AccountTeamMemberSnapshot(Base, TimestampMixin):
@@ -769,6 +781,10 @@ class AccountTeamMemberSnapshot(Base, TimestampMixin):
         Index("ix_account_team_account", "account_id"),
         Index("ix_account_team_user", "user_id"),
     )
+
+    @validates("account_id")
+    def _pseudonymize_account_id(self, _key, value):
+        return pseudonymize_record_id(value)
 
     def __repr__(self) -> str:
         return f"<AccountTeamMemberSnapshot(account={self.account_id}, user={self.user_id}, role={self.team_member_role})>"
@@ -801,6 +817,10 @@ class OpportunityTeamMemberSnapshot(Base, TimestampMixin):
         Index("ix_opp_team_opportunity", "opportunity_id"),
         Index("ix_opp_team_user", "user_id"),
     )
+
+    @validates("opportunity_id")
+    def _pseudonymize_opportunity_id(self, _key, value):
+        return pseudonymize_record_id(value)
 
     def __repr__(self) -> str:
         return f"<OpportunityTeamMemberSnapshot(opp={self.opportunity_id}, user={self.user_id}, role={self.team_member_role})>"
@@ -1014,6 +1034,31 @@ class OrgUser(Base, TimestampMixin):
         }
 
         return permission_map.get(permission, False)
+
+
+class OrgAccessGrant(Base, TimestampMixin):
+    """Which client orgs a non-admin Newton user may open.
+
+    Newton users (OrgUser rows) live in the operator's own org; client
+    Salesforce orgs are separate Organization rows. ORG_ADMIN users can
+    open every client org; everyone else needs a grant here.
+    """
+    __tablename__ = "org_access_grants"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    org_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("org_users.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    granted_by: Mapped[Optional[str]] = mapped_column(String(36))
+
+    __table_args__ = (
+        UniqueConstraint("org_user_id", "organization_id", name="uq_org_access_grant"),
+        Index("ix_org_access_grant_user", "org_user_id"),
+        Index("ix_org_access_grant_org", "organization_id"),
+    )
 
 
 class AuthToken(Base, TimestampMixin):

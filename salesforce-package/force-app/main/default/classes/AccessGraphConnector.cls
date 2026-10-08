@@ -30,6 +30,17 @@ public with sharing class AccessGraphConnector {
     }
 
     /**
+     * Newton rejects package callouts without the per-org key an admin
+     * generates in the web app and stores in AccessGraph_Settings__c.
+     */
+    private static void applyPackageKey(HttpRequest req) {
+        AccessGraph_Settings__c settings = AccessGraph_Settings__c.getOrgDefaults();
+        if (settings != null && String.isNotBlank(settings.Package_Key__c)) {
+            req.setHeader('X-Newton-Package-Key', settings.Package_Key__c);
+        }
+    }
+
+    /**
      * Get dashboard (frontend UI) URL.
      * Currently hardcoded; can be made configurable via custom setting later.
      */
@@ -76,6 +87,7 @@ public with sharing class AccessGraphConnector {
             req.setEndpoint(endpoint);
             req.setMethod('POST');
             req.setHeader('Content-Type', 'application/json');
+            applyPackageKey(req);
             req.setBody(JSON.serialize(new Map<String, Object>{
                 'organizationId' => salesforceOrgId
             }));
@@ -128,6 +140,7 @@ public with sharing class AccessGraphConnector {
             req.setEndpoint(endpoint);
             req.setMethod('GET');
             req.setHeader('Content-Type', 'application/json');
+            applyPackageKey(req);
             req.setTimeout(30000);
 
             Http http = new Http();
@@ -354,6 +367,7 @@ public with sharing class AccessGraphConnector {
         req.setEndpoint(endpoint);
         req.setMethod('GET');
         req.setHeader('Content-Type', 'application/json');
+        applyPackageKey(req);
         req.setTimeout(timeoutMs);
         return new Http().send(req);
     }
@@ -447,6 +461,7 @@ public with sharing class AccessGraphConnector {
             req.setEndpoint(endpoint);
             req.setMethod('POST');
             req.setHeader('Content-Type', 'application/json');
+            applyPackageKey(req);
             req.setBody(JSON.serialize(new Map<String, Object>{
                 'salesforceOrgId' => UserInfo.getOrganizationId(),
                 'salesforceUserId' => UserInfo.getUserId(),
@@ -838,6 +853,7 @@ public with sharing class AccessGraphConnector {
             req.setEndpoint(getApiEndpoint() + '/recommendations/' + recId);
             req.setMethod('PATCH');
             req.setHeader('Content-Type', 'application/json');
+            applyPackageKey(req);
             req.setBody(JSON.serialize(new Map<String, Object>{
                 'status' => newStatus
             }));
@@ -877,6 +893,7 @@ public with sharing class AccessGraphConnector {
             );
             req.setMethod('POST');
             req.setHeader('Content-Type', 'application/json');
+            applyPackageKey(req);
             req.setBody('{}');
             req.setTimeout(60000);  // policy rollout can take ~10-30s on big orgs
             HttpResponse res = new Http().send(req);

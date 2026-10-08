@@ -12,11 +12,11 @@ import { useAuth } from '@/lib/auth/AuthContext'
 
 export default function HomePage() {
   const router = useRouter()
-  const { user, isLoading, isAuthenticated } = useAuth()
+  const { isLoading, isAuthenticated } = useAuth()
 
   useEffect(() => {
     if (!isLoading) {
-      if (isAuthenticated && user) {
+      if (isAuthenticated) {
         // Post-login fork: existing-org workspace vs new-implementation
         // workspace. The chooser at /start presents both.
         router.push('/start')
@@ -25,7 +25,7 @@ export default function HomePage() {
         router.push('/login')
       }
     }
-  }, [isAuthenticated, isLoading, user, router])
+  }, [isAuthenticated, isLoading, router])
 
   // Show loading while checking authentication
   return (

@@ -7,20 +7,28 @@ import { apiClient } from '../client'
 import { endpoints } from '../endpoints'
 
 // Types
-interface Organization {
+/** A client org the signed-in user may open (GET /orgs). */
+export interface Organization {
   id: string
   name: string
-  salesforceOrgId?: string
-  instanceUrl?: string
-  isActive: boolean
-  lastSyncAt?: string
-  createdAt: string
+  domain: string | null
+  is_demo: boolean
+  created_at: string
+  is_connected: boolean
+  instance_url: string | null
+  /** null when the org has no Salesforce connection yet. */
+  is_sandbox: boolean | null
+  last_sync_at: string | null
+  last_sync_status: string | null
 }
 
-interface CreateOrgRequest {
+/** GET /orgs/{orgId} — the slimmer single-org shape. */
+export interface OrganizationDetail {
+  id: string
   name: string
-  salesforceOrgId?: string
-  instanceUrl?: string
+  domain: string | null
+  is_demo: boolean
+  created_at: string
 }
 
 interface SyncResponse {
@@ -42,13 +50,14 @@ export const orgKeys = {
 /**
  * Get all organizations
  */
-export function useOrgs() {
+export function useOrgs(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: orgKeys.lists(),
     queryFn: async () => {
       const data = await apiClient.get<Organization[]>(endpoints.orgs)
       return data
     },
+    enabled: options.enabled ?? true,
   })
 }
 
@@ -59,28 +68,10 @@ export function useOrg(orgId: string) {
   return useQuery({
     queryKey: orgKeys.detail(orgId),
     queryFn: async () => {
-      const data = await apiClient.get<Organization>(endpoints.org(orgId))
+      const data = await apiClient.get<OrganizationDetail>(endpoints.org(orgId))
       return data
     },
     enabled: !!orgId,
-  })
-}
-
-/**
- * Create new organization
- */
-export function useCreateOrg() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (request: CreateOrgRequest) => {
-      const data = await apiClient.post<Organization>(endpoints.orgs, request)
-      return data
-    },
-    onSuccess: () => {
-      // Invalidate organizations list
-      queryClient.invalidateQueries({ queryKey: orgKeys.lists() })
-    },
   })
 }
 
@@ -153,11 +144,11 @@ export function useAnalyzeOrg(orgId: string) {
 /**
  * Get sync jobs for organization
  */
-export function useSyncJobs(orgId: string) {
+export function useSyncJobs(orgId: string | null | undefined) {
   return useQuery({
-    queryKey: orgKeys.syncJobs(orgId),
+    queryKey: orgKeys.syncJobs(orgId ?? ''),
     queryFn: async () => {
-      const data = await apiClient.get<any[]>(endpoints.syncJobs(orgId))
+      const data = await apiClient.get<any[]>(endpoints.syncJobs(orgId as string))
       return data
     },
     enabled: !!orgId,

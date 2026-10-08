@@ -28,10 +28,11 @@ export default function SecurityPracticesPage() {
           Security Practices
         </h1>
         <p className="mt-4 text-lg text-grove-ink/70 dark:text-grove-ink/50">
-          Last updated: {new Date().toLocaleDateString()}
+          Last updated: October 8, 2026
         </p>
         <p className="mt-2 text-grove-ink/70 dark:text-grove-ink/50">
-          Learn how Newton protects your data and maintains enterprise-grade security.
+          How Newton protects the data it holds: the controls in place today, and what is not
+          yet in place.
         </p>
       </div>
 
@@ -55,10 +56,11 @@ export default function SecurityPracticesPage() {
                 <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                    GDPR data-subject rights
+                    Data inventory and erasure
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    Right to access, erasure, portability — enforced by the /orgs/{'{'}id{'}'}/privacy endpoints
+                    Per-org inventory of stored records; an administrator can delete a client
+                    org, which revokes Newton&apos;s Salesforce access and deletes all its data
                   </p>
                 </div>
               </div>
@@ -66,10 +68,12 @@ export default function SecurityPracticesPage() {
                 <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                    AES-256 encryption at rest
+                    OAuth tokens encrypted at rest
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    OAuth tokens are AES-256 encrypted via sqlalchemy-utils
+                    Salesforce access and refresh tokens are AES-256 encrypted at the
+                    application level (sqlalchemy-utils). Other stored data is not
+                    field-encrypted by Newton.
                   </p>
                 </div>
               </div>
@@ -77,10 +81,10 @@ export default function SecurityPracticesPage() {
                 <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                    TLS 1.2+ in transit
+                    TLS (HTTPS) in transit
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    Provided by Railway (backend) + Vercel (frontend) ingress
+                    Provided by the hosting provider&apos;s ingress
                   </p>
                 </div>
               </div>
@@ -91,7 +95,8 @@ export default function SecurityPracticesPage() {
                     Role-based access (RBAC)
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    ORG_ADMIN / ANALYST / VIEWER / AUDITOR + granular per-permission flags
+                    Administrator / analyst / viewer / auditor, with per-org access grants
+                    re-checked server-side on every request
                   </p>
                 </div>
               </div>
@@ -102,7 +107,8 @@ export default function SecurityPracticesPage() {
                     Audit logging
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    Sensitive actions written to an append-only audit_logs table
+                    Sign-ins, sensitive data access, syncs, Salesforce connections, write-backs
+                    and deletions; retained 365 days
                   </p>
                 </div>
               </div>
@@ -113,7 +119,20 @@ export default function SecurityPracticesPage() {
                     Bcrypt password hashing
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    Cost factor 12 for the email+password login flow
+                    Cost factor 12 for the email+password login flow; sign-in attempts are
+                    rate limited
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    OAuth with PKCE
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    Salesforce authorization-code flow with PKCE and a signed, short-lived
+                    state value (CSRF protection)
                   </p>
                 </div>
               </div>
@@ -135,7 +154,19 @@ export default function SecurityPracticesPage() {
                     Admin-invited account model
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    No self-signup — every account requires admin invitation + email activation
+                    No self-signup — every account requires an administrator invitation and
+                    activation
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
+                    Automatic retention
+                  </p>
+                  <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
+                    A daily job deletes data past its retention period (section 6)
                   </p>
                 </div>
               </div>
@@ -187,7 +218,7 @@ export default function SecurityPracticesPage() {
                     Independent penetration testing
                   </p>
                   <p className="text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                    Third-party pentest engagement planned once we reach enterprise pilots
+                    Not performed to date; a third-party test is planned
                   </p>
                 </div>
               </div>
@@ -213,17 +244,21 @@ export default function SecurityPracticesPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-2">
                 <li>
-                  <strong>AES-256 Field-Level Encryption:</strong> OAuth tokens and sensitive
-                  fields encrypted using industry-standard AES-256-GCM
+                  <strong>AES-256 Field-Level Encryption:</strong> Salesforce OAuth access and
+                  refresh tokens are encrypted with AES-256 at the application level before
+                  they are written to the database
                 </li>
                 <li>
-                  <strong>Database Encryption:</strong> Managed PostgreSQL volumes on Railway are encrypted at rest by the provider
+                  <strong>Other Stored Data:</strong> Not encrypted by Newton at the
+                  application level. It is stored in Railway-managed PostgreSQL and relies on
+                  the hosting provider&apos;s infrastructure controls.
                 </li>
                 <li>
                   <strong>Key Management:</strong> Encryption keys stored as Railway environment variables (secrets), never checked into code
                 </li>
                 <li>
-                  <strong>Key Rotation:</strong> Manual — operator rotates the key by updating the env var and running the token re-encrypt migration. Scheduled rotation is not yet automated.
+                  <strong>Key Rotation:</strong> Manual and not automated. Rotating the key
+                  requires re-encrypting the stored tokens or reconnecting each Salesforce org.
                 </li>
               </ul>
             </div>
@@ -235,13 +270,20 @@ export default function SecurityPracticesPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-2">
                 <li>
-                  <strong>TLS 1.2+:</strong> All API communication uses TLS as provided by Railway (backend) + Vercel (frontend) ingress
+                  <strong>TLS:</strong> Traffic between the browser, Newton, and Salesforce
+                  is transmitted over HTTPS (TLS), terminated by the hosting provider&apos;s ingress
                 </li>
                 <li>
                   <strong>HSTS:</strong> Strict-Transport-Security headers are sent when <code className="text-xs">ENFORCE_HTTPS</code> is set on the backend (recommended production configuration)
                 </li>
                 <li>
-                  <strong>Salesforce OAuth:</strong> Secure OAuth 2.0 flow for authentication
+                  <strong>Salesforce OAuth:</strong> OAuth 2.0 authorization-code flow with
+                  PKCE and a signed, short-lived state value (CSRF protection). Newton stores
+                  the resulting access and refresh tokens, encrypted as described above.
+                </li>
+                <li>
+                  <strong>Managed package:</strong> The optional Newton Salesforce package
+                  authenticates to Newton with a per-org key issued by a Newton administrator
                 </li>
               </ul>
             </div>
@@ -257,14 +299,15 @@ export default function SecurityPracticesPage() {
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Role-Based Access Control (RBAC)
               </h3>
-              <p>Dashboard users are assigned one of four roles:</p>
+              <p>Each Newton account is assigned one of four roles:</p>
               <div className="mt-3 space-y-2">
                 <div className="flex items-start space-x-3">
                   <Badge variant="danger" size="sm">
-                    ORG_ADMIN
+                    ADMINISTRATOR
                   </Badge>
                   <p className="text-sm">
-                    Full access to all features, user management, and data deletion
+                    Access to all client orgs. The only role that can delete data, write back
+                    to Salesforce, or manage Newton users.
                   </p>
                 </div>
                 <div className="flex items-start space-x-3">
@@ -272,21 +315,21 @@ export default function SecurityPracticesPage() {
                     ANALYST
                   </Badge>
                   <p className="text-sm">
-                    View and analyze data, create recommendations, export reports
+                    Access only to client orgs explicitly granted to them
                   </p>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Badge variant="info" size="sm">
                     VIEWER
                   </Badge>
-                  <p className="text-sm">Read-only access to dashboard and reports</p>
+                  <p className="text-sm">Read-only access to client orgs granted to them</p>
                 </div>
                 <div className="flex items-start space-x-3">
                   <Badge variant="success" size="sm">
                     AUDITOR
                   </Badge>
                   <p className="text-sm">
-                    Access to audit logs and compliance reports only
+                    Read-only access to client orgs granted to them
                   </p>
                 </div>
               </div>
@@ -294,15 +337,22 @@ export default function SecurityPracticesPage() {
 
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
-                Granular Permissions
+                Accounts and Sessions
               </h3>
-              <p>Each role has fine-grained permissions:</p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>can_export_data - Export data from the platform</li>
-                <li>can_manage_users - Invite and remove dashboard users</li>
-                <li>can_sync_data - Trigger Salesforce sync operations</li>
-                <li>can_delete_data - Delete organization data</li>
-                <li>can_view_audit_logs - Access security audit trail</li>
+                <li>
+                  Access requires an individual Newton account (email and password). Accounts
+                  are created only by administrator invitation followed by activation.
+                </li>
+                <li>Passwords are stored as bcrypt hashes</li>
+                <li>Sign-in attempts are rate limited</li>
+                <li>
+                  Every request re-checks, server-side, that the account is active and has
+                  access to the requested client org
+                </li>
+                <li>
+                  Sessions use a signed, HTTP-only, Secure cookie with a 7-day expiry
+                </li>
               </ul>
             </div>
           </div>
@@ -316,18 +366,18 @@ export default function SecurityPracticesPage() {
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2 flex items-center">
                 <FileText className="h-5 w-5 mr-2 text-primary-700" />
-                Comprehensive Audit Trail
+                Audit Trail
               </h3>
-              <p>We log all sensitive operations with the following details:</p>
+              <p>Each audit log entry records:</p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
                 <li>
                   <strong>Who:</strong> User email, user ID, IP address, user agent
                 </li>
                 <li>
-                  <strong>What:</strong> Action performed (17 tracked actions)
+                  <strong>What:</strong> Action performed
                 </li>
                 <li>
-                  <strong>When:</strong> Timestamp (UTC) with millisecond precision
+                  <strong>When:</strong> Timestamp (UTC)
                 </li>
                 <li>
                   <strong>Where:</strong> Request path, HTTP method, resource accessed
@@ -347,18 +397,14 @@ export default function SecurityPracticesPage() {
               </h3>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <ul className="text-sm space-y-1">
-                  <li>• Authentication (login, logout)</li>
-                  <li>• Data access (view users, permissions)</li>
+                  <li>• Sign-ins</li>
+                  <li>• Access to sensitive data endpoints</li>
                   <li>• Sync operations</li>
-                  <li>• Export operations</li>
-                  <li>• User management</li>
                 </ul>
                 <ul className="text-sm space-y-1">
+                  <li>• Salesforce connections</li>
+                  <li>• Write-backs to Salesforce</li>
                   <li>• Data deletion</li>
-                  <li>• Settings changes</li>
-                  <li>• Salesforce connection</li>
-                  <li>• Access graph viewing</li>
-                  <li>• Anomaly detection</li>
                 </ul>
               </div>
             </div>
@@ -368,9 +414,9 @@ export default function SecurityPracticesPage() {
                 Retention
               </h3>
               <p>
-                Audit logs are retained for <strong>365 days</strong> to meet SOC 2 and
-                compliance requirements. Logs are automatically purged after the retention
-                period.
+                Audit logs are retained for <strong>365 days</strong> and then deleted by the
+                daily retention job. Deleting a client org also deletes that org&apos;s audit
+                logs.
               </p>
             </div>
           </div>
@@ -388,17 +434,18 @@ export default function SecurityPracticesPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-2">
                 <li>
-                  <strong>Railway Platform:</strong> SOC 2, GDPR-compliant infrastructure
-                  provider
+                  <strong>Railway Platform:</strong> Hosts the backend API and the PostgreSQL
+                  database. For Railway&apos;s own controls and attestations, see its security
+                  documentation.
                 </li>
                 <li>
-                  <strong>PostgreSQL:</strong> Railway-managed PostgreSQL with provider-managed backups
+                  <strong>PostgreSQL:</strong> Railway-managed PostgreSQL
                 </li>
                 <li>
                   <strong>Geographic redundancy:</strong> Single-region today; multi-region is on the roadmap
                 </li>
                 <li>
-                  <strong>DDoS mitigation:</strong> Provided by Railway&apos;s ingress layer; we do not run a dedicated WAF or CloudFlare Enterprise
+                  <strong>DDoS mitigation:</strong> Provided by the hosting provider&apos;s ingress layer; we do not run a dedicated WAF or CloudFlare Enterprise
                 </li>
               </ul>
             </div>
@@ -409,7 +456,7 @@ export default function SecurityPracticesPage() {
               </h3>
               <ul className="list-disc pl-6 space-y-1">
                 <li>Backend + database run on Railway&apos;s private networking</li>
-                <li>Frontend served via Vercel&apos;s edge network</li>
+                <li>The web front end is served by our hosting provider</li>
                 <li>Admin access uses the same authenticated + role-gated login flow as any other user — no IP allowlist today</li>
               </ul>
             </div>
@@ -425,9 +472,9 @@ export default function SecurityPracticesPage() {
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Security Headers
               </h3>
-              <p>All HTTP responses include security headers:</p>
+              <p>Backend API responses include security headers:</p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>Strict-Transport-Security (HSTS)</li>
+                <li>Strict-Transport-Security (HSTS), when HTTPS is enforced</li>
                 <li>X-Content-Type-Options: nosniff</li>
                 <li>X-Frame-Options: SAMEORIGIN</li>
                 <li>Content-Security-Policy</li>
@@ -441,10 +488,13 @@ export default function SecurityPracticesPage() {
                 Input Validation & Sanitization
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>All API inputs validated with Pydantic schemas</li>
+                <li>API inputs validated with Pydantic schemas</li>
                 <li>SQL injection prevention via parameterized queries</li>
                 <li>XSS prevention through React's built-in escaping</li>
-                <li>CSRF protection on all state-changing operations</li>
+                <li>
+                  Session cookie is HTTP-only and SameSite=Lax; the Salesforce OAuth flow is
+                  protected by a signed, short-lived state value
+                </li>
               </ul>
             </div>
 
@@ -453,9 +503,9 @@ export default function SecurityPracticesPage() {
                 Dependency Management
               </h3>
               <ul className="list-disc pl-6 space-y-1">
-                <li>Automated dependency vulnerability scanning (Dependabot)</li>
-                <li>Weekly security patch updates</li>
-                <li>Pinned dependency versions for reproducible builds</li>
+                <li>Dependency versions are pinned or constrained to tested ranges</li>
+                <li>Dependencies are updated periodically; there is no fixed patch schedule</li>
+                <li>No automated dependency scanning is configured in CI today</li>
               </ul>
             </div>
           </div>
@@ -475,44 +525,72 @@ export default function SecurityPracticesPage() {
                   <Database className="h-5 w-5 text-primary-700 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-medium text-grove-ink dark:text-grove-ink-dk">
-                      Metadata + aggregate counts only
+                      Configuration, user data, and aggregate counts — not record contents
                     </p>
                     <p className="text-sm text-grove-ink/85 dark:text-grove-ink-dk/85 mt-1">
-                      Newton reads Salesforce permission metadata and
-                      aggregate row/field counts. We do not read the values
-                      inside your records. Field-level data never leaves
-                      Salesforce.
+                      Newton reads Salesforce configuration metadata, personal data about the
+                      org&apos;s Salesforce users, login history, the Setup Audit Trail, and
+                      aggregate counts over business records. It does not read or store the
+                      contents of business records (for example account names, contact
+                      details, opportunity amounts, or case text).
                     </p>
                     <p className="text-[11px] font-mono uppercase tracking-wider text-grove-ink/70 dark:text-grove-ink-dk/70 mt-3">
-                      Metadata we sync + store
+                      Configuration metadata we sync + store
                     </p>
                     <ul className="text-sm mt-1 space-y-1">
-                      <li>• Users, roles, profiles, permission sets, permission-set groups + assignments</li>
-                      <li>• Object &amp; field permissions</li>
-                      <li>• Sharing rules, group memberships, org-wide defaults</li>
-                      <li>• Account team, opportunity team, and share records (structural, not content)</li>
-                      <li>• Flow, Apex Trigger, Connected App, Named Credential, and Report/Dashboard <em>inventories</em> (name + owner + timestamps)</li>
-                      <li>• Login history (user, timestamp, application name, IP)</li>
+                      <li>• Profiles, permission sets, permission set groups + assignments</li>
+                      <li>• Object permissions and field-level security</li>
+                      <li>• Roles, public groups + members, sharing rules, org-wide defaults</li>
+                      <li>• Installed packages, flows, Apex class/trigger names and test coverage</li>
+                      <li>• Validation and workflow rules</li>
+                      <li>• Reports and dashboards (name, description, owner, last run)</li>
+                      <li>• Connected apps, named credentials, remote sites (including endpoint URLs)</li>
+                      <li>• Org limits and license counts</li>
+                    </ul>
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-grove-ink/70 dark:text-grove-ink-dk/70 mt-3">
+                      Personal data about Salesforce users
+                    </p>
+                    <ul className="text-sm mt-1 space-y-1">
+                      <li>• Name, username, email, title, department, manager, delegated approver, active status, created date, last login time, profile/role</li>
+                      <li>
+                        • Login history, last 90 days (login time, status, application, login
+                        type, source IP, browser, platform, geolocation including city, country
+                        and coordinates) — used to detect login anomalies. IP addresses and
+                        coordinates are used only in memory; city, country, browser and
+                        platform can appear in stored anomaly explanations.
+                      </li>
+                      <li>
+                        • Setup Audit Trail, last 30 days (who made each change, when, the
+                        section, and Salesforce&apos;s description text of the change)
+                      </li>
+                    </ul>
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-grove-ink/70 dark:text-grove-ink-dk/70 mt-3">
+                      Record-level access structure
+                    </p>
+                    <ul className="text-sm mt-1 space-y-1">
+                      <li>
+                        • Account/opportunity share rows and account/opportunity team
+                        membership. Business record IDs are replaced with a keyed one-way hash
+                        before storage — enough to count and compare records, not to identify
+                        them in Salesforce.
+                      </li>
                     </ul>
                     <p className="text-[11px] font-mono uppercase tracking-wider text-copper-700 dark:text-copper-400 mt-3">
-                      Aggregate signals we compute (no record content)
+                      Aggregate counts we compute (no record content)
                     </p>
                     <ul className="text-sm mt-1 space-y-1">
+                      <li>• Number of records per object</li>
+                      <li>• Per-field fill counts (<code>COUNT</code> of populated values)</li>
                       <li>
-                        <strong>Data Quality scoring</strong> — per-object aggregate SOQL: <code>COUNT(field)</code> for completeness, <code>GROUP BY key HAVING COUNT(Id) &gt; 1</code> for duplicate clusters, <code>COUNT() WHERE LastModifiedDate &lt; threshold</code> for staleness. We also read Salesforce&apos;s native <code>DuplicateRule</code> configuration. Only the numeric answers come back — no record IDs, no field values.
+                        • Number and sizes of duplicate clusters — grouped inside Salesforce;
+                        the duplicated values themselves are never returned to Newton
                       </li>
-                      <li>
-                        <strong>License Fit</strong> — per-user owner counts on Account / Opportunity / Case / Lead / Contact via aggregate SOQL to detect persona mismatch. No field values are stored.
-                      </li>
-                      <li>
-                        <strong>Change Risk Radar</strong> — reads SetupAuditTrail (an admin-change log). This is metadata about changes, not record content.
-                      </li>
+                      <li>• Counts of stale records</li>
+                      <li>• Records owned per user</li>
+                      <li>• Open opportunities not modified in 60 days</li>
                     </ul>
                     <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80 mt-3">
-                      A future opt-in &quot;Deep Scan&quot; mode may read record content via Salesforce Bulk API for organisations that specifically request full-scan accuracy. That mode is disabled by default; enabling it requires an explicit admin action with a consent modal.
-                    </p>
-                    <p className="text-sm text-grove-ink/80 dark:text-grove-ink-dk/80 mt-3">
-                      All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see. Custom fields containing regulated data (PHI, PCI) are visible only if that user has access to them.
+                      All queries run under the OAuth session of the Salesforce user who authorised Newton — we can only read what that user can see.
                     </p>
                   </div>
                 </div>
@@ -520,16 +598,54 @@ export default function SecurityPracticesPage() {
             </Card>
 
             <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2 flex items-center">
+                <AlertTriangle className="h-5 w-5 mr-2 text-primary-700" />
+                What Newton Writes to Salesforce
+              </h3>
+              <p>
+                Exactly three optional actions, each performed only when a Newton administrator
+                explicitly takes it, and each recorded in the audit log:
+              </p>
+              <ul className="list-disc pl-6 mt-2 space-y-1">
+                <li>Setting a user&apos;s Manager (Org Chart editor)</li>
+                <li>Setting a user&apos;s Delegated Approver (Org Chart editor)</li>
+                <li>
+                  Deactivating users flagged as inactive or never-logged-in license holders
+                  (Health Report &quot;apply fix&quot;)
+                </li>
+              </ul>
+              <p className="mt-2">
+                Restructure Studio plans are exported, not applied. Nothing else is written.
+              </p>
+            </div>
+
+            <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 Automatic Data Retention
               </h3>
-              <p>We automatically delete old data to minimize storage:</p>
+              <p>
+                A daily job deletes data past its retention period; an administrator can also
+                run it on demand:
+              </p>
               <ul className="list-disc pl-6 mt-2 space-y-1">
-                <li>Snapshots: 90 days</li>
-                <li>Audit logs: 365 days (compliance requirement)</li>
-                <li>Sync jobs: 30 days</li>
-                <li>Analysis data: 180 days</li>
+                <li>Salesforce metadata and user data: deleted when not refreshed by a sync for 90 days</li>
+                <li>Analysis results (anomalies, risk scores, findings, sprawl, compliance and data-quality results): 180 days</li>
+                <li>Audit logs: 365 days</li>
+                <li>Sync history: 30 days (the most recent sync record is kept)</li>
+                <li>Consultant-authored configuration (price book, report branding, saved restructure plans, VIP designations) and the Salesforce connection: until the client org is deleted</li>
               </ul>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+                Deletion
+              </h3>
+              <p>
+                An administrator can delete a client org from Newton. This revokes
+                Newton&apos;s OAuth grant in Salesforce and permanently deletes every stored
+                record for that org — metadata, user data, analyses, reports, audit logs, and
+                settings. It cannot be undone.
+              </p>
             </div>
           </div>
         </section>
@@ -545,13 +661,15 @@ export default function SecurityPracticesPage() {
               </h3>
               <ol className="list-decimal pl-6 space-y-2">
                 <li>
-                  <strong>Detection:</strong> Automated monitoring and alerting systems
+                  <strong>Detection:</strong> From application and audit logs, hosting-provider
+                  alerts, and reports from users
                 </li>
                 <li>
-                  <strong>Triage:</strong> Severity assessment within 1 hour
+                  <strong>Triage:</strong> Severity assessment as soon as an incident is identified
                 </li>
                 <li>
-                  <strong>Containment:</strong> Isolate affected systems immediately
+                  <strong>Containment:</strong> Isolate affected systems and revoke affected
+                  credentials
                 </li>
                 <li>
                   <strong>Investigation:</strong> Root cause analysis and impact assessment
@@ -587,8 +705,7 @@ export default function SecurityPracticesPage() {
                   </a>
                 </p>
                 <p className="mt-2 text-sm text-grove-ink/70 dark:text-grove-ink/50">
-                  We have a responsible disclosure policy and will acknowledge reports within
-                  24 hours.
+                  We will acknowledge reports within 5 business days.
                 </p>
               </div>
             </div>
@@ -608,7 +725,7 @@ export default function SecurityPracticesPage() {
                 <strong>Manual code review:</strong> Every change is reviewed by the maintainer before merge
               </li>
               <li>
-                <strong>Dependency updates:</strong> Dependencies are updated regularly; GitHub&apos;s built-in security alerts flag known-vulnerable versions
+                <strong>Dependency updates:</strong> Dependencies are updated periodically; GitHub&apos;s built-in security alerts flag known-vulnerable versions
               </li>
               <li>
                 <strong>Independent penetration testing:</strong> Not yet — planned once we reach enterprise pilots
@@ -636,10 +753,10 @@ export default function SecurityPracticesPage() {
                 <strong>Principle of least privilege:</strong> Only the maintainer has production credentials
               </li>
               <li>
-                <strong>Access logging:</strong> Railway + Vercel + database provider logs all admin actions
+                <strong>Access logging:</strong> Hosting-provider platform logs record administrative actions on the infrastructure
               </li>
               <li>
-                <strong>MFA on infrastructure accounts:</strong> Railway, Vercel, GitHub, and email accounts all require MFA. (In-app user accounts are password-only today; MFA is on the roadmap.)
+                <strong>MFA on infrastructure accounts:</strong> Hosting, source-control, and email accounts require MFA. (In-app user accounts are password-only today; MFA is on the roadmap.)
               </li>
             </ul>
           </div>
@@ -662,8 +779,8 @@ export default function SecurityPracticesPage() {
                 </a>
               </p>
               <p className="mt-2">
-                <strong>Response Time:</strong> We respond within 24 hours for security
-                inquiries
+                <strong>Response Time:</strong> We respond to security inquiries within 5
+                business days
               </p>
             </div>
           </div>

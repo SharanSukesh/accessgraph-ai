@@ -702,11 +702,16 @@ class SalesforceAPIClient:
         try:
             resp = await self.query(soql)
         except Exception as exc:  # noqa: BLE001
+            # One un-aggregatable field (long text, multipicklist, a
+            # field the integration user can't see) fails the whole
+            # combined query. Retry per field so one bad column drops
+            # only itself, not the object.
             logger.info(
-                "aggregate_field_populated_counts failed for %s: %s",
+                "aggregate_field_populated_counts combined query failed for %s, "
+                "retrying per field: %s",
                 object_name, exc,
             )
-            return None
+            return await self._populated_counts_per_field(object_name, field_names)
         records = resp.records or []
         if not records:
             return None
@@ -716,30 +721,57 @@ class SalesforceAPIClient:
             out[name] = int(row.get(f"f_{name}") or 0)
         return out
 
-    async def aggregate_duplicate_clusters(
+    async def _populated_counts_per_field(
+        self, object_name: str, field_names: List[str]
+    ) -> Optional[Dict[str, int]]:
+        try:
+            total_resp = await self.query(f"SELECT COUNT(Id) t FROM {object_name}")
+        except Exception as exc:  # noqa: BLE001
+            logger.info("COUNT(Id) failed for %s: %s", object_name, exc)
+            return None
+        total_rows = total_resp.records or []
+        if not total_rows:
+            return None
+        out: Dict[str, int] = {"__total__": int(total_rows[0].get("t") or 0)}
+        for name in field_names:
+            try:
+                resp = await self.query(
+                    f"SELECT COUNT({name}) f FROM {object_name}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.info(
+                    "COUNT(%s) failed on %s — field excluded: %s",
+                    name, object_name, exc,
+                )
+                continue
+            rows = resp.records or []
+            out[name] = int(rows[0].get("f") or 0) if rows else 0
+        return out
+
+    async def aggregate_duplicate_cluster_sizes(
         self, object_name: str, key_field: str, limit: int = 2000
-    ) -> Optional[List[Dict[str, Any]]]:
-        """Find duplicate clusters via SOQL GROUP BY HAVING COUNT() > 1.
+    ) -> Optional[List[int]]:
+        """Sizes of duplicate clusters via SOQL GROUP BY HAVING COUNT() > 1.
 
         Query shape:
-            SELECT Name k, COUNT(Id) cnt
+            SELECT COUNT(Id) cnt
             FROM Contact
-            WHERE Name != null
-            GROUP BY Name
+            WHERE Email != null
+            GROUP BY Email
             HAVING COUNT(Id) > 1
             LIMIT 2000
 
-        Salesforce evaluates the aggregate across the WHOLE object.
-        The 2000-cluster cap is SF's aggregate result ceiling — a
-        larger enterprise org with >2000 duplicate clusters would need
-        Bulk API deep-scan (see future_v2_items.md). Returns list of
-        `{"key": <value>, "count": <int>}` sorted by count desc, or
-        None on failure.
+        The key field is grouped on but deliberately NOT selected, so the
+        duplicated values (names, emails) never leave Salesforce — only
+        cluster sizes do. That keeps Data Quality inside the metadata-only
+        promise. 2000 is SF's aggregate row ceiling; callers flag
+        truncation when the result length hits it. Returns sizes sorted
+        desc, or None on failure.
         """
         if not key_field:
             return None
         soql = (
-            f"SELECT {key_field} k, COUNT(Id) cnt "
+            f"SELECT COUNT(Id) cnt "
             f"FROM {object_name} "
             f"WHERE {key_field} != null "
             f"GROUP BY {key_field} "
@@ -750,20 +782,12 @@ class SalesforceAPIClient:
             resp = await self.query(soql)
         except Exception as exc:  # noqa: BLE001
             logger.info(
-                "aggregate_duplicate_clusters failed for %s.%s: %s",
+                "aggregate_duplicate_cluster_sizes failed for %s.%s: %s",
                 object_name, key_field, exc,
             )
             return None
-        records = resp.records or []
-        clusters: List[Dict[str, Any]] = []
-        for row in records:
-            key_val = row.get("k")
-            cnt = int(row.get("cnt") or 0)
-            if key_val is None:
-                continue
-            clusters.append({"key": str(key_val), "count": cnt})
-        clusters.sort(key=lambda c: c["count"], reverse=True)
-        return clusters
+        sizes = [int(row.get("cnt") or 0) for row in (resp.records or [])]
+        return sorted((n for n in sizes if n > 1), reverse=True)
 
     async def extract_duplicate_rules(self) -> List[Dict[str, Any]]:
         """All Salesforce Duplicate Rules configured on the org.
@@ -2015,7 +2039,7 @@ class SalesforceAPIClient:
         soql = """
             SELECT Id, Username, Name, Email, ProfileId, UserRoleId, ManagerId,
                    DelegatedApproverId, IsActive, UserType, Department, Title,
-                   LastLoginDate
+                   LastLoginDate, CreatedDate
             FROM User
             WHERE IsActive = true
         """
