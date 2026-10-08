@@ -146,11 +146,20 @@ def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFindi
             f"since {short_date(prev['at'])}"
         )
 
-    logo = (
-        f'<img class="firm-logo" src="data:{brand.logo_mime};base64,{brand.logo_b64}" alt="" />'
+    client_logo = (
+        f'<img class="cover-client-logo" src="data:{brand.client_logo_mime};base64,{brand.client_logo_b64}" alt="" />'
+        if brand and brand.client_logo_b64 else ""
+    )
+    firm_logo = (
+        f'<img class="cover-firm-logo" src="data:{brand.logo_mime};base64,{brand.logo_b64}" alt="" />'
         if brand and brand.logo_b64 else ""
     )
-    byline = f'<div class="byline">Prepared by {_esc(brand.firm_name)}</div>' if brand and brand.firm_name else ""
+    firm_name = _esc(brand.firm_name) if brand and brand.firm_name else ""
+    logo = f'<div class="cover-logos">{client_logo}</div>' if client_logo else ""
+    byline = (
+        f'<div class="byline">Prepared by {firm_logo or firm_name}</div>'
+        if (firm_logo or firm_name) else ""
+    )
     snapshot_at = snapshot.snapshot_at or datetime.now(timezone.utc)
     meter_color = charts.SERIES if score >= 70 else (charts.WARNING if score >= 50 else charts.CRITICAL)
 
@@ -489,13 +498,19 @@ def _methodology(snapshot: OrgAnalysisSnapshot) -> str:
 FOOTER_FONT = "font-family: 'Helvetica Neue', Arial, 'DejaVu Sans', sans-serif; font-size: 7.5pt; color: #898781;"
 
 STYLE = """
-  @page { size: Letter; margin: 0.6in 0.6in 0.7in 0.6in; }
+  @page { size: Letter; margin: 0.95in 0.6in 0.7in 0.6in; @top-center { content: element(letterhead); width: 100%; vertical-align: bottom; padding-bottom: 10px; } }
+  @page :first { margin-top: 0.6in; @top-center { content: none; } }
+  .letterhead { position: running(letterhead); display: flex; justify-content: space-between; align-items: center; width: 100%; border-bottom: 1px solid #e1e0d9; padding-bottom: 6px; }
+  .lh-logo { max-height: 26px; max-width: 150px; }
+  .lh-text { font-size: 8pt; color: #898781; font-weight: 600; }
+  .cover-logos { margin-bottom: 1.4em; }
+  .cover-client-logo { max-height: 64px; max-width: 260px; }
+  .cover-firm-logo { max-height: 22px; max-width: 140px; vertical-align: middle; margin-left: 4px; }
   body { font-family: 'Helvetica Neue', Arial, 'DejaVu Sans', sans-serif; color: #0b0b0b; font-size: 10pt; line-height: 1.45; }
   h1, h2, h3, h4 { margin: 0; }
   h2 { font-size: 16pt; color: ACCENT; margin-bottom: 0.6em; }
   .page { page-break-before: always; }
   .eyebrow { font-size: 8pt; letter-spacing: 0.12em; text-transform: uppercase; color: #898781; font-weight: 600; }
-  .cover .firm-logo { max-height: 56px; max-width: 220px; margin-bottom: 1.2em; }
   .cover .org-name { font-size: 26pt; color: ACCENT; margin: 0.15em 0 0.1em; }
   .subtitle { color: #52514e; font-size: 11pt; }
   .byline { color: #52514e; font-size: 9pt; margin-top: 0.2em; }
@@ -540,6 +555,18 @@ STYLE = """
 """
 
 
+def _letterhead(org_name: str, brand) -> str:
+    """Running header on every page after the cover: client left, firm right."""
+    def img(mime, b64):
+        return f'<img class="lh-logo" src="data:{mime};base64,{b64}" alt="" />' if b64 else ""
+
+    client = img(getattr(brand, "client_logo_mime", None), getattr(brand, "client_logo_b64", None))
+    firm = img(getattr(brand, "logo_mime", None), getattr(brand, "logo_b64", None))
+    left = client or f'<span class="lh-text">{_esc(org_name)}</span>'
+    right = firm or (f'<span class="lh-text">{_esc(brand.firm_name)}</span>' if brand and brand.firm_name else "")
+    return f'<div class="letterhead"><div class="lh-left">{left}</div><div class="lh-right">{right}</div></div>'
+
+
 def _build_html(
     org_name: str,
     snapshot: OrgAnalysisSnapshot,
@@ -554,7 +581,7 @@ def _build_html(
         f'@page {{ @bottom-left {{ content: "{_esc(org_name)} · Salesforce org assessment"; {FOOTER_FONT} }}'
         f' @bottom-right {{ content: "{footer} · page " counter(page) " of " counter(pages); {FOOTER_FONT} }} }}'
     )
-    body = "".join([
+    body = _letterhead(org_name, brand) + "".join([
         _cover(org_name, snapshot, findings, ctx, brand),
         _glance(findings, ctx),
         _profile(snapshot),
@@ -570,9 +597,9 @@ def _build_html(
 
 
 class BrandContext:
-    """White-label inputs for the report; None fields fall back to defaults."""
+    """Letterhead inputs; None fields fall back to defaults."""
 
-    __slots__ = ("firm_name", "accent_hex", "logo_mime", "logo_b64")
+    __slots__ = ("firm_name", "accent_hex", "logo_mime", "logo_b64", "client_logo_mime", "client_logo_b64")
 
     def __init__(
         self,
@@ -580,11 +607,15 @@ class BrandContext:
         accent_hex: Optional[str] = None,
         logo_mime: Optional[str] = None,
         logo_b64: Optional[str] = None,
+        client_logo_mime: Optional[str] = None,
+        client_logo_b64: Optional[str] = None,
     ):
         self.firm_name = firm_name
         self.accent_hex = accent_hex
         self.logo_mime = logo_mime
         self.logo_b64 = logo_b64
+        self.client_logo_mime = client_logo_mime
+        self.client_logo_b64 = client_logo_b64
 
 
 def build_report_pdf(

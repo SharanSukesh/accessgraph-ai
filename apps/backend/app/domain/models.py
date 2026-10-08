@@ -1461,6 +1461,11 @@ class BrandSettings(Base, TimestampMixin):
     accent_hex: Mapped[Optional[str]] = mapped_column(String(7))  # "#RRGGBB"
     logo_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
     logo_mime: Mapped[Optional[str]] = mapped_column(String(64))
+    # The client's own logo for the report letterhead (uploaded, or pulled
+    # from the org's Salesforce branding).
+    client_logo_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary)
+    client_logo_mime: Mapped[Optional[str]] = mapped_column(String(64))
+    client_logo_source: Mapped[Optional[str]] = mapped_column(String(32))
     updated_by: Mapped[Optional[str]] = mapped_column(String(255))
 
 

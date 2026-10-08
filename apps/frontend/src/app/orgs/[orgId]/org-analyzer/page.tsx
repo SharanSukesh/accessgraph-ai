@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import type { ApiError } from '@/lib/api/client'
 import { useParams } from 'next/navigation'
 import {
   Activity,
@@ -60,6 +61,7 @@ import {
   useUpdateBrandSettings,
   useUpdateLicensePriceBook,
   useUploadBrandLogo,
+  useClientLogo,
   type FindingCategory,
   type FindingSeverity,
   type OrgFinding,
@@ -2049,7 +2051,7 @@ function BrandSettingsModal({
           </div>
           <div>
             <label className="block text-xs uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
-              Firm logo (PNG / JPEG / SVG, 256KB max)
+              Firm logo for this client (PNG / JPEG, 256KB max). Leave empty to use the firm-wide logo.
             </label>
             <div className="flex items-center gap-3">
               {brand.data?.has_logo && (
@@ -2076,6 +2078,7 @@ function BrandSettingsModal({
               </p>
             )}
           </div>
+          <ClientLogoField orgId={orgId} hasLogo={!!brand.data?.has_client_logo} source={brand.data?.client_logo_source ?? null} />
           {saved && (
             <p className="text-xs text-grove-ink/85 dark:text-grove-ink-dk/85 italic">
               <Info className="inline h-3.5 w-3.5 mr-1" />
@@ -2098,6 +2101,76 @@ function BrandSettingsModal({
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+
+// Client logo for the PDF letterhead: upload, or pull from the org's
+// Salesforce branding (best effort; falls back to upload).
+function ClientLogoField({
+  orgId,
+  hasLogo,
+  source,
+}: {
+  orgId: string
+  hasLogo: boolean
+  source: string | null
+}) {
+  const { upload, pullFromSalesforce, remove } = useClientLogo(orgId)
+  const [error, setError] = useState<string | null>(null)
+  const busy = upload.isPending || pullFromSalesforce.isPending || remove.isPending
+  const sourceLabel =
+    source === 'upload' ? 'Uploaded' : source?.startsWith('salesforce') ? 'From Salesforce' : null
+
+  return (
+    <div>
+      <label className="block text-xs uppercase tracking-wider text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
+        Client logo (shown on the report letterhead)
+      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        {hasLogo && (
+          <img
+            src={`${API_BASE}${endpoints.orgAnalyzerClientLogo(orgId)}?t=${Date.now()}`}
+            alt="Client logo"
+            className="h-12 max-w-[120px] object-contain rounded border border-grove-border dark:border-grove-border-dk bg-white p-1"
+          />
+        )}
+        <input
+          type="file"
+          accept="image/png,image/jpeg"
+          disabled={busy}
+          className="text-xs"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            setError(null)
+            upload.mutate(file, { onError: (err) => setError((err as Error).message) })
+          }}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={busy}
+          onClick={() => {
+            setError(null)
+            pullFromSalesforce.mutate(undefined, {
+              onError: (err) => setError((err as ApiError).message || 'Could not find a logo in Salesforce.'),
+            })
+          }}
+        >
+          {pullFromSalesforce.isPending ? 'Looking…' : 'Pull from Salesforce'}
+        </Button>
+        {hasLogo && (
+          <Button variant="secondary" size="sm" disabled={busy} onClick={() => remove.mutate()}>
+            Remove
+          </Button>
+        )}
+      </div>
+      {sourceLabel && hasLogo && (
+        <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">{sourceLabel}</p>
+      )}
+      {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
     </div>
   )
 }

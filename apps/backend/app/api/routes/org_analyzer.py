@@ -36,7 +36,14 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
-from app.auth.deps import get_current_actor_email, require_org_access, require_org_admin
+from app.auth.deps import (
+    Principal,
+    get_current_actor_email,
+    get_principal,
+    require_admin,
+    require_org_access,
+    require_org_admin,
+)
 from app.services.write_back import require_write_back
 from app.domain.models import (
     BrandSettings,
@@ -658,6 +665,8 @@ class BrandRow(BaseModel):
     firm_name: Optional[str] = None
     accent_hex: Optional[str] = Field(default=None, max_length=7)
     has_logo: bool = False
+    has_client_logo: bool = False
+    client_logo_source: Optional[str] = None
 
 
 class BrandUpdate(BaseModel):
@@ -710,6 +719,8 @@ async def get_brand(
         firm_name=row.firm_name,
         accent_hex=row.accent_hex,
         has_logo=bool(row.logo_bytes),
+        has_client_logo=bool(row.client_logo_bytes),
+        client_logo_source=row.client_logo_source,
     )
 
 
@@ -810,6 +821,153 @@ async def get_brand_logo(
         content=row.logo_bytes,
         media_type=row.logo_mime or "application/octet-stream",
     )
+
+
+class ClientLogoStatus(BaseModel):
+    has_client_logo: bool
+    source: Optional[str] = None
+
+
+async def _read_logo_upload(file: UploadFile) -> bytes:
+    if file.content_type not in _ALLOWED_LOGO_MIMES:
+        raise HTTPException(status_code=400, detail="Use a PNG or JPEG logo.")
+    data = await file.read()
+    if len(data) > _MAX_LOGO_BYTES:
+        raise HTTPException(status_code=400, detail=f"Logo exceeds the {_MAX_LOGO_BYTES // 1024}KB limit.")
+    return data
+
+
+async def _brand_row_for_write(db: AsyncSession, org_id: str, actor_email: str) -> BrandSettings:
+    row = await _get_brand_row(db, org_id)
+    if row is None:
+        row = BrandSettings(organization_id=org_id, updated_by=actor_email)
+        db.add(row)
+    row.updated_by = actor_email
+    return row
+
+
+@router.post("/orgs/{org_id}/org-analyzer/brand/client-logo", response_model=ClientLogoStatus)
+async def upload_client_logo(
+    org_id: str,
+    file: UploadFile = File(...),
+    _org: str = Depends(require_org_access),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> ClientLogoStatus:
+    data = await _read_logo_upload(file)
+    row = await _brand_row_for_write(db, org_id, actor_email)
+    row.client_logo_bytes, row.client_logo_mime, row.client_logo_source = data, file.content_type, "upload"
+    await db.commit()
+    return ClientLogoStatus(has_client_logo=True, source="upload")
+
+
+@router.post("/orgs/{org_id}/org-analyzer/brand/client-logo/from-salesforce", response_model=ClientLogoStatus)
+async def pull_client_logo_from_salesforce(
+    org_id: str,
+    _org: str = Depends(require_org_access),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> ClientLogoStatus:
+    """Look for the client's logo in their org's branding (best effort)."""
+    from app.services.client_logo import fetch_client_logo
+    from app.services.salesforce_sync import SalesforceSyncService
+
+    try:
+        sf_client = await SalesforceSyncService(db, org_id)._refresh_access_token()
+    except Exception:
+        raise HTTPException(status_code=409, detail="Reconnect Salesforce before pulling the logo.")
+    found = await fetch_client_logo(sf_client)
+    if found is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No PNG or JPEG logo found in this org's branding. Upload one instead.",
+        )
+    data, mime, source = found
+    row = await _brand_row_for_write(db, org_id, actor_email)
+    row.client_logo_bytes, row.client_logo_mime, row.client_logo_source = data, mime, source
+    await db.commit()
+    return ClientLogoStatus(has_client_logo=True, source=source)
+
+
+@router.get("/orgs/{org_id}/org-analyzer/brand/client-logo")
+async def get_client_logo(
+    org_id: str,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> Response:
+    row = await _get_brand_row(db, org_id)
+    if not row or not row.client_logo_bytes:
+        raise HTTPException(status_code=404, detail="No client logo set.")
+    return Response(content=row.client_logo_bytes, media_type=row.client_logo_mime or "image/png")
+
+
+@router.delete("/orgs/{org_id}/org-analyzer/brand/client-logo", response_model=ClientLogoStatus)
+async def delete_client_logo(
+    org_id: str,
+    _org: str = Depends(require_org_access),
+    actor_email: str = Depends(get_current_actor_email),
+    db: AsyncSession = Depends(get_database),
+) -> ClientLogoStatus:
+    row = await _get_brand_row(db, org_id)
+    if row:
+        row.client_logo_bytes = row.client_logo_mime = row.client_logo_source = None
+        row.updated_by = actor_email
+        await db.commit()
+    return ClientLogoStatus(has_client_logo=False)
+
+
+# ---- Firm-wide branding: stored on the Newton operator's own org and used
+# ---- whenever a client org has no brand override of its own.
+
+
+@router.get("/firm-brand", response_model=BrandRow)
+async def get_firm_brand(
+    principal: Principal = Depends(get_principal),
+    db: AsyncSession = Depends(get_database),
+) -> BrandRow:
+    row = await _get_brand_row(db, principal.home_org_id)
+    if row is None:
+        return BrandRow(firm_name=None, accent_hex=None, has_logo=False)
+    return BrandRow(firm_name=row.firm_name, accent_hex=row.accent_hex, has_logo=bool(row.logo_bytes))
+
+
+@router.put("/firm-brand", response_model=BrandRow)
+async def update_firm_brand(
+    payload: BrandUpdate,
+    principal: Principal = Depends(get_principal),
+    _admin: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_database),
+) -> BrandRow:
+    row = await _brand_row_for_write(db, principal.home_org_id, principal.email)
+    row.firm_name = payload.firm_name
+    row.accent_hex = _validate_accent(payload.accent_hex)
+    await db.commit()
+    return BrandRow(firm_name=row.firm_name, accent_hex=row.accent_hex, has_logo=bool(row.logo_bytes))
+
+
+@router.post("/firm-brand/logo", response_model=BrandRow)
+async def upload_firm_logo(
+    file: UploadFile = File(...),
+    principal: Principal = Depends(get_principal),
+    _admin: str = Depends(require_admin),
+    db: AsyncSession = Depends(get_database),
+) -> BrandRow:
+    data = await _read_logo_upload(file)
+    row = await _brand_row_for_write(db, principal.home_org_id, principal.email)
+    row.logo_bytes, row.logo_mime = data, file.content_type
+    await db.commit()
+    return BrandRow(firm_name=row.firm_name, accent_hex=row.accent_hex, has_logo=True)
+
+
+@router.get("/firm-brand/logo")
+async def get_firm_logo(
+    principal: Principal = Depends(get_principal),
+    db: AsyncSession = Depends(get_database),
+) -> Response:
+    row = await _get_brand_row(db, principal.home_org_id)
+    if not row or not row.logo_bytes:
+        raise HTTPException(status_code=404, detail="No firm logo set.")
+    return Response(content=row.logo_bytes, media_type=row.logo_mime or "image/png")
 
 
 @router.get(
@@ -1019,6 +1177,7 @@ async def update_price_book(
 )
 async def download_report(
     org_id: str,
+    request: Request,
     _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> StreamingResponse:
@@ -1060,25 +1219,32 @@ async def download_report(
             detail="PDF generation unavailable. Check server logs.",
         )
 
-    # Optional white-labeling: pull brand settings + encode the logo as
-    # base64 so the PDF can embed it inline (avoids a network fetch
-    # from inside weasyprint).
-    brand_row = await _get_brand_row(db, org_id)
-    brand_ctx: Optional[BrandContext] = None
-    if brand_row is not None and (
-        brand_row.firm_name or brand_row.accent_hex or brand_row.logo_bytes
-    ):
-        import base64
-        logo_b64 = (
-            base64.b64encode(brand_row.logo_bytes).decode("ascii")
-            if brand_row.logo_bytes else None
-        )
-        brand_ctx = BrandContext(
-            firm_name=brand_row.firm_name,
-            accent_hex=brand_row.accent_hex,
-            logo_mime=brand_row.logo_mime,
-            logo_b64=logo_b64,
-        )
+    # Letterhead: the firm's branding (per-client override, else the
+    # firm-wide default on the operator's own org) plus the client's logo.
+    import base64
+
+    def _b64(data: Optional[bytes]) -> Optional[str]:
+        return base64.b64encode(data).decode("ascii") if data else None
+
+    org_brand = await _get_brand_row(db, org_id)
+    home_org_id = getattr(getattr(request.state, "principal", None), "home_org_id", None)
+    firm_brand = await _get_brand_row(db, home_org_id) if home_org_id else None
+
+    def _pick(attr: str):
+        for row in (org_brand, firm_brand):
+            if row is not None and getattr(row, attr):
+                return row
+        return None
+
+    logo_row = _pick("logo_bytes")
+    brand_ctx = BrandContext(
+        firm_name=getattr(_pick("firm_name"), "firm_name", None),
+        accent_hex=getattr(_pick("accent_hex"), "accent_hex", None),
+        logo_mime=logo_row.logo_mime if logo_row else None,
+        logo_b64=_b64(logo_row.logo_bytes) if logo_row else None,
+        client_logo_mime=org_brand.client_logo_mime if org_brand else None,
+        client_logo_b64=_b64(org_brand.client_logo_bytes) if org_brand else None,
+    )
 
     from app.services.report.context import gather_report_context
 

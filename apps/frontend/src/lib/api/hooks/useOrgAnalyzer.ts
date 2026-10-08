@@ -93,6 +93,8 @@ export interface BrandSettings {
   firm_name: string | null
   accent_hex: string | null
   has_logo: boolean
+  has_client_logo?: boolean
+  client_logo_source?: string | null
 }
 
 export interface ApplyFixResponse {
@@ -391,6 +393,61 @@ export function useUploadBrandLogo(orgId: string) {
       qc.invalidateQueries({ queryKey: brandKey(orgId) })
     },
   })
+}
+
+async function uploadImage(path: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  const res = await fetch(`${base}${path}`, { method: 'POST', body: formData, credentials: 'include' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.detail || `Upload failed (${res.status})`)
+  }
+  return res.json()
+}
+
+export function useClientLogo(orgId: string) {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: brandKey(orgId) })
+  return {
+    upload: useMutation({
+      mutationFn: (file: File) => uploadImage(endpoints.orgAnalyzerClientLogo(orgId), file),
+      onSuccess: invalidate,
+    }),
+    pullFromSalesforce: useMutation({
+      mutationFn: () => apiClient.post(endpoints.orgAnalyzerClientLogoFromSalesforce(orgId)),
+      onSuccess: invalidate,
+    }),
+    remove: useMutation({
+      mutationFn: () => apiClient.delete(endpoints.orgAnalyzerClientLogo(orgId)),
+      onSuccess: invalidate,
+    }),
+  }
+}
+
+const firmBrandKey = ['firm-brand'] as const
+
+export function useFirmBrand() {
+  return useQuery({
+    queryKey: firmBrandKey,
+    queryFn: () => apiClient.get<BrandSettings>(endpoints.firmBrand),
+  })
+}
+
+export function useUpdateFirmBrand() {
+  const qc = useQueryClient()
+  return {
+    save: useMutation({
+      mutationFn: (payload: { firm_name: string | null; accent_hex: string | null }) =>
+        apiClient.put<BrandSettings>(endpoints.firmBrand, payload),
+      onSuccess: () => qc.invalidateQueries({ queryKey: firmBrandKey }),
+    }),
+    uploadLogo: useMutation({
+      mutationFn: (file: File) => uploadImage(endpoints.firmBrandLogo, file),
+      onSuccess: () => qc.invalidateQueries({ queryKey: firmBrandKey }),
+    }),
+  }
 }
 
 export function formatMoneyCents(cents: number | null | undefined): string {

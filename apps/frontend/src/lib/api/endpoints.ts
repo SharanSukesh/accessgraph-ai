@@ -83,6 +83,11 @@ export const endpoints = {
     `/orgs/${orgId}/org-analyzer/findings/${findingId}/apply-fix`,
   orgAnalyzerBrand: (orgId: string) => `/orgs/${orgId}/org-analyzer/brand`,
   orgAnalyzerBrandLogo: (orgId: string) => `/orgs/${orgId}/org-analyzer/brand/logo`,
+  orgAnalyzerClientLogo: (orgId: string) => `/orgs/${orgId}/org-analyzer/brand/client-logo`,
+  orgAnalyzerClientLogoFromSalesforce: (orgId: string) =>
+    `/orgs/${orgId}/org-analyzer/brand/client-logo/from-salesforce`,
+  firmBrand: '/firm-brand',
+  firmBrandLogo: '/firm-brand/logo',
 
   // Data Quality — per-object health scoring
   dataQualityRun: (orgId: string) => `/orgs/${orgId}/data-quality/run`,

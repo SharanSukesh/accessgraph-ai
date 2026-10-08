@@ -43,6 +43,8 @@ import { apiClient } from '@/lib/api/client'
 import type { Organization } from '@/lib/api/hooks/useOrgs'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { cn } from '@/lib/utils/cn'
+import { endpoints } from '@/lib/api/endpoints'
+import { useFirmBrand, useUpdateFirmBrand } from '@/lib/api/hooks/useOrgAnalyzer'
 
 // ---------------------------------------------------------------- types
 
@@ -158,6 +160,10 @@ export default function AdminUsersPage() {
           eyebrow="Admin · access"
           subtitle="Invite new users to AccessGraph. They'll receive an activation email and set their own password."
         />
+      </Reveal>
+
+      <Reveal>
+        <FirmBrandCard />
       </Reveal>
 
       {/* Create user form */}
@@ -682,4 +688,87 @@ function extractErrorMessage(err: unknown): string {
   }
   if (e.message && typeof e.message === 'string') return e.message
   return 'Failed to create user.'
+}
+
+
+// Firm-wide letterhead branding for client PDF reports. A client org's own
+// brand settings (Health Report > Branding) override these per engagement.
+function FirmBrandCard() {
+  const brand = useFirmBrand()
+  const { save, uploadLogo } = useUpdateFirmBrand()
+  const [firmName, setFirmName] = useState<string | null>(null)
+  const [accent, setAccent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const name = firmName ?? brand.data?.firm_name ?? ''
+  const color = accent ?? brand.data?.accent_hex ?? ''
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+  return (
+    <Card variant="bordered" className="p-6">
+      <h2 className="text-base font-semibold text-grove-ink dark:text-grove-ink-dk">Firm branding</h2>
+      <p className="mt-1 text-sm text-grove-ink/60 dark:text-grove-ink-dk/60">
+        Your logo, name and accent colour on every client report. Client logos are set per org on its Health Report.
+      </p>
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <label className="block">
+          <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">Firm name</span>
+          <input
+            value={name}
+            onChange={(e) => setFirmName(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-grove-border bg-transparent px-3 py-2 text-sm dark:border-grove-border-dk"
+          />
+        </label>
+        <label className="block">
+          <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">Accent colour (#RRGGBB)</span>
+          <input
+            value={color}
+            onChange={(e) => setAccent(e.target.value)}
+            placeholder="#14532d"
+            className="mt-1 w-full rounded-lg border border-grove-border bg-transparent px-3 py-2 text-sm dark:border-grove-border-dk"
+          />
+        </label>
+        <div>
+          <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">Logo (PNG / JPEG, 256KB max)</span>
+          <div className="mt-1 flex items-center gap-3">
+            {brand.data?.has_logo && (
+              <img
+                src={`${apiBase}${endpoints.firmBrandLogo}?t=${Date.now()}`}
+                alt="Firm logo"
+                className="h-10 max-w-[120px] rounded border border-grove-border bg-white object-contain p-1"
+              />
+            )}
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              className="text-xs"
+              disabled={uploadLogo.isPending}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                setError(null)
+                uploadLogo.mutate(file, { onError: (err) => setError((err as Error).message) })
+              }}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <Button
+          size="sm"
+          disabled={save.isPending}
+          onClick={() => {
+            setError(null)
+            save.mutate(
+              { firm_name: name.trim() || null, accent_hex: color.trim() || null },
+              { onError: (err) => setError((err as Error).message) },
+            )
+          }}
+        >
+          {save.isPending ? 'Saving…' : 'Save firm branding'}
+        </Button>
+        {save.isSuccess && <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">Saved</span>}
+        {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+      </div>
+    </Card>
+  )
 }
