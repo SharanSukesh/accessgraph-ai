@@ -86,51 +86,56 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
     )
   }
 
+  // Rendered in the page header standalone, and as a toolbar row when
+  // embedded in /schema (which has its own header).
+  const dqActions = (
+    <div className="flex items-center gap-2">
+      <ScopeToggle
+        value={scope}
+        onChange={setScope}
+        disabled={runDq.isPending}
+        // Business count comes from the live Objects list so it
+        // stays in sync with the "Total Objects" KPI card above
+        // — always fresh, never dependent on when the last data-
+        // quality run happened. All-scope count only exists in
+        // stored coverage after at least one run has hit that
+        // scope; falls back to `?` before then.
+        businessCount={objects?.length}
+        allCount={dqSummary?.coverage?.total_sobjects_raw}
+      />
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => runDq.mutate(scope)}
+        disabled={runDq.isPending}
+        aria-label={
+          dqSummary?.has_data
+            ? 'Re-run data quality analysis'
+            : 'Analyse data quality'
+        }
+      >
+        {runDq.isPending ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : (
+          <Sparkles className="h-4 w-4 mr-2" />
+        )}
+        {runDq.isPending
+          ? 'Analysing…'
+          : dqSummary?.has_data
+          ? 'Re-analyse quality'
+          : 'Analyse quality'}
+      </Button>
+    </div>
+  )
+
   return (
     <div className="space-y-6">
+      {embedded && <div className="flex justify-end">{dqActions}</div>}
       {!embedded && <PageHeader
         icon={Database}
         title="Salesforce Objects"
         subtitle="Browse objects and analyze access patterns"
-        actions={
-          <div className="flex items-center gap-2">
-            <ScopeToggle
-              value={scope}
-              onChange={setScope}
-              disabled={runDq.isPending}
-              // Business count comes from the live Objects list so it
-              // stays in sync with the "Total Objects" KPI card above
-              // — always fresh, never dependent on when the last data-
-              // quality run happened. All-scope count only exists in
-              // stored coverage after at least one run has hit that
-              // scope; falls back to `?` before then.
-              businessCount={objects?.length}
-              allCount={dqSummary?.coverage?.total_sobjects_raw}
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => runDq.mutate(scope)}
-              disabled={runDq.isPending}
-              aria-label={
-                dqSummary?.has_data
-                  ? 'Re-run data quality analysis'
-                  : 'Analyse data quality'
-              }
-            >
-              {runDq.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-2" />
-              )}
-              {runDq.isPending
-                ? 'Analysing…'
-                : dqSummary?.has_data
-                ? 'Re-analyse quality'
-                : 'Analyse quality'}
-            </Button>
-          </div>
-        }
+        actions={dqActions}
       />}
 
       {/* Show the last run error inline so the user doesn't need
@@ -237,7 +242,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
         </StaggerItem>
 
         {/* Data quality KPI — an aggregate view of the per-object scores.
-            "Not analysed" state points the user at the header button. */}
+            "Not analysed" state points the user at the Analyse quality button. */}
         <StaggerItem>
         <Card variant="bordered" className="p-6">
           <div className="flex items-center justify-between">
