@@ -1080,14 +1080,18 @@ async def download_report(
             logo_b64=logo_b64,
         )
 
+    from app.services.report.context import gather_report_context
+
+    report_ctx = await gather_report_context(db, org_id, snap)
     pdf_bytes = build_report_pdf(
         org_name=org_name,
         snapshot=snap,
         findings=findings,
         brand=brand_ctx,
+        ctx=report_ctx,
     )
     filename = (
-        f"org-analyzer-report-"
+        f"org-assessment-"
         f"{snap.snapshot_at.strftime('%Y%m%d')}.pdf"
     )
     return StreamingResponse(
