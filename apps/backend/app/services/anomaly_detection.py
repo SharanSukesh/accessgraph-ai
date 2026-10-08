@@ -235,6 +235,15 @@ class AnomalyDetectionService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.access_service = EffectiveAccessService(db)
+        # Sensitive indicators (would come from config in production)
+        self.sensitive_objects = ["Quote"]
+        self.sensitive_fields = [
+            "Account.AnnualRevenue",
+            "Account.CreditScore__c",
+            "Contact.SSN__c",
+            "Opportunity.Amount",
+            "Case.Internal_Severity__c",
+        ]
 
     async def _build_sf_client(self, org_id: str) -> Optional[SalesforceAPIClient]:
         """Build a live SalesforceAPIClient for org_id from the stored
@@ -270,16 +279,6 @@ class AnomalyDetectionService:
         if sf_client is None:
             return []
         return await self.detect_session_anomalies(org_id, sf_client)
-
-        # Sensitive indicators (would come from config in production)
-        self.sensitive_objects = ["Quote"]
-        self.sensitive_fields = [
-            "Account.AnnualRevenue",
-            "Account.CreditScore__c",
-            "Contact.SSN__c",
-            "Opportunity.Amount",
-            "Case.Internal_Severity__c",
-        ]
 
     async def detect_anomalies(self, org_id: str) -> List[AccessAnomaly]:
         """

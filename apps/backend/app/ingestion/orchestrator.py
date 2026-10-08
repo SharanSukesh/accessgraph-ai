@@ -173,7 +173,10 @@ class SyncOrchestrator:
         if conn.refresh_token:
             try:
                 logger.info("Refreshing Salesforce access token")
-                oauth = SalesforceOAuthClient()
+                # The org's own My Domain token endpoint serves production,
+                # sandbox and scratch orgs alike; login.salesforce.com
+                # rejects sandbox refresh tokens.
+                oauth = SalesforceOAuthClient(login_url=conn.instance_url)
                 token_response = await oauth.refresh_access_token(conn.refresh_token)
 
                 # Update connection with new access token
