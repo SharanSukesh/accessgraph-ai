@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict
 from typing import Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -16,6 +16,7 @@ from app.domain.models import (
     PermissionSetGroupComponentSnapshot,
     PermissionSetGroupSnapshot,
     PermissionSetSnapshot,
+    ProfileSnapshot,
     UserSnapshot,
 )
 
@@ -318,18 +319,26 @@ class EffectiveAccessService:
             )
             profile_ps = result.scalar_one_or_none()
             if profile_ps:
+                profile_name = (
+                    await self.db.execute(
+                        select(ProfileSnapshot.name).where(
+                            ProfileSnapshot.organization_id == org_id,
+                            ProfileSnapshot.salesforce_id == profile_id,
+                        )
+                    )
+                ).scalar_one_or_none() or profile_id
                 ps_details.append({
                     "ps_id": profile_ps.salesforce_id,
-                    "ps_name": profile_ps.name,
+                    "ps_name": profile_name,
                     "source_type": "profile",
-                    "source_name": f"Profile: {profile_id}",
+                    "source_name": f"Profile: {profile_name}",
                 })
 
         # Direct assignments
         result = await self.db.execute(
             select(
                 PermissionSetAssignmentSnapshot.permission_set_id,
-                PermissionSetSnapshot.name,
+                func.coalesce(PermissionSetSnapshot.label, PermissionSetSnapshot.name),
             )
             .join(
                 PermissionSetSnapshot,
@@ -338,6 +347,9 @@ class EffectiveAccessService:
             .where(
                 PermissionSetAssignmentSnapshot.organization_id == org_id,
                 PermissionSetAssignmentSnapshot.assignee_id == user_sf_id,
+                # Salesforce also reports the profile's own permission set
+                # as an assignment; it's already covered as the profile above.
+                PermissionSetSnapshot.is_owned_by_profile == False,  # noqa: E712
             )
         )
         assignments = result.all()
@@ -357,7 +369,7 @@ class EffectiveAccessService:
                 result_comp = await self.db.execute(
                     select(
                         PermissionSetGroupComponentSnapshot.permission_set_id,
-                        PermissionSetSnapshot.name,
+                        func.coalesce(PermissionSetSnapshot.label, PermissionSetSnapshot.name),
                     )
                     .join(
                         PermissionSetSnapshot,

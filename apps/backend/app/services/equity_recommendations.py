@@ -124,6 +124,9 @@ class EquityGraph:
     # R: integer indices into user_ids
     vip_indices: np.ndarray
     junior_indices: np.ndarray
+    # Permission sets that can't be assigned to a user directly: the
+    # hidden ones owned by profiles and the aggregates behind PSGs.
+    ungrantable_ps: Set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -467,6 +470,10 @@ class EquityRecommendationService:
             user_ps=user_ps,
             vip_indices=vip_indices,
             junior_indices=junior_indices,
+            ungrantable_ps={
+                ps.salesforce_id for ps in permission_sets
+                if ps.is_owned_by_profile or (ps.ps_type or "") == "Group"
+            },
         )
 
     @staticmethod
@@ -707,7 +714,7 @@ class EquityRecommendationService:
             for pi, ps_id in enumerate(graph.ps_ids):
                 if ps_id in held:
                     continue
-                if ps_id not in ps_held_by_vip:
+                if ps_id not in ps_held_by_vip or ps_id in graph.ungrantable_ps:
                     continue
                 mask[ji, pi] = 1.0
         return mask

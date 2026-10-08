@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
+from app.services.grant_sources import KIND_PROFILE, resolve_grant_sources
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
 
@@ -807,47 +808,29 @@ async def get_object_details(
     profiles_dict = {}
     permission_sets_dict = {}
 
+    sources = await resolve_grant_sources(db, org_id, {p.parent_id for p in permissions})
     for perm in permissions:
-        # Check if it's a profile or permission set
-        profile_query = select(ProfileSnapshot).where(
-            ProfileSnapshot.organization_id == org_id,
-            ProfileSnapshot.salesforce_id == perm.parent_id
-        )
-        profile_result = await db.execute(profile_query)
-        profile = profile_result.scalar_one_or_none()
-
-        if profile:
-            profiles_dict[profile.salesforce_id] = {
-                "id": profile.salesforce_id,
-                "name": profile.name,
-                "read": perm.permissions_read,
-                "create": perm.permissions_create,
-                "edit": perm.permissions_edit,
-                "delete": perm.permissions_delete,
-                "viewAll": perm.permissions_view_all_records,
-                "modifyAll": perm.permissions_modify_all_records,
-            }
-        else:
-            # It's a permission set
-            ps_query = select(PermissionSetSnapshot).where(
-                PermissionSetSnapshot.organization_id == org_id,
-                PermissionSetSnapshot.salesforce_id == perm.parent_id
-            )
-            ps_result = await db.execute(ps_query)
-            ps = ps_result.scalar_one_or_none()
-
-            if ps:
-                permission_sets_dict[ps.salesforce_id] = {
-                    "id": ps.salesforce_id,
-                    "name": ps.name,
-                    "label": ps.label,
-                    "read": perm.permissions_read,
-                    "create": perm.permissions_create,
-                    "edit": perm.permissions_edit,
-                    "delete": perm.permissions_delete,
-                    "viewAll": perm.permissions_view_all_records,
-                    "modifyAll": perm.permissions_modify_all_records,
-                }
+        source = sources.get(perm.parent_id)
+        if source is None:
+            continue
+        grants = {
+            "read": perm.permissions_read,
+            "create": perm.permissions_create,
+            "edit": perm.permissions_edit,
+            "delete": perm.permissions_delete,
+            "viewAll": perm.permissions_view_all_records,
+            "modifyAll": perm.permissions_modify_all_records,
+        }
+        bucket = profiles_dict if source.kind == KIND_PROFILE else permission_sets_dict
+        entry = bucket.setdefault(source.id, {
+            "id": source.id,
+            "name": source.name,
+            "label": source.label,
+            "type": source.kind,
+            **{k: False for k in grants},
+        })
+        for flag, granted in grants.items():
+            entry[flag] = entry[flag] or bool(granted)
 
     profiles_with_access = list(profiles_dict.values())
     permission_sets_with_access = list(permission_sets_dict.values())
@@ -898,7 +881,7 @@ async def get_object_details(
                         "email": user.email,
                         "access_methods": []
                     }
-                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["name"])
+                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["label"])
 
     # Convert to list and format access via
     users_with_access = [
@@ -1120,52 +1103,25 @@ async def get_field_details(
     profiles_dict = {}
     permission_sets_dict = {}
 
+    sources = await resolve_grant_sources(db, org_id, {p.parent_id for p in permissions})
     for perm in permissions:
-        # Check if it's a profile or permission set
-        profile_query = select(ProfileSnapshot).where(
-            ProfileSnapshot.organization_id == org_id,
-            ProfileSnapshot.salesforce_id == perm.parent_id
-        )
-        profile_result = await db.execute(profile_query)
-        profile = profile_result.scalar_one_or_none()
-
-        if profile:
-            profiles_dict[profile.salesforce_id] = {
-                "id": profile.salesforce_id,
-                "name": profile.name,
-                "read": perm.permissions_read,
-                "edit": perm.permissions_edit,
-            }
-        else:
-            # It's a permission set
-            ps_query = select(PermissionSetSnapshot).where(
-                PermissionSetSnapshot.organization_id == org_id,
-                PermissionSetSnapshot.salesforce_id == perm.parent_id
-            )
-            ps_result = await db.execute(ps_query)
-            ps = ps_result.scalar_one_or_none()
-
-            if ps:
-                # For profile-owned permission sets, use the profile name instead
-                display_name = ps.label or ps.name
-                if ps.is_owned_by_profile and ps.profile_id:
-                    # Get the profile name
-                    prof_query = select(ProfileSnapshot).where(
-                        ProfileSnapshot.organization_id == org_id,
-                        ProfileSnapshot.salesforce_id == ps.profile_id
-                    )
-                    prof_result = await db.execute(prof_query)
-                    prof = prof_result.scalar_one_or_none()
-                    if prof:
-                        display_name = f"{prof.name} (Profile)"
-
-                permission_sets_dict[ps.salesforce_id] = {
-                    "id": ps.salesforce_id,
-                    "name": display_name,
-                    "label": display_name,
-                    "read": perm.permissions_read,
-                    "edit": perm.permissions_edit,
-                }
+        source = sources.get(perm.parent_id)
+        if source is None:
+            continue
+        grants = {
+            "read": perm.permissions_read,
+            "edit": perm.permissions_edit,
+        }
+        bucket = profiles_dict if source.kind == KIND_PROFILE else permission_sets_dict
+        entry = bucket.setdefault(source.id, {
+            "id": source.id,
+            "name": source.name,
+            "label": source.label,
+            "type": source.kind,
+            **{k: False for k in grants},
+        })
+        for flag, granted in grants.items():
+            entry[flag] = entry[flag] or bool(granted)
 
     profiles_with_access = list(profiles_dict.values())
     permission_sets_with_access = list(permission_sets_dict.values())
@@ -1216,7 +1172,7 @@ async def get_field_details(
                         "email": user.email,
                         "access_methods": []
                     }
-                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["name"])
+                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["label"])
 
     # Convert to list and format access via
     users_with_access = [
@@ -1411,10 +1367,11 @@ async def get_permission_set_detail(
         len(perms) for perms in system_permissions_by_category.values()
     )
 
+    detail_source = (await resolve_grant_sources(db, org_id, [ps.salesforce_id])).get(ps.salesforce_id)
     return {
         "id": ps.salesforce_id,
         "name": ps.name,
-        "label": ps.label,
+        "label": detail_source.display if detail_source else ps.label,
         "type": ps.ps_type or "Regular",
         "isMuting": (ps.ps_type == "Muting"),
         "isOwnedByProfile": ps.is_owned_by_profile,
@@ -1917,11 +1874,13 @@ async def get_node_details(
         ps = ps_result.scalar_one_or_none()
 
         if ps:
+            node_sources = await resolve_grant_sources(db, org_id, [ps.salesforce_id])
+            node_source = node_sources.get(ps.salesforce_id)
             node_info = {
                 "id": ps.salesforce_id,
                 "type": "permission_set",
                 "name": ps.name,
-                "label": ps.label,
+                "label": node_source.display if node_source else ps.label,
                 "description": getattr(ps, 'description', None),
             }
         else:
