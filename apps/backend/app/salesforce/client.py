@@ -423,10 +423,10 @@ class SalesforceAPIClient:
         Report is a standard queryable SObject. The fields we pull:
           - Id / Name / DeveloperName / OwnerId — identity
           - FolderName — inline on Report (no join needed)
-          - LastReferencedDate — anywhere-in-org signal (view / edit /
-            embed). Drives the zombie tier cutoff.
-          - LastRunDate — explicit run signal. Nullable — some orgs
-            only populate this on scheduled runs.
+          - LastRunDate — org-wide: last time anyone (or a schedule)
+            ran the report. Drives the zombie tier cutoff.
+          - LastReferencedDate / LastViewedDate — the CONNECTED user's
+            own activity only; used solely when LastRunDate is null.
           - LastModifiedDate / CreatedDate — for age vs staleness
             heuristics on the frontend.
           - Format — Tabular / Summary / Matrix / MultiBlock / Joined.

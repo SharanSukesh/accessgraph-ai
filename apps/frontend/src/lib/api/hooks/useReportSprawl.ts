@@ -2,9 +2,10 @@
  * Report & Dashboard Sprawl API hooks.
  *
  * Powers /orgs/{orgId}/report-sprawl — the interactive inventory page
- * where consultants see every Report + Dashboard classified into one
- * of four tiers (live / zombie / orphaned / duplicate) and can drill
- * down for evidence.
+ * where consultants see every Report + Dashboard classified by tier
+ * (live / zombie / orphaned / duplicate for reports; dashboards get
+ * unknown_usage instead of live / zombie because Salesforce exposes no
+ * org-wide dashboard usage date) and can drill down for evidence.
  *
  * Types mirror the Pydantic response models in
  * apps/backend/app/api/routes/report_sprawl.py.
@@ -19,7 +20,12 @@ import { endpoints } from '../endpoints'
 // ============================================================================
 
 export type ReportItemType = 'report' | 'dashboard'
-export type ReportTier = 'live' | 'zombie' | 'orphaned' | 'duplicate'
+export type ReportTier =
+  | 'live'
+  | 'zombie'
+  | 'orphaned'
+  | 'duplicate'
+  | 'unknown_usage'
 
 export interface ReportItem {
   id: string
@@ -54,6 +60,7 @@ export interface ReportSprawlSummary {
   items_zombie: number
   items_orphaned: number
   items_duplicate: number
+  items_unknown_usage: number
   items_never_referenced: number
   avg_days_since_last_view: number | null
   duplicate_groups: number
@@ -75,6 +82,7 @@ export interface ReportSprawlRunResponse {
   items_zombie: number
   items_orphaned: number
   items_duplicate: number
+  items_unknown_usage: number
 }
 
 export interface ReportSprawlHistoryPoint {
@@ -84,6 +92,7 @@ export interface ReportSprawlHistoryPoint {
   items_zombie: number
   items_orphaned: number
   items_duplicate: number
+  items_unknown_usage: number
 }
 
 export interface ReportItemFilters {

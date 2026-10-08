@@ -1901,11 +1901,12 @@ class InstalledPackage(Base, TimestampMixin):
 # Managed-Package Sprawl pattern: one snapshot per run, one row per
 # item, tier + evidence computed at snapshot time.
 #
-# Tiers (precedence: orphaned > duplicate > zombie > live):
-#   - orphaned:  owner is inactive
-#   - duplicate: normalised name matches ≥1 sibling in the same run
-#   - zombie:    LastReferencedDate > 12 months ago (or never referenced)
-#   - live:      referenced within the last 12 months
+# Tiers (precedence: orphaned > duplicate > zombie / unknown_usage > live):
+#   - orphaned:      owner (dashboards: running user) is explicitly inactive
+#   - duplicate:     normalised name matches ≥1 sibling in the same run
+#   - zombie:        report not run in >12 months (or never run)
+#   - unknown_usage: dashboard — Salesforce exposes no org-wide view date
+#   - live:          report run within the last 12 months
 
 
 class ReportSprawlRun(Base, TimestampMixin):
@@ -1933,8 +1934,15 @@ class ReportSprawlRun(Base, TimestampMixin):
     items_zombie: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     items_orphaned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     items_duplicate: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Dashboards whose usage can't be observed via the API. Zero on runs
+    # recorded before this tier existed (those dashboards were counted
+    # as live/zombie from the connected user's own view dates).
+    items_unknown_usage: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
 
-    # Aggregate signals for the KPI strip.
+    # Aggregate signals for the KPI strip. Both count reports only:
+    # "never referenced" means no LastRunDate (or fallback view date).
     items_never_referenced: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
@@ -1985,9 +1993,9 @@ class ReportInventoryItem(Base, TimestampMixin):
 
     owner_sf_id: Mapped[Optional[str]] = mapped_column(String(18))
     owner_name: Mapped[Optional[str]] = mapped_column(String(255))
-    # Nullable because we may not have resolved the owner (managed by
-    # someone in a synced-out portion of the org). None means "unknown"
-    # not "active" — the tier scorer treats None as inactive to fail safe.
+    # None means the owner couldn't be resolved (Report.OwnerId is often
+    # a folder id, not a user). The scorer only treats an explicit False
+    # as orphaned.
     owner_is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
 
     description: Mapped[Optional[str]] = mapped_column(String(1000))
@@ -2000,10 +2008,12 @@ class ReportInventoryItem(Base, TimestampMixin):
     last_modified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     # Snapshot-time computed values (avoid recomputing on every read).
-    # None when no view history — frontend renders "never viewed".
+    # Reports: days since LastRunDate (LastReferencedDate only when
+    # LastRunDate is null). Dashboards: always None — there is no
+    # org-wide usage date to measure from.
     days_since_last_view: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Tier: 'live' | 'zombie' | 'orphaned' | 'duplicate'.
+    # Tier: 'live' | 'zombie' | 'orphaned' | 'duplicate' | 'unknown_usage'.
     tier: Mapped[str] = mapped_column(String(16), default="live", nullable=False)
     # Hash of the normalised name; groups items by dedup key so the
     # frontend can render duplicate clusters. NULL when the item's name
@@ -2031,15 +2041,19 @@ class ReportInventoryItem(Base, TimestampMixin):
 # Mirror of the Report Sprawl + Package Sprawl pattern applied to
 # automation. One row per Flow / ApexTrigger, tiered by:
 #
-#   broken > orphaned > dormant > active
+#   needs_attention > orphaned > inactive > unchanged > active
 #
-#   - broken:   Flow IsOutOfDate=True (active version doesn't match
-#               latest saved), OR ApexTrigger IsValid=False (doesn't
-#               compile against current schema).
-#   - orphaned: LastModifiedBy is an inactive user.
-#   - dormant:  currently active but LastModifiedDate >12 months ago.
-#               Proxy for "nobody has touched this in a year".
-#   - active:   modified within the last 12 months + owner active.
+#   - needs_attention: active ApexTrigger with IsValid=False.
+#   - orphaned:        last modifier is explicitly inactive (never for
+#                      managed-package items).
+#   - inactive:        deactivated flow / trigger.
+#   - unchanged:       active, not modified in >12 months. Salesforce
+#                      exposes no execution counts without Event
+#                      Monitoring, so this is not a usage signal.
+#   - active:          everything else.
+#
+# Runs and items recorded before 2026-10 used 'broken' and 'dormant';
+# the API maps those to needs_attention / unchanged on read.
 
 
 class AutomationSprawlRun(Base, TimestampMixin):
@@ -2072,14 +2086,22 @@ class AutomationSprawlRun(Base, TimestampMixin):
     items_active: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
-    items_dormant: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False
+    # Stored in the legacy `items_dormant` column. Older runs counted
+    # deactivated automation here too (there was no inactive tier).
+    items_unchanged: Mapped[int] = mapped_column(
+        "items_dormant", Integer, default=0, nullable=False
     )
     items_orphaned: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )
-    items_broken: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False
+    # Stored in the legacy `items_broken` column. Older runs also
+    # counted out-of-date flows and inactive invalid triggers here.
+    items_needs_attention: Mapped[int] = mapped_column(
+        "items_broken", Integer, default=0, nullable=False
+    )
+    # Zero on runs recorded before this tier existed.
+    items_inactive: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
     )
 
     # Mean of days-since-last-modified across items that were modified
@@ -2152,8 +2174,8 @@ class AutomationInventoryItem(Base, TimestampMixin):
     length_without_comments: Mapped[Optional[int]] = mapped_column(Integer)
 
     # State flags. `is_active` is what Salesforce currently runs;
-    # `is_valid` is compile / schema-validity for triggers or
-    # IsOutOfDate inverted for flows.
+    # `is_valid` is ApexTrigger.IsValid. Flows have no validity flag
+    # (None); older runs stored IsOutOfDate inverted here.
     is_active: Mapped[Optional[bool]] = mapped_column(Boolean)
     is_valid: Mapped[Optional[bool]] = mapped_column(Boolean)
 
@@ -2167,6 +2189,8 @@ class AutomationInventoryItem(Base, TimestampMixin):
     )
     days_since_modified: Mapped[Optional[int]] = mapped_column(Integer)
 
+    # 'needs_attention' | 'orphaned' | 'inactive' | 'unchanged' | 'active'
+    # (legacy rows: 'broken' | 'dormant').
     tier: Mapped[str] = mapped_column(
         String(16), default="active", nullable=False
     )

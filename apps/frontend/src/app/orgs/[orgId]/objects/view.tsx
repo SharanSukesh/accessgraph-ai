@@ -412,12 +412,14 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {obj.isSensitive ? (
-                          <Badge variant="warning" size="sm">
-                            Sensitive
-                          </Badge>
+                          <span title={obj.sensitivity ? `Likely holds ${obj.sensitivity}` : undefined}>
+                            <Badge variant="warning" size="sm">
+                              {obj.sensitivity ? `Sensitive: ${obj.sensitivity}` : 'Sensitive'}
+                            </Badge>
+                          </span>
                         ) : (
                           <Badge variant="default" size="sm">
-                            Standard
+                            Not flagged
                           </Badge>
                         )}
                       </td>

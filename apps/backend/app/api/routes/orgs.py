@@ -31,6 +31,7 @@ from app.domain.models import (
 from app.graph.builder import GraphBuilder
 from app.db.neo4j_client import get_neo4j_client
 from app.ingestion.orchestrator import schedule_background_sync
+from app.services.org_naming import rename_manually
 from app.services.write_back import set_write_back, write_back_enabled
 from app.services.anomaly_detection import AnomalyDetectionService
 from app.services.recommendations import RecommendationEngine
@@ -448,4 +449,26 @@ async def update_write_back(
     await db.commit()
     logger.warning("write-back %s for org %s by %s", "ENABLED" if body.enabled else "disabled", org_id, actor)
     return record
+
+
+class RenameRequest(BaseModel):
+    name: str
+
+
+@router.patch("/{org_id}", response_model=OrgResponse)
+async def rename_organization(
+    org_id: str,
+    body: RenameRequest,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+):
+    """Give a client org a display name; it then stops following
+    Salesforce's Organization.Name."""
+    if not body.name.strip():
+        raise HTTPException(status_code=400, detail="Name can't be empty.")
+    org = await db.get(Organization, org_id)
+    rename_manually(org, body.name)
+    await db.commit()
+    await db.refresh(org)
+    return org
 

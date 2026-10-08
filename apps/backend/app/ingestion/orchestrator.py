@@ -147,6 +147,7 @@ class SyncOrchestrator:
         """Extract data from live Salesforce org"""
         from sqlalchemy.orm import selectinload
         from app.salesforce.oauth import SalesforceOAuthClient
+        from app.services.org_naming import apply_salesforce_name
 
         # Get Salesforce connection with eager loading
         stmt = select(Organization).where(Organization.id == org_id).options(
@@ -193,6 +194,9 @@ class SyncOrchestrator:
             instance_url=conn.instance_url,
             access_token=access_token,
         )
+
+        info = await client.extract_organization()
+        apply_salesforce_name(org, (info or {}).get("Name"))
 
         # Extract all data
         return await client.extract_all()

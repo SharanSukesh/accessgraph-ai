@@ -42,6 +42,7 @@ from app.domain.models import (
 from app.salesforce.client import SalesforceAPIClient
 from app.salesforce.oauth import SalesforceOAuthClient
 from app.services.connection_posture import assess_connected_user
+from app.services.org_naming import apply_salesforce_name
 
 logger = logging.getLogger(__name__)
 
@@ -210,6 +211,7 @@ async def callback(
         org_id = connection.organization_id
         existing_org = await db.get(Organization, org_id)
         existing_org.settings = {**(existing_org.settings or {}), "is_sandbox": bool(flow.get("sandbox"))}
+        apply_salesforce_name(existing_org, org_name)
     else:
         domain = token.instance_url.replace("https://", "").split(".")[0]
         org = Organization(

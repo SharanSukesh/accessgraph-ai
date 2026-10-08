@@ -12,13 +12,16 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import AutomationInventoryItem, AutomationSprawlRun
-from app.services.automation_sprawl import AutomationSprawlService
+from app.services.automation_sprawl import (
+    TIER_RANK,
+    AutomationSprawlService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -32,9 +35,10 @@ class RunResponse(BaseModel):
     run_id: str
     snapshot_at: str
     items_total: int
-    items_broken: int
+    items_needs_attention: int
     items_orphaned: int
-    items_dormant: int
+    items_inactive: int
+    items_unchanged: int
 
 
 class RunSummary(BaseModel):
@@ -44,9 +48,10 @@ class RunSummary(BaseModel):
     triggers_total: int
     items_total: int
     items_active: int
-    items_dormant: int
+    items_unchanged: int
+    items_inactive: int
     items_orphaned: int
-    items_broken: int
+    items_needs_attention: int
     avg_days_since_modified: Optional[int]
     duplicate_groups: int
     has_data: bool
@@ -107,7 +112,7 @@ class ItemResponse(BaseModel):
             owner_is_active=row.owner_is_active,
             last_modified_at=iso(row.last_modified_at),
             days_since_modified=row.days_since_modified,
-            tier=row.tier,
+            tier=_LEGACY_TIERS.get(row.tier, row.tier),
             duplicate_group_key=row.duplicate_group_key,
             evidence=row.evidence or {},
         )
@@ -123,13 +128,31 @@ class HistoryPoint(BaseModel):
     run_id: str
     snapshot_at: str
     items_total: int
-    items_broken: int
+    items_needs_attention: int
     items_orphaned: int
-    items_dormant: int
+    items_inactive: int
+    items_unchanged: int
 
 
 # ---------------------------------------------------------------- helpers
 
+
+# Tier names stored by runs before the 2026-10 rename.
+_LEGACY_TIERS = {"broken": "needs_attention", "dormant": "unchanged"}
+
+
+def _stored_tiers(tier: str) -> List[str]:
+    return [tier] + [old for old, new in _LEGACY_TIERS.items() if new == tier]
+
+
+_TIER_ORDER = case(
+    {
+        **TIER_RANK,
+        **{old: TIER_RANK[new] for old, new in _LEGACY_TIERS.items()},
+    },
+    value=AutomationInventoryItem.tier,
+    else_=99,
+)
 
 
 async def _latest_run(
@@ -179,9 +202,10 @@ async def run_automation_sprawl(
         run_id=run.id,
         snapshot_at=run.snapshot_at.isoformat(),
         items_total=run.items_total,
-        items_broken=run.items_broken,
+        items_needs_attention=run.items_needs_attention,
         items_orphaned=run.items_orphaned,
-        items_dormant=run.items_dormant,
+        items_inactive=run.items_inactive,
+        items_unchanged=run.items_unchanged,
     )
 
 
@@ -205,9 +229,10 @@ async def get_latest_summary(
             triggers_total=0,
             items_total=0,
             items_active=0,
-            items_dormant=0,
+            items_unchanged=0,
+            items_inactive=0,
             items_orphaned=0,
-            items_broken=0,
+            items_needs_attention=0,
             avg_days_since_modified=None,
             duplicate_groups=0,
             has_data=False,
@@ -222,9 +247,10 @@ async def get_latest_summary(
         triggers_total=run.triggers_total,
         items_total=run.items_total,
         items_active=run.items_active,
-        items_dormant=run.items_dormant,
+        items_unchanged=run.items_unchanged,
+        items_inactive=run.items_inactive,
         items_orphaned=run.items_orphaned,
-        items_broken=run.items_broken,
+        items_needs_attention=run.items_needs_attention,
         avg_days_since_modified=run.avg_days_since_modified,
         duplicate_groups=run.duplicate_groups,
         has_data=True,
@@ -242,7 +268,7 @@ async def list_items(
     org_id: str,
     tier: Optional[str] = Query(
         None,
-        pattern="^(active|dormant|orphaned|broken)$",
+        pattern="^(needs_attention|orphaned|inactive|unchanged|active)$",
         description="Filter to a single tier.",
     ),
     item_type: Optional[str] = Query(
@@ -261,19 +287,20 @@ async def list_items(
     db: AsyncSession = Depends(get_database),
 ) -> ItemListResponse:
     """Per-item list from the latest run. Ordered by tier
-    actionability (broken first) then by staleness within tier."""
+    actionability (needs_attention first) then by staleness within
+    tier."""
     run = await _latest_run(db, org_id)
     if run is None:
         return ItemListResponse(run_id=None, total=0, items=[])
 
     conditions = [AutomationInventoryItem.run_id == run.id]
     if tier:
-        conditions.append(AutomationInventoryItem.tier == tier)
+        conditions.append(
+            AutomationInventoryItem.tier.in_(_stored_tiers(tier))
+        )
     if item_type:
         conditions.append(AutomationInventoryItem.item_type == item_type)
     if search:
-        from sqlalchemy import func, or_
-
         needle = f"%{search.lower()}%"
         conditions.append(
             or_(
@@ -281,8 +308,6 @@ async def list_items(
                 func.lower(AutomationInventoryItem.api_name).like(needle),
             )
         )
-
-    from sqlalchemy import func
 
     total_row = await db.execute(
         select(func.count())
@@ -297,8 +322,10 @@ async def list_items(
                 select(AutomationInventoryItem)
                 .where(*conditions)
                 .order_by(
-                    AutomationInventoryItem.tier,
-                    desc(AutomationInventoryItem.days_since_modified),
+                    _TIER_ORDER,
+                    desc(
+                        AutomationInventoryItem.days_since_modified
+                    ).nulls_last(),
                     AutomationInventoryItem.name,
                 )
                 .limit(limit)
@@ -308,21 +335,6 @@ async def list_items(
         .scalars()
         .all()
     )
-    # Python-side re-sort so `broken` lands first (SQL alphabetises).
-    tier_priority = {
-        "broken": 0,
-        "orphaned": 1,
-        "dormant": 2,
-        "active": 3,
-    }
-    rows.sort(
-        key=lambda r: (
-            tier_priority.get(r.tier, 99),
-            -(r.days_since_modified or 0),
-            r.name.lower(),
-        )
-    )
-
     return ItemListResponse(
         run_id=run.id,
         total=total,
@@ -352,9 +364,10 @@ async def get_history(
             run_id=r.id,
             snapshot_at=r.snapshot_at.isoformat(),
             items_total=r.items_total,
-            items_broken=r.items_broken,
+            items_needs_attention=r.items_needs_attention,
             items_orphaned=r.items_orphaned,
-            items_dormant=r.items_dormant,
+            items_inactive=r.items_inactive,
+            items_unchanged=r.items_unchanged,
         )
         for r in reversed(runs)
     ]

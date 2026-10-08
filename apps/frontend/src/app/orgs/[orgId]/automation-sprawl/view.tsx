@@ -4,14 +4,19 @@
  * Automation Sprawl page.
  *
  * Inventory of every Flow + Apex Trigger in the org, tiered by
- * validity + ownership + staleness. Mirror of the Report Sprawl UX.
+ * validity, ownership, activation and time since last change. Mirror
+ * of the Report Sprawl UX.
  *
- * Tiers (precedence — broken > orphaned > dormant > active):
- *   - broken:   Flow IsOutOfDate=true OR ApexTrigger IsValid=false.
- *               Actively causing runtime errors.
- *   - orphaned: Last modifier is inactive — no one accountable.
- *   - dormant:  Active but not modified in 12+ months.
- *   - active:   Modified in last 12 months + owner active.
+ * Tiers (precedence — needs_attention > orphaned > inactive >
+ * unchanged > active):
+ *   - needs_attention: active trigger marked invalid by Salesforce.
+ *   - orphaned:        last modifier is an inactive user (never for
+ *                      managed-package items).
+ *   - inactive:        deactivated flow / trigger — easiest cleanup.
+ *   - unchanged:       active, not modified in 12+ months. Not a usage
+ *                      signal: run counts need Event Monitoring.
+ *   - active:          everything else.
+ * Legacy 'broken' / 'dormant' rows are mapped to the new tiers by the API.
  */
 
 import { useState } from 'react'
@@ -31,7 +36,9 @@ import {
   Zap,
   Cpu,
   AlertCircle,
-  PauseCircle,
+  History,
+  Package,
+  PowerOff,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -149,14 +156,14 @@ export function AutomationSprawlView({ embedded = false }: { embedded?: boolean 
         <EmptyState
           icon="database"
           title="No sprawl analysis yet"
-          description="Click Analyse automations to inventory every Flow + Apex Trigger and tier each by compile validity, ownership, and staleness."
+          description="Click Analyse automations to inventory every Flow + Apex Trigger and tier each by validity, ownership, activation, and time since last change."
         />
       ) : summary.items_total === 0 ? (
         <CleanShopState summary={summary} />
       ) : (
         <>
-          {/* KPI strip — 5 cards */}
-          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {/* KPI strip */}
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             <StaggerItem>
               <TierKpi
                 label="Total automations"
@@ -168,42 +175,51 @@ export function AutomationSprawlView({ embedded = false }: { embedded?: boolean 
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Active"
-                value={summary.items_active}
-                icon={Zap}
-                tone="primary"
-                hint="Modified in the last 12 months with an active owner"
+                label={TIER_META.needs_attention.label}
+                value={summary.items_needs_attention}
+                icon={AlertCircle}
+                tone="warning"
+                hint="Active triggers Salesforce has marked invalid — usually they recompile on next run, but confirm they still compile"
               />
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Dormant"
-                value={summary.items_dormant}
-                icon={PauseCircle}
-                tone="copper"
-                hint={
-                  summary.avg_days_since_modified
-                    ? `Avg. ${summary.avg_days_since_modified} days since last modification`
-                    : 'Currently active but not modified in >12 months'
-                }
-              />
-            </StaggerItem>
-            <StaggerItem>
-              <TierKpi
-                label="Orphaned"
+                label={TIER_META.orphaned.label}
                 value={summary.items_orphaned}
                 icon={UserX}
                 tone="danger"
-                hint="Last modifier is inactive — no one accountable"
+                hint="Last modifier is an inactive user — confirm someone else owns it"
               />
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Broken"
-                value={summary.items_broken}
-                icon={AlertCircle}
-                tone="danger"
-                hint="Flow out-of-date OR trigger fails to compile — actively causing runtime errors"
+                label={TIER_META.inactive.label}
+                value={summary.items_inactive}
+                icon={PowerOff}
+                tone="neutral"
+                hint="Deactivated flows and triggers — they never run, so they are the easiest cleanup"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label={TIER_META.unchanged.label}
+                value={summary.items_unchanged}
+                icon={History}
+                tone="copper"
+                hint="Active but not modified in over 12 months. Salesforce doesn't expose run counts without Event Monitoring, so confirm before removing"
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label={TIER_META.active.label}
+                value={summary.items_active}
+                icon={Zap}
+                tone="primary"
+                hint={
+                  summary.avg_days_since_modified
+                    ? `Avg. ${summary.avg_days_since_modified} days since last modification across all items`
+                    : 'Active and modified in the last 12 months, or vendor-maintained'
+                }
               />
             </StaggerItem>
           </Stagger>
@@ -218,14 +234,19 @@ export function AutomationSprawlView({ embedded = false }: { embedded?: boolean 
                 </strong>{' '}
                 — tiers use precedence{' '}
                 <strong>
-                  broken &gt; orphaned &gt; dormant &gt; active
+                  needs attention &gt; orphaned &gt; inactive &gt; unchanged
+                  &gt; active
                 </strong>
-                . Broken tops the list because these are actively firing
-                with invalid logic or against a stale schema (silent data
-                errors). Dormant means "still switched on but nobody has
-                touched it in a year" — the classic Salesforce cleanup
-                surface. Duplicate name clusters are surfaced on individual
-                cards but don&rsquo;t override tier.
+                . Salesforce doesn&rsquo;t report how often a flow or
+                trigger runs without Shield Event Monitoring, so
+                &ldquo;Unchanged 12+ months&rdquo; only means nobody has
+                edited it — a busy flow can sit there safely. A flow with a
+                newer saved version that hasn&rsquo;t been activated is
+                normal drafting and is noted on the card, not flagged.
+                Managed-package items are maintained by their vendor and are
+                never marked orphaned or unchanged. Duplicate name clusters
+                are shown on individual cards but don&rsquo;t change the
+                tier.
               </div>
             </div>
           </Card>
@@ -277,34 +298,16 @@ export function AutomationSprawlView({ embedded = false }: { embedded?: boolean 
               >
                 All tiers ({summary.items_total.toLocaleString()})
               </TierChip>
-              <TierChip
-                tone="broken"
-                active={tier === 'broken'}
-                onClick={() => changeFilter(() => setTier('broken'))}
-              >
-                Broken ({summary.items_broken.toLocaleString()})
-              </TierChip>
-              <TierChip
-                tone="orphaned"
-                active={tier === 'orphaned'}
-                onClick={() => changeFilter(() => setTier('orphaned'))}
-              >
-                Orphaned ({summary.items_orphaned.toLocaleString()})
-              </TierChip>
-              <TierChip
-                tone="dormant"
-                active={tier === 'dormant'}
-                onClick={() => changeFilter(() => setTier('dormant'))}
-              >
-                Dormant ({summary.items_dormant.toLocaleString()})
-              </TierChip>
-              <TierChip
-                tone="active"
-                active={tier === 'active'}
-                onClick={() => changeFilter(() => setTier('active'))}
-              >
-                Active ({summary.items_active.toLocaleString()})
-              </TierChip>
+              {TIER_ORDER.map((t) => (
+                <TierChip
+                  key={t}
+                  tone={t}
+                  active={tier === t}
+                  onClick={() => changeFilter(() => setTier(t))}
+                >
+                  {TIER_META[t].label} ({tierCount(summary, t).toLocaleString()})
+                </TierChip>
+              ))}
             </div>
           </Card>
 
@@ -531,12 +534,14 @@ function TierKpi({
   label: string
   value: number
   icon: React.ComponentType<{ className?: string }>
-  tone: 'primary' | 'copper' | 'danger' | 'neutral'
+  tone: 'primary' | 'copper' | 'warning' | 'danger' | 'neutral'
   hint: string
 }) {
   const wrapperCls =
     tone === 'primary'
       ? 'p-3 rounded-lg bg-primary-50 dark:bg-primary-900/25 ring-1 ring-primary-200 dark:ring-primary-800'
+      : tone === 'warning'
+      ? 'p-3 rounded-lg bg-orange-100 dark:bg-orange-900/25 ring-1 ring-orange-200 dark:ring-orange-800'
       : tone === 'copper'
       ? 'p-3 rounded-lg bg-copper-100 dark:bg-copper-900/25 ring-1 ring-copper-200 dark:ring-copper-800'
       : tone === 'danger'
@@ -545,6 +550,8 @@ function TierKpi({
   const iconCls =
     tone === 'primary'
       ? 'h-5 w-5 text-primary-700 dark:text-primary-400'
+      : tone === 'warning'
+      ? 'h-5 w-5 text-orange-600 dark:text-orange-400'
       : tone === 'copper'
       ? 'h-5 w-5 text-copper-600 dark:text-copper-400'
       : tone === 'danger'
@@ -553,6 +560,8 @@ function TierKpi({
   const valueCls =
     tone === 'danger'
       ? 'mt-2 text-2xl font-bold text-red-600 dark:text-red-400 tabular-nums'
+      : tone === 'warning'
+      ? 'mt-2 text-2xl font-bold text-orange-600 dark:text-orange-400 tabular-nums'
       : tone === 'copper'
       ? 'mt-2 text-2xl font-bold text-copper-600 dark:text-copper-400 tabular-nums'
       : 'mt-2 text-2xl font-bold text-grove-ink dark:text-grove-ink-dk tabular-nums'
@@ -601,25 +610,88 @@ function TierChip({
   )
 }
 
+const TIER_ORDER: AutomationTier[] = [
+  'needs_attention',
+  'orphaned',
+  'inactive',
+  'unchanged',
+  'active',
+]
+
+const TIER_META: Record<
+  AutomationTier,
+  { label: string; chip: string; chipActive: string; ring: string; dot: string }
+> = {
+  needs_attention: {
+    label: 'Needs attention',
+    chipActive: 'bg-orange-600 text-white',
+    chip: 'bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/25 dark:text-orange-400 dark:hover:bg-orange-900/40',
+    ring: 'ring-1 ring-orange-200 dark:ring-orange-900/60',
+    dot: 'bg-orange-500',
+  },
+  orphaned: {
+    label: 'Orphaned',
+    chipActive: 'bg-red-600 text-white',
+    chip: 'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-400 dark:hover:bg-red-900/40',
+    ring: 'ring-1 ring-red-200 dark:ring-red-900/60',
+    dot: 'bg-red-500',
+  },
+  inactive: {
+    label: 'Inactive',
+    chipActive: 'bg-grove-ink/70 text-white dark:bg-grove-ink-dk/60 dark:text-grove-canvas-dk',
+    chip: 'bg-grove-ink/5 text-grove-ink/70 hover:bg-grove-ink/10 dark:bg-grove-ink-dk/10 dark:text-grove-ink-dk/70 dark:hover:bg-grove-ink-dk/20',
+    ring: '',
+    dot: 'bg-grove-ink/40 dark:bg-grove-ink-dk/40',
+  },
+  unchanged: {
+    label: 'Unchanged 12+ months',
+    chipActive: 'bg-copper-600 text-white',
+    chip: 'bg-copper-50 text-copper-700 hover:bg-copper-100 dark:bg-copper-900/25 dark:text-copper-400 dark:hover:bg-copper-900/40',
+    ring: 'ring-1 ring-copper-200 dark:ring-copper-900/60',
+    dot: 'bg-copper-500',
+  },
+  active: {
+    label: 'Active',
+    chipActive: 'bg-primary-600 text-white',
+    chip: 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/25 dark:text-primary-400 dark:hover:bg-primary-900/40',
+    ring: '',
+    dot: 'bg-primary-500',
+  },
+}
+
+function tierCount(
+  summary: {
+    items_needs_attention: number
+    items_orphaned: number
+    items_inactive: number
+    items_unchanged: number
+    items_active: number
+  },
+  tier: AutomationTier,
+): number {
+  switch (tier) {
+    case 'needs_attention':
+      return summary.items_needs_attention
+    case 'orphaned':
+      return summary.items_orphaned
+    case 'inactive':
+      return summary.items_inactive
+    case 'unchanged':
+      return summary.items_unchanged
+    case 'active':
+      return summary.items_active
+  }
+}
+
+// Unknown values (e.g. a tier added server-side first) fall back to
+// the neutral Active styling rather than crashing the card.
+function tierMeta(tier: AutomationTier) {
+  return TIER_META[tier] ?? TIER_META.active
+}
+
 function tierChipClasses(tier: AutomationTier, active: boolean): string {
-  if (tier === 'broken') {
-    return active
-      ? 'bg-red-600 text-white'
-      : 'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-400 dark:hover:bg-red-900/40'
-  }
-  if (tier === 'orphaned') {
-    return active
-      ? 'bg-orange-600 text-white'
-      : 'bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/25 dark:text-orange-400 dark:hover:bg-orange-900/40'
-  }
-  if (tier === 'dormant') {
-    return active
-      ? 'bg-copper-600 text-white'
-      : 'bg-copper-50 text-copper-700 hover:bg-copper-100 dark:bg-copper-900/25 dark:text-copper-400 dark:hover:bg-copper-900/40'
-  }
-  return active
-    ? 'bg-primary-600 text-white'
-    : 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/25 dark:text-primary-400 dark:hover:bg-primary-900/40'
+  const meta = tierMeta(tier)
+  return active ? meta.chipActive : meta.chip
 }
 
 function TypeChip({
@@ -661,14 +733,7 @@ function ItemCard({
   expanded: boolean
   onToggle: () => void
 }) {
-  const ringClass =
-    item.tier === 'broken'
-      ? 'ring-1 ring-red-200 dark:ring-red-900/60'
-      : item.tier === 'orphaned'
-      ? 'ring-1 ring-orange-200 dark:ring-orange-900/60'
-      : item.tier === 'dormant'
-      ? 'ring-1 ring-copper-200 dark:ring-copper-900/60'
-      : ''
+  const ringClass = tierMeta(item.tier).ring
 
   const evidence = (item.evidence || {}) as Record<string, unknown>
   const dupGroup = evidence.duplicate_group as
@@ -676,6 +741,9 @@ function ItemCard({
     | undefined
   const tierReason =
     typeof evidence.tier_reason === 'string' ? evidence.tier_reason : null
+  const notes = Array.isArray(evidence.notes)
+    ? evidence.notes.filter((n): n is string => typeof n === 'string')
+    : []
 
   const typeLabel = item.item_type === 'flow' ? 'FLOW' : 'APEX TRIGGER'
 
@@ -697,14 +765,15 @@ function ItemCard({
                 {item.name}
               </h3>
               <TierBadge tier={item.tier} />
-              {item.is_active === false && (
+              {item.is_active === false && item.tier !== 'inactive' && (
                 <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink/60 dark:text-grove-ink-dk/60">
-                  Inactive
+                  Deactivated
                 </span>
               )}
               {item.namespace_prefix && (
-                <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink/60 dark:text-grove-ink-dk/60">
-                  {item.namespace_prefix}
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink/60 dark:text-grove-ink-dk/60 ring-1 ring-grove-border dark:ring-grove-border-dk">
+                  <Package className="h-3 w-3" />
+                  Managed package ({item.namespace_prefix})
                 </span>
               )}
             </div>
@@ -755,6 +824,11 @@ function ItemCard({
                 {tierReason}
               </div>
             )}
+            {notes.length > 0 && !expanded && (
+              <div className="mt-1 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
+                {notes.join(' · ')}
+              </div>
+            )}
           </div>
 
           <button
@@ -775,6 +849,9 @@ function ItemCard({
           <div className="mt-4 pt-4 border-t border-grove-border/60 dark:border-grove-border-dk/60 space-y-3 text-xs text-grove-ink/80 dark:text-grove-ink-dk/80">
             {tierReason && (
               <DetailRow label="Why this tier" value={tierReason} />
+            )}
+            {notes.length > 0 && (
+              <DetailRow label="Notes" value={notes.join(' · ')} />
             )}
             <DetailRow label="Salesforce ID" value={item.sf_id} mono />
             {item.api_name && (
@@ -809,16 +886,21 @@ function ItemCard({
             {item.description && (
               <DetailRow label="Description" value={item.description} />
             )}
-            {typeof item.is_valid === 'boolean' && (
-              <DetailRow
-                label="Valid"
-                value={item.is_valid ? 'Yes' : 'No — compile / schema check failed'}
-              />
-            )}
+            {item.item_type === 'trigger' &&
+              typeof item.is_valid === 'boolean' && (
+                <DetailRow
+                  label="Valid"
+                  value={
+                    item.is_valid
+                      ? 'Yes'
+                      : 'No — marked invalid by Salesforce (usually recompiles on next run)'
+                  }
+                />
+              )}
             {typeof item.is_active === 'boolean' && (
               <DetailRow
                 label="Active"
-                value={item.is_active ? 'Yes' : 'No — admin-deactivated'}
+                value={item.is_active ? 'Yes' : 'No — deactivated'}
               />
             )}
             {item.last_modified_at && (
@@ -869,20 +951,13 @@ function TierBadge({ tier }: { tier: AutomationTier }) {
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${tierChipClasses(tier, true)}`}
     >
-      {tier}
+      {tierMeta(tier).label}
     </span>
   )
 }
 
 function TierDot({ tier }: { tier: AutomationTier }) {
-  const cls =
-    tier === 'broken'
-      ? 'bg-red-500'
-      : tier === 'orphaned'
-      ? 'bg-orange-500'
-      : tier === 'dormant'
-      ? 'bg-copper-500'
-      : 'bg-primary-500'
+  const cls = tierMeta(tier).dot
   return (
     <div
       className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${cls}`}

@@ -12,13 +12,13 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+from sqlalchemy import case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import ReportInventoryItem, ReportSprawlRun
-from app.services.report_sprawl import ReportSprawlService
+from app.services.report_sprawl import TIER_RANK, ReportSprawlService
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class RunResponse(BaseModel):
     items_zombie: int
     items_orphaned: int
     items_duplicate: int
+    items_unknown_usage: int
 
 
 class RunSummary(BaseModel):
@@ -47,6 +48,7 @@ class RunSummary(BaseModel):
     items_zombie: int
     items_orphaned: int
     items_duplicate: int
+    items_unknown_usage: int
     items_never_referenced: int
     avg_days_since_last_view: Optional[int]
     duplicate_groups: int
@@ -119,10 +121,13 @@ class HistoryPoint(BaseModel):
     items_zombie: int
     items_orphaned: int
     items_duplicate: int
+    items_unknown_usage: int
 
 
 # ---------------------------------------------------------------- helpers
 
+
+_TIER_ORDER = case(TIER_RANK, value=ReportInventoryItem.tier, else_=99)
 
 
 async def _latest_run(
@@ -173,6 +178,7 @@ async def run_report_sprawl(
         items_zombie=run.items_zombie,
         items_orphaned=run.items_orphaned,
         items_duplicate=run.items_duplicate,
+        items_unknown_usage=run.items_unknown_usage,
     )
 
 
@@ -200,6 +206,7 @@ async def get_latest_summary(
             items_zombie=0,
             items_orphaned=0,
             items_duplicate=0,
+            items_unknown_usage=0,
             items_never_referenced=0,
             avg_days_since_last_view=None,
             duplicate_groups=0,
@@ -217,6 +224,7 @@ async def get_latest_summary(
         items_zombie=run.items_zombie,
         items_orphaned=run.items_orphaned,
         items_duplicate=run.items_duplicate,
+        items_unknown_usage=run.items_unknown_usage,
         items_never_referenced=run.items_never_referenced,
         avg_days_since_last_view=run.avg_days_since_last_view,
         duplicate_groups=run.duplicate_groups,
@@ -234,7 +242,7 @@ async def list_items(
     org_id: str,
     tier: Optional[str] = Query(
         None,
-        pattern="^(live|zombie|orphaned|duplicate)$",
+        pattern="^(live|zombie|orphaned|duplicate|unknown_usage)$",
         description="Filter to a single tier.",
     ),
     item_type: Optional[str] = Query(
@@ -267,8 +275,6 @@ async def list_items(
     if search:
         needle = f"%{search.lower()}%"
         # Case-insensitive across name + folder_name (either one hits).
-        from sqlalchemy import func, or_
-
         conditions.append(
             or_(
                 func.lower(ReportInventoryItem.name).like(needle),
@@ -278,8 +284,6 @@ async def list_items(
 
     # Total for pagination display — separate count query is cheaper
     # than pulling all rows into memory.
-    from sqlalchemy import func
-
     total_row = await db.execute(
         select(func.count()).select_from(ReportInventoryItem).where(*conditions)
     )
@@ -291,12 +295,10 @@ async def list_items(
                 select(ReportInventoryItem)
                 .where(*conditions)
                 .order_by(
-                    # SQL-side alphabetical on tier alphabetises
-                    # 'duplicate' before 'live' — mostly what we want
-                    # but 'orphaned' would land AFTER 'live'. We
-                    # re-sort in Python for correctness.
-                    ReportInventoryItem.tier,
-                    desc(ReportInventoryItem.days_since_last_view),
+                    _TIER_ORDER,
+                    desc(
+                        ReportInventoryItem.days_since_last_view
+                    ).nulls_last(),
                     ReportInventoryItem.name,
                 )
                 .limit(limit)
@@ -306,20 +308,6 @@ async def list_items(
         .scalars()
         .all()
     )
-    tier_priority = {
-        "orphaned": 0,
-        "duplicate": 1,
-        "zombie": 2,
-        "live": 3,
-    }
-    rows.sort(
-        key=lambda r: (
-            tier_priority.get(r.tier, 99),
-            -(r.days_since_last_view or 0),
-            r.name.lower(),
-        )
-    )
-
     return ItemListResponse(
         run_id=run.id,
         total=total,
@@ -354,6 +342,7 @@ async def get_history(
             items_zombie=r.items_zombie,
             items_orphaned=r.items_orphaned,
             items_duplicate=r.items_duplicate,
+            items_unknown_usage=r.items_unknown_usage,
         )
         for r in reversed(runs)
     ]

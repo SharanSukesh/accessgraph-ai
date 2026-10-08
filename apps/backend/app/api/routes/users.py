@@ -12,10 +12,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
 from app.services.grant_sources import KIND_PROFILE, resolve_grant_sources
+from app.services.risk_scoring import classify_sensitive_field, classify_sensitive_object
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
 
 logger = logging.getLogger(__name__)
+
+def _object_sensitivity(object_name: str) -> Dict[str, object]:
+    """Same definition of sensitive as the risk score, so the Schema pages
+    and user risk drivers never disagree."""
+    match = classify_sensitive_object(object_name)
+    return {"isSensitive": match is not None, "sensitivity": match[0] if match else None}
+
+
+def _field_sensitivity(field_name: str) -> Dict[str, object]:
+    match = classify_sensitive_field(field_name.split(".")[-1])
+    return {"isSensitive": match is not None, "sensitivity": match[0] if match else None}
+
 
 # Every route on `router` is under /orgs/{org_id}; main.py guards it with
 # require_org_access. Routes without an org in the path go on
@@ -772,6 +785,7 @@ async def list_objects(
             "apiName": obj.sobject_type,
             "label": create_label(obj.sobject_type),
             "isCustom": obj.sobject_type.endswith('__c'),
+            **_object_sensitivity(obj.sobject_type),
             "fieldCount": 0,
             "userCount": total_users,
             "permissionSetCount": obj.permission_set_count,
@@ -908,6 +922,7 @@ async def get_object_details(
         "apiName": object_name,
         "label": create_label(object_name),
         "isCustom": object_name.endswith('__c'),
+        **_object_sensitivity(object_name),
         "profilesWithAccess": profiles_with_access,
         "permissionSetsWithAccess": permission_sets_with_access,
         "usersWithAccess": users_with_access,
@@ -1006,7 +1021,7 @@ async def list_fields(
                 "apiName": field.field,
                 "label": create_label(field.field),
                 "dataType": "String",  # We don't have this info yet
-                "isSensitive": False,  # Would need field metadata to determine
+                **_field_sensitivity(field.field),
                 "isEncrypted": False,  # Would need field metadata to determine
                 "isCustom": field.field.endswith('__c'),
                 "userCount": field.permission_count,
@@ -1200,7 +1215,7 @@ async def get_field_details(
         "label": create_label(field_name),
         "isCustom": field_name.endswith('__c'),
         "dataType": "String",  # We don't have this metadata yet
-        "isSensitive": False,  # Would need field metadata
+        **_field_sensitivity(field_name),
         "isEncrypted": False,  # Would need field metadata
         "profilesWithAccess": profiles_with_access,
         "permissionSetsWithAccess": permission_sets_with_access,

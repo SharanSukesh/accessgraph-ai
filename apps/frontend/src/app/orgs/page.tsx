@@ -9,7 +9,8 @@
  * workspace at /orgs/{id}/dashboard.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -20,6 +21,7 @@ import {
   Plus,
   FlaskConical,
   LogOut,
+  Pencil,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/Logo'
 import { Button } from '@/components/shared/Button'
@@ -27,7 +29,8 @@ import { OrgEnvPill } from '@/components/shared/OrgEnvPill'
 import { Eyebrow, Pill } from '@/components/v2/primitives'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
-import type { Organization } from '@/lib/api/hooks/useOrgs'
+import { orgKeys, type Organization } from '@/lib/api/hooks/useOrgs'
+import { apiClient } from '@/lib/api/client'
 import { formatRelativeTime } from '@/lib/utils/formatters'
 
 export default function OrgsPage() {
@@ -111,7 +114,7 @@ export default function OrgsPage() {
           <Stagger className="space-y-3">
             {orgs.map((org) => (
               <StaggerItem key={org.id}>
-                <OrgRow org={org} />
+                <OrgRow org={org} canRename={canWrite} />
               </StaggerItem>
             ))}
           </Stagger>
@@ -161,7 +164,55 @@ const SYNC_STATUS_LABELS: Record<string, string> = {
   partial: 'partially completed',
 }
 
-function OrgRow({ org }: { org: Organization }) {
+function OrgRow({ org, canRename }: { org: Organization; canRename: boolean }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(org.name)
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    if (!name.trim() || name.trim() === org.name) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    try {
+      await apiClient.patch(`/orgs/${org.id}`, { name: name.trim() })
+      await queryClient.invalidateQueries({ queryKey: orgKeys.all })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          save()
+        }}
+        className="flex items-center gap-3 rounded-2xl border border-primary-400/60 bg-grove-surface p-5 dark:bg-grove-surface-dk"
+      >
+        <input
+          autoFocus
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && setEditing(false)}
+          aria-label="Client org name"
+          className="flex-1 rounded-lg border border-grove-border bg-transparent px-3 py-2 text-base font-semibold text-grove-ink dark:border-grove-border-dk dark:text-grove-ink-dk"
+        />
+        <Button type="submit" size="sm" disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </form>
+    )
+  }
+
   return (
     <Link
       href={`/orgs/${org.id}/dashboard`}
@@ -175,6 +226,22 @@ function OrgRow({ org }: { org: Organization }) {
           <h2 className="truncate text-base font-semibold text-grove-ink dark:text-grove-ink-dk">
             {org.name}
           </h2>
+          {canRename && (
+            <button
+              type="button"
+              aria-label={`Rename ${org.name}`}
+              title="Rename"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setName(org.name)
+                setEditing(true)
+              }}
+              className="rounded p-1 text-grove-ink/40 hover:bg-grove-border/40 hover:text-grove-ink dark:text-grove-ink-dk/40 dark:hover:text-grove-ink-dk"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
           <OrgEnvPill isSandbox={org.is_sandbox} />
           {org.is_demo ? (
             <Pill>Demo</Pill>

@@ -26,6 +26,7 @@ export interface SalesforceObject {
   apiName: string
   isCustom: boolean
   isSensitive: boolean
+  sensitivity?: string | null
   userCount?: number
   anomalyCount?: number
   description?: string

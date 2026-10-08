@@ -7,11 +7,15 @@
  * with drill-down evidence per item. Mirror of the Managed-Package
  * Sprawl UX at a higher item count.
  *
- * Tiers (precedence — orphaned > duplicate > zombie > live):
- *   - orphaned:  owner is inactive
- *   - duplicate: normalised name matches ≥1 sibling in the same run
- *   - zombie:    not referenced for >12 months
- *   - live:      referenced within last 12 months
+ * Tiers (reports: orphaned > duplicate > zombie > live;
+ *        dashboards: orphaned > duplicate > unknown_usage):
+ *   - orphaned:      owner (dashboards: running user) is explicitly
+ *                    inactive; an unresolved owner is not enough
+ *   - duplicate:     normalised name matches ≥1 sibling in the same run
+ *   - zombie:        report not run in >12 months (LastRunDate)
+ *   - live:          report run within the last 12 months
+ *   - unknown_usage: dashboards — Salesforce exposes only the connected
+ *                    user's own view dates, so usage can't be observed
  */
 
 import { useState } from 'react'
@@ -34,6 +38,7 @@ import {
   FileText,
   LayoutDashboard,
   Clock,
+  HelpCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -150,14 +155,14 @@ export function ReportSprawlView({ embedded = false }: { embedded?: boolean } = 
         <EmptyState
           icon="database"
           title="No sprawl analysis yet"
-          description="Click Analyse reports to inventory every Report + Dashboard and tier each by activity and ownership."
+          description="Click Analyse reports to inventory every Report + Dashboard and tier each by last run date, ownership, and duplicate names."
         />
       ) : summary.items_total === 0 ? (
         <CleanShopState summary={summary} />
       ) : (
         <>
-          {/* KPI strip — 5 cards */}
-          <Stagger className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {/* KPI strip */}
+          <Stagger className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
             <StaggerItem>
               <TierKpi
                 label="Total items"
@@ -169,42 +174,51 @@ export function ReportSprawlView({ embedded = false }: { embedded?: boolean } = 
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Live"
+                label={TIER_META.live.label}
                 value={summary.items_live}
                 icon={Activity}
                 tone="primary"
-                hint="Referenced within the last 12 months — in active use"
+                hint="Reports run within the last 12 months"
               />
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Zombie"
+                label={TIER_META.zombie.label}
                 value={summary.items_zombie}
                 icon={Ghost}
                 tone="copper"
                 hint={
                   summary.avg_days_since_last_view
-                    ? `Avg. ${summary.avg_days_since_last_view} days since view across viewed items`
-                    : 'Not referenced in >12 months — cleanup candidate'
+                    ? `Reports not run in over 12 months. Avg. ${summary.avg_days_since_last_view} days since last run across reports`
+                    : 'Reports not run in over 12 months — cleanup candidates'
                 }
               />
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Orphaned"
+                label={TIER_META.orphaned.label}
                 value={summary.items_orphaned}
                 icon={UserX}
                 tone="danger"
-                hint="Owner is inactive — nobody accountable for this item"
+                hint="Owner (or dashboard running user) is inactive — nobody accountable"
               />
             </StaggerItem>
             <StaggerItem>
               <TierKpi
-                label="Duplicate"
+                label={TIER_META.duplicate.label}
                 value={summary.items_duplicate}
                 icon={Copy}
                 tone="danger"
                 hint={`${summary.duplicate_groups} duplicate name group${summary.duplicate_groups === 1 ? '' : 's'} detected`}
+              />
+            </StaggerItem>
+            <StaggerItem>
+              <TierKpi
+                label={TIER_META.unknown_usage.label}
+                value={summary.items_unknown_usage}
+                icon={HelpCircle}
+                tone="neutral"
+                hint="Dashboards — Salesforce doesn't expose org-wide dashboard views via the API"
               />
             </StaggerItem>
           </Stagger>
@@ -219,11 +233,18 @@ export function ReportSprawlView({ embedded = false }: { embedded?: boolean } = 
                 </strong>{' '}
                 — tiers use precedence{' '}
                 <strong>orphaned &gt; duplicate &gt; zombie &gt; live</strong>,
-                so an item that's both orphaned and duplicate lands under
-                &ldquo;orphaned&rdquo;. Zombie cutoff is 12 months since last
-                reference. Duplicates group by name (lowercased, stripped of
-                common suffixes like &ldquo;copy&rdquo; and &ldquo;(1)&rdquo;)
-                within the same item type.
+                so an item that&rsquo;s both orphaned and duplicate lands under
+                &ldquo;orphaned&rdquo;. Report usage comes from each
+                report&rsquo;s last run date, which Salesforce records
+                org-wide; the zombie cutoff is 12 months. Salesforce&rsquo;s
+                &ldquo;last viewed&rdquo; dates only cover the connected user,
+                so they&rsquo;re used only when a report has no run date, and
+                dashboards &mdash; which have nothing else &mdash; show as
+                &ldquo;Usage unknown&rdquo;. Items are only marked orphaned
+                when the owner is an inactive user. Duplicates group by name
+                (lowercased, stripped of common suffixes like
+                &ldquo;copy&rdquo; and &ldquo;(1)&rdquo;) within the same
+                item type.
               </div>
             </div>
           </Card>
@@ -278,34 +299,16 @@ export function ReportSprawlView({ embedded = false }: { embedded?: boolean } = 
               >
                 All tiers ({summary.items_total.toLocaleString()})
               </TierChip>
-              <TierChip
-                tone="orphaned"
-                active={tier === 'orphaned'}
-                onClick={() => changeFilter(() => setTier('orphaned'))}
-              >
-                Orphaned ({summary.items_orphaned.toLocaleString()})
-              </TierChip>
-              <TierChip
-                tone="duplicate"
-                active={tier === 'duplicate'}
-                onClick={() => changeFilter(() => setTier('duplicate'))}
-              >
-                Duplicate ({summary.items_duplicate.toLocaleString()})
-              </TierChip>
-              <TierChip
-                tone="zombie"
-                active={tier === 'zombie'}
-                onClick={() => changeFilter(() => setTier('zombie'))}
-              >
-                Zombie ({summary.items_zombie.toLocaleString()})
-              </TierChip>
-              <TierChip
-                tone="live"
-                active={tier === 'live'}
-                onClick={() => changeFilter(() => setTier('live'))}
-              >
-                Live ({summary.items_live.toLocaleString()})
-              </TierChip>
+              {TIER_ORDER.map((t) => (
+                <TierChip
+                  key={t}
+                  tone={t}
+                  active={tier === t}
+                  onClick={() => changeFilter(() => setTier(t))}
+                >
+                  {TIER_META[t].label} ({tierCount(summary, t).toLocaleString()})
+                </TierChip>
+              ))}
             </div>
           </Card>
 
@@ -532,25 +535,88 @@ function TierChip({
   )
 }
 
+const TIER_ORDER: ReportTier[] = [
+  'orphaned',
+  'duplicate',
+  'zombie',
+  'unknown_usage',
+  'live',
+]
+
+const TIER_META: Record<
+  ReportTier,
+  { label: string; chip: string; chipActive: string; ring: string; dot: string }
+> = {
+  orphaned: {
+    label: 'Orphaned',
+    chipActive: 'bg-red-600 text-white',
+    chip: 'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-400 dark:hover:bg-red-900/40',
+    ring: 'ring-1 ring-red-200 dark:ring-red-900/60',
+    dot: 'bg-red-500',
+  },
+  duplicate: {
+    label: 'Duplicate',
+    chipActive: 'bg-purple-600 text-white',
+    chip: 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/25 dark:text-purple-400 dark:hover:bg-purple-900/40',
+    ring: 'ring-1 ring-purple-200 dark:ring-purple-900/60',
+    dot: 'bg-purple-500',
+  },
+  zombie: {
+    label: 'Zombie',
+    chipActive: 'bg-copper-600 text-white',
+    chip: 'bg-copper-50 text-copper-700 hover:bg-copper-100 dark:bg-copper-900/25 dark:text-copper-400 dark:hover:bg-copper-900/40',
+    ring: 'ring-1 ring-copper-200 dark:ring-copper-900/60',
+    dot: 'bg-copper-500',
+  },
+  unknown_usage: {
+    label: 'Usage unknown',
+    chipActive: 'bg-grove-ink/70 text-white dark:bg-grove-ink-dk/60 dark:text-grove-canvas-dk',
+    chip: 'bg-grove-ink/5 text-grove-ink/70 hover:bg-grove-ink/10 dark:bg-grove-ink-dk/10 dark:text-grove-ink-dk/70 dark:hover:bg-grove-ink-dk/20',
+    ring: '',
+    dot: 'bg-grove-ink/40 dark:bg-grove-ink-dk/40',
+  },
+  live: {
+    label: 'Live',
+    chipActive: 'bg-primary-600 text-white',
+    chip: 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/25 dark:text-primary-400 dark:hover:bg-primary-900/40',
+    ring: '',
+    dot: 'bg-primary-500',
+  },
+}
+
+function tierCount(
+  summary: {
+    items_orphaned: number
+    items_duplicate: number
+    items_zombie: number
+    items_unknown_usage: number
+    items_live: number
+  },
+  tier: ReportTier,
+): number {
+  switch (tier) {
+    case 'orphaned':
+      return summary.items_orphaned
+    case 'duplicate':
+      return summary.items_duplicate
+    case 'zombie':
+      return summary.items_zombie
+    case 'unknown_usage':
+      return summary.items_unknown_usage
+    case 'live':
+      return summary.items_live
+  }
+}
+
+// Unknown values (e.g. a tier added server-side first) fall back to
+// the Live styling rather than crashing the card.
+function tierMeta(tier: ReportTier) {
+  return TIER_META[tier] ?? TIER_META.live
+}
+
 function tierChipClasses(tier: ReportTier, active: boolean): string {
-  if (tier === 'orphaned') {
-    return active
-      ? 'bg-red-600 text-white'
-      : 'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/25 dark:text-red-400 dark:hover:bg-red-900/40'
-  }
-  if (tier === 'duplicate') {
-    return active
-      ? 'bg-purple-600 text-white'
-      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/25 dark:text-purple-400 dark:hover:bg-purple-900/40'
-  }
-  if (tier === 'zombie') {
-    return active
-      ? 'bg-copper-600 text-white'
-      : 'bg-copper-50 text-copper-700 hover:bg-copper-100 dark:bg-copper-900/25 dark:text-copper-400 dark:hover:bg-copper-900/40'
-  }
-  return active
-    ? 'bg-primary-600 text-white'
-    : 'bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/25 dark:text-primary-400 dark:hover:bg-primary-900/40'
+  const meta = tierMeta(tier)
+  return active ? meta.chipActive : meta.chip
 }
 
 function TypeChip({
@@ -592,14 +658,7 @@ function ItemCard({
   expanded: boolean
   onToggle: () => void
 }) {
-  const ringClass =
-    item.tier === 'orphaned'
-      ? 'ring-1 ring-red-200 dark:ring-red-900/60'
-      : item.tier === 'duplicate'
-      ? 'ring-1 ring-purple-200 dark:ring-purple-900/60'
-      : item.tier === 'zombie'
-      ? 'ring-1 ring-copper-200 dark:ring-copper-900/60'
-      : ''
+  const ringClass = tierMeta(item.tier).ring
 
   const evidence = (item.evidence || {}) as Record<string, unknown>
   const dupGroup = evidence.duplicate_group as
@@ -653,12 +712,16 @@ function ItemCard({
                   )}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                {item.days_since_last_view === null
-                  ? 'never viewed'
-                  : `viewed ${item.days_since_last_view}d ago`}
-              </span>
+              {item.item_type === 'report' && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {item.days_since_last_view === null
+                    ? 'no run on record'
+                    : item.last_run_at
+                    ? `run ${item.days_since_last_view}d ago`
+                    : `viewed ${item.days_since_last_view}d ago by connected user`}
+                </span>
+              )}
               {dupGroup && (
                 <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400">
                   <Copy className="h-3 w-3" />
@@ -706,7 +769,7 @@ function ItemCard({
             )}
             {item.last_referenced_at && (
               <DetailRow
-                label="Last referenced"
+                label="Connected user last viewed"
                 value={new Date(item.last_referenced_at).toLocaleString()}
               />
             )}
@@ -770,20 +833,13 @@ function TierBadge({ tier }: { tier: ReportTier }) {
     <span
       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${tierChipClasses(tier, true)}`}
     >
-      {tier}
+      {tierMeta(tier).label}
     </span>
   )
 }
 
 function TierDot({ tier }: { tier: ReportTier }) {
-  const cls =
-    tier === 'orphaned'
-      ? 'bg-red-500'
-      : tier === 'duplicate'
-      ? 'bg-purple-500'
-      : tier === 'zombie'
-      ? 'bg-copper-500'
-      : 'bg-primary-500'
+  const cls = tierMeta(tier).dot
   return (
     <div
       className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${cls}`}

@@ -4,23 +4,30 @@ every Report and Dashboard in a Salesforce org.
 Mirror of the Managed-Package Sprawl pattern applied to analytics
 content. Pulls every Report + Dashboard visible to the running user,
 joins Folder + Owner metadata, detects duplicate name clusters, and
-classifies each into one of four tiers:
+classifies each item:
 
-  live      — referenced within the last 12 months. In active use.
-  zombie    — not referenced for >12 months (or never referenced).
-              Cleanup candidate.
-  orphaned  — owner is inactive. Nobody accountable for the item.
-  duplicate — normalised name matches at least one sibling in the
-              same run. Consolidation candidate.
+  orphaned      — owner (dashboards: running user) is explicitly
+                  inactive. An owner we couldn't resolve is noted in
+                  the reason but never treated as orphaned —
+                  Report.OwnerId is frequently a folder, not a user.
+  duplicate     — normalised name matches at least one sibling in the
+                  same run. Consolidation candidate.
+  zombie        — report not run in >12 months (or never run).
+  live          — report run within the last 12 months.
+  unknown_usage — dashboards. Salesforce exposes no org-wide
+                  last-viewed date for dashboards via the API.
+
+Usage signal: Report.LastRunDate is org-wide and is preferred.
+LastReferencedDate / LastViewedDate reflect only the connected user's
+own activity — for an integration user that never opens reports they
+are almost always null — so they are used only when LastRunDate is
+null, and the reason says so. Dashboards only have those per-user
+dates, so they are never tiered zombie or live.
 
 Tier precedence (highest actionability first):
 
-    orphaned > duplicate > zombie > live
-
-Rationale: an orphaned item is highest concern for GRC because
-there's no owner to certify it. Duplicate is next because it's the
-consolidation story ("you have 6 copies of Monthly Pipeline"). Zombie
-third for cleanup. Live is default.
+    reports:    orphaned > duplicate > zombie > live
+    dashboards: orphaned > duplicate > unknown_usage
 
 Entrypoint:
     service = ReportSprawlService(db, org_id)
@@ -55,9 +62,21 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ----------------------------------------------------------------------
 
-# Days-since-last-referenced threshold above which we tier `zombie`.
-# 365 matches the consulting pitch: "reports not viewed in 12 months".
+# Days since a report last ran above which we tier `zombie`.
 ZOMBIE_DAYS_THRESHOLD = 365
+
+# Most actionable first. Also used by the API to order item lists.
+TIER_RANK = {
+    "orphaned": 0,
+    "duplicate": 1,
+    "zombie": 2,
+    "unknown_usage": 3,
+    "live": 4,
+}
+
+# Folder ids start with 00l. Report.OwnerId points at the folder for
+# reports saved in shared folders.
+_FOLDER_ID_PREFIX = "00l"
 
 # Safety cap. An org with more items than this hits some ceiling —
 # almost certainly a client we WANT to know about, but we still bound
@@ -171,6 +190,17 @@ def _days_between(reference: datetime, target: Optional[datetime]) -> Optional[i
         return None
     delta = reference - target
     return max(delta.days, 0)
+
+
+def _unresolved_owner_note(
+    owner_id: Optional[str], owner: Optional[Dict[str, Any]]
+) -> str:
+    """Suffix for a tier reason when the owner isn't a resolvable user."""
+    if owner is not None:
+        return ""
+    if owner_id and owner_id.startswith(_FOLDER_ID_PREFIX):
+        return " Owned by a shared folder, not an individual user."
+    return " Owner couldn't be resolved."
 
 
 # ----------------------------------------------------------------------
@@ -303,9 +333,7 @@ class ReportSprawlService:
 
         # -- Duplicate detection (post-scoring pass) -----------------
         # Group by (item_type, normalised_name). Groups of ≥2 flag as
-        # duplicate. This can override an item's initial tier
-        # (`zombie` → `duplicate`) but NOT `orphaned` — orphaned always
-        # wins because "no owner" is the highest-priority signal.
+        # duplicate. This overrides every base tier except `orphaned`.
         groups: Dict[str, List[ScoredItem]] = defaultdict(list)
         for it in all_items:
             if it.duplicate_group_key:
@@ -329,6 +357,7 @@ class ReportSprawlService:
                 it.tier = "duplicate"
                 it.evidence.update(
                     {
+                        "base_tier_reason": it.evidence.get("tier_reason"),
                         "tier_reason": (
                             f"{len(members)} items share this normalised "
                             f"name"
@@ -344,15 +373,9 @@ class ReportSprawlService:
         # -- Cap for persistence (SF returned more than we want to
         #    store this run — sort by "most actionable first" so we
         #    keep the useful rows).
-        tier_rank = {
-            "orphaned": 0,
-            "duplicate": 1,
-            "zombie": 2,
-            "live": 3,
-        }
         all_items.sort(
             key=lambda i: (
-                tier_rank.get(i.tier, 99),
+                TIER_RANK.get(i.tier, 99),
                 -(i.days_since_last_view or 0),
                 i.name.lower(),
             )
@@ -365,15 +388,18 @@ class ReportSprawlService:
             )
 
         # -- Rollups -------------------------------------------------
-        counts = {"live": 0, "zombie": 0, "orphaned": 0, "duplicate": 0}
+        counts = {tier: 0 for tier in TIER_RANK}
         for it in capped:
             counts[it.tier] = counts.get(it.tier, 0) + 1
+        # Dashboards have no usage date at all, so they'd inflate
+        # "never referenced" — count reports only.
+        reports = [it for it in capped if it.item_type == "report"]
         never_referenced = sum(
-            1 for it in capped if it.days_since_last_view is None
+            1 for it in reports if it.days_since_last_view is None
         )
         days_values = [
             it.days_since_last_view
-            for it in capped
+            for it in reports
             if it.days_since_last_view is not None
         ]
         avg_days = (
@@ -396,6 +422,7 @@ class ReportSprawlService:
             items_zombie=counts.get("zombie", 0),
             items_orphaned=counts.get("orphaned", 0),
             items_duplicate=counts.get("duplicate", 0),
+            items_unknown_usage=counts.get("unknown_usage", 0),
             items_never_referenced=never_referenced,
             avg_days_since_last_view=avg_days,
             duplicate_groups=duplicate_group_count,
@@ -437,10 +464,12 @@ class ReportSprawlService:
         await self.db.commit()
         logger.info(
             "report-sprawl: org=%s persisted run=%s items=%d "
-            "(live=%d zombie=%d orphaned=%d duplicate=%d) in %dms",
+            "(live=%d zombie=%d orphaned=%d duplicate=%d "
+            "unknown_usage=%d) in %dms",
             self.org_id, run.id, len(capped),
             counts.get("live", 0), counts.get("zombie", 0),
             counts.get("orphaned", 0), counts.get("duplicate", 0),
+            counts.get("unknown_usage", 0),
             duration_ms,
         )
         return run
@@ -465,12 +494,20 @@ class ReportSprawlService:
 
         last_ref = _parse_sf_datetime(raw.get("LastReferencedDate"))
         last_run = _parse_sf_datetime(raw.get("LastRunDate"))
-        # Prefer LastReferencedDate (broadest signal). Fall back to
-        # LastRunDate for orgs that don't populate the former.
-        signal_ts = last_ref or last_run
+        if last_run is not None:
+            signal_ts, usage_source = last_run, "last_run"
+        elif last_ref is not None:
+            signal_ts, usage_source = last_ref, "connected_user_view"
+        else:
+            signal_ts, usage_source = None, None
         days = _days_between(now, signal_ts)
 
-        tier, reason = self._classify(owner_active, days)
+        tier, reason = self._classify_report(
+            owner_active,
+            days,
+            usage_source=usage_source,
+            owner_note=_unresolved_owner_note(owner_id, owner),
+        )
         normalised = _normalise_name(name)
 
         return ScoredItem(
@@ -499,6 +536,7 @@ class ReportSprawlService:
             evidence={
                 "tier_reason": reason,
                 "normalised_name": normalised,
+                "usage_source": usage_source,
             },
         )
 
@@ -520,10 +558,15 @@ class ReportSprawlService:
         owner = users_by_id.get(owner_id) if owner_id else None
         owner_active = owner.get("IsActive") if owner else None
 
+        # Only the connected user's own view date exists here; it is
+        # stored for display but never used to score usage.
         last_ref = _parse_sf_datetime(raw.get("LastReferencedDate"))
-        days = _days_between(now, last_ref)
 
-        tier, reason = self._classify(owner_active, days)
+        tier, reason = self._classify_dashboard(
+            owner_active,
+            running_user_name=(owner or {}).get("Name"),
+            owner_note=_unresolved_owner_note(owner_id, owner),
+        )
         normalised = _normalise_name(name)
 
         folder_id = raw.get("FolderId")
@@ -547,7 +590,7 @@ class ReportSprawlService:
             last_modified_at=_parse_sf_datetime(
                 raw.get("LastModifiedDate")
             ),
-            days_since_last_view=days,
+            days_since_last_view=None,
             tier=tier,
             duplicate_group_key=(
                 _hash_key("dashboard", normalised) if normalised else None
@@ -555,21 +598,23 @@ class ReportSprawlService:
             evidence={
                 "tier_reason": reason,
                 "normalised_name": normalised,
+                "usage_source": None,
             },
         )
 
-    def _classify(
+    def _classify_report(
         self,
         owner_is_active: Optional[bool],
-        days_since_view: Optional[int],
+        days_since_run: Optional[int],
+        *,
+        usage_source: Optional[str],
+        owner_note: str = "",
     ) -> tuple[str, str]:
-        """Base tier BEFORE duplicate-detection can override it.
-        Duplicate resolution runs as a separate post-pass in run().
+        """Base tier BEFORE duplicate detection, which runs as a
+        post-pass in run(). orphaned > zombie > live.
 
-        Precedence at this stage:
-          1. orphaned  — owner is inactive OR unknown (fail-safe)
-          2. zombie    — never referenced OR >12 months since reference
-          3. live      — referenced within last 12 months
+        `usage_source` is 'last_run' (org-wide LastRunDate),
+        'connected_user_view' (LastReferencedDate fallback) or None.
         """
         if owner_is_active is False:
             return (
@@ -577,26 +622,53 @@ class ReportSprawlService:
                 "Owner is marked inactive — no one is accountable for "
                 "this item",
             )
-        if owner_is_active is None:
-            return (
-                "orphaned",
-                "Owner could not be resolved — likely an inactive or "
-                "deleted user",
-            )
-        if days_since_view is None:
-            return (
-                "zombie",
-                "Never referenced — no view or run activity on record",
-            )
-        if days_since_view > ZOMBIE_DAYS_THRESHOLD:
+        caveat = (
+            " (based on the connected user's views only — Salesforce "
+            "recorded no run date)"
+            if usage_source == "connected_user_view"
+            else ""
+        )
+        if days_since_run is None:
             return (
                 "zombie",
-                f"Not referenced in {days_since_view} days "
-                f"(>{ZOMBIE_DAYS_THRESHOLD} day threshold)",
+                "No run on record — Salesforce has no LastRunDate for "
+                "this report" + owner_note,
+            )
+        verb = "Last run" if usage_source == "last_run" else "Last viewed"
+        if days_since_run > ZOMBIE_DAYS_THRESHOLD:
+            return (
+                "zombie",
+                f"{verb} {days_since_run} days ago "
+                f"(>{ZOMBIE_DAYS_THRESHOLD} day threshold){caveat}"
+                + owner_note,
             )
         return (
             "live",
-            f"Referenced {days_since_view} days ago — in active use",
+            f"{verb} {days_since_run} days ago{caveat}" + owner_note,
+        )
+
+    def _classify_dashboard(
+        self,
+        running_user_is_active: Optional[bool],
+        *,
+        running_user_name: Optional[str] = None,
+        owner_note: str = "",
+    ) -> tuple[str, str]:
+        """Base tier BEFORE duplicate detection: orphaned > unknown_usage.
+        Dashboards are never zombie/live — the only view dates the API
+        returns belong to the connected user."""
+        if running_user_is_active is False:
+            who = running_user_name or "The running user"
+            return (
+                "orphaned",
+                f"{who} (running user) is inactive — the dashboard can't "
+                "refresh as that user",
+            )
+        return (
+            "unknown_usage",
+            "Usage isn't observable via the Salesforce API — dashboards "
+            "only expose the connected user's own view dates. Check with "
+            "the owner before removing." + owner_note,
         )
 
     # ------------------------------------------------------------------

@@ -2,28 +2,36 @@
 and Apex Trigger in a Salesforce org.
 
 Mirror of the Report Sprawl pattern. Pulls every FlowDefinitionView +
-ApexTrigger row visible to the running user, checks compile / activation
-state, resolves the last-modifier's active status, and classifies each
-into one of four tiers:
+ApexTrigger row visible to the running user, resolves the last
+modifier's active status, and classifies each into one of five tiers:
 
-  active   — currently active + owner active + modified in last 12 months.
-             Real, healthy automation.
-  dormant  — currently active but hasn't been touched in >12 months.
-             Nobody has looked at it in a year — cleanup candidate.
-  orphaned — last modifier is an inactive (departed) user.
-             Highest-priority signal because nobody's accountable.
-  broken   — Flow is IsOutOfDate=True (active version doesn't match the
-             latest saved version) OR ApexTrigger IsValid=False (doesn't
-             compile against current schema). Silently corrupting data.
+  needs_attention — active ApexTrigger with IsValid=False. Salesforce
+                    flags triggers invalid when a dependency changes;
+                    they usually recompile on next run, but someone
+                    should confirm they still compile.
+  orphaned        — last modifier is an explicitly inactive user. An
+                    unresolved modifier (system users such as
+                    "Automated Process", deleted users) is not enough.
+  inactive        — flow or trigger is deactivated. Doesn't run, so it
+                    is harmless clutter and the easiest cleanup.
+  unchanged       — active but not modified in >12 months. Salesforce
+                    exposes no execution counts without Shield Event
+                    Monitoring, so this says nothing about whether it
+                    still fires — confirm before removing.
+  active          — everything else.
 
 Tier precedence (highest actionability first):
 
-    broken > orphaned > dormant > active
+    needs_attention > orphaned > inactive > unchanged > active
 
-Rationale: `broken` tops the list because it's ACTIVELY causing errors
-in production (invalid trigger fires and logs exceptions; out-of-date
-flow fires stale logic). `orphaned` next because nobody can certify it.
-`dormant` third for cleanup. `active` is default.
+Flow IsOutOfDate is not a tier signal: it usually means a newer version
+has been saved but not activated, which is normal drafting. It is kept
+in evidence notes. Managed-package items (NamespacePrefix set) are
+maintained by the vendor and can't be edited, so they never land in
+orphaned or unchanged.
+
+Runs before 2026-10 used 'broken' and 'dormant'; the API maps those
+stored values to needs_attention and unchanged.
 
 Entrypoint:
     service = AutomationSprawlService(db, org_id)
@@ -58,9 +66,17 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ----------------------------------------------------------------------
 
-# Days-since-last-modified above which we tier `dormant`. 365 matches
-# the consulting pitch: "hasn't been touched in a year".
-DORMANT_DAYS_THRESHOLD = 365
+# Days-since-last-modified above which an active item tiers `unchanged`.
+UNCHANGED_DAYS_THRESHOLD = 365
+
+# Most actionable first. Also used by the API to order item lists.
+TIER_RANK = {
+    "needs_attention": 0,
+    "orphaned": 1,
+    "inactive": 2,
+    "unchanged": 3,
+    "active": 4,
+}
 
 # Safety cap on how many items to persist per run. Modern orgs
 # sometimes have thousands of flows (post-migration from Workflow
@@ -187,6 +203,25 @@ def _days_between(
         return None
     delta = reference - target
     return max(delta.days, 0)
+
+
+def _evidence(
+    reason: str,
+    normalised: str,
+    namespace: Optional[str],
+    notes: List[str],
+    **extra: Any,
+) -> Dict[str, Any]:
+    evidence: Dict[str, Any] = {
+        "tier_reason": reason,
+        "normalised_name": normalised,
+        **extra,
+    }
+    if namespace:
+        evidence["managed_package"] = namespace
+    if notes:
+        evidence["notes"] = notes
+    return evidence
 
 
 def _extract_sf_error(exc: Any) -> str:
@@ -372,9 +407,8 @@ class AutomationSprawlService:
         all_items: List[ScoredItem] = flow_items + trigger_items
 
         # -- Duplicate detection post-pass ---------------------------
-        # Same rule as Report Sprawl: promote zombie/dormant items to
-        # `duplicate` when a name cluster of ≥2 is detected, but NEVER
-        # override a higher-priority tier (broken, orphaned).
+        # Automation has no `duplicate` tier; cluster membership is
+        # stamped on evidence for the drilldown UI only.
         groups: Dict[str, List[ScoredItem]] = defaultdict(list)
         for it in all_items:
             if it.duplicate_group_key:
@@ -386,10 +420,6 @@ class AutomationSprawlService:
             duplicate_group_count += 1
             sibling_ids = sorted(m.sf_id for m in members)
             for it in members:
-                # Automation Sprawl doesn't use a `duplicate` TIER
-                # (broken/orphaned/dormant/active per user's picked
-                # scheme), so we just stamp duplicate-cluster
-                # membership on evidence for the drilldown UI.
                 it.evidence["duplicate_group"] = {
                     "key": key,
                     "size": len(members),
@@ -397,15 +427,9 @@ class AutomationSprawlService:
                 }
 
         # -- Cap ------------------------------------------------------
-        tier_rank = {
-            "broken": 0,
-            "orphaned": 1,
-            "dormant": 2,
-            "active": 3,
-        }
         all_items.sort(
             key=lambda i: (
-                tier_rank.get(i.tier, 99),
+                TIER_RANK.get(i.tier, 99),
                 -(i.days_since_modified or 0),
                 i.name.lower(),
             )
@@ -418,12 +442,7 @@ class AutomationSprawlService:
             )
 
         # -- Rollups -------------------------------------------------
-        counts = {
-            "active": 0,
-            "dormant": 0,
-            "orphaned": 0,
-            "broken": 0,
-        }
+        counts = {tier: 0 for tier in TIER_RANK}
         for it in capped:
             counts[it.tier] = counts.get(it.tier, 0) + 1
         days_values = [
@@ -449,10 +468,11 @@ class AutomationSprawlService:
                 1 for it in capped if it.item_type == "trigger"
             ),
             items_total=len(capped),
-            items_active=counts.get("active", 0),
-            items_dormant=counts.get("dormant", 0),
-            items_orphaned=counts.get("orphaned", 0),
-            items_broken=counts.get("broken", 0),
+            items_active=counts["active"],
+            items_unchanged=counts["unchanged"],
+            items_inactive=counts["inactive"],
+            items_orphaned=counts["orphaned"],
+            items_needs_attention=counts["needs_attention"],
             avg_days_since_modified=avg_days,
             duplicate_groups=duplicate_group_count,
             duration_ms=duration_ms,
@@ -496,10 +516,11 @@ class AutomationSprawlService:
         await self.db.commit()
         logger.info(
             "automation-sprawl: org=%s persisted run=%s items=%d "
-            "(active=%d dormant=%d orphaned=%d broken=%d) in %dms",
+            "(active=%d unchanged=%d inactive=%d orphaned=%d "
+            "needs_attention=%d) in %dms",
             self.org_id, run.id, len(capped),
-            counts["active"], counts["dormant"],
-            counts["orphaned"], counts["broken"],
+            counts["active"], counts["unchanged"], counts["inactive"],
+            counts["orphaned"], counts["needs_attention"],
             duration_ms,
         )
         return run
@@ -519,6 +540,7 @@ class AutomationSprawlService:
             return None
         name = raw.get("Label") or raw.get("ApiName") or "(unnamed flow)"
         api_name = raw.get("ApiName")
+        namespace = raw.get("NamespacePrefix") or None
         owner_id = raw.get("LastModifiedById")
         modifier = users_by_id.get(owner_id) if owner_id else None
         owner_active = (modifier or {}).get("IsActive")
@@ -527,23 +549,19 @@ class AutomationSprawlService:
         days = _days_between(now, last_modified)
 
         is_active = bool(raw.get("IsActive"))
-        # IsOutOfDate=True means active version diverges from latest
-        # saved — usually a partial deploy or a broken save. Treat as
-        # NOT valid.
         is_out_of_date = bool(raw.get("IsOutOfDate"))
-        is_valid = (not is_out_of_date) if is_active else None
+        notes: List[str] = []
+        if is_out_of_date:
+            notes.append("Newer version saved but not activated")
 
         tier, reason = self._classify(
+            item_label="Flow",
             is_active=is_active,
-            is_valid=is_valid,
             owner_active=owner_active,
+            owner_name=(modifier or {}).get("Name"),
             days=days,
-            broken_signal=(
-                "Active version is out of date (latest saved edits "
-                "haven't been activated)"
-                if (is_active and is_out_of_date)
-                else None
-            ),
+            namespace=namespace,
+            attention_signal=None,
         )
         normalised = _normalise_name(name)
 
@@ -553,14 +571,14 @@ class AutomationSprawlService:
             name=name,
             api_name=api_name,
             description=raw.get("Description"),
-            namespace_prefix=raw.get("NamespacePrefix"),
+            namespace_prefix=namespace,
             process_type=raw.get("ProcessType"),
             trigger_type=raw.get("TriggerType"),
             target_object=None,
             api_version=None,
             length_without_comments=None,
             is_active=is_active,
-            is_valid=is_valid,
+            is_valid=None,
             owner_sf_id=owner_id,
             owner_name=(modifier or {}).get("Name"),
             owner_is_active=owner_active,
@@ -570,11 +588,13 @@ class AutomationSprawlService:
             duplicate_group_key=(
                 _hash_key("flow", normalised) if normalised else None
             ),
-            evidence={
-                "tier_reason": reason,
-                "normalised_name": normalised,
-                "is_out_of_date": is_out_of_date,
-            },
+            evidence=_evidence(
+                reason,
+                normalised,
+                namespace,
+                notes,
+                is_out_of_date=is_out_of_date,
+            ),
         )
 
     def _score_trigger(
@@ -587,6 +607,7 @@ class AutomationSprawlService:
         if not sf_id:
             return None
         name = raw.get("Name") or "(unnamed trigger)"
+        namespace = raw.get("NamespacePrefix") or None
         owner_id = raw.get("LastModifiedById")
         modifier = users_by_id.get(owner_id) if owner_id else None
         owner_active = (modifier or {}).get("IsActive")
@@ -597,20 +618,28 @@ class AutomationSprawlService:
         # Status: 'Active' | 'Inactive' | 'Deleted'
         status = raw.get("Status")
         is_active = status == "Active"
-        # IsValid=False means it won't compile — broken irrespective
-        # of activation state.
         is_valid = raw.get("IsValid")
+        notes: List[str] = []
+        # A deactivated trigger never fires, so an invalid flag on it
+        # isn't worth escalating — note it and let it tier as inactive.
+        attention_signal = None
+        if is_valid is False:
+            if is_active:
+                attention_signal = (
+                    "Marked invalid by Salesforce; usually recompiles on "
+                    "next run — confirm it compiles"
+                )
+            else:
+                notes.append("Marked invalid by Salesforce")
 
         tier, reason = self._classify(
+            item_label="Trigger",
             is_active=is_active,
-            is_valid=is_valid,
             owner_active=owner_active,
+            owner_name=(modifier or {}).get("Name"),
             days=days,
-            broken_signal=(
-                "Trigger fails to compile against the current schema"
-                if is_valid is False
-                else None
-            ),
+            namespace=namespace,
+            attention_signal=attention_signal,
         )
         normalised = _normalise_name(name)
 
@@ -620,7 +649,7 @@ class AutomationSprawlService:
             name=name,
             api_name=name,
             description=None,
-            namespace_prefix=raw.get("NamespacePrefix"),
+            namespace_prefix=namespace,
             process_type=None,
             trigger_type=None,
             target_object=raw.get("TableEnumOrId"),
@@ -643,64 +672,77 @@ class AutomationSprawlService:
                 if normalised
                 else None
             ),
-            evidence={
-                "tier_reason": reason,
-                "normalised_name": normalised,
-                "status": status,
-            },
+            evidence=_evidence(
+                reason, normalised, namespace, notes, status=status
+            ),
         )
 
     def _classify(
         self,
         *,
-        is_active: Optional[bool],
-        is_valid: Optional[bool],
+        item_label: str,
+        is_active: bool,
         owner_active: Optional[bool],
+        owner_name: Optional[str],
         days: Optional[int],
-        broken_signal: Optional[str],
+        namespace: Optional[str],
+        attention_signal: Optional[str],
     ) -> tuple[str, str]:
-        """Precedence: broken > orphaned > dormant > active.
+        """Precedence: needs_attention > orphaned > inactive >
+        unchanged > active. See the module docstring for why each rule
+        is as narrow as it is."""
+        if attention_signal:
+            return "needs_attention", attention_signal
 
-        Note that `is_active=False` (admin-disabled but not broken) is
-        NOT itself a tier — it flows through as `dormant` or `active`
-        depending on last-modified age. That's on purpose: admins
-        deactivate things intentionally, so it isn't a red flag. What
-        IS a red flag is inactive-owner or invalid-compile.
-        """
-        if broken_signal:
-            return "broken", broken_signal
-        if is_valid is False:
-            return (
-                "broken",
-                "Fails validation against the current org schema",
-            )
-        if owner_active is False:
+        if owner_active is False and not namespace:
+            who = owner_name or "The last modifier"
             return (
                 "orphaned",
-                "Last modifier is inactive — no one accountable",
+                f"{who} (last modifier) is an inactive user — confirm "
+                "someone else owns this",
             )
-        if owner_active is None:
+
+        if not is_active:
+            if namespace:
+                return (
+                    "inactive",
+                    f"{item_label} is deactivated; it ships with the "
+                    f"{namespace} package, so it can't be deleted on its "
+                    "own",
+                )
             return (
-                "orphaned",
-                "Last modifier could not be resolved — likely a "
-                "deleted user",
+                "inactive",
+                f"{item_label} is deactivated, so it never runs — "
+                "safe to review for deletion",
+            )
+
+        if namespace:
+            return (
+                "active",
+                f"Active; maintained by the {namespace} package vendor",
+            )
+
+        unresolved = (
+            " Last modifier couldn't be resolved."
+            if owner_active is None
+            else ""
+        )
+        if days is not None and days > UNCHANGED_DAYS_THRESHOLD:
+            return (
+                "unchanged",
+                f"Active but not modified in {days} days. Salesforce "
+                "doesn't expose how often it runs without Event "
+                "Monitoring, so confirm it's unused before removing."
+                + unresolved,
             )
         if days is None:
-            # No LastModifiedDate at all — should be rare on a
-            # Tooling API row but treat as dormant to fail safe.
             return (
-                "dormant",
-                "No last-modified date on record — likely stale",
-            )
-        if days > DORMANT_DAYS_THRESHOLD:
-            return (
-                "dormant",
-                f"Not modified in {days} days "
-                f"(>{DORMANT_DAYS_THRESHOLD} day threshold)",
+                "active",
+                "Active; no last-modified date returned." + unresolved,
             )
         return (
             "active",
-            f"Modified {days} days ago — actively maintained",
+            f"Active; modified {days} days ago." + unresolved,
         )
 
     # ------------------------------------------------------------------

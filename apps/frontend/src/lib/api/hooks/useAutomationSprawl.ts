@@ -2,8 +2,10 @@
  * Automation Sprawl API hooks.
  *
  * Powers /orgs/{orgId}/automation-sprawl — inventory of every Flow +
- * ApexTrigger in the org, classified into one of four tiers
- * (broken / orphaned / dormant / active) with drill-down evidence.
+ * ApexTrigger in the org, classified into one of five tiers
+ * (needs_attention / orphaned / inactive / unchanged / active) with
+ * drill-down evidence. Runs recorded before the rename stored
+ * 'broken' / 'dormant'; the API maps those to the new names.
  *
  * Types mirror the Pydantic response models in
  * apps/backend/app/api/routes/automation_sprawl.py.
@@ -18,7 +20,12 @@ import { endpoints } from '../endpoints'
 // ============================================================================
 
 export type AutomationItemType = 'flow' | 'trigger'
-export type AutomationTier = 'broken' | 'orphaned' | 'dormant' | 'active'
+export type AutomationTier =
+  | 'needs_attention'
+  | 'orphaned'
+  | 'inactive'
+  | 'unchanged'
+  | 'active'
 
 export interface AutomationItem {
   id: string
@@ -64,9 +71,10 @@ export interface AutomationSprawlSummary {
   triggers_total: number
   items_total: number
   items_active: number
-  items_dormant: number
+  items_unchanged: number
+  items_inactive: number
   items_orphaned: number
-  items_broken: number
+  items_needs_attention: number
   avg_days_since_modified: number | null
   duplicate_groups: number
   has_data: boolean
@@ -85,18 +93,20 @@ export interface AutomationSprawlRunResponse {
   run_id: string
   snapshot_at: string
   items_total: number
-  items_broken: number
+  items_needs_attention: number
   items_orphaned: number
-  items_dormant: number
+  items_inactive: number
+  items_unchanged: number
 }
 
 export interface AutomationSprawlHistoryPoint {
   run_id: string
   snapshot_at: string
   items_total: number
-  items_broken: number
+  items_needs_attention: number
   items_orphaned: number
-  items_dormant: number
+  items_inactive: number
+  items_unchanged: number
 }
 
 export interface AutomationItemFilters {
