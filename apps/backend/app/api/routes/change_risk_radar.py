@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import ChangeAuditEvent, ChangeAuditRun
+from app.services import privacy_mode
 from app.services.change_risk_radar import ChangeRiskRadarService
 
 
@@ -179,6 +180,7 @@ async def run_change_risk(
     Typically 5-30 seconds. If it grows past ~60s we should move to
     the async background pattern the sync-job uses.
     """
+    await privacy_mode.require_feature(db, org_id, "change_risk")
 
     # Parse the weekday list defensively — any junk falls back to
     # weekdays. Bounded to 0-6 so a mischievous client can't confuse

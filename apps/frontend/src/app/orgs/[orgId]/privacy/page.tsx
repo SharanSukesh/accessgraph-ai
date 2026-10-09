@@ -27,6 +27,7 @@ import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
+import { PrivacyLevelCard } from '@/components/privacy/PrivacyLevelCard'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 // GET /orgs/{id}/privacy/inventory groups every org-scoped table by its
@@ -167,6 +168,10 @@ export default function PrivacyPage() {
           eyebrow="Admin · data governance"
           subtitle="GDPR compliance, data retention policies, and privacy controls"
         />
+      </Reveal>
+
+      <Reveal>
+        <PrivacyLevelCard orgId={orgId} isAdmin={isAdmin} />
       </Reveal>
 
       {/* Data Inventory Overview */}

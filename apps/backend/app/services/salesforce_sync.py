@@ -4,7 +4,7 @@ Orchestrates extraction and storage of Salesforce data
 """
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Any, Dict, List
 from uuid import uuid4
 
 import httpx
@@ -190,7 +190,7 @@ class SalesforceSyncService:
 
             # Try to extract data, retry once with refreshed token if 401
             try:
-                sf_data = await client.extract_all()
+                sf_data = await self._extract_all(client)
             except httpx.HTTPStatusError as e:
                 logger.error(f"HTTP error during extract_all: {e.response.status_code} - {e}", exc_info=True)
                 if e.response.status_code == 401:
@@ -199,7 +199,7 @@ class SalesforceSyncService:
                         # Token expired during extraction - refresh and retry
                         client = await self._refresh_access_token()
                         logger.info("Token refreshed, retrying extraction...")
-                        sf_data = await client.extract_all()
+                        sf_data = await self._extract_all(client)
                         logger.info("Extraction succeeded after token refresh")
                     except Exception as refresh_error:
                         logger.error(f"Token refresh or retry failed: {refresh_error}", exc_info=True)
@@ -252,6 +252,20 @@ class SalesforceSyncService:
             raise
 
         return sync_job
+
+    async def _extract_all(self, client: SalesforceAPIClient) -> Dict[str, Any]:
+        """extract_all narrowed to what the org's privacy level allows
+        (mirrors SyncOrchestrator._extract_from_salesforce)."""
+        from app.services import privacy_mode as privacy
+
+        org = await privacy.load_org(self.db, self.org_id)
+        data = await client.extract_all(
+            include_users=privacy.allows(org, privacy.USER_RECORDS),
+            include_record_shares=privacy.allows(org, privacy.RECORD_SHARES),
+        )
+        if not privacy.allows(org, privacy.USER_IDENTITY):
+            data["users"] = privacy.mask_users(self.org_id, data.get("users", []))
+        return data
 
     async def _sync_users(self, users: List) -> int:
         """Sync users to database"""

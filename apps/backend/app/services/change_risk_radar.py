@@ -56,6 +56,7 @@ from app.domain.models import (
     SalesforceConnection,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,10 @@ class ChangeRiskRadarService:
     invocation. All Salesforce IO goes through SalesforceAPIClient.
     """
 
+    # Narrowed per run from the org's privacy level.
+    _keep_identity = True
+    _keep_audit_text = True
+
     def __init__(
         self,
         db: AsyncSession,
@@ -224,6 +229,10 @@ class ChangeRiskRadarService:
 
         started = time.monotonic()
         since = datetime.now(timezone.utc) - timedelta(days=self.since_days)
+
+        org = await privacy_mode.require_feature(self.db, self.org_id, "change_risk")
+        self._keep_identity = privacy_mode.allows(org, privacy_mode.USER_IDENTITY)
+        self._keep_audit_text = privacy_mode.allows(org, privacy_mode.AUDIT_TEXT)
 
         try:
             client = await self._client()
@@ -287,6 +296,7 @@ class ChangeRiskRadarService:
                     raw.get("Id"), exc,
                 )
                 continue
+        self._apply_privacy(scored)
 
         # Rollups for the KPI card + charts. Expanded past the v1
         # top-5 tallies to include time-series (by_day) for the
@@ -412,6 +422,10 @@ class ChangeRiskRadarService:
                 type(exc).__name__, exc,
             )
             component_activity = {}
+        if not self._keep_identity:
+            for entry in component_activity.values():
+                for row in (entry or {}).get("top") or []:
+                    row["actor"] = None
 
         # Hourly distribution in the LOCAL timezone — powers the
         # "when during the day" chart. 24 buckets so the frontend can
@@ -575,6 +589,21 @@ class ChangeRiskRadarService:
             reasoning=reasoning,
         )
 
+    def _apply_privacy(self, scored: List[ScoredEvent]) -> None:
+        """Strip what the org's privacy level doesn't let Newton keep.
+        Runs after scoring, so the Display keywords still count towards
+        blast radius even when the text itself is dropped."""
+        for e in scored:
+            if not self._keep_identity:
+                e.actor_name = (
+                    privacy_mode.user_alias(self.org_id, e.actor_id)
+                    if e.actor_id else None
+                )
+                e.delegate_user = None
+            if not self._keep_audit_text:
+                e.display = ""
+                e.delegate_user = None
+
     # ------------------------------------------------------------------
     # Rollup helpers
     # ------------------------------------------------------------------
@@ -649,7 +678,10 @@ class ChangeRiskRadarService:
             "dominant_tier": tier_counter.most_common(1)[0][0],
             # First 3 event display strings so the UI can preview
             # what's inside the burst without loading every event.
-            "sample_displays": [e.display[:180] for e in cluster[:3]],
+            "sample_displays": (
+                [e.display[:180] for e in cluster[:3]]
+                if self._keep_audit_text else []
+            ),
         }
 
     async def _load_previous_run_signals(

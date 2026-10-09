@@ -147,6 +147,7 @@ class SyncOrchestrator:
         """Extract data from live Salesforce org"""
         from sqlalchemy.orm import selectinload
         from app.salesforce.oauth import SalesforceOAuthClient
+        from app.services import privacy_mode as privacy
         from app.services.org_naming import apply_salesforce_name
 
         # Get Salesforce connection with eager loading
@@ -198,8 +199,13 @@ class SyncOrchestrator:
         info = await client.extract_organization()
         apply_salesforce_name(org, (info or {}).get("Name"))
 
-        # Extract all data
-        return await client.extract_all()
+        data = await client.extract_all(
+            include_users=privacy.allows(org, privacy.USER_RECORDS),
+            include_record_shares=privacy.allows(org, privacy.RECORD_SHARES),
+        )
+        if not privacy.allows(org, privacy.USER_IDENTITY):
+            data["users"] = privacy.mask_users(org.id, data.get("users", []))
+        return data
 
     async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:
         """

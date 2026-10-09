@@ -57,6 +57,7 @@ from app.domain.models import (
     SalesforceConnection,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 
 
 logger = logging.getLogger(__name__)
@@ -369,10 +370,22 @@ class AutomationSprawlService:
             if t.get("LastModifiedById")
         }
         owner_ids.discard(None)
+        org = await privacy_mode.load_org(self.db, self.org_id)
         try:
-            users_by_id = await self._resolve_users(
-                client, list(owner_ids)
-            )
+            if privacy_mode.allows(org, privacy_mode.USER_RECORDS):
+                users_by_id = await self._resolve_users(
+                    client, list(owner_ids)
+                )
+                if not privacy_mode.allows(org, privacy_mode.USER_IDENTITY):
+                    users_by_id = privacy_mode.alias_user_names(
+                        self.org_id, users_by_id
+                    )
+            else:
+                # Last modifiers stay unknown, which never tiers as orphaned.
+                users_by_id = {}
+                diagnostics["users"]["skipped"] = (
+                    "This client's privacy level excludes user records."
+                )
             diagnostics["users"]["resolved_count"] = len(users_by_id)
         except Exception as exc:  # noqa: BLE001
             users_by_id = {}

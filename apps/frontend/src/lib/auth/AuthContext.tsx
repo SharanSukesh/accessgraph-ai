@@ -17,6 +17,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { orgKeys, useOrgs, type Organization } from '@/lib/api/hooks/useOrgs'
+import type { PrivacyMode } from '@/lib/privacy'
 
 export type UserRole = 'org_admin' | 'analyst' | 'viewer' | 'auditor'
 
@@ -30,6 +31,14 @@ export interface AuthUser {
 
 export type SalesforceEnv = 'sandbox' | 'production'
 
+export interface ConnectSalesforceOptions {
+  forceLogin?: boolean
+  /** Privacy level for a newly connected org. Existing orgs keep theirs on reconnect. */
+  privacy?: PrivacyMode
+  /** Only sent with privacy 'metadata_only'. */
+  aggregates?: boolean
+}
+
 interface AuthContextType {
   user: AuthUser | null
   orgs: Organization[]
@@ -40,7 +49,7 @@ interface AuthContextType {
   /** org_admin or analyst. Viewers and auditors are read-only. */
   canWrite: boolean
   loginWithPassword: (email: string, password: string) => Promise<void>
-  connectSalesforce: (env?: SalesforceEnv, opts?: { forceLogin?: boolean }) => void
+  connectSalesforce: (env?: SalesforceEnv, opts?: ConnectSalesforceOptions) => void
   logout: () => Promise<void>
   refetch: () => Promise<void>
 }
@@ -85,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchUser()
   }
 
-  const connectSalesforce = (env?: SalesforceEnv, opts?: { forceLogin?: boolean }) => {
+  const connectSalesforce = (env?: SalesforceEnv, opts?: ConnectSalesforceOptions) => {
     const apiUrl =
       process.env.NEXT_PUBLIC_API_URL || 'https://api.accessgraphai.com'
     let forceLogin = !!opts?.forceLogin
@@ -96,6 +105,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const params = new URLSearchParams()
     if (env === 'sandbox') params.set('env', 'sandbox')
     if (forceLogin) params.set('prompt', 'login')
+    if (opts?.privacy) params.set('privacy', opts.privacy)
+    if (opts?.privacy === 'metadata_only') params.set('aggregates', opts.aggregates ? 'true' : 'false')
     const qs = params.toString()
     window.location.href = `${apiUrl}/auth/salesforce/authorize${qs ? `?${qs}` : ''}`
   }

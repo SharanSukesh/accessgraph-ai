@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import DataQualityRun, ObjectQualityScore
+from app.services import privacy_mode
 from app.services.data_quality import DataQualityService
 
 
@@ -180,6 +181,7 @@ async def run_data_quality(
     If runtime grows past ~90s we should switch to the same background
     pattern the sync-job uses (asyncio.create_task + polling endpoint).
     """
+    await privacy_mode.require_feature(db, org_id, "data_quality")
     service = DataQualityService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email, scope=scope)

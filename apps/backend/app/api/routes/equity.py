@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.services import privacy_mode
 from app.services.equity_diagnostic import EquityDiagnosticService
 from app.services.equity_recommendations import (
     DEFAULT_BUDGET,
@@ -107,6 +108,7 @@ async def generate_equity_recommendations(
 ) -> GenerateResponse:
     if budget < 1 or budget > 200:
         raise HTTPException(status_code=400, detail="budget must be in [1, 200]")
+    await privacy_mode.require_feature(db, org_id, "equity")
     service = EquityRecommendationService(db, budget=budget)
     try:
         result = await service.generate(org_id)

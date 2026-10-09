@@ -15,16 +15,32 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { MaskedUsersBanner, PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { privacyModeOf } from '@/lib/privacy'
 import { Reveal } from '@/components/v2/motion'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 
 export default function UsersPage() {
+  return (
+    <PrivacyGate
+      feature="users"
+      header={<PageHeader icon={UsersIcon} title="Users" eyebrow="Explore · people" />}
+    >
+      <UsersContent />
+    </PrivacyGate>
+  )
+}
+
+function UsersContent() {
   const params = useParams()
   const router = useRouter()
   const orgId = params.orgId as string
 
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<string>('')
+  const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
 
   const { data: users, isLoading, error } = useUsers(orgId, {
     search,
@@ -32,6 +48,7 @@ export default function UsersPage() {
   })
 
   if (error) {
+    if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
     return (
       <ErrorState
         message="Failed to load users. Please try again."
@@ -59,6 +76,8 @@ export default function UsersPage() {
           }
         />
       </Reveal>
+
+      <MaskedUsersBanner />
 
       {/* Filters */}
       <Reveal delay={0.05}>
@@ -148,9 +167,15 @@ export default function UsersPage() {
                             <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                               {user.name}
                             </div>
-                            <div className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
-                              {user.email}
-                            </div>
+                            {masked ? (
+                              <div className="font-mono text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                                {user.salesforceUserId}
+                              </div>
+                            ) : (
+                              <div className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
+                                {user.email}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>

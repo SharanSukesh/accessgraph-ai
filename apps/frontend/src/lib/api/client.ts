@@ -16,6 +16,29 @@ export class ApiError extends Error {
   }
 }
 
+// FastAPI puts the reason in `detail`, which is a string for plain
+// HTTPExceptions and an object ({code, message} or {message, error_type,
+// error}) for structured ones.
+function errorMessage(errorData: any): string {
+  const detail = errorData?.detail
+  if (typeof detail === 'string' && detail) return detail
+  if (detail && typeof detail === 'object') {
+    if (typeof detail.message === 'string' && detail.message) return detail.message
+    if (typeof detail.error === 'string' && detail.error) return detail.error
+  }
+  if (typeof errorData?.message === 'string' && errorData.message) return errorData.message
+  return 'Request failed'
+}
+
+/** True for the 409 the backend returns when a client org's privacy level switches a feature off. */
+export function isPrivacyModeError(err: unknown): err is ApiError {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    err.data?.detail?.code === 'privacy_mode'
+  )
+}
+
 interface RequestConfig extends RequestInit {
   params?: Record<string, string | number | boolean>
 }
@@ -84,11 +107,7 @@ class ApiClient {
 
         console.error('API Error:', { url, status: response.status, errorData })
 
-        throw new ApiError(
-          errorData.detail || errorData.message || 'Request failed',
-          response.status,
-          errorData
-        )
+        throw new ApiError(errorMessage(errorData), response.status, errorData)
       }
 
       // Parse JSON response

@@ -95,6 +95,32 @@ export default function PrivacyPolicyPage() {
             1. Information We Collect
           </h2>
           <div className="text-grove-ink/85 dark:text-grove-ink-dk/85 space-y-4">
+            <div className="rounded-lg border border-grove-border dark:border-grove-border-dk p-4">
+              <p className="font-semibold text-grove-ink dark:text-grove-ink-dk">Privacy levels</p>
+              <p className="mt-1">
+                Each client chooses what Newton may collect for its org. The sections below describe
+                the <strong>Full</strong> level; the other levels collect less:
+              </p>
+              <ul className="list-disc pl-6 mt-2 space-y-1">
+                <li>
+                  <strong>Masked users:</strong> Salesforce user records are read, but names, email
+                  addresses and usernames are replaced with a stable alias before anything is stored.
+                  The Salesforce user ID is kept so the client can identify a user in its own org.
+                  Login history is kept at country level only, and Setup Audit Trail description text
+                  is not stored.
+                </li>
+                <li>
+                  <strong>Metadata only:</strong> Salesforce user records, login history and the Setup
+                  Audit Trail are not read at all; only configuration metadata is collected. Aggregate
+                  record statistics (counts, fill rates and duplicate cluster sizes, never record
+                  values) are collected only if the client opts in.
+                </li>
+              </ul>
+              <p className="mt-2">
+                When a client moves to a stricter level, data already held that the new level does not
+                allow is masked or deleted immediately.
+              </p>
+            </div>
             <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 1.1 Salesforce Configuration Metadata

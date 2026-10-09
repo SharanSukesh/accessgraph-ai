@@ -47,9 +47,14 @@ from app.domain.models import (
     SalesforceConnection,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 
 
 logger = logging.getLogger(__name__)
+
+NO_LOGIN_HISTORY_REASON = (
+    "Usage not checked: this client's privacy level excludes login history."
+)
 
 
 # ----------------------------------------------------------------------
@@ -146,6 +151,9 @@ def _extract_sf_error(exc: Any) -> str:
 class IntegrationSprawlService:
     """Runs integration inventory + tier scoring for one org."""
 
+    # Set per run from the org's privacy level.
+    _login_history_allowed = True
+
     def __init__(self, db: AsyncSession, org_id: str):
         self.db = db
         self.org_id = org_id
@@ -160,6 +168,8 @@ class IntegrationSprawlService:
         import httpx  # local — only needed for 401 detection
 
         started = time.monotonic()
+        org = await privacy_mode.load_org(self.db, self.org_id)
+        self._login_history_allowed = privacy_mode.allows(org, privacy_mode.LOGIN_HISTORY)
 
         try:
             client = await self._client()
@@ -265,20 +275,23 @@ class IntegrationSprawlService:
         # by Application. Way cheaper than firing a per-app aggregate
         # query and avoids SF's aggregate-SOQL restrictions.
         logins_by_app: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        try:
-            login_rows = await client.get_login_history(
-                since_days=STALE_DAYS_THRESHOLD
-            )
-            for row in login_rows:
-                app_name = row.get("Application")
-                if app_name in GENERIC_APPLICATION_NAMES:
-                    continue
-                logins_by_app[app_name].append(row)
-            diagnostics["login_history"]["raw_count"] = len(login_rows)
-        except Exception as exc:  # noqa: BLE001
-            diagnostics["login_history"]["error"] = (
-                f"{type(exc).__name__}: {exc}"
-            )
+        if not self._login_history_allowed:
+            diagnostics["login_history"]["skipped"] = NO_LOGIN_HISTORY_REASON
+        else:
+            try:
+                login_rows = await client.get_login_history(
+                    since_days=STALE_DAYS_THRESHOLD
+                )
+                for row in login_rows:
+                    app_name = row.get("Application")
+                    if app_name in GENERIC_APPLICATION_NAMES:
+                        continue
+                    logins_by_app[app_name].append(row)
+                diagnostics["login_history"]["raw_count"] = len(login_rows)
+            except Exception as exc:  # noqa: BLE001
+                diagnostics["login_history"]["error"] = (
+                    f"{type(exc).__name__}: {exc}"
+                )
 
         logger.warning(
             "integration-sprawl: org=%s connected_apps=%d "
@@ -430,6 +443,27 @@ class IntegrationSprawlService:
         if not sf_id:
             return None
         name = raw.get("Name") or "(unnamed app)"
+        if not self._login_history_allowed:
+            return ScoredItem(
+                sf_id=sf_id,
+                integration_type="connected_app",
+                direction="inbound",
+                name=name,
+                developer_name=None,
+                endpoint=raw.get("StartUrl") or raw.get("MobileStartUrl"),
+                namespace_prefix=None,
+                is_active=None,
+                login_count_180d=None,
+                failed_login_count_180d=None,
+                last_used_at=None,
+                tier="unknown",
+                evidence={
+                    "tier_reason": NO_LOGIN_HISTORY_REASON,
+                    "admin_approved_only": bool(
+                        raw.get("OptionsAllowAdminApprovedUsersOnly")
+                    ),
+                },
+            )
 
         # Join by name to LoginHistory.Application. Salesforce doesn't
         # expose a stable FK from LoginHistory → ConnectedApplication;
@@ -590,7 +624,9 @@ class IntegrationSprawlService:
             if times:
                 last_used = max(times)
 
-        if login_count > 0:
+        if not self._login_history_allowed:
+            tier, reason, login_count = "unknown", NO_LOGIN_HISTORY_REASON, None
+        elif login_count > 0:
             tier = "healthy"
             reason = (
                 f"SSO provider matched {login_count} logins in the "

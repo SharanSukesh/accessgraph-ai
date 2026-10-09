@@ -43,6 +43,8 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useLicenseFitLatest,
@@ -57,6 +59,17 @@ import {
 const PAGE_SIZE = 30
 
 export default function LicenseFitPage() {
+  return (
+    <PrivacyGate
+      feature="license_fit"
+      header={<PageHeader icon={DollarSign} eyebrow="Optimize · spend" title="License-to-Persona Fit" />}
+    >
+      <LicenseFitContent />
+    </PrivacyGate>
+  )
+}
+
+function LicenseFitContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
@@ -94,6 +107,9 @@ export default function LicenseFitPage() {
   }
 
   if (summaryError) {
+    if (isPrivacyModeError(summaryError)) {
+      return <PrivacyUnavailable message={summaryError.message} />
+    }
     return (
       <ErrorState
         message="Failed to load license-fit summary."
@@ -136,7 +152,10 @@ export default function LicenseFitPage() {
       />
       </Reveal>
 
-      {runMutation.isError && (
+      {runMutation.isError && isPrivacyModeError(runMutation.error) && (
+        <PrivacyUnavailable message={runMutation.error.message} />
+      )}
+      {runMutation.isError && !isPrivacyModeError(runMutation.error) && (
         <Card variant="bordered" className="p-4 border-red-300 dark:border-red-800">
           <div className="flex items-start gap-3 text-sm">
             <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />

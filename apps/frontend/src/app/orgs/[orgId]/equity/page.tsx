@@ -31,6 +31,8 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useEquityDiagnostic,
@@ -347,6 +349,17 @@ function suggestedGrantsEmpty(
 }
 
 export default function EquityPage() {
+  return (
+    <PrivacyGate
+      feature="equity"
+      header={<PageHeader icon={Scale} eyebrow="Optimize · fairness" title="Equity" />}
+    >
+      <EquityContent />
+    </PrivacyGate>
+  )
+}
+
+function EquityContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
@@ -373,6 +386,9 @@ export default function EquityPage() {
   const handleGenerate = () => generateMutation.mutate(undefined)
 
   if (diagnosticError) {
+    if (isPrivacyModeError(diagnosticError)) {
+      return <PrivacyUnavailable message={diagnosticError.message} />
+    }
     return <ErrorState message="Failed to load equity diagnostic" />
   }
 
@@ -423,7 +439,10 @@ export default function EquityPage() {
       {/* Generate-mutation status banners. Without these, a failed run
           was invisible — the user saw the "Computing…" spinner briefly
           then nothing else. */}
-      {generateMutation.isError && (
+      {generateMutation.isError && isPrivacyModeError(generateMutation.error) && (
+        <PrivacyUnavailable message={generateMutation.error.message} />
+      )}
+      {generateMutation.isError && !isPrivacyModeError(generateMutation.error) && (
         <Card variant="bordered" className="p-4 border-red-300 dark:border-red-800 bg-red-50/40 dark:bg-red-900/15">
           <div className="flex items-start gap-3 text-sm">
             <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />

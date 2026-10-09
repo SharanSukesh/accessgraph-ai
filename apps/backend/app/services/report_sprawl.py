@@ -53,6 +53,7 @@ from app.domain.models import (
     SalesforceConnection,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 
 
 logger = logging.getLogger(__name__)
@@ -193,13 +194,17 @@ def _days_between(reference: datetime, target: Optional[datetime]) -> Optional[i
 
 
 def _unresolved_owner_note(
-    owner_id: Optional[str], owner: Optional[Dict[str, Any]]
+    owner_id: Optional[str],
+    owner: Optional[Dict[str, Any]],
+    looked_up: bool = True,
 ) -> str:
     """Suffix for a tier reason when the owner isn't a resolvable user."""
     if owner is not None:
         return ""
     if owner_id and owner_id.startswith(_FOLDER_ID_PREFIX):
         return " Owned by a shared folder, not an individual user."
+    if not looked_up:
+        return " Owner not looked up: this client's privacy level excludes user records."
     return " Owner couldn't be resolved."
 
 
@@ -214,6 +219,10 @@ class ReportSprawlService:
     Stateful only for the duration of `.run()` — every intermediate
     structure falls out of scope when the coroutine returns.
     """
+
+    # False when the org's privacy level excludes User records; owners
+    # then stay unknown, which never counts as orphaned.
+    _owners_looked_up = True
 
     def __init__(self, db: AsyncSession, org_id: str):
         self.db = db
@@ -315,7 +324,13 @@ class ReportSprawlService:
             if d.get("RunningUserId")
         }
         owner_ids.discard(None)
-        users_by_id = await self._resolve_users(client, list(owner_ids))
+        org = await privacy_mode.load_org(self.db, self.org_id)
+        self._owners_looked_up = privacy_mode.allows(org, privacy_mode.USER_RECORDS)
+        users_by_id: Dict[str, Dict[str, Any]] = {}
+        if self._owners_looked_up:
+            users_by_id = await self._resolve_users(client, list(owner_ids))
+            if not privacy_mode.allows(org, privacy_mode.USER_IDENTITY):
+                users_by_id = privacy_mode.alias_user_names(self.org_id, users_by_id)
 
         # -- Score every item ----------------------------------------
         now = datetime.now(timezone.utc)
@@ -506,7 +521,7 @@ class ReportSprawlService:
             owner_active,
             days,
             usage_source=usage_source,
-            owner_note=_unresolved_owner_note(owner_id, owner),
+            owner_note=_unresolved_owner_note(owner_id, owner, self._owners_looked_up),
         )
         normalised = _normalise_name(name)
 
@@ -565,7 +580,7 @@ class ReportSprawlService:
         tier, reason = self._classify_dashboard(
             owner_active,
             running_user_name=(owner or {}).get("Name"),
-            owner_note=_unresolved_owner_note(owner_id, owner),
+            owner_note=_unresolved_owner_note(owner_id, owner, self._owners_looked_up),
         )
         normalised = _normalise_name(name)
 

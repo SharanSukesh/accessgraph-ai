@@ -197,6 +197,18 @@ export default function DPAPage() {
             </div>
 
             <div>
+              <p>
+                <strong>Privacy level.</strong> The Controller selects a privacy level for each
+                connected org, which limits the categories above. Under <em>Masked users</em>, names,
+                email addresses and usernames are replaced with aliases before storage (Salesforce user
+                IDs are retained), login history is limited to country, and Setup Audit Trail
+                description text is not stored. Under <em>Metadata only</em>, no Salesforce user
+                records, login history or Setup Audit Trail data are processed; aggregate record
+                statistics are processed only if the Controller opts in.
+              </p>
+            </div>
+
+            <div>
               <h3 className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
                 2.5 Categories of Data Subjects
               </h3>

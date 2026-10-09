@@ -17,6 +17,8 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { isFeatureAvailable } from '@/lib/privacy'
 import {
   useDataQualityObject,
   type ObjectScore,
@@ -74,10 +76,14 @@ export default function ObjectDetailPage() {
   // objects by SF API name (Account, Contact, __c). objectName from
   // the URL may be an internal id, so we wait for objectDetail before
   // firing the query.
+  const { currentOrg } = useAuth()
   const { data: dqScore, error: dqError } = useDataQualityObject(
     orgId,
     objectDetail?.apiName ?? '',
-    { enabled: !!objectDetail?.apiName },
+    {
+      enabled:
+        !!objectDetail?.apiName && isFeatureAvailable(currentOrg, 'data_quality'),
+    },
   )
 
   if (error) {

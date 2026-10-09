@@ -31,6 +31,7 @@ from app.domain.models import (
 from app.graph.builder import GraphBuilder
 from app.db.neo4j_client import get_neo4j_client
 from app.ingestion.orchestrator import schedule_background_sync
+from app.services import privacy_mode
 from app.services.org_naming import rename_manually
 from app.services.write_back import set_write_back, write_back_enabled
 from app.services.anomaly_detection import AnomalyDetectionService
@@ -107,6 +108,8 @@ class AccessibleOrgResponse(BaseModel):
     last_sync_status: Optional[str]
     connected_as: Optional[dict] = None
     write_back_enabled: bool = False
+    privacy_mode: str = "full"
+    allow_record_aggregates: bool = True
 
 
 def _is_sandbox(org: Organization, conn: Optional[SalesforceConnection]) -> Optional[bool]:
@@ -173,6 +176,8 @@ async def list_organizations(
             last_sync_status=(job.status.value if hasattr(job.status, "value") else job.status) if job else None,
             connected_as=conn.connected_as if conn else None,
             write_back_enabled=write_back_enabled(o),
+            privacy_mode=privacy_mode.mode_of(o),
+            allow_record_aggregates=privacy_mode.allows(o, privacy_mode.RECORD_AGGREGATES),
         ))
     return out
 

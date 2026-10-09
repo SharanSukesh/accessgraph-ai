@@ -50,6 +50,7 @@ from app.domain.models import (
     SharingRuleSnapshot,
     UserSnapshot,
 )
+from app.services import privacy_mode
 from app.services.salesforce_sync import SalesforceSyncService
 
 
@@ -562,6 +563,11 @@ class AnalyzerContext:
     # price_book from the LicensePriceBook table.
     price_book_is_billed: Dict[str, bool] = field(default_factory=dict)
 
+    # What the client org's privacy level lets this run pull and keep.
+    allow_login_history: bool = True
+    allow_record_aggregates: bool = True
+    keep_user_identity: bool = True
+
 
 @dataclass
 class FindingDraft:
@@ -633,6 +639,10 @@ class OrgAnalyzerService:
 
     async def _load_context(self, actor_email: Optional[str]) -> AnalyzerContext:
         ctx = AnalyzerContext(org_id=self.org_id, actor_email=actor_email)
+        org = await privacy_mode.load_org(self.db, self.org_id)
+        ctx.allow_login_history = privacy_mode.allows(org, privacy_mode.LOGIN_HISTORY)
+        ctx.allow_record_aggregates = privacy_mode.allows(org, privacy_mode.RECORD_AGGREGATES)
+        ctx.keep_user_identity = privacy_mode.allows(org, privacy_mode.USER_IDENTITY)
 
         async def _q(model):
             r = await self.db.execute(
@@ -787,7 +797,10 @@ class OrgAnalyzerService:
             logger.warning("list_all_sobjects failed: %s", e)
 
         # Per-object record counts. Cap to keep API budget tight.
-        candidates = self._select_objects_to_count(ctx.sobject_index)
+        candidates = (
+            self._select_objects_to_count(ctx.sobject_index)
+            if ctx.allow_record_aggregates else []
+        )
         for name in candidates[:COUNT_SOBJECT_CAP]:
             count = await sf_client.count_sobject(name)
             if count is not None:
@@ -839,10 +852,11 @@ class OrgAnalyzerService:
             logger.warning("get_apex_coverage failed: %s", e)
 
         # LoginHistory (last 90 days)
-        try:
-            ctx.login_history = await sf_client.get_login_history(since_days=90)
-        except Exception as e:
-            logger.warning("get_login_history failed: %s", e)
+        if ctx.allow_login_history:
+            try:
+                ctx.login_history = await sf_client.get_login_history(since_days=90)
+            except Exception as e:
+                logger.warning("get_login_history failed: %s", e)
 
         # License inventory — actual SKUs in this org, drives both the
         # LICENSE_SEATS_UNUSED finding and the price-book auto-population.
@@ -873,6 +887,8 @@ class OrgAnalyzerService:
             )
 
         # Sales-ops signals
+        if not ctx.allow_record_aggregates:
+            return
         try:
             ctx.stale_opportunities_count = await sf_client.count_stale_opportunities(60)
         except Exception as e:
@@ -2386,13 +2402,15 @@ class OrgAnalyzerService:
                 for r in top5:
                     owner_id = r.get("OwnerId")
                     cnt = int(r.get("cnt") or 0)
+                    if not ctx.keep_user_identity:
+                        owner_name = privacy_mode.user_alias(self.org_id, owner_id)
+                    elif owner_id and owner_id in user_by_id:
+                        owner_name = user_by_id.get(owner_id).name
+                    else:
+                        owner_name = owner_id
                     evidence_top.append({
                         "owner_id": owner_id,
-                        "owner_name": (
-                            user_by_id.get(owner_id).name
-                            if owner_id and owner_id in user_by_id
-                            else owner_id
-                        ),
+                        "owner_name": owner_name,
                         "account_count": cnt,
                         "share_of_org_pct": round(cnt / denom * 100, 1),
                     })

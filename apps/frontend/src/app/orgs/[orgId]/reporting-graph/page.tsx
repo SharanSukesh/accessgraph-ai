@@ -33,6 +33,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Ca
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal } from '@/components/v2/motion'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -61,6 +63,17 @@ type PendingEdit = RelationshipEdit & {
 }
 
 export default function ReportingGraphPage() {
+  return (
+    <PrivacyGate
+      feature="reporting_graph"
+      header={<PageHeader icon={Users2} title="Org Chart" eyebrow="Admin · hierarchy" />}
+    >
+      <ReportingGraphContent />
+    </PrivacyGate>
+  )
+}
+
+function ReportingGraphContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
@@ -692,7 +705,9 @@ export default function ReportingGraphPage() {
           'Permission denied. You need an ORG_ADMIN role to edit the reporting graph. ' +
           '(If no ORG_ADMIN is configured yet, this falls back to allowing any user — ' +
           'so this error means someone has explicitly locked it down.)'
-      } else if (err?.data?.detail) {
+      } else if (isPrivacyModeError(err)) {
+        message = err.message
+      } else if (typeof err?.data?.detail === 'string') {
         message = `Save failed: ${err.data.detail}`
       } else if (err?.message) {
         message = `Save failed: ${err.message}`
@@ -702,6 +717,7 @@ export default function ReportingGraphPage() {
   }
 
   if (error) {
+    if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
     return <ErrorState message="Failed to load reporting graph" />
   }
 

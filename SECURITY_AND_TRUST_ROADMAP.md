@@ -47,6 +47,13 @@ Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBO
 - Business record IDs stored only as keyed hashes; data-quality duplicate
   checks never return field values.
 - Legal pages (privacy, security, terms, DPA) rewritten to match the code.
+- Per-client privacy levels: Full, Masked users (aliases instead of
+  names; Salesforce IDs kept for client-side lookup; no login location or
+  audit text), Metadata only (no users, logins or audit trail; aggregate
+  record statistics opt-in). Tightening a level purges or masks stored
+  data immediately.
+- Client report: two-logo letterhead (client + firm), severity-ordered
+  findings, charts and cross-module insights.
 
 ## P0: before the next client engagement
 

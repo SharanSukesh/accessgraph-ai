@@ -221,6 +221,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 from app.services.effective_access import EffectiveAccessService
 from sqlalchemy import desc
 
@@ -776,6 +777,14 @@ class AnomalyDetectionService:
         )
         await self.db.commit()
 
+        org = await privacy_mode.load_org(self.db, org_id)
+        if not privacy_mode.allows(org, privacy_mode.LOGIN_HISTORY):
+            logger.info("Session anomalies skipped for org %s: privacy level.", org_id)
+            return []
+        # Without LOGIN_DETAIL, city / browser / platform may steer the
+        # rules in memory but never reach a stored reason or feature.
+        login_detail = privacy_mode.allows(org, privacy_mode.LOGIN_DETAIL)
+
         # Pull the 90-day window. Session anomalies are inherently
         # short-horizon (impossible travel, brute force) or recent-versus-
         # historical (new country, dormant reactivation), so 90 days
@@ -879,12 +888,18 @@ class AnomalyDetectionService:
                     continue
                 gap_hours = (curr["_ts"] - prev["_ts"]).total_seconds() / 3600.0
                 if 0 < gap_hours <= IMPOSSIBLE_TRAVEL_HOURS:
-                    per_user_findings.append(
-                        f"Impossible travel: login from "
-                        f"{prev_geo.get('City') or prev_country}, {prev_country} "
-                        f"then {curr_geo.get('City') or curr_country}, {curr_country} "
-                        f"only {gap_hours:.1f}h apart."
-                    )
+                    if login_detail:
+                        per_user_findings.append(
+                            f"Impossible travel: login from "
+                            f"{prev_geo.get('City') or prev_country}, {prev_country} "
+                            f"then {curr_geo.get('City') or curr_country}, {curr_country} "
+                            f"only {gap_hours:.1f}h apart."
+                        )
+                    else:
+                        per_user_findings.append(
+                            f"Impossible travel: login from {prev_country} "
+                            f"then {curr_country} only {gap_hours:.1f}h apart."
+                        )
                     per_user_features["impossible_travel"] = True
                     highest_severity_score = max(highest_severity_score, 0.95)
                     break
@@ -928,16 +943,27 @@ class AnomalyDetectionService:
                     devices_recent.add(dev)
             new_devices = devices_recent - devices_prior
             if new_devices and devices_prior:
-                for browser, platform in sorted(new_devices):
-                    if browser == "unknown" and platform == "unknown":
-                        continue
-                    per_user_findings.append(
-                        f"New device: {browser} on {platform} — not seen in "
-                        "the prior 60 days for this user."
-                    )
-                per_user_features["new_devices"] = [
-                    f"{b}/{p}" for b, p in sorted(new_devices)
+                known_new = [
+                    (b, p) for b, p in sorted(new_devices)
+                    if not (b == "unknown" and p == "unknown")
                 ]
+                if login_detail:
+                    for browser, platform in known_new:
+                        per_user_findings.append(
+                            f"New device: {browser} on {platform} — not seen in "
+                            "the prior 60 days for this user."
+                        )
+                    per_user_features["new_devices"] = [
+                        f"{b}/{p}" for b, p in sorted(new_devices)
+                    ]
+                else:
+                    if known_new:
+                        per_user_findings.append(
+                            f"New device: {len(known_new)} browser/platform "
+                            "combination(s) not seen in the prior 60 days "
+                            "for this user."
+                        )
+                    per_user_features["new_device_count"] = len(new_devices)
                 highest_severity_score = max(highest_severity_score, 0.55)
 
             # --- Rule 4: Dormant reactivation --------------------------

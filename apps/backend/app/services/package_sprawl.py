@@ -39,6 +39,7 @@ from app.domain.models import (
     SalesforceConnection,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,9 @@ class PackageSprawlService:
     invocation.
     """
 
+    # Set per run from the org's privacy level.
+    _record_counts_allowed = True
+
     def __init__(
         self,
         db: AsyncSession,
@@ -149,6 +153,8 @@ class PackageSprawlService:
         import httpx  # local — only needed for 401 detection
 
         started = time.monotonic()
+        org = await privacy_mode.load_org(self.db, self.org_id)
+        self._record_counts_allowed = privacy_mode.allows(org, privacy_mode.RECORD_AGGREGATES)
 
         try:
             client = await self._client()
@@ -621,7 +627,7 @@ class PackageSprawlService:
         record_count_total: Optional[int] = None
         record_counts_by_object: Dict[str, int] = {}
         objects_for_count = package_object_names[:MAX_RECORD_COUNT_QUERIES_PER_PACKAGE]
-        if objects_for_count:
+        if objects_for_count and self._record_counts_allowed:
             record_count_total = 0
             for obj_name in objects_for_count:
                 cnt = await client.count_sobject(obj_name)

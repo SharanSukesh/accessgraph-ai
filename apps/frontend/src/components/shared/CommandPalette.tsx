@@ -24,6 +24,8 @@ import {
 import { useParams, useRouter } from 'next/navigation'
 import { ChevronRight, Search, X as XIcon } from 'lucide-react'
 import { navigationSections } from '@/components/layout/Sidebar'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { isFeatureAvailable } from '@/lib/privacy'
 
 interface CommandRow {
   name: string
@@ -49,6 +51,7 @@ export function CommandPalette() {
   const router = useRouter()
   const params = useParams()
   const orgId = (params?.orgId as string) || ''
+  const { currentOrg } = useAuth()
 
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -105,6 +108,7 @@ export function CommandPalette() {
     const out: CommandRow[] = []
     for (const section of navigationSections) {
       for (const item of section.items) {
+        if (item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature)) continue
         out.push({
           name: item.name,
           section: section.label,
@@ -114,7 +118,7 @@ export function CommandPalette() {
       }
     }
     return out
-  }, [orgId])
+  }, [orgId, currentOrg])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

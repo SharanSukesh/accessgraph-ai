@@ -16,7 +16,11 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Stagger, StaggerItem } from '@/components/v2/motion'
+import { PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { useObjects } from '@/lib/api/hooks/useObjects'
+import { isPrivacyModeError } from '@/lib/api/client'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { isFeatureAvailable, privacyModeOf, unavailableMessage } from '@/lib/privacy'
 import {
   useDataQualityLatest,
   useDataQualityObjects,
@@ -40,8 +44,13 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
 
   // Data-quality overlay — worst-first scores plus the org-wide KPI.
   // Hydrates on first paint; no-op if the engine has never run.
-  const { data: dqSummary } = useDataQualityLatest(orgId)
-  const { data: dqObjects } = useDataQualityObjects(orgId)
+  // Metadata-only clients may opt out of record counts and fill rates,
+  // which is all Data Quality is built from.
+  const { currentOrg } = useAuth()
+  const dqAvailable = isFeatureAvailable(currentOrg, 'data_quality')
+  const dqUnavailableReason = `${unavailableMessage(privacyModeOf(currentOrg))} without aggregate record statistics`
+  const { data: dqSummary } = useDataQualityLatest(orgId, { enabled: dqAvailable })
+  const { data: dqObjects } = useDataQualityObjects(orgId, { enabled: dqAvailable })
   const runDq = useRunDataQuality(orgId)
 
   // Scope the user picked in the toggle. Defaults to whatever the
@@ -93,7 +102,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
       <ScopeToggle
         value={scope}
         onChange={setScope}
-        disabled={runDq.isPending}
+        disabled={runDq.isPending || !dqAvailable}
         // Business count comes from the live Objects list so it
         // stays in sync with the "Total Objects" KPI card above
         // — always fresh, never dependent on when the last data-
@@ -103,11 +112,14 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
         businessCount={objects?.length}
         allCount={dqSummary?.coverage?.total_sobjects_raw}
       />
+      {/* Disabled buttons swallow hover in some browsers, so the
+          tooltip sits on a wrapper. */}
+      <span title={dqAvailable ? undefined : dqUnavailableReason} className="inline-flex">
       <Button
         variant="secondary"
         size="sm"
         onClick={() => runDq.mutate(scope)}
-        disabled={runDq.isPending}
+        disabled={runDq.isPending || !dqAvailable}
         aria-label={
           dqSummary?.has_data
             ? 'Re-run data quality analysis'
@@ -125,6 +137,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
           ? 'Re-analyse quality'
           : 'Analyse quality'}
       </Button>
+      </span>
     </div>
   )
 
@@ -141,7 +154,10 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
       {/* Show the last run error inline so the user doesn't need
           devtools open to see WHY the analyse call failed. The backend
           now returns a structured detail: {message, error_type, error}. */}
-      {runDq.isError && (
+      {runDq.isError && isPrivacyModeError(runDq.error) && (
+        <PrivacyUnavailable title="Data Quality is not available" message={runDq.error.message} />
+      )}
+      {runDq.isError && !isPrivacyModeError(runDq.error) && (
         <Card
           variant="bordered"
           className="border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-900/10"
@@ -290,8 +306,11 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                   <p className="mt-2 text-3xl font-bold text-grove-ink/40 dark:text-grove-ink-dk/40">
                     —
                   </p>
-                  <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
-                    Not analysed
+                  <p
+                    className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1"
+                    title={dqAvailable ? undefined : dqUnavailableReason}
+                  >
+                    {dqAvailable ? 'Not analysed' : 'Not available for this client'}
                   </p>
                 </>
               )}

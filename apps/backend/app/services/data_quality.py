@@ -59,6 +59,7 @@ from app.domain.models import (
     SalesforceConnection,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 
 
 logger = logging.getLogger(__name__)
@@ -292,6 +293,7 @@ class DataQualityService:
             )
 
         started = time.monotonic()
+        await privacy_mode.require_feature(self.db, self.org_id, "data_quality")
         # Explicit try/except at each stage so we can tell exactly WHERE
         # the run is failing when a 500 leaves the frontend.
         try:

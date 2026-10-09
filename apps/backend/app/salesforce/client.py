@@ -2424,9 +2424,12 @@ class SalesforceAPIClient:
         logger.info(f"Extracted total of {len(all_rules)} sharing rules")
         return all_rules
 
-    async def extract_all(self) -> Dict[str, List[Any]]:
+    async def extract_all(
+        self, *, include_users: bool = True, include_record_shares: bool = True
+    ) -> Dict[str, List[Any]]:
         """
-        Extract all data in one operation
+        Extract all data in one operation. The include_* switches come from
+        the client org's privacy level: what's excluded is never queried.
 
         Returns:
             Dict with all extracted data (Pydantic models converted to dicts)
@@ -2434,7 +2437,7 @@ class SalesforceAPIClient:
         logger.info("Starting full extraction")
 
         # Extract all in parallel would be better, but let's keep it simple for now
-        users = await self.extract_users()
+        users = await self.extract_users() if include_users else []
         roles = await self.extract_user_roles()
         profiles = await self.extract_profiles()
         permission_sets = await self.extract_permission_sets()
@@ -2466,8 +2469,8 @@ class SalesforceAPIClient:
         # Extract sharing data (some objects may not be available in all orgs)
         groups = await self.extract_groups()
         group_members = await self.extract_group_members()
-        account_shares = await self.extract_account_shares()
-        opportunity_shares = await self.extract_opportunity_shares()
+        account_shares = await self.extract_account_shares() if include_record_shares else []
+        opportunity_shares = await self.extract_opportunity_shares() if include_record_shares else []
 
         # Extract Organization-Wide Defaults
         organization_wide_defaults = await self.extract_organization_wide_defaults()
@@ -2475,7 +2478,8 @@ class SalesforceAPIClient:
         # AccountTeamMember is optional - may not be enabled in all orgs
         account_team_members = []
         try:
-            account_team_members = await self.extract_account_team_members()
+            if include_record_shares:
+                account_team_members = await self.extract_account_team_members()
         except Exception as e:
             logger.warning(f"Could not extract account team members (may not be enabled): {e}")
 
@@ -2483,7 +2487,8 @@ class SalesforceAPIClient:
         # selling to be turned on. Same defensive pattern as account teams.
         opportunity_team_members = []
         try:
-            opportunity_team_members = await self.extract_opportunity_team_members()
+            if include_record_shares:
+                opportunity_team_members = await self.extract_opportunity_team_members()
         except Exception as e:
             logger.warning(
                 f"Could not extract opportunity team members "

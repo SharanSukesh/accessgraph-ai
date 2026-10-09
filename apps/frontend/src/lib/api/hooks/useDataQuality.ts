@@ -150,11 +150,11 @@ export const dataQualityKeys = {
  * never run for this org, so callers can render an "Analyse now"
  * empty state instead of a broken chart.
  */
-export function useDataQualityLatest(orgId: string) {
+export function useDataQualityLatest(orgId: string, options?: { enabled?: boolean }) {
   return useQuery<DataQualitySummary>({
     queryKey: dataQualityKeys.latest(orgId),
     queryFn: () => apiClient.get(endpoints.dataQualityLatest(orgId)),
-    enabled: !!orgId,
+    enabled: !!orgId && (options?.enabled ?? true),
     staleTime: 30_000,
   })
 }

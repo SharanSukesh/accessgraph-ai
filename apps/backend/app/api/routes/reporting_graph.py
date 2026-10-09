@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access, require_org_admin
+from app.services import privacy_mode
 from app.services.write_back import require_write_back
 from app.domain.models import ProfileSnapshot, RoleSnapshot, UserSnapshot
 from app.services.reporting_graph_service import (
@@ -107,6 +108,7 @@ async def get_reporting_graph(
     from nodes but kept on the source side of edges if they appear as a
     subordinate elsewhere — keeps the graph from breaking on archival.
     """
+    await privacy_mode.require_feature(db, org_id, "reporting_graph")
     users = (await db.execute(
         select(UserSnapshot).where(
             UserSnapshot.organization_id == org_id,
@@ -204,6 +206,7 @@ async def apply_reporting_graph_edits(
     Partial-failure semantics: returns one EditResult per edit; success
     field tells the frontend which to retry / surface as errors.
     """
+    await privacy_mode.require_feature(db, org_id, "reporting_graph")
     await require_write_back(db, org_id)
     if not payload.edits:
         return ApplyResponse(total=0, succeeded=0, failed=0, results=[])

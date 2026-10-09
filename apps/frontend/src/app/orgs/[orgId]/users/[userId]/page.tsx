@@ -27,6 +27,10 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Ta
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { MaskedUsersBanner, PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
+import { useAuth } from '@/lib/auth/AuthContext'
+import { privacyModeOf } from '@/lib/privacy'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { Reveal } from '@/components/v2/motion'
@@ -47,12 +51,24 @@ import {
 import { useUserGraph } from '@/lib/api/hooks/useGraph'
 
 export default function UserDetailPage() {
+  return (
+    <PrivacyGate
+      feature="users"
+      header={<PageHeader icon={User} title="User" eyebrow="Explore · user detail" />}
+    >
+      <UserDetailContent />
+    </PrivacyGate>
+  )
+}
+
+function UserDetailContent() {
   const params = useParams()
   const router = useRouter()
   const orgId = params.orgId as string
   const userId = params.userId as string
 
   const [activeTab, setActiveTab] = useState('overview')
+  const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
   const [selectedObjects, setSelectedObjects] = useState<string[]>([])
   const [selectedGraphNode, setSelectedGraphNode] = useState<any>(null)
 
@@ -75,6 +91,7 @@ export default function UserDetailPage() {
     riskScore !== undefined && (risk?.risk_score !== undefined || !!risk?.calculatedAt || riskScore > 0)
 
   if (userError) {
+    if (isPrivacyModeError(userError)) return <PrivacyUnavailable message={userError.message} />
     return (
       <ErrorState
         message="Failed to load user details. Please try again."
@@ -112,7 +129,7 @@ export default function UserDetailPage() {
         <PageHeader
           icon={User}
           title={user.name}
-          subtitle={user.email}
+          subtitle={masked ? `Salesforce ID ${user.salesforceUserId}` : user.email}
           eyebrow="Explore · user detail"
           actions={
             <>
@@ -128,6 +145,8 @@ export default function UserDetailPage() {
           }
         />
       </Reveal>
+
+      <MaskedUsersBanner />
 
       {/* User Info Card */}
       <Reveal delay={0.1}>

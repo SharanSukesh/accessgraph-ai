@@ -72,6 +72,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
 from app.services.org_analyzer import (
     DEFAULT_PRICE_BOOK_CENTS,
     _lookup_default_price,
@@ -189,6 +190,7 @@ class LicenseFitService:
         import httpx  # local — needed for 401 detection
 
         started = time.monotonic()
+        org = await privacy_mode.require_feature(self.db, self.org_id, "license_fit")
 
         try:
             client = await self._client()
@@ -301,10 +303,11 @@ class LicenseFitService:
 
         # -- Owner counts per object (behaviour signal) --------------
         owners_by_object: Dict[str, Dict[str, int]] = {}
-        for obj_name in PROBED_OBJECTS:
-            counts = await client.owner_counts_by_object(obj_name)
-            owners_by_object[obj_name] = counts
-            diagnostics["owner_counts"][obj_name] = len(counts)
+        if privacy_mode.allows(org, privacy_mode.RECORD_AGGREGATES):
+            for obj_name in PROBED_OBJECTS:
+                counts = await client.owner_counts_by_object(obj_name)
+                owners_by_object[obj_name] = counts
+                diagnostics["owner_counts"][obj_name] = len(counts)
 
         # -- Effective object access — pull ONCE via a batch query
         #    for the subset of objects that indicate persona. We don't

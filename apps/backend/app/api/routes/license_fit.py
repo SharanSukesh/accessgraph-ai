@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import LicenseFitAssessment, LicenseFitRun
+from app.services import privacy_mode
 from app.services.license_fit import LicenseFitService
 
 
@@ -158,6 +159,7 @@ async def run_license_fit(
     """Kick off a right-sizing analysis. Reads user snapshots +
     profile join + a few aggregate SOQLs (owner counts per key
     SObject). Usually 5-30 seconds."""
+    await privacy_mode.require_feature(db, org_id, "license_fit")
     service = LicenseFitService(db, org_id)
     try:
         run = await service.run(actor_email=actor_email)

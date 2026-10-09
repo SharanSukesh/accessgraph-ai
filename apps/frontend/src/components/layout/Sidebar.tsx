@@ -36,6 +36,12 @@ import { Logo } from '@/components/shared/Logo'
 import { MarqueeLabel } from '@/components/layout/MarqueeLabel'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { orgKeys, useSyncJobs } from '@/lib/api/hooks/useOrgs'
+import {
+  isFeatureAvailable,
+  privacyModeOf,
+  unavailableMessage,
+  type PrivacyFeature,
+} from '@/lib/privacy'
 
 // Sidebar nav grouped by user intent, not feature-ship-order.
 //
@@ -73,13 +79,16 @@ export const navigationSections: {
     // Gate the item on `isAdmin` from AuthContext. Non-admin sessions
     // see the item filtered out at render time.
     adminOnly?: boolean
+    // Feature the current org's privacy level can switch off; the item
+    // renders disabled when it does.
+    privacyFeature?: PrivacyFeature
   }[]
 }[] = [
   {
     label: 'EXPLORE',
     items: [
       { name: 'Overview', path: 'dashboard', icon: LayoutDashboard },
-      { name: 'Users', path: 'users', icon: Users },
+      { name: 'Users', path: 'users', icon: Users, privacyFeature: 'users' },
       { name: 'Schema', path: 'schema', icon: Layers },
       // Permission Sets list page — deferred. Only the detail route
       // (`permission-sets/[psId]`) exists today; the list surface
@@ -93,18 +102,18 @@ export const navigationSections: {
     label: 'ATTENTION',
     items: [
       { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
-      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle },
-      { name: 'Change Risk', path: 'change-risk', icon: Radar },
+      { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle, privacyFeature: 'anomalies' },
+      { name: 'Change Risk', path: 'change-risk', icon: Radar, privacyFeature: 'change_risk' },
     ],
   },
   {
     label: 'OPTIMIZE',
     items: [
       { name: 'Health Report', path: 'org-analyzer', icon: Stethoscope },
-      { name: 'Equity', path: 'equity', icon: Scale },
-      { name: 'Restructure Studio', path: 'restructure', icon: Wrench },
+      { name: 'Equity', path: 'equity', icon: Scale, privacyFeature: 'equity' },
+      { name: 'Restructure Studio', path: 'restructure', icon: Wrench, privacyFeature: 'restructure' },
       { name: 'Sprawl', path: 'sprawl', icon: Boxes },
-      { name: 'License Fit', path: 'license-fit', icon: DollarSign },
+      { name: 'License Fit', path: 'license-fit', icon: DollarSign, privacyFeature: 'license_fit' },
       { name: 'Compliance', path: 'compliance', icon: ShieldCheck },
     ],
   },
@@ -117,7 +126,7 @@ export const navigationSections: {
         icon: UserPlus,
         adminOnly: true,
       },
-      { name: 'Org Chart', path: 'reporting-graph', icon: Users2 },
+      { name: 'Org Chart', path: 'reporting-graph', icon: Users2, privacyFeature: 'reporting_graph' },
       { name: 'Privacy', path: 'privacy', icon: Shield },
     ],
   },
@@ -190,6 +199,8 @@ export function Sidebar() {
         .filter(item => !item.adminOnly || isAdmin)
         .map(item => ({
           ...item,
+          unavailable:
+            !!item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature),
           // Without an org in the URL, org-scoped items lead to the picker.
           href: item.path.startsWith('/')
             ? item.path
@@ -305,6 +316,37 @@ export function Sidebar() {
                 const Icon = item.icon
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + '/')
+                if (item.unavailable) {
+                  const reason = unavailableMessage(privacyModeOf(currentOrg))
+                  return (
+                    <span
+                      key={item.name}
+                      role="link"
+                      aria-disabled="true"
+                      className={cn(
+                        'v2-nav-item flex items-center rounded-lg text-sm font-medium relative group cursor-not-allowed text-grove-ink/35 dark:text-grove-ink-dk/35',
+                        isExpanded
+                          ? 'space-x-3 px-4 py-2.5'
+                          : 'justify-center w-10 h-10 mx-auto',
+                      )}
+                      style={{
+                        animation: `grove-slide-in 280ms ease-out ${itemIdx * 30 + sectionIdx * 60}ms both`,
+                      }}
+                      title={isExpanded ? reason : undefined}
+                    >
+                      <Icon className="h-5 w-5 flex-shrink-0" />
+                      {isExpanded && <MarqueeLabel text={item.name} />}
+                      {!isExpanded && (
+                        <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
+                          {item.name}
+                          <span className="block text-[10px] text-grove-canvas/70 dark:text-grove-ink-dk/70">
+                            {reason}
+                          </span>
+                        </div>
+                      )}
+                    </span>
+                  )
+                }
                 return (
                   <Link
                     key={item.name}

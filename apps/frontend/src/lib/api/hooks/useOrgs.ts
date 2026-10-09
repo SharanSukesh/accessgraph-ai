@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import { endpoints } from '../endpoints'
+import type { PrivacyMode } from '@/lib/privacy'
 
 // Types
 /** A client org the signed-in user may open (GET /orgs). */
@@ -23,6 +24,9 @@ export interface Organization {
   /** Salesforce user the org was connected as; null for connections made before Oct 2026. */
   connected_as: ConnectionPosture | null
   write_back_enabled: boolean
+  privacy_mode: PrivacyMode
+  /** Only meaningful for metadata_only: record counts and fill rates for Data Quality. */
+  allow_record_aggregates: boolean
 }
 
 export interface ConnectionPosture {

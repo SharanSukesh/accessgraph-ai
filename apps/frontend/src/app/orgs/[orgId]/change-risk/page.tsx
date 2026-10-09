@@ -45,6 +45,8 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   TierDonut,
@@ -67,6 +69,17 @@ import {
 } from '@/lib/api/hooks/useChangeRiskRadar'
 
 export default function ChangeRiskPage() {
+  return (
+    <PrivacyGate
+      feature="change_risk"
+      header={<PageHeader icon={Radar} title="Change-Risk Radar" eyebrow="Attention · change intelligence" />}
+    >
+      <ChangeRiskContent />
+    </PrivacyGate>
+  )
+}
+
+function ChangeRiskContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
@@ -133,6 +146,9 @@ export default function ChangeRiskPage() {
   )
 
   if (summaryError) {
+    if (isPrivacyModeError(summaryError)) {
+      return <PrivacyUnavailable message={summaryError.message} />
+    }
     return (
       <ErrorState
         message="Failed to load change-risk summary. Please try again."
@@ -193,7 +209,10 @@ export default function ChangeRiskPage() {
       <ExplainerCard />
 
       {/* Inline error surfacing (same pattern as /objects). */}
-      {runMutation.isError && (
+      {runMutation.isError && isPrivacyModeError(runMutation.error) && (
+        <PrivacyUnavailable message={runMutation.error.message} />
+      )}
+      {runMutation.isError && !isPrivacyModeError(runMutation.error) && (
         <Card
           variant="bordered"
           className="border-red-200 dark:border-red-800 bg-red-50/40 dark:bg-red-900/10"

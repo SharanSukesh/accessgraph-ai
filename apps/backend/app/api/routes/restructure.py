@@ -50,6 +50,7 @@ from app.domain.models import (
     RestructurePreservationConstraint,
     RestructureRun,
 )
+from app.services import privacy_mode
 from app.services.restructure_planner import RestructurePlannerService
 from app.services.restructure_probe import RestructureProbeService
 
@@ -328,6 +329,7 @@ async def run_restructure(
     persists everything in one DB transaction. Typical runtime ~2-10s
     depending on org size (dominated by the O(n²) PSet pairs pass).
     """
+    await privacy_mode.require_feature(db, org_id, "restructure")
 
     service = RestructurePlannerService(
         db,

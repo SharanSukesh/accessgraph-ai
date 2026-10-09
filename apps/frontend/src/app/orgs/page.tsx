@@ -4,7 +4,8 @@
  * /orgs — client-org picker.
  *
  * Lists the client orgs the signed-in user may open (admins: all) and,
- * for roles that can write, the Salesforce connect buttons. Renders
+ * for roles that can write, the Salesforce connect dialog (environment
+ * and privacy level). Renders
  * bare like /start (see AppLayout); picking an org enters the full
  * workspace at /orgs/{id}/dashboard.
  */
@@ -22,13 +23,22 @@ import {
   FlaskConical,
   LogOut,
   Pencil,
+  ShieldCheck,
+  X,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/Logo'
 import { Button } from '@/components/shared/Button'
 import { OrgEnvPill } from '@/components/shared/OrgEnvPill'
 import { Eyebrow, Pill } from '@/components/v2/primitives'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
-import { useAuth } from '@/lib/auth/AuthContext'
+import { PrivacyLevelPicker } from '@/components/shared/PrivacyLevelPicker'
+import {
+  useAuth,
+  type ConnectSalesforceOptions,
+  type SalesforceEnv,
+} from '@/lib/auth/AuthContext'
+import { PRIVACY_LEVELS, privacyModeOf, type PrivacyMode } from '@/lib/privacy'
+import { cn } from '@/lib/utils/cn'
 import { orgKeys, type Organization } from '@/lib/api/hooks/useOrgs'
 import { apiClient } from '@/lib/api/client'
 import { formatRelativeTime } from '@/lib/utils/formatters'
@@ -74,7 +84,7 @@ export default function OrgsPage() {
               </h1>
             </div>
             {canWrite && orgs.length > 0 && (
-              <ConnectButtons onConnect={connectSalesforce} />
+              <ConnectOrgButton onConnect={connectSalesforce} />
             )}
           </div>
         </Reveal>
@@ -95,7 +105,7 @@ export default function OrgsPage() {
                     first sync starts automatically.
                   </p>
                   <div className="mt-6">
-                    <ConnectButtons onConnect={connectSalesforce} />
+                    <ConnectOrgButton onConnect={connectSalesforce} />
                   </div>
                 </>
               ) : (
@@ -137,24 +147,173 @@ export default function OrgsPage() {
   )
 }
 
-function ConnectButtons({
+function ConnectOrgButton({
   onConnect,
 }: {
-  onConnect: (env: 'production' | 'sandbox') => void
+  onConnect: (env: SalesforceEnv, opts: ConnectSalesforceOptions) => void
 }) {
+  const [open, setOpen] = useState(false)
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button variant="primary" size="sm" onClick={() => onConnect('production')}>
+    <>
+      <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
         <Plus className="mr-1.5 h-4 w-4" />
-        Connect production org
+        Connect a Salesforce org
       </Button>
-      <Button variant="secondary" size="sm" onClick={() => onConnect('sandbox')}>
-        <FlaskConical className="mr-1.5 h-4 w-4" />
-        Connect sandbox
-      </Button>
+      {open && <ConnectOrgDialog onConnect={onConnect} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+function ConnectOrgDialog({
+  onConnect,
+  onClose,
+}: {
+  onConnect: (env: SalesforceEnv, opts: ConnectSalesforceOptions) => void
+  onClose: () => void
+}) {
+  const [env, setEnv] = useState<SalesforceEnv>('production')
+  const [privacy, setPrivacy] = useState<PrivacyMode>('full')
+  const [aggregates, setAggregates] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="connect-org-title"
+        className="v2-card max-h-[90vh] w-full max-w-lg overflow-y-auto p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <Eyebrow>New client org</Eyebrow>
+            <h2
+              id="connect-org-title"
+              className="v2-display mt-1.5 text-2xl font-semibold text-grove-ink dark:text-grove-ink-dk"
+            >
+              Connect a Salesforce org
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded p-1 text-grove-ink/50 hover:bg-grove-border/40 hover:text-grove-ink dark:text-grove-ink-dk/50 dark:hover:text-grove-ink-dk"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            onConnect(env, { privacy, aggregates: privacy === 'metadata_only' && aggregates })
+          }}
+          className="space-y-5"
+        >
+          <fieldset>
+            <legend className="v2-micro mb-2 text-grove-ink/55 dark:text-grove-ink-dk/55">
+              Environment
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {ENVIRONMENTS.map(({ value, label, hint, icon: Icon }) => {
+                const selected = env === value
+                return (
+                  <label
+                    key={value}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 transition-colors duration-150',
+                      'focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-1',
+                      selected
+                        ? 'border-primary-500/70 bg-primary-50/70 dark:border-primary-600 dark:bg-primary-900/20'
+                        : 'border-grove-border bg-grove-surface hover:border-primary-300 dark:border-grove-border-dk dark:bg-grove-surface-dk dark:hover:border-primary-700',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="connect-env"
+                      value={value}
+                      checked={selected}
+                      onChange={() => setEnv(value)}
+                      className="sr-only"
+                    />
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        selected ? 'text-primary-700 dark:text-primary-400' : 'text-grove-ink/50 dark:text-grove-ink-dk/50',
+                      )}
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
+                        {label}
+                      </span>
+                      <span className="block text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">{hint}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend className="v2-micro mb-2 text-grove-ink/55 dark:text-grove-ink-dk/55">
+              Privacy level
+            </legend>
+            <PrivacyLevelPicker
+              name="connect-privacy"
+              value={privacy}
+              onChange={setPrivacy}
+              aggregates={aggregates}
+              onAggregatesChange={setAggregates}
+            />
+            <p className="mt-2 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+              Agree the level with the client first. An org admin can change it later on the
+              Privacy page.
+            </p>
+          </fieldset>
+
+          <p className="flex items-start gap-2 rounded-lg bg-copper-50/70 px-3 py-2.5 text-xs leading-relaxed text-copper-800 dark:bg-copper-900/20 dark:text-copper-300">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              <strong className="font-semibold">Use a read-only integration user.</strong> Sign in
+              to Salesforce as the client&apos;s dedicated integration user, not a personal admin
+              account. See the client onboarding guide.
+            </span>
+          </p>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button type="button" variant="secondary" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Continue to Salesforce
+              <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
+
+const ENVIRONMENTS: {
+  value: SalesforceEnv
+  label: string
+  hint: string
+  icon: typeof Building2
+}[] = [
+  { value: 'production', label: 'Production', hint: 'login.salesforce.com', icon: Building2 },
+  { value: 'sandbox', label: 'Sandbox', hint: 'test.salesforce.com', icon: FlaskConical },
+]
 
 const SYNC_STATUS_LABELS: Record<string, string> = {
   completed: 'completed',
@@ -252,6 +411,11 @@ function OrgRow({ org, canRename }: { org: Organization; canRename: boolean }) {
           )}
           {!org.is_demo && org.is_connected && <PosturePill posture={org.connected_as} />}
           {org.write_back_enabled && <Pill tone="copper">Write-back on</Pill>}
+          {privacyModeOf(org) !== 'full' && (
+            <span title={PRIVACY_LEVELS[privacyModeOf(org)].summary}>
+              <Pill>{PRIVACY_LEVELS[privacyModeOf(org)].label}</Pill>
+            </span>
+          )}
         </div>
         <p className="mt-1 truncate text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
           {org.domain || org.instance_url || 'No Salesforce domain'}

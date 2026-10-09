@@ -41,6 +41,7 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.salesforce.oauth import SalesforceOAuthClient
+from app.services import privacy_mode
 from app.services.connection_posture import assess_connected_user
 from app.services.org_naming import apply_salesforce_name
 
@@ -73,6 +74,13 @@ async def authorize(
     prompt: Optional[str] = Query(
         None, description="Forwarded to Salesforce, e.g. 'login' to force the login screen."
     ),
+    privacy: str = Query(
+        privacy_mode.FULL,
+        description="Privacy level for a newly connected org: full, masked or metadata_only.",
+    ),
+    aggregates: bool = Query(
+        False, description="With metadata_only: allow aggregate record statistics.",
+    ),
     principal: Principal = Depends(get_principal),
 ):
     """Start connecting a client Salesforce org. Requires a Newton session."""
@@ -102,6 +110,8 @@ async def authorize(
             "verifier": verifier,
             "sandbox": is_sandbox,
             "uid": principal.user_id,
+            "privacy": privacy if privacy in privacy_mode.MODES else privacy_mode.FULL,
+            "aggregates": bool(aggregates),
             "exp": datetime.now(timezone.utc) + OAUTH_COOKIE_TTL,
         },
         _jwt_secret(),
@@ -206,10 +216,10 @@ async def callback(
         if token.refresh_token:
             connection.refresh_token = token.refresh_token
         connection.instance_url = token.instance_url
-        connection.connected_as = posture
         connection.is_active = True
         org_id = connection.organization_id
         existing_org = await db.get(Organization, org_id)
+        connection.connected_as = privacy_mode.mask_posture(existing_org, posture)
         existing_org.settings = {**(existing_org.settings or {}), "is_sandbox": bool(flow.get("sandbox"))}
         apply_salesforce_name(existing_org, org_name)
     else:
@@ -220,6 +230,9 @@ async def callback(
             is_demo=False,
             settings={"is_sandbox": bool(flow.get("sandbox"))},
         )
+        privacy_mode.set_privacy(
+            org, flow.get("privacy") or privacy_mode.FULL, bool(flow.get("aggregates")), principal.email
+        )
         db.add(org)
         await db.flush()
         db.add(SalesforceConnection(
@@ -228,7 +241,7 @@ async def callback(
             organization_id_sf=sf_org_id,
             access_token=token.access_token,
             refresh_token=token.refresh_token,
-            connected_as=posture,
+            connected_as=privacy_mode.mask_posture(org, posture),
             is_active=True,
         ))
         if not principal.is_admin:
@@ -253,7 +266,7 @@ async def callback(
         context_data={
             "new_org": is_new_org,
             "scopes": settings.SALESFORCE_OAUTH_SCOPES,
-            "connected_as": posture.get("username"),
+            "connected_as": privacy_mode.mask_posture(await db.get(Organization, org_id), posture).get("username"),
             "elevated_permissions": posture.get("elevated_permissions"),
         },
     ))

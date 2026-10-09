@@ -50,6 +50,8 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal } from '@/components/v2/motion'
 import {
   useRestructureLatest,
@@ -163,6 +165,17 @@ const BLAST_META: Record<
 const PAGE_SIZE = 30
 
 export default function RestructurePage() {
+  return (
+    <PrivacyGate
+      feature="restructure"
+      header={<PageHeader icon={Wrench} eyebrow="Optimize · org design" title="Restructure Studio" />}
+    >
+      <RestructureContent />
+    </PrivacyGate>
+  )
+}
+
+function RestructureContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
@@ -254,13 +267,19 @@ export default function RestructurePage() {
 
       <ExplainerCard />
 
-      {runMutation.isError && (
-        <ErrorState message={formatRunError(runMutation.error)} />
-      )}
+      {runMutation.isError &&
+        (isPrivacyModeError(runMutation.error) ? (
+          <PrivacyUnavailable message={runMutation.error.message} />
+        ) : (
+          <ErrorState message={formatRunError(runMutation.error)} />
+        ))}
 
-      {summaryError && (
-        <ErrorState message="Failed to load restructure summary." />
-      )}
+      {summaryError &&
+        (isPrivacyModeError(summaryError) ? (
+          <PrivacyUnavailable message={summaryError.message} />
+        ) : (
+          <ErrorState message="Failed to load restructure summary." />
+        ))}
 
       {summaryLoading && !summary ? (
         <Card variant="bordered">

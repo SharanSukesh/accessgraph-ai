@@ -15,10 +15,23 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
+import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 
 export default function AnomaliesPage() {
+  return (
+    <PrivacyGate
+      feature="anomalies"
+      header={<PageHeader icon={AlertTriangle} title="Anomalies" eyebrow="Attention · detection" />}
+    >
+      <AnomaliesContent />
+    </PrivacyGate>
+  )
+}
+
+function AnomaliesContent() {
   const params = useParams()
   const router = useRouter()
   const orgId = params.orgId as string
@@ -43,6 +56,7 @@ export default function AnomaliesPage() {
   const { data: topUsers } = useTopAnomalousUsers(orgId, 10)
 
   if (error) {
+    if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
     return (
       <ErrorState
         message="Failed to load anomalies. Please try again."
