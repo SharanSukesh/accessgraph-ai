@@ -122,6 +122,7 @@ export default function OrgAnalyzerPage() {
   const params = useParams()
   const orgId = params.orgId as string
   const [tab, setTab] = useState<Tab>('overview')
+  const [brandOpen, setBrandOpen] = useState(false)
 
   const latest = useOrgAnalyzerLatest(orgId)
   const history = useOrgAnalyzerHistory(orgId)
@@ -169,6 +170,10 @@ export default function OrgAnalyzerPage() {
         }
         actions={
           <>
+            <Button variant="secondary" size="md" onClick={() => setBrandOpen(true)}>
+              <Settings2 className="h-4 w-4 mr-2" />
+              Report branding
+            </Button>
             {hasRun && (
               <a
                 href={`${API_BASE}${endpoints.orgAnalyzerReportPdf(orgId)}`}
@@ -198,6 +203,7 @@ export default function OrgAnalyzerPage() {
           </>
         }
       />
+      {brandOpen && <BrandSettingsModal orgId={orgId} onClose={() => setBrandOpen(false)} />}
       </Reveal>
 
       {/* Toast */}
@@ -1730,7 +1736,6 @@ function PriceBookTab({ orgId }: { orgId: string }) {
   const update = useUpdateLicensePriceBook(orgId)
   const [rows, setRows] = useState<PriceBookRow[] | null>(null)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
-  const [brandOpen, setBrandOpen] = useState(false)
 
   const display = rows ?? pb.data?.rows ?? []
 
@@ -1917,13 +1922,6 @@ function PriceBookTab({ orgId }: { orgId: string }) {
               {update.isPending ? 'Saving…' : 'Save price book'}
             </Button>
           )}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setBrandOpen(true)}
-          >
-            <Settings2 className="h-4 w-4 mr-1.5" /> Brand settings
-          </Button>
           {savedMessage && (
             <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
               <Info className="inline h-3.5 w-3.5 mr-1" />
@@ -1932,9 +1930,6 @@ function PriceBookTab({ orgId }: { orgId: string }) {
           )}
         </div>
       </CardContent>
-      {brandOpen && (
-        <BrandSettingsModal orgId={orgId} onClose={() => setBrandOpen(false)} />
-      )}
     </Card>
   )
 }
@@ -2001,7 +1996,7 @@ function BrandSettingsModal({
       >
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold">Brand settings</h2>
+            <h2 className="text-lg font-semibold">Report branding</h2>
             <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
               White-label the PDF report with your firm logo and accent
               color. Leave blank to use the Newton defaults.
