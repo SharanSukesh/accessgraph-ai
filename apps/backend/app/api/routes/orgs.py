@@ -3,7 +3,7 @@ Organization & Sync API Routes
 """
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -250,6 +250,10 @@ async def build_graph(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# A pending/running sync older than this is treated as abandoned.
+SYNC_STALE_AFTER = timedelta(minutes=30)
+
+
 @router.post("/{org_id}/analyze", status_code=status.HTTP_202_ACCEPTED)
 async def run_analysis(
     org_id: str,
@@ -265,6 +269,23 @@ async def run_analysis(
     org = await db.get(Organization, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+
+    # A sync runs this same analysis when it finishes; a second run started
+    # meanwhile only repeats the work. Jobs older than SYNC_STALE_AFTER are
+    # treated as abandoned so a crashed sync can't block analysis forever.
+    since = datetime.now(timezone.utc) - SYNC_STALE_AFTER
+    running = (await db.execute(
+        select(SyncJob.id).where(
+            SyncJob.organization_id == org_id,
+            SyncJob.status.in_([SyncStatus.PENDING, SyncStatus.RUNNING]),
+            SyncJob.created_at >= since,
+        ).limit(1)
+    )).scalar_one_or_none()
+    if running:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A sync is still running for this org and will run the analysis when it finishes.",
+        )
 
     results = {}
 

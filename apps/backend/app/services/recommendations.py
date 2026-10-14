@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -17,8 +17,14 @@ from app.domain.models import (
     RecommendationType,
     UserSnapshot,
 )
+from app.services.replace_lock import lock_for_replace
 
 logger = logging.getLogger(__name__)
+
+
+def _plural(count: int, noun: str) -> str:
+    """'1 sensitive field', '3 sensitive fields'."""
+    return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
 class RecommendationEngine:
@@ -58,10 +64,15 @@ class RecommendationEngine:
             recs = await self._recommendations_from_anomaly(org_id, anomaly)
             recommendations.extend(recs)
 
-        # Persist
+        # Replace in one locked transaction so an overlapping run can't
+        # leave two sets (see services/replace_lock.py).
+        await lock_for_replace(self.db, org_id, "recommendations")
+        await self.db.execute(
+            delete(Recommendation).where(Recommendation.organization_id == org_id)
+        )
         if recommendations:
             self.db.add_all(recommendations)
-            await self.db.commit()
+        await self.db.commit()
 
         logger.info(f"Generated {len(recommendations)} recommendations")
         return recommendations
@@ -97,7 +108,7 @@ class RecommendationEngine:
                 target_entity_type="user",
                 target_entity_id=user.salesforce_id,
                 title=f"Review permission set assignments for {user.name}",
-                description=f"User has {features['num_permission_sets']} direct permission set assignments. Consider consolidating into Permission Set Groups for easier management.",
+                description=f"User has {_plural(features['num_permission_sets'], 'direct permission set assignment')}. Consider consolidating into Permission Set Groups for easier management.",
                 rationale=f"Peers typically use {int(peer_stats.get('peer_medians', {}).get('num_permission_sets', 0))} permission sets. Multiple direct assignments increase management complexity.",
                 impact_summary={
                     "affected_permission_sets": features.get("num_permission_sets", 0),
@@ -118,7 +129,7 @@ class RecommendationEngine:
                 target_entity_type="user",
                 target_entity_id=user.salesforce_id,
                 title=f"Review broad edit permissions for {user.name}",
-                description=f"User has edit access to {features['num_objects_edit']} objects, significantly higher than peer median of {int(peer_stats.get('peer_medians', {}).get('num_objects_edit', 0))}.",
+                description=f"User has edit access to {_plural(features['num_objects_edit'], 'object')}, significantly higher than peer median of {int(peer_stats.get('peer_medians', {}).get('num_objects_edit', 0))}.",
                 rationale="Excessive edit permissions increase risk of unauthorized data modification. Consider least-privilege principle.",
                 impact_summary={
                     "objects_with_edit": features.get("num_objects_edit", 0),
@@ -140,7 +151,7 @@ class RecommendationEngine:
                 target_entity_type="user",
                 target_entity_id=user.salesforce_id,
                 title=f"Remove sensitive field access for {user.name}",
-                description=f"User in {user.department} department has access to {features['num_sensitive_fields']} sensitive fields, which is unusual for this role.",
+                description=f"User in {user.department} department has access to {_plural(features['num_sensitive_fields'], 'sensitive field')}, which is unusual for this role.",
                 rationale="Sensitive fields like SSN, Credit Score should be restricted to necessary roles only.",
                 impact_summary={
                     "sensitive_fields": features.get("num_sensitive_fields", 0),
@@ -161,7 +172,7 @@ class RecommendationEngine:
                 target_entity_type="user",
                 target_entity_id=user.salesforce_id,
                 title=f"Review unique delete permissions for {user.name}",
-                description=f"User has delete access to {features['num_objects_delete']} objects while peers have none. This is a unique permission pattern.",
+                description=f"User has delete access to {_plural(features['num_objects_delete'], 'object')} while peers have none. This is a unique permission pattern.",
                 rationale="Delete permissions should be carefully controlled and reviewed regularly.",
                 impact_summary={
                     "objects_with_delete": features.get("num_objects_delete", 0),

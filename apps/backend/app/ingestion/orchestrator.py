@@ -112,10 +112,6 @@ class SyncOrchestrator:
             persister = SnapshotPersister(self.db)
             counts = await persister.persist_all(org_id, data, sync_job_id)
 
-            # Update job
-            sync_job.status = SyncStatus.COMPLETED
-            sync_job.completed_at = datetime.now(timezone.utc)
-
             # Initialize metadata if it doesn't exist
             if not sync_job.sync_metadata:
                 sync_job.sync_metadata = {}
@@ -133,6 +129,13 @@ class SyncOrchestrator:
 
             # Run AI analysis after successful sync
             await self._run_ai_analysis(org_id, sync_job)
+
+            # Completed only once the analysis has run: until then the org
+            # must not look idle, or an "Analyze" click starts a second,
+            # overlapping run and the UI refreshes before risk scores exist.
+            sync_job.status = SyncStatus.COMPLETED
+            sync_job.completed_at = datetime.now(timezone.utc)
+            await self.db.commit()
 
             return counts
 

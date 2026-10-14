@@ -5,7 +5,8 @@
  * Executive overview of access health
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { Users, AlertTriangle, Shield, Database, Sparkles, Info, LayoutDashboard, ArrowRight } from 'lucide-react'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -18,6 +19,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
 import { rankLabel } from '@/lib/anomalyTypes'
+import { isSyncActive, syncJustFinished } from '@/lib/syncStatus'
 // Grove Refined — motion + chart primitives ported from the /v2
 // prototype. Presentational only.
 import { Reveal, Stagger, StaggerItem, CountUp } from '@/components/v2/motion'
@@ -57,6 +59,20 @@ export default function DashboardPage() {
 
   // Analysis mutation
   const analyzeOrg = useAnalyzeOrg(orgId)
+  const queryClient = useQueryClient()
+
+  // A sync runs the analysis (anomalies, risk, recommendations) when it
+  // finishes. Refresh every tile once it does, so a page opened mid-sync
+  // doesn't keep counting from data loaded before risk scores existed.
+  const latestSyncStatus = syncJobs?.[0]?.status
+  const syncRunning = isSyncActive(latestSyncStatus)
+  const previousSyncStatus = useRef(latestSyncStatus)
+  useEffect(() => {
+    if (syncJustFinished(previousSyncStatus.current, latestSyncStatus)) {
+      queryClient.invalidateQueries()
+    }
+    previousSyncStatus.current = latestSyncStatus
+  }, [latestSyncStatus, queryClient])
 
   // Trigger initial sync if needed
   useEffect(() => {
@@ -116,10 +132,8 @@ export default function DashboardPage() {
   const handleAnalyze = async () => {
     try {
       await analyzeOrg.mutateAsync()
-      // Refetch all AI-related data
-      refetchAnomalies()
-      refetchTopAnomalies()
-      refetchRecommendations()
+      // Refetch everything the analysis feeds, users' risk included.
+      queryClient.invalidateQueries()
     } catch (error) {
       console.error('Analysis failed:', error)
     }
@@ -134,7 +148,7 @@ export default function DashboardPage() {
           title="Overview"
           subtitle="Access health overview for your organization"
           actions={
-            (!anomalies?.length && !recommendations?.length) && (
+            (!anomalies?.length && !recommendations?.length && !syncRunning) && (
               <Button
                 variant="primary"
                 onClick={handleAnalyze}

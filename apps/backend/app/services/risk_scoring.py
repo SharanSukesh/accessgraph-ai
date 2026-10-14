@@ -102,6 +102,7 @@ from app.domain.models import (
     SyncStatus,
     UserSnapshot,
 )
+from app.services.replace_lock import lock_for_replace
 
 logger = logging.getLogger(__name__)
 
@@ -603,6 +604,15 @@ class RiskScoringService:
             except Exception as e:  # noqa: BLE001 — one bad user must not sink the run
                 logger.error("Failed to score user %s: %s", user.name, e, exc_info=True)
 
+        # Replace in one locked transaction so an overlapping run can't
+        # leave two sets of scores (see services/replace_lock.py).
+        await lock_for_replace(self.db, org_id, "risk_scores:user")
+        await self.db.execute(
+            delete(RiskScore).where(
+                RiskScore.organization_id == org_id,
+                RiskScore.entity_type == "user",
+            )
+        )
         if scores:
             self.db.add_all(scores)
         await self.db.commit()
