@@ -59,3 +59,5 @@ summary no longer calls an org "production" when its type is unknown.
   (untested).
 - How to tell it's broken: Download PDF returns 503 "PDF generation
   unavailable", and the logs say WeasyPrint could not import external libraries.
+
+**Railway build settings (handled by the owner on `main` before Thursday's merge):** backend service, Settings, Build: Builder = Dockerfile, root directory `apps/backend`, Dockerfile path `Dockerfile`, no custom start command. Rollback: switch the builder back to its previous value and redeploy.
