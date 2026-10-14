@@ -185,6 +185,16 @@ export default function OrgAnalyzerPage() {
                 Download PDF
               </a>
             )}
+            {hasRun && (
+              <a
+                href={`${API_BASE}${endpoints.orgAnalyzerReportXlsx(orgId)}`}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-grove-border dark:border-grove-border-dk rounded-md hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
+                title="Summary, findings, License Fit, anomalies, user risk, sprawl and data quality as an Excel workbook"
+              >
+                <Download className="h-4 w-4" />
+                Download Excel
+              </a>
+            )}
             <Button
               variant="primary"
               size="md"

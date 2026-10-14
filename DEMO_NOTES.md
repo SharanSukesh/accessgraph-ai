@@ -125,6 +125,24 @@ cross-department access.
 - Before the demo, the Demo orgs page also lists any older `is_demo` orgs
   already in production, so check it once after the merge.
 
+## Graph, exports, explain, Excel (step 6)
+
+- Access graph: a group assignment shows the group node (its edges are the
+  group's net access) with its component sets ("includes") and its muting
+  set (red, "mutes"). Production groups need a **re-sync after deploy**:
+  the sync now reads `PermissionSetAssignment.PermissionSetGroupId`, which
+  links Salesforce's aggregate permission set back to its group. Until
+  then the dev org shows the group node without its components.
+- Object cards show effective access across all sources; a field's Edit
+  is greyed out (with a tooltip) when the object is Read only.
+- CSV export on Anomalies, Users and Priority Actions; PNG and JSON on the
+  Graph Explorer and the user Graph tab.
+- "Why?" on each Object Access row shows the access paths, including what
+  a muting set removed.
+- Health Report → **Download Excel**: Summary, Findings, License Fit,
+  Anomalies, User Risk, Sprawl Summary, Data Quality. Sheets for modules
+  that haven't run say "not run yet". Needs `openpyxl` (in requirements).
+
 ## Backlog (not before Friday)
 
 - Anomaly severity: every top-2% user scores 0.986 or higher on the
