@@ -127,6 +127,12 @@ cross-department access.
 
 ## Backlog (not before Friday)
 
+- Anomaly severity: every top-2% user scores 0.986 or higher on the
+  normalised scale, so all flagged users are "critical". Options:
+  rank-based bands within the flagged set, or drop severity for anomalies
+  and show rank only. Severity should stay "how unusual"; risk level
+  already covers "how much damage".
+
 - Pardot and Marketing Cloud are priced per org, not per seat. The
   catalog stores them as per-seat monthly prices ($1,250 and $400), so any
   per-seat savings line on them overstates savings. Treat them as org-level

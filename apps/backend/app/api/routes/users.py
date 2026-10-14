@@ -489,7 +489,7 @@ async def list_anomalies(
     if category:
         query = query.where(AccessAnomaly.category == category)
 
-    query = query.order_by(AccessAnomaly.anomaly_score.desc()).limit(limit)
+    query = query.order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id).limit(limit)
 
     result = await db.execute(query)
     anomaly_user_pairs = result.all()
@@ -552,7 +552,7 @@ async def get_top_anomalous_users(
             AccessAnomaly.organization_id == org_id,
             UserSnapshot.organization_id == org_id,
         )
-        .order_by(AccessAnomaly.anomaly_score.desc())
+        .order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
         .limit(limit)
     )
 

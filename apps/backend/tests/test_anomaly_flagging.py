@@ -135,3 +135,14 @@ def test_exclusive_access_reason_names_the_grants():
     )
     assert reasons[0].startswith("Is the only user in the org with 2 permissions, including "
                                  "Edit on field Compensation__c.Salary__c, Delete on Compensation__c")
+
+
+@pytest.mark.asyncio
+async def test_tied_scores_rank_by_user_id(async_db_session, monkeypatch):
+    org_id = await _uniform_org(async_db_session, admin_profile=False)
+    monkeypatch.setattr(ad._MahalanobisGMMAvgDetector, "fit", lambda self, X: None)
+    monkeypatch.setattr(ad._MahalanobisGMMAvgDetector, "score", lambda self, X: np.zeros(len(X)))
+
+    anomalies = await AnomalyDetectionService(async_db_session).detect_anomalies(org_id)
+
+    assert [a.user_id for a in anomalies] == ["005u0"]

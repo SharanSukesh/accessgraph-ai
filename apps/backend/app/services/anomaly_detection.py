@@ -449,7 +449,10 @@ class AnomalyDetectionService:
         # whether or not a reason template matches or they have peers.
         n_users = len(X)
         k = max(1, int(n_users * DEFAULT_ANOMALY_FRACTION))
-        top_k_idx = np.argsort(-raw_scores, kind="stable")[:k]
+        # Ties (common with rank averages) break by Salesforce user id, the
+        # same secondary order the anomaly list endpoints use, so the
+        # displayed order always matches the stored rank.
+        top_k_idx = np.lexsort((np.array([u.salesforce_id for u in users]), -raw_scores))[:k]
 
         org_medians = df[feature_cols].median()
         org_stds = df[feature_cols].std(ddof=0)
