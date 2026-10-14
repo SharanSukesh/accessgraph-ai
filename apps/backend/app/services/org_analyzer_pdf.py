@@ -57,7 +57,6 @@ SEVERITY_ORDER = [
 SEVERITY_LABEL = {s: s.value.capitalize() for s in SEVERITY_ORDER}
 SEV_RANK = {s: i for i, s in enumerate(SEVERITY_ORDER)}
 
-HEALTH_BANDS = [(85, "Healthy"), (70, "Fair"), (50, "Needs attention"), (0, "At risk")]
 
 
 def _esc(value: object) -> str:
@@ -114,7 +113,10 @@ def _sev_chip(sev: FindingSeverity) -> str:
 
 
 def _health_band(score: float) -> str:
-    return next(label for threshold, label in HEALTH_BANDS if score >= threshold)
+    # Same bands as the analyzer's executive summary, so the two never disagree.
+    from app.services.org_analyzer import _health_band as analyzer_band
+
+    return analyzer_band(int(score)).capitalize()
 
 
 def _stat(label: str, value: str, note: str = "") -> str:
@@ -161,7 +163,7 @@ def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFindi
         if (firm_logo or firm_name) else ""
     )
     snapshot_at = snapshot.snapshot_at or datetime.now(timezone.utc)
-    meter_color = charts.SERIES if score >= 70 else (charts.WARNING if score >= 50 else charts.CRITICAL)
+    meter_color = charts.SERIES if score >= 75 else (charts.WARNING if score >= 60 else charts.CRITICAL)
 
     kpis = "".join([
         _stat("Findings", f"{len(findings)}", f"{urgent} critical or high" if urgent else "None critical or high"),

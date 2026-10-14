@@ -317,7 +317,7 @@ def _compose_executive_summary(
         )
     else:
         edition_prefix = (
-            f"This {ctx.org_type or 'production'} Salesforce org "
+            f"This {ctx.org_type + ' ' if ctx.org_type else ''}Salesforce org "
         )
 
     # Top opportunity = highest-savings active finding
