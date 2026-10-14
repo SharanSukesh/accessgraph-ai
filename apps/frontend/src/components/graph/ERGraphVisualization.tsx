@@ -149,6 +149,20 @@ export function ERGraphVisualization({
           shape: 'round-rectangle',
         },
       },
+      // Permission set group nodes — deeper mint with a double border, so the
+      // group reads as a container for the sets hanging off it.
+      {
+        selector: 'node[type="permission_set_group"]',
+        style: {
+          'background-color': '#3fa47a',
+          'border-color': '#094230',
+          'border-width': 4,
+          'border-style': 'double',
+          shape: 'round-rectangle',
+          color: '#fdfaf1',
+          'text-outline-color': '#146b4a',
+        },
+      },
       // Muting permission set nodes — distinct red treatment so they read as
       // "removes access" at a glance, not just another permission set.
       {
@@ -275,6 +289,37 @@ export function ERGraphVisualization({
       // regular grant edges. Communicates "this path removes access".
       {
         selector: 'edge[type="ASSIGNED_MUTING_PERMISSION_SET"]',
+        style: {
+          'line-color': '#dc2626',
+          'target-arrow-color': '#dc2626',
+          'line-style': 'dashed',
+          'line-dash-pattern': [6, 4],
+          width: 1.75,
+        },
+      },
+      // ASSIGNED_PERMISSION_SET_GROUP edge — matches the group node
+      {
+        selector: 'edge[type="ASSIGNED_PERMISSION_SET_GROUP"]',
+        style: {
+          'line-color': '#3fa47a',
+          'target-arrow-color': '#146b4a',
+          width: 2,
+        },
+      },
+      // INCLUDES_PERMISSION_SET edge — group to component set, dotted:
+      // display only, the group's own edges carry its access.
+      {
+        selector: 'edge[type="INCLUDES_PERMISSION_SET"]',
+        style: {
+          'line-color': '#6bbf95',
+          'target-arrow-color': '#146b4a',
+          'line-style': 'dotted',
+          width: 1.5,
+        },
+      },
+      // MUTES edge — group to its muting set, red dashed.
+      {
+        selector: 'edge[type="MUTES"]',
         style: {
           'line-color': '#dc2626',
           'target-arrow-color': '#dc2626',

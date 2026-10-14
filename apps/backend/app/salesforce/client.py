@@ -2159,7 +2159,7 @@ class SalesforceAPIClient:
             List of SalesforcePermissionSetAssignment objects
         """
         soql = """
-            SELECT Id, AssigneeId, PermissionSetId
+            SELECT Id, AssigneeId, PermissionSetId, PermissionSetGroupId
             FROM PermissionSetAssignment
             WHERE Assignee.IsActive = true
         """

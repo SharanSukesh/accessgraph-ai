@@ -41,6 +41,12 @@ const nodeLegend: LegendItem[] = [
     description: 'Permission sets granting additional access',
   },
   {
+    label: NODE_TYPES.PERMISSION_SET_GROUP.label,
+    color: 'bg-[#3fa47a]',
+    shape: 'rounded-rectangle',
+    description: "Permission set groups; their access edges show the group's net access after muting",
+  },
+  {
     label: NODE_TYPES.MUTING_PERMISSION_SET.label,
     color: 'bg-red-500',
     shape: 'rounded-rectangle',
@@ -84,9 +90,19 @@ const edgeLegend: LegendItem[] = [
     description: 'User has permission set',
   },
   {
-    label: EDGE_TYPES.HAS_MUTING_PERMISSION_SET.label,
+    label: EDGE_TYPES.HAS_PERMISSION_SET_GROUP.label,
+    color: 'border-[#3fa47a]',
+    description: 'User has permission set group',
+  },
+  {
+    label: EDGE_TYPES.INCLUDES_PERMISSION_SET.label,
+    color: 'border-[#6bbf95]',
+    description: 'Permission set included in the group (dotted)',
+  },
+  {
+    label: EDGE_TYPES.MUTES.label,
     color: 'border-red-600',
-    description: 'User has muting permission set (removes access)',
+    description: "Group's muting set removes access its other sets grant (dashed)",
   },
   {
     label: EDGE_TYPES.HAS_ROLE.label,
