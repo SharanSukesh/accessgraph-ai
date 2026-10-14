@@ -167,7 +167,7 @@ def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFindi
 
     kpis = "".join([
         _stat("Findings", f"{len(findings)}", f"{urgent} critical or high" if urgent else "None critical or high"),
-        _stat("Estimated annual savings", _fmt_money_cents(savings), "From the configured price book"),
+        _stat("Estimated annual savings", _fmt_money_cents(savings), "Published list prices; negotiated rates replace them"),
         _stat("Active users", _compact(metrics.get("total_active_users") or 0)),
         _stat("Change since last run", change_value, change_note),
     ])

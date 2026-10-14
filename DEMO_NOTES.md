@@ -87,3 +87,21 @@ summary no longer calls an org "production" when its type is unknown.
   permission set in the dev org and sync. The code assumes Salesforce reports
   muting sets as PermissionSet with Type "Muting", like the rest of the
   codebase. Unverified against a live org.
+
+## Anomaly flagging (after step 3 review)
+
+The detector flags exactly the top 2% of active users by ensemble score
+(k = max(1, int(0.02 × users))). The old `score > 0.5` path is gone; on
+min-max-normalised rank averages it admitted about half the org, and the
+reason templates had been acting as the real filter. A top-k user is
+never dropped: users with no role or profile peers are compared against
+the whole org, and a fallback reason names the features that put them in
+the top 2%. New reason templates: exclusive access, last login,
+cross-department access.
+
+## Backlog (not before Friday)
+
+- Pardot and Marketing Cloud are priced per org, not per seat. The
+  catalog stores them as per-seat monthly prices ($1,250 and $400), so any
+  per-seat savings line on them overstates savings. Treat them as org-level
+  SKUs (no per-user math) or exclude them from seat findings.

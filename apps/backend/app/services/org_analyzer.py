@@ -61,11 +61,10 @@ logger = logging.getLogger(__name__)
 # Defaults — overridable per-org via the license_price_book table.
 # ---------------------------------------------------------------------------
 
-# Default price catalog — approximate Salesforce Enterprise-tier LIST
-# prices as published by Salesforce. Real customer pricing varies with
-# contract terms, discounts, and bundles, so these are starting points
-# that the consultant overrides via the price-book editor with the
-# customer's negotiated rates.
+# Default price catalog — Salesforce published list prices. Real
+# customer pricing varies with contract terms, discounts, and bundles, so
+# these are starting points that the consultant overrides via the
+# price-book editor with the customer's negotiated rates.
 #
 # Lookup is substring-based on the SKU label (case-insensitive). The
 # table is ordered most-specific → least-specific; the FIRST pattern

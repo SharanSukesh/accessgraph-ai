@@ -1792,8 +1792,8 @@ function PriceBookTab({ orgId }: { orgId: string }) {
           <span className="font-semibold text-primary-700 dark:text-primary-300">In org</span>{' '}
           are the actual{' '}
           <code>UserLicense</code> + <code>PermissionSetLicense</code>{' '}
-          records this org owns. Default prices come from a built-in
-          catalog of Salesforce Enterprise list prices; rows flagged{' '}
+          records this org owns. Default prices are Salesforce&apos;s published
+          list prices; negotiated contract rates replace them. Rows flagged{' '}
           <span className="font-semibold text-green-700 dark:text-green-400">Custom</span>{' '}
           have been overridden by you. The{' '}
           <span className="font-semibold">Billed</span> toggle controls

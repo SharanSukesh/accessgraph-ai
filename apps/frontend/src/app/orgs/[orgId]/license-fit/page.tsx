@@ -263,7 +263,7 @@ function LicenseFitContent() {
                   {summary.source_diagnostics?.price_book_source ===
                   'org_override'
                     ? 'per-org price book (customer contract prices)'
-                    : 'Salesforce list prices from the default catalog — your customer contract may differ. Edit prices in Org Analyzer → Price Book to reflect actuals.'}
+                    : 'Salesforce published list prices (per user per month). Negotiated contract rates replace them: enter them in Org Analyzer → Price Book.'}
                 </div>
               </div>
             </div>
