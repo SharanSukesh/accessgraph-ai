@@ -17,7 +17,7 @@ or 3-way ensembles is staged in REPORT.md § 8.
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 try:
     import numpy as np
@@ -466,14 +466,21 @@ class AnomalyDetectionService:
             )
             peer_stats["rank"] = rank
             peer_stats["users_scored"] = n_users
-            reasons = self._generate_reasons(
+            org_z = {
+                col: (float(feature_data[idx][col]) - float(org_medians[col])) / float(org_stds[col])
+                for col in feature_cols if float(org_stds[col]) > 0
+            }
+            ranked = self._ranked_reasons(
                 feature_data[idx],
                 peer_stats,
                 unique_grants=unique_grants.get(user.salesforce_id, []),
                 top_features=self._top_contributing_features(
                     feature_data[idx], org_medians, org_stds, feature_cols
                 ),
+                org_z=org_z,
             )
+            reasons = [text for _, text in ranked]
+            peer_stats["anomaly_type"] = ranked[0][0]
             severity = self._determine_severity(score, len(reasons))
 
             anomalies.append(AccessAnomaly(
@@ -741,13 +748,32 @@ class AnomalyDetectionService:
         peer_stats: Dict,
         unique_grants: Optional[List[tuple]] = None,
         top_features: Optional[List[str]] = None,
+        org_z: Optional[Dict[str, float]] = None,
     ) -> List[str]:
-        """Generate context-aware anomaly reasons with peer comparison details.
+        """Reason texts, strongest first (see _ranked_reasons)."""
+        return [text for _, text in self._ranked_reasons(features, peer_stats, unique_grants, top_features, org_z)]
+
+    def _ranked_reasons(
+        self,
+        features: Dict,
+        peer_stats: Dict,
+        unique_grants: Optional[List[tuple]] = None,
+        top_features: Optional[List[str]] = None,
+        org_z: Optional[Dict[str, float]] = None,
+    ) -> List[Tuple[str, str]]:
+        """(anomaly type, reason) pairs with peer comparison details,
+        strongest first: by how far the reason's feature sits above the org,
+        in standard deviations (org_z). The first pair's type labels the
+        anomaly.
 
         Always returns at least one reason: when no template matches, the
         fallback names the features that put the user in the top 2%.
         """
-        reasons = []
+        reasons: List[Tuple[float, int, str, str]] = []
+
+        def add(kind: str, feature: Optional[str], text: str) -> None:
+            strength = (org_z or {}).get(feature, 0.0) if feature else float("-inf")
+            reasons.append((strength, len(reasons), kind, text))
 
         peer_count = peer_stats.get("peer_count", 0)
         peer_group = peer_stats.get("peer_group", "org")
@@ -766,7 +792,7 @@ class AnomalyDetectionService:
         unique_count = features.get("unique_access_count", 0)
         if unique_count > 0 and unique_count > medians.get("unique_access_count", 0):
             examples = ", ".join(_format_grant(g) for g in (unique_grants or [])[:3])
-            reasons.append(
+            add("exclusive_access", "unique_access_count",
                 f"Is the only user in the org with {unique_count} permission{'s' if unique_count != 1 else ''}"
                 + (f", including {examples}" if examples else "")
                 + ". If this account is lost or disabled, nobody else can do this work."
@@ -776,12 +802,12 @@ class AnomalyDetectionService:
         days = features.get("last_login_days_ago", 0)
         peer_days = medians.get("last_login_days_ago", 0)
         if days >= NEVER_LOGGED_IN_DAYS and peer_days < NEVER_LOGGED_IN_DAYS:
-            reasons.append(
+            add("dormant_access", "last_login_days_ago",
                 f"Has never logged in, yet the account is active and keeps all its access. "
                 f"{peer_context}, whose median last login was {int(peer_days)} days ago."
             )
         elif DORMANT_DAYS <= days < NEVER_LOGGED_IN_DAYS and days > peer_days:
-            reasons.append(
+            add("dormant_access", "last_login_days_ago",
                 f"Last logged in {days} days ago vs peer median of {int(peer_days)} days. "
                 f"{peer_context}; the account keeps its access while unused."
             )
@@ -791,7 +817,7 @@ class AnomalyDetectionService:
         peer_ratio = medians.get("cross_department_access_ratio", 0.0)
         if ratio - peer_ratio >= CROSS_DEPARTMENT_GAP:
             dept = features.get("department") or "this user's"
-            reasons.append(
+            add("role_mismatch", "cross_department_access_ratio",
                 f"{round(ratio * 100)}% of the objects and fields this {dept} user can read belong to other "
                 f"departments vs peer median of {round(peer_ratio * 100)}%. {peer_context}."
             )
@@ -800,35 +826,35 @@ class AnomalyDetectionService:
         if deviations.get("num_permission_sets", 0) > 2.0:
             user_val = features["num_permission_sets"]
             peer_val = medians.get("num_permission_sets", 0)
-            reasons.append(
+            add("permission_accumulation", "num_permission_sets",
                 f"Has {user_val} permission sets vs peer median of {int(peer_val)}. {peer_context}, this user has {int((user_val/max(peer_val, 1) - 1) * 100)}% more permission sets than typical."
             )
 
         if deviations.get("num_objects_edit", 0) > 1.5:
             user_val = features["num_objects_edit"]
             peer_val = medians.get("num_objects_edit", 0)
-            reasons.append(
+            add("over_privilege", "num_objects_edit",
                 f"Can edit {user_val} objects vs peer median of {int(peer_val)}. {peer_context}, this is {int((user_val/max(peer_val, 1) - 1) * 100)}% more edit access."
             )
 
         if deviations.get("num_objects_delete", 0) > 1.0 and features["num_objects_delete"] > 0:
             user_val = features["num_objects_delete"]
             peer_val = medians.get("num_objects_delete", 0)
-            reasons.append(
+            add("over_privilege", "num_objects_delete",
                 f"Can delete from {user_val} objects vs peer median of {int(peer_val)}. {peer_context}, this elevated delete access is unusual."
             )
 
         if features["num_sensitive_fields"] > medians.get("num_sensitive_fields", 0) and features["num_sensitive_fields"] > 0:
             user_val = features["num_sensitive_fields"]
             peer_val = medians.get("num_sensitive_fields", 0)
-            reasons.append(
+            add("over_privilege", "num_sensitive_fields",
                 f"Accesses {user_val} sensitive fields vs peer median of {int(peer_val)}. {peer_context}, this sensitive data access requires review."
             )
 
         if features["num_sensitive_objects"] > medians.get("num_sensitive_objects", 0) and features["num_sensitive_objects"] > 0:
             user_val = features["num_sensitive_objects"]
             peer_val = medians.get("num_sensitive_objects", 0)
-            reasons.append(
+            add("over_privilege", "num_sensitive_objects",
                 f"Accesses {user_val} sensitive objects vs peer median of {int(peer_val)}. {peer_context}, unusual sensitive object access detected."
             )
 
@@ -839,17 +865,18 @@ class AnomalyDetectionService:
             if peer_group == "org":
                 position = f"{peer_context}. {position}"
             if top_features:
-                reasons.append(
+                add("unusual_access", None,
                     f"{position} by the anomaly model on the combination of its access features. "
                     f"Furthest above the org: {'; '.join(top_features)}."
                 )
             else:
-                reasons.append(
+                add("unusual_access", None,
                     f"{position} by the anomaly model on the combination of its access features; "
                     f"no single feature stands out."
                 )
 
-        return reasons[:5]  # Top 5 most significant reasons
+        reasons.sort(key=lambda r: (-r[0], r[1]))
+        return [(kind, text) for _, _, kind, text in reasons[:5]]  # Top 5 most significant reasons
 
     def _determine_severity(self, score: float, num_reasons: int) -> AnomalySeverity:
         """Determine severity level"""

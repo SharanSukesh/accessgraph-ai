@@ -42,6 +42,11 @@ USD = '"$"#,##0'
 USD_CENTS = '"$"#,##0.00'
 PCT = '0.0"%"'
 HEADER_FILL = PatternFill("solid", fgColor="E8F1EC")
+ANOMALY_TYPE_LABELS = {
+    "exclusive_access": "Exclusive access", "role_mismatch": "Role mismatch",
+    "permission_accumulation": "Permission accumulation", "over_privilege": "Over-privilege",
+    "dormant_access": "Dormant access", "unusual_access": "Unusual access",
+}
 PRICE_NOTE = "Savings use Salesforce's published list prices; negotiated rates replace them where entered."
 
 
@@ -180,7 +185,8 @@ async def _license_fit(ws: Worksheet, db: AsyncSession, ctx: ReportContext, user
 
 async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed: bool) -> None:
     columns = [
-        Column("Rank", 7, "0"), Column("User", 24), Column("Category", 11), Column("Severity", 11),
+        Column("Rank", 7, "0"), Column("User", 24), Column("Category", 11), Column("Type", 24),
+        Column("Severity", 11),
         Column("Anomaly score", 14, "0.000"), Column("Reasons", 100, wrap=True),
     ]
     if not users_allowed:
@@ -193,7 +199,9 @@ async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed
         .order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
     )).all()
     _table(ws, columns, (
-        ((a.peer_stats or {}).get("rank"), name, a.category or "access", _value(a.severity),
+        ((a.peer_stats or {}).get("rank"), name, a.category or "access",
+         ANOMALY_TYPE_LABELS.get((a.peer_stats or {}).get("anomaly_type"), "") if a.category != "session" else "Session",
+         _value(a.severity),
          a.anomaly_score, "\n".join(a.reasons or []))
         for a, name in rows
     ), "No anomalies flagged.")

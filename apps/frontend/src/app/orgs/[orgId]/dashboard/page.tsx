@@ -17,6 +17,7 @@ import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
+import { rankLabel } from '@/lib/anomalyTypes'
 // Grove Refined — motion + chart primitives ported from the /v2
 // prototype. Presentational only.
 import { Reveal, Stagger, StaggerItem, CountUp } from '@/components/v2/motion'
@@ -326,11 +327,13 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="text-right">
-                        <p className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
-                          {anomaly.anomalyScore.toFixed(1)}
+                        <p className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+                          {rankLabel(anomaly.rank, anomaly.usersScored) ?? anomaly.anomalyScore.toFixed(2)}
                         </p>
-                        <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-                          score
+                        <p className="text-xs tabular-nums text-grove-ink/55 dark:text-grove-ink-dk/55">
+                          {rankLabel(anomaly.rank, anomaly.usersScored)
+                            ? `score ${anomaly.anomalyScore.toFixed(2)}`
+                            : 'score'}
                         </p>
                       </div>
                       <SeverityBadge severity={anomaly.severity} />

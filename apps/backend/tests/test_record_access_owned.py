@@ -10,7 +10,7 @@ from tests.test_demo_orgs import _cookie, _users, client  # noqa: F401  (fixture
 @pytest.mark.asyncio
 async def test_unsynced_objects_report_null_owned_records(client, async_db_session):  # noqa: F811
     admin, _ = await _users(async_db_session)
-    org = Organization(name="Acme", is_demo=True)
+    org = Organization(name="Acme", is_demo=False)
     async_db_session.add(org)
     await async_db_session.flush()
     async_db_session.add_all([

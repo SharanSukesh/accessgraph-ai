@@ -38,6 +38,8 @@ interface Anomaly {
     deviation: number
   }
   detectedAt: string
+  rank?: number | null
+  usersScored?: number | null
 }
 
 interface TopAnomalousUser {
@@ -48,6 +50,9 @@ interface TopAnomalousUser {
   severity: string
   topReasons: string[]
   riskScore?: number
+  anomalyType?: string | null
+  rank?: number | null
+  usersScored?: number | null
 }
 
 // Query Keys

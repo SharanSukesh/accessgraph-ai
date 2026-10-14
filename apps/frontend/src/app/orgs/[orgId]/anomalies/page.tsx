@@ -11,6 +11,7 @@ import { AlertTriangle, Filter, Search, User, Calendar, Info, Download } from 'l
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { exportAnomaliesToCSV, exportStamp } from '@/lib/utils/exports'
+import { ANOMALY_TYPE_FILTERS, anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { Badge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -239,12 +240,11 @@ function AnomaliesContent() {
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Types</option>
-              <option value="excessive_permissions">Excessive Permissions</option>
-              <option value="unusual_access">Unusual Access</option>
-              <option value="dormant_user">Dormant User</option>
-              <option value="privilege_escalation">Privilege Escalation</option>
-              <option value="sensitive_data">Sensitive Data Access</option>
-              <option value="session_anomaly">Session anomaly</option>
+              {ANOMALY_TYPE_FILTERS.map((t) => (
+                <option key={t} value={t}>
+                  {anomalyTypeLabel(t)}
+                </option>
+              ))}
             </select>
           </div>
         </CardContent>
@@ -288,14 +288,28 @@ function AnomaliesContent() {
                                 Access
                               </Badge>
                             )}
-                            <Badge variant="info" size="sm">
-                              {anomaly.type?.replace(/_/g, ' ')}
-                            </Badge>
+                            {anomaly.category !== 'session' && anomalyTypeLabel(anomaly.type) && (
+                              <Badge variant="info" size="sm">
+                                {anomalyTypeLabel(anomaly.type)}
+                              </Badge>
+                            )}
                           </div>
                           <h3 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
                             {anomaly.title}
                           </h3>
                         </div>
+                        {typeof anomaly.score === 'number' && (
+                          <div className="ml-3 shrink-0 text-right">
+                            <div className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+                              {rankLabel(anomaly.rank, anomaly.usersScored) ?? anomaly.score.toFixed(2)}
+                            </div>
+                            {rankLabel(anomaly.rank, anomaly.usersScored) && (
+                              <div className="text-xs tabular-nums text-grove-ink/55 dark:text-grove-ink-dk/55">
+                                score {anomaly.score.toFixed(2)}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-3">
                         {anomaly.description}
@@ -358,7 +372,7 @@ function AnomaliesContent() {
                     Type
                   </div>
                   <div className="text-sm text-grove-ink dark:text-grove-ink-dk">
-                    {selectedAnomaly.type?.replace(/_/g, ' ')}
+                    {anomalyTypeLabel(selectedAnomaly.type)}
                   </div>
                 </div>
 
@@ -427,14 +441,20 @@ function AnomaliesContent() {
                               {user.userName}
                             </div>
                             <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-                              {user.anomalyCount} anomalies
+                              {anomalyTypeLabel(user.anomalyType) ?? 'Anomaly'}
                             </div>
                           </div>
                         </div>
-                        <div className="v2-num text-2xl font-bold text-red-600 dark:text-red-400">
-                          {typeof user.anomalyScore === 'number'
-                            ? user.anomalyScore.toFixed(2)
-                            : user.anomalyScore}
+                        <div className="text-right">
+                          <div className="v2-num text-xl font-bold text-red-600 dark:text-red-400">
+                            {rankLabel(user.rank, user.usersScored) ??
+                              (typeof user.anomalyScore === 'number' ? user.anomalyScore.toFixed(2) : user.anomalyScore)}
+                          </div>
+                          {rankLabel(user.rank, user.usersScored) && typeof user.anomalyScore === 'number' && (
+                            <div className="text-xs tabular-nums text-grove-ink/55 dark:text-grove-ink-dk/55">
+                              score {user.anomalyScore.toFixed(2)}
+                            </div>
+                          )}
                         </div>
                       </button>
                     ))}

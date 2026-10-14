@@ -33,6 +33,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { MaskedUsersBanner, PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { isPrivacyModeError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { DEMO_UNAVAILABLE_MESSAGE, unavailableForDemo } from '@/lib/demoOrg'
 import { privacyModeOf } from '@/lib/privacy'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -71,7 +72,9 @@ function UserDetailContent() {
   const userId = params.userId as string
 
   const [activeTab, setActiveTab] = useState('overview')
-  const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
+  const { currentOrg } = useAuth()
+  const masked = privacyModeOf(currentOrg) === 'masked'
+  const recordsUnavailable = unavailableForDemo(currentOrg?.is_demo, 'records')
   const [selectedObjects, setSelectedObjects] = useState<string[]>([])
   const [selectedGraphNode, setSelectedGraphNode] = useState<any>(null)
 
@@ -223,10 +226,12 @@ function UserDetailContent() {
             <FileText className="h-4 w-4 mr-2" />
             Field Access
           </TabsTrigger>
-          <TabsTrigger value="records">
-            <Shield className="h-4 w-4 mr-2" />
-            Record Access
-          </TabsTrigger>
+          <span title={recordsUnavailable ? DEMO_UNAVAILABLE_MESSAGE : undefined}>
+            <TabsTrigger value="records" disabled={recordsUnavailable}>
+              <Shield className="h-4 w-4 mr-2" />
+              Record Access
+            </TabsTrigger>
+          </span>
           <TabsTrigger value="graph">
             <Network className="h-4 w-4 mr-2" />
             Graph

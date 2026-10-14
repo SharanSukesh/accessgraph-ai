@@ -75,3 +75,13 @@ async def ensure_live_org(db: AsyncSession, org_id: str, module: str) -> None:
             f"{module} needs a live Salesforce connection, so it isn't available "
             "for a demo org. This org's data is synthetic."
         )
+
+
+async def refuse_demo_org(db: AsyncSession, org_id: str, module: str) -> None:
+    """Route guard: HTTP 409 with the demo-org message."""
+    from fastapi import HTTPException
+
+    try:
+        await ensure_live_org(db, org_id, module)
+    except DemoOrgUnsupported as exc:
+        raise HTTPException(status_code=409, detail=str(exc))

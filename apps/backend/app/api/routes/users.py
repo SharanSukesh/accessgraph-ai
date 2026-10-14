@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
@@ -129,68 +129,71 @@ class RecommendationStatusUpdate(BaseModel):
 # ============================================================================
 
 
+RISK_LEVEL_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
 @router.get("/orgs/{org_id}/users")
 async def list_users(
     org_id: str,
     is_active: Optional[bool] = None,
     department: Optional[str] = None,
-    limit: int = Query(100, le=1000),
+    search: Optional[str] = None,
+    riskLevel: Optional[str] = Query(None, description="critical | high | medium | low"),
+    sort: str = Query("risk", description="risk (highest first) or name"),
+    limit: int = Query(5000, le=5000),
     db: AsyncSession = Depends(get_database),
 ):
-    """List users in organization"""
+    """List users in organization, highest risk first by default.
+
+    Profiles, roles and each user's latest risk score are loaded in bulk
+    rather than per user.
+    """
     from app.domain.models import ProfileSnapshot, RoleSnapshot, RiskScore
 
     query = select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
-
     if is_active is not None:
         query = query.where(UserSnapshot.is_active == is_active)
     if department:
         query = query.where(UserSnapshot.department == department)
+    if search and search.strip():
+        needle = f"%{search.strip().lower()}%"
+        query = query.where(or_(
+            func.lower(UserSnapshot.name).like(needle),
+            func.lower(UserSnapshot.username).like(needle),
+            func.lower(UserSnapshot.email).like(needle),
+        ))
+    users = (await db.execute(query)).scalars().all()
 
-    query = query.limit(limit)
+    profiles = dict((await db.execute(
+        select(ProfileSnapshot.salesforce_id, ProfileSnapshot.name)
+        .where(ProfileSnapshot.organization_id == org_id)
+    )).all())
+    roles = dict((await db.execute(
+        select(RoleSnapshot.salesforce_id, RoleSnapshot.name)
+        .where(RoleSnapshot.organization_id == org_id)
+    )).all())
+    latest = (
+        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
+        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        .group_by(RiskScore.entity_id)
+        .subquery()
+    )
+    risks = {
+        r.entity_id: r
+        for r in (await db.execute(
+            select(RiskScore).join(
+                latest,
+                (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at),
+            ).where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        )).scalars().all()
+    }
 
-    result = await db.execute(query)
-    users = result.scalars().all()
-
-    # Build response with role, profile, and risk data
     user_list = []
     for u in users:
-        # Get profile name
-        profile_name = None
-        if u.profile_id:
-            profile_query = select(ProfileSnapshot).where(
-                ProfileSnapshot.organization_id == org_id,
-                ProfileSnapshot.salesforce_id == u.profile_id
-            )
-            profile_result = await db.execute(profile_query)
-            profile = profile_result.scalar_one_or_none()
-            if profile:
-                profile_name = profile.name
-
-        # Get role name
-        role_name = None
-        if u.user_role_id:
-            role_query = select(RoleSnapshot).where(
-                RoleSnapshot.organization_id == org_id,
-                RoleSnapshot.salesforce_id == u.user_role_id
-            )
-            role_result = await db.execute(role_query)
-            role = role_result.scalar_one_or_none()
-            if role:
-                role_name = role.name
-
-        # Get risk level
-        risk_level = None
-        risk_query = select(RiskScore).where(
-            RiskScore.organization_id == org_id,
-            RiskScore.entity_type == "user",
-            RiskScore.entity_id == u.salesforce_id
-        ).order_by(RiskScore.calculated_at.desc()).limit(1)
-        risk_result = await db.execute(risk_query)
-        risk = risk_result.scalar_one_or_none()
-        if risk:
-            risk_level = risk.risk_level.value
-
+        risk = risks.get(u.salesforce_id)
+        risk_level = risk.risk_level.value if risk else None
+        if riskLevel and risk_level != riskLevel.lower():
+            continue
         user_list.append({
             "id": u.id,
             "salesforceUserId": u.salesforce_id,
@@ -202,12 +205,22 @@ async def list_users(
             "title": u.title,
             "isActive": u.is_active,
             "is_active": u.is_active,
-            "role": role_name,
-            "profile": profile_name,
+            "role": roles.get(u.user_role_id) if u.user_role_id else None,
+            "profile": profiles.get(u.profile_id) if u.profile_id else None,
             "risk": risk_level,
+            "riskLevel": risk_level,
+            "riskScore": round(risk.risk_score, 1) if risk else None,
+            "lastLoginDate": u.last_login_at.isoformat() if u.last_login_at else None,
         })
 
-    return user_list
+    if sort == "name":
+        user_list.sort(key=lambda r: (r["name"] or "").lower())
+    else:
+        # Highest risk first; unscored users last; ties by name.
+        user_list.sort(key=lambda r: (
+            r["riskScore"] is None, -(r["riskScore"] or 0), (r["name"] or "").lower(),
+        ))
+    return user_list[:limit]
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}")
@@ -280,7 +293,7 @@ async def get_user(
         "role": role_name,
         "profile": profile_name,
         "riskLevel": risk_level,
-        "lastLoginDate": None,  # We don't have this data yet
+        "lastLoginDate": user.last_login_at.isoformat() if user.last_login_at else None,
     }
 
 
@@ -467,6 +480,8 @@ async def list_anomalies(
     org_id: str,
     severity: Optional[str] = None,
     category: Optional[str] = None,
+    type: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = Query(100, le=1000),
     db: AsyncSession = Depends(get_database),
 ):
@@ -474,6 +489,8 @@ async def list_anomalies(
 
     `category` filter accepts "access" (ML permission-based detector) or
     "session" (LoginHistory rule-based detector). Omit to see both.
+    `type` matches the anomaly type shown on each card; `search` matches
+    the user's name and the reason text.
     """
     query = (
         select(AccessAnomaly, UserSnapshot.name)
@@ -489,7 +506,7 @@ async def list_anomalies(
     if category:
         query = query.where(AccessAnomaly.category == category)
 
-    query = query.order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id).limit(limit)
+    query = query.order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
 
     result = await db.execute(query)
     anomaly_user_pairs = result.all()
@@ -499,7 +516,7 @@ async def list_anomalies(
             return f"Session anomaly detected for {user_name}"
         return f"Anomalous access pattern detected for {user_name}"
 
-    return [
+    rows = [
         {
             "id": a.id,
             "userId": a.user_id,  # Frontend expects camelCase
@@ -516,12 +533,24 @@ async def list_anomalies(
             # Type mapping: session anomalies get their own type so the
             # frontend legend + filter dropdown group them separately from
             # the ML permission anomalies.
-            "type": "session_anomaly" if a.category == "session" else "excessive_permissions",
+            # Access anomalies are typed by their strongest reason; rows
+            # from before that existed fall back to the old generic type.
+            "type": "session_anomaly" if a.category == "session"
+            else (a.peer_stats or {}).get("anomaly_type") or "excessive_permissions",
+            "rank": (a.peer_stats or {}).get("rank"),
+            "usersScored": (a.peer_stats or {}).get("users_scored"),
             "title": _display_title(a.category, user_name),
             "description": a.reasons[0] if a.reasons else "Access pattern deviates from peer baseline",
         }
         for a, user_name in anomaly_user_pairs
     ]
+    if type:
+        rows = [r for r in rows if r["type"] == type]
+    if search and search.strip():
+        needle = search.strip().lower()
+        rows = [r for r in rows if needle in (r["userName"] or "").lower()
+                or any(needle in reason.lower() for reason in r["reasons"] or [])]
+    return rows[:limit]
 
 
 class TopAnomalousUserResponse(BaseModel):
@@ -532,6 +561,9 @@ class TopAnomalousUserResponse(BaseModel):
     severity: str
     topReasons: List[str]
     riskScore: Optional[float] = None
+    anomalyType: Optional[str] = None
+    rank: Optional[int] = None
+    usersScored: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -568,6 +600,10 @@ async def get_top_anomalous_users(
             "severity": anomaly.severity.value,
             "topReasons": anomaly.reasons[:3] if anomaly.reasons else [],
             "riskScore": None,  # Could be joined from RiskScore if needed
+            "anomalyType": "session_anomaly" if anomaly.category == "session"
+            else (anomaly.peer_stats or {}).get("anomaly_type"),
+            "rank": (anomaly.peer_stats or {}).get("rank"),
+            "usersScored": (anomaly.peer_stats or {}).get("users_scored"),
         }
         for anomaly, user in rows
     ]
@@ -685,8 +721,10 @@ async def get_user_record_access(
     - Manual shares
     - Team access (Account Teams, Opportunity Teams)
     """
+    from app.ingestion.demo_orgs import refuse_demo_org
     from app.services.record_access import RecordAccessService
 
+    await refuse_demo_org(db, org_id, "Record Access")
     # Create service instance
     service = RecordAccessService(db)
 

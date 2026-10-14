@@ -3,6 +3,8 @@
  * CSV and JSON export helpers
  */
 
+import { anomalyTypeLabel } from '../anomalyTypes'
+
 /**
  * Convert array of objects to CSV string
  */
@@ -141,16 +143,20 @@ export function exportStamp(date: Date = new Date()): string {
  */
 export function exportAnomaliesToCSV(anomalies: any[], filename: string = 'anomalies'): void {
   const rows = anomalies.map((a) => ({
+    rank: a.rank ?? '',
     user: a.userName ?? a.user_name ?? '',
     category: a.category ?? 'access',
+    type: anomalyTypeLabel(a.type) ?? '',
     severity: a.severity,
     score: typeof a.score === 'number' ? a.score.toFixed(3) : '',
     reasons: (a.reasons ?? []).join(' | '),
     detectedAt: a.detectedAt ?? a.detected_at ?? '',
   }))
   exportToCSV(rows, filename, [
+    { key: 'rank', label: 'Rank' },
     { key: 'user', label: 'User' },
     { key: 'category', label: 'Category' },
+    { key: 'type', label: 'Type' },
     { key: 'severity', label: 'Severity' },
     { key: 'score', label: 'Anomaly score' },
     { key: 'reasons', label: 'Reasons' },

@@ -32,6 +32,7 @@ import {
   FlaskConical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { DEMO_UNAVAILABLE_MESSAGE, unavailableForDemo } from '@/lib/demoOrg'
 import { apiClient, ApiError } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
 import { MarqueeLabel } from '@/components/layout/MarqueeLabel'
@@ -83,8 +84,6 @@ export const navigationSections: {
     // Feature the current org's privacy level can switch off; the item
     // renders disabled when it does.
     privacyFeature?: PrivacyFeature
-    // Reads live Salesforce data, so it renders disabled on a demo org.
-    liveOnly?: boolean
   }[]
 }[] = [
   {
@@ -106,7 +105,7 @@ export const navigationSections: {
     items: [
       { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
       { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle, privacyFeature: 'anomalies' },
-      { name: 'Change Risk', path: 'change-risk', icon: Radar, privacyFeature: 'change_risk', liveOnly: true },
+      { name: 'Change Risk', path: 'change-risk', icon: Radar, privacyFeature: 'change_risk' },
     ],
   },
   {
@@ -115,7 +114,7 @@ export const navigationSections: {
       { name: 'Health Report', path: 'org-analyzer', icon: Stethoscope },
       { name: 'Equity', path: 'equity', icon: Scale, privacyFeature: 'equity' },
       { name: 'Restructure Studio', path: 'restructure', icon: Wrench, privacyFeature: 'restructure' },
-      { name: 'Sprawl', path: 'sprawl', icon: Boxes, liveOnly: true },
+      { name: 'Sprawl', path: 'sprawl', icon: Boxes },
       { name: 'License Fit', path: 'license-fit', icon: DollarSign, privacyFeature: 'license_fit' },
       { name: 'Compliance', path: 'compliance', icon: ShieldCheck },
     ],
@@ -213,7 +212,7 @@ export function Sidebar() {
           ...item,
           unavailable:
             (!!item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature)) ||
-            (!!item.liveOnly && isDemoOrg),
+            unavailableForDemo(isDemoOrg, item.path),
           // Without an org in the URL, org-scoped items lead to the picker.
           href: item.path.startsWith('/')
             ? item.path
@@ -331,8 +330,8 @@ export function Sidebar() {
                   pathname === item.href || pathname.startsWith(item.href + '/')
                 if (item.unavailable) {
                   const reason =
-                    item.liveOnly && isDemoOrg
-                      ? 'Needs a live Salesforce connection, so it is not available for a demo org.'
+                    unavailableForDemo(isDemoOrg, item.path)
+                      ? DEMO_UNAVAILABLE_MESSAGE
                       : unavailableMessage(privacyModeOf(currentOrg))
                   return (
                     <span

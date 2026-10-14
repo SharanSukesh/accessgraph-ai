@@ -155,22 +155,23 @@ Report, License Fit, Compliance, Sprawl, Admin → Demo orgs, user compare,
 Record Access, the PDF (9 pages) and the Excel workbook. No browser console
 errors after login.
 
-Avoid or explain in a live demo:
-- **Users page and Dashboard tiles are wrong (pre-existing, not fixed):** the
-  list returns the first 100 users in database order, so the Dashboard says
-  100 users (not 400) and the Users page opens with the planted users first;
-  the Risk column and the "High-risk users" tile are always empty/0 because
-  the frontend drops the API's `risk` field; search and the risk filter are
-  ignored by the API. Use Anomalies, the Health Report and user pages instead.
-- **User detail "Last Login" always shows "-"** (the endpoint hardcodes it).
+Fixed after the first pass: the Users list returns every user, highest
+risk first (risk badge and score shown, sort, search and risk filter work);
+the Dashboard counts all users and the high/critical ones; user pages show
+Last Login; anomalies are typed by their strongest reason (Exclusive
+access, Role mismatch, Permission accumulation, Over-privilege, Dormant
+access) with their rank ("#1 of 400") next to the score; the anomaly type
+filter and search work; Record Access and Equity are greyed out for demo
+orgs.
+
+Still worth knowing live:
 - Graph: object cards appear only after ticking objects in the right panel.
-- Anomalies: all eight are Critical (see backlog), and every access anomaly
-  is tagged "excessive permissions", including the sole-access ones.
-- Lumenvale has no sharing or team data: Record Access is all zeros and
-  Equity reports index 1.0 / disparity 0 (and adds 20 equity items to
-  Priority Actions). Show Equity on the dev org instead.
-- Sprawl, Data Quality and Change Risk are greyed out for the demo org; use
-  the dev org.
+- All eight anomalies are Critical (see backlog); the rank carries the order.
+- Mina Tanaka, Oskar Holloway and Freya Castellan (planted over-privileged /
+  role mismatch) are typed Permission accumulation: their strongest signal
+  in the data is 5-6 permission sets against a median of 1.
+- Sprawl, Data Quality, Change Risk, Equity and Record Access are greyed out
+  for the demo org; show them on the dev org.
 
 ## Thursday runbook
 
@@ -201,8 +202,10 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    completed" (about a minute). Open it and check the "Demo data" badge.
 7. On Lumenvale: Health Report → Run analysis; License Fit → Re-analyse;
    Compliance → Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS.
-   Expected: Health 35 (Critical), 12 findings, $183,180/yr; License Fit
-   $116,220/yr; 8 anomalies.
+   Do not run Equity on Lumenvale (it is greyed out; the fixture has no
+   sharing data). Expected: Dashboard 400 users, 40 high-risk, 8 critical
+   anomalies; Health 35 (Critical), 12 findings, $183,180/yr; License Fit
+   $116,220/yr; anomalies #1 Jun Jovanovic (Exclusive access) to #8.
 8. Dev org: **Sync from Salesforce** first (needed for the group/muting
    graph), then Health Report, Data Quality, all four Sprawl tabs, License
    Fit, Compliance (five frameworks), Equity and Change Risk.
@@ -226,6 +229,10 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
   deployment; PDF download is then unavailable.
 
 ## Backlog (not before Friday)
+
+- Equity adds Priority Actions even when disparity is 0 (it created 20 on
+  the synthetic org at index 1.0). It should add nothing when there is no
+  disparity to close.
 
 - Anomaly severity: every top-2% user scores 0.986 or higher on the
   normalised scale, so all flagged users are "critical". Options:

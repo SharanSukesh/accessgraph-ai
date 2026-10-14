@@ -15,6 +15,7 @@ interface UserFilters {
   department?: string
   isActive?: boolean
   riskLevel?: string
+  sort?: 'risk' | 'name'
   limit?: number
   offset?: number
 }
@@ -33,11 +34,11 @@ interface User {
   department?: string
   title?: string
   lastLoginDate?: string
+  riskScore?: number
+  riskLevel?: string
 }
 
 interface UserDetail extends User {
-  riskScore?: number
-  riskLevel?: string
   anomalyScore?: number
   recommendationCount?: number
 }
@@ -129,6 +130,8 @@ function normalizeUser(user: any): User {
     department: user.department,
     title: user.title,
     lastLoginDate: user.lastLoginDate || user.last_login_date,
+    riskLevel: user.riskLevel ?? user.risk ?? user.risk_level ?? undefined,
+    riskScore: user.riskScore ?? user.risk_score ?? undefined,
   }
 }
 

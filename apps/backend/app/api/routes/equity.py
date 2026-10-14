@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
 from app.services import privacy_mode
+from app.ingestion.demo_orgs import refuse_demo_org
 from app.services.equity_diagnostic import EquityDiagnosticService
 from app.services.equity_recommendations import (
     DEFAULT_BUDGET,
@@ -109,6 +110,9 @@ async def generate_equity_recommendations(
     if budget < 1 or budget > 200:
         raise HTTPException(status_code=400, detail="budget must be in [1, 200]")
     await privacy_mode.require_feature(db, org_id, "equity")
+    # The demo fixtures carry no sharing or team data, so equity would be a
+    # flat 1.0 and still add recommendations to Priority Actions.
+    await refuse_demo_org(db, org_id, "Equity")
     service = EquityRecommendationService(db, budget=budget)
     try:
         result = await service.generate(org_id)

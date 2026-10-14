@@ -41,11 +41,13 @@ function UsersContent() {
 
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<string>('')
+  const [sort, setSort] = useState<'risk' | 'name'>('risk')
   const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
 
   const { data: users, isLoading, error } = useUsers(orgId, {
     search,
     riskLevel: riskFilter || undefined,
+    sort,
   })
 
   if (error) {
@@ -118,6 +120,17 @@ function UsersContent() {
               <option value="high">High</option>
               <option value="medium">Medium</option>
               <option value="low">Low</option>
+            </select>
+
+            {/* Sort */}
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as 'risk' | 'name')}
+              aria-label="Sort users"
+              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="risk">Highest risk first</option>
+              <option value="name">Name A–Z</option>
             </select>
           </div>
         </CardContent>
@@ -202,7 +215,14 @@ function UsersContent() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {user.riskLevel ? (
-                          <RiskBadge level={user.riskLevel} />
+                          <div className="flex items-center gap-2">
+                            <RiskBadge level={user.riskLevel} />
+                            {user.riskScore != null && (
+                              <span className="text-xs tabular-nums text-grove-ink/60 dark:text-grove-ink-dk/60">
+                                {Math.round(user.riskScore)}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-sm text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>
                         )}
