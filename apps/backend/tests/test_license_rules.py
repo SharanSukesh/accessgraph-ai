@@ -103,3 +103,10 @@ def test_never_logged_in_uses_salesforce_created_date():
     ctx.users = [old, new]
 
     assert _never_ids(ctx) == {"005old"}
+
+
+def test_einstein_add_ons_are_not_priced_as_full_seats():
+    from app.services.org_analyzer import _lookup_default_price
+
+    assert _lookup_default_price("Sales Cloud Einstein") < _lookup_default_price("Sales Cloud")
+    assert _lookup_default_price("Service Cloud Einstein") < _lookup_default_price("Service Cloud")
