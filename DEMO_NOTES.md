@@ -29,3 +29,33 @@ export DATABASE_URL=postgresql://postgres:pw@localhost:55439/newton JWT_SECRET_K
 Login: `admin@newton-demo.com` / `Local-demo-only-1` (override with
 `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`). The fixture is small (8 users),
 so it exercises every page but won't show rich anomalies.
+
+## 1. PDF health report
+
+Verified two ways on 2026-10-14:
+- Local API (macOS, WeasyPrint with Homebrew Pango): log in, then
+  `GET /orgs/{id}/org-analyzer/report.pdf` gives a 6-page PDF for the seeded demo org.
+- Production-style container: built `apps/backend/Dockerfile` from a `git archive`
+  of this branch (what Railway sees), ran it against Postgres. It ran migrations on
+  boot, served the API, accepted a login and returned the same 6-page PDF with
+  DejaVu fonts embedded.
+
+Fixed while checking: the cover's health band now uses the analyzer's labels
+(Excellent / Good / Needs attention / Concerning / Critical), and the executive
+summary no longer calls an org "production" when its type is unknown.
+
+### What production needs
+- Backend service builder = **Dockerfile** (Railway: backend service, Settings,
+  Build, Builder), root directory `apps/backend`, Dockerfile path `Dockerfile`.
+- **No custom start command** (clear it if one was set for Nixpacks). The
+  Dockerfile CMD runs `scripts/run_migrations.py` (alembic upgrade head) then
+  uvicorn on `$PORT`.
+- System libraries, already in the Dockerfile: `libpango-1.0-0`,
+  `libpangoft2-1.0-0`, `libharfbuzz0b`, `fonts-dejavu-core`. Nothing else needed.
+- No new environment variables.
+- Not viable: the repo's `nixpacks.toml` fails to build locally (`pip: command
+  not found`), even before any of these changes, and installs no Pango/fonts.
+  Railpack would need `RAILPACK_DEPLOY_APT_PACKAGES` for the same libraries
+  (untested).
+- How to tell it's broken: Download PDF returns 503 "PDF generation
+  unavailable", and the logs say WeasyPrint could not import external libraries.
