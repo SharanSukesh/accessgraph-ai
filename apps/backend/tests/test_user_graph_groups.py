@@ -130,3 +130,16 @@ async def test_aggregate_group_assignment_expands_and_keeps_salesforce_net_acces
     assert _node(graph, "object_Account")["properties"]["canEdit"] is False
     # Object cards combine every source: Edit on Opportunity comes from the permission set.
     assert _node(graph, "object_Opportunity")["properties"]["canEdit"] is True
+
+
+@pytest.mark.asyncio
+async def test_explain_labels_an_aggregate_group_assignment_as_the_group(client, async_db_session):  # noqa: F811
+    admin, _ = await _users(async_db_session)
+    org_id = await _production_shaped_org(async_db_session)
+
+    r = await client.get(f"/orgs/{org_id}/users/005agent/explain/object/Account", cookies=_cookie(admin))
+
+    path = next(p for p in r.json()["paths"] if p["source_type"] == "permission_set_group")
+    assert path["permissions"] == ["Read"]
+    assert "Group access as calculated by Salesforce, after any muting" in path["steps"]
+    assert r.json()["access"]["edit"] is False

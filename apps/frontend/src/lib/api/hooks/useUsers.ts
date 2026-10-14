@@ -105,8 +105,6 @@ export const userKeys = {
     [...userKeys.detail(orgId, userId), 'field-access'] as const,
   objectExplanation: (orgId: string, userId: string, objectName: string) =>
     [...userKeys.detail(orgId, userId), 'explain-object', objectName] as const,
-  fieldExplanation: (orgId: string, userId: string, fieldApiName: string) =>
-    [...userKeys.detail(orgId, userId), 'explain-field', fieldApiName] as const,
   risk: (orgId: string, userId: string) =>
     [...userKeys.detail(orgId, userId), 'risk'] as const,
   recommendations: (orgId: string, userId: string) =>
@@ -167,6 +165,35 @@ export function useUser(orgId: string, userId: string) {
 /**
  * Get user's object access permissions
  */
+export interface AccessPath {
+  source_type: 'profile' | 'permission_set' | 'permission_set_group' | string
+  source_name: string
+  permissions: string[]
+  granted_via: string[]
+  muted: { permission: string; muted_by: string }[]
+  steps: string[]
+}
+
+export interface ObjectAccessExplanation {
+  user_id: string
+  user_name: string
+  object: string
+  access: Record<'read' | 'create' | 'edit' | 'delete', boolean>
+  paths: AccessPath[]
+}
+
+/** How a user gets each permission on one object (fetched on demand). */
+export function useObjectAccessExplanation(orgId: string, userId: string, objectName: string | null) {
+  return useQuery({
+    queryKey: userKeys.objectExplanation(orgId, userId, objectName ?? ''),
+    queryFn: () =>
+      apiClient.get<ObjectAccessExplanation>(
+        endpoints.userObjectExplanation(orgId, userId, objectName as string)
+      ),
+    enabled: !!orgId && !!userId && !!objectName,
+  })
+}
+
 export function useUserObjectAccess(orgId: string, userId: string) {
   return useQuery({
     queryKey: userKeys.objectAccess(orgId, userId),
@@ -195,46 +222,6 @@ export function useUserFieldAccess(orgId: string, userId: string) {
       return data.fields || []
     },
     enabled: !!orgId && !!userId,
-  })
-}
-
-/**
- * Get explanation for why user has access to an object
- */
-export function useObjectExplanation(
-  orgId: string,
-  userId: string,
-  objectName: string
-) {
-  return useQuery({
-    queryKey: userKeys.objectExplanation(orgId, userId, objectName),
-    queryFn: async () => {
-      const data = await apiClient.get<AccessExplanation>(
-        endpoints.userObjectExplanation(orgId, userId, objectName)
-      )
-      return data
-    },
-    enabled: !!orgId && !!userId && !!objectName,
-  })
-}
-
-/**
- * Get explanation for why user has access to a field
- */
-export function useFieldExplanation(
-  orgId: string,
-  userId: string,
-  fieldApiName: string
-) {
-  return useQuery({
-    queryKey: userKeys.fieldExplanation(orgId, userId, fieldApiName),
-    queryFn: async () => {
-      const data = await apiClient.get<AccessExplanation>(
-        endpoints.userFieldExplanation(orgId, userId, fieldApiName)
-      )
-      return data
-    },
-    enabled: !!orgId && !!userId && !!fieldApiName,
   })
 }
 

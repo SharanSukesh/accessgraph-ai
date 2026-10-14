@@ -202,6 +202,13 @@ class EffectiveAccessService:
             # can't grant anything outside its group.
             if ps is not None and (ps.is_owned_by_profile or ps.is_muting):
                 continue
+            if ps is not None and ps.ps_type == "Group":
+                # Salesforce's aggregate permission set for a group: its rows
+                # are already the group's net access, muting applied. Same
+                # evaluation as a permission set; labelled as the group.
+                sources.append(_Source("permission_set_group", component(ps_id).name,
+                                       [component(ps_id)], group_id=ps_id))
+                continue
             sources.append(_Source("permission_set", component(ps_id).name, [component(ps_id)]))
         return sources
 
@@ -350,7 +357,9 @@ class EffectiveAccessService:
             steps.append(f"Profile: {source.name}")
         elif source.kind == "permission_set_group":
             steps.append(f"PermissionSetGroup: {source.name}")
-            if granted_via:
+            if granted_via == [source.name]:
+                steps.append("Group access as calculated by Salesforce, after any muting")
+            elif granted_via:
                 steps.append(f"PermissionSet: {', '.join(granted_via)}")
         else:
             steps.append(f"PermissionSet: {source.name}")

@@ -5,7 +5,7 @@
  * Comprehensive view of user access, permissions, and risk
  */
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -19,10 +19,12 @@ import {
   Network,
   FileCheck,
   Calendar,
+  HelpCircle,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { fileSlug } from '@/lib/utils/exports'
+import { ExplainAccessPanel } from '@/components/users/ExplainAccessPanel'
 import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -76,6 +78,7 @@ function UserDetailContent() {
   // Fetch user data
   const { data: user, isLoading: userLoading, error: userError } = useUser(orgId, userId)
   const { data: objectAccess, isLoading: objectsLoading } = useUserObjectAccess(orgId, userId)
+  const [explainObject, setExplainObject] = useState<string | null>(null)
   const { data: fieldAccess, isLoading: fieldsLoading } = useUserFieldAccess(orgId, userId)
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
   const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
@@ -381,11 +384,13 @@ function UserDetailContent() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Sensitivity
                         </th>
+                        <th className="px-6 py-3" />
                       </tr>
                     </thead>
                     <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                       {objectAccess.map((obj: any) => (
-                        <tr key={obj.objectName} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                        <Fragment key={obj.objectName}>
+                        <tr className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                             {obj.objectLabel || obj.objectName}
                           </td>
@@ -424,7 +429,28 @@ function UserDetailContent() {
                               <Badge variant="default" size="sm">Standard</Badge>
                             )}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExplainObject(explainObject === obj.objectName ? null : obj.objectName)
+                              }
+                              aria-expanded={explainObject === obj.objectName}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 hover:underline dark:text-primary-400"
+                            >
+                              <HelpCircle className="h-3.5 w-3.5" />
+                              {explainObject === obj.objectName ? 'Hide' : 'Why?'}
+                            </button>
+                          </td>
                         </tr>
+                        {explainObject === obj.objectName && (
+                          <tr className="bg-primary-50/30 dark:bg-primary-900/10">
+                            <td colSpan={7} className="px-6 py-4">
+                              <ExplainAccessPanel orgId={orgId} userId={userId} objectName={obj.objectName} />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>

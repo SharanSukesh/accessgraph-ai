@@ -24,9 +24,7 @@ export const endpoints = {
   userFieldAccess: (orgId: string, userId: string) =>
     `/orgs/${orgId}/users/${userId}/access/fields`,
   userObjectExplanation: (orgId: string, userId: string, objectName: string) =>
-    `/orgs/${orgId}/users/${userId}/explain/object/${objectName}`,
-  userFieldExplanation: (orgId: string, userId: string, fieldApiName: string) =>
-    `/orgs/${orgId}/users/${userId}/explain/field/${fieldApiName}`,
+    `/orgs/${orgId}/users/${userId}/explain/object/${encodeURIComponent(objectName)}`,
   userRisk: (orgId: string, userId: string) => `/orgs/${orgId}/users/${userId}/risk`,
   userAnomalies: (orgId: string, userId: string) => `/orgs/${orgId}/users/${userId}/anomalies`,
   userRecommendations: (orgId: string, userId: string) =>
