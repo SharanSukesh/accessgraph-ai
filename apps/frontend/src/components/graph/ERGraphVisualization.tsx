@@ -39,6 +39,9 @@ interface Graph {
     edgeCount: number
     centerNodeId?: string
     generatedAt: string
+    // Permission sets and groups drawn, and how many were left out.
+    assignmentsShown?: number
+    assignmentsHidden?: number
   }
 }
 
@@ -634,6 +637,12 @@ export function ERGraphVisualization({
           >
             <Download className="h-3.5 w-3.5" /> JSON
           </button>
+        </div>
+      )}
+      {!isLoading && (graph.metadata.assignmentsHidden ?? 0) > 0 && (
+        <div className="absolute left-3 top-3 z-20 rounded-md border border-copper-200 bg-copper-50/95 px-2 py-1 text-xs text-copper-700 dark:border-copper-800 dark:bg-copper-900/40 dark:text-copper-300">
+          +{graph.metadata.assignmentsHidden} more permission sets or groups not drawn. The Object Access tab
+          includes them all.
         </div>
       )}
       {isLoading && (

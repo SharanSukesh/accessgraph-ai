@@ -1481,6 +1481,10 @@ def _extract_system_permissions(raw_data: dict) -> dict[str, list[dict]]:
     return result
 
 
+# Permission sets and groups drawn per user before "+N more" kicks in.
+GRAPH_MAX_ASSIGNMENTS = 50
+
+
 @router.get("/orgs/{org_id}/graph/user/{user_sf_id}")
 async def get_user_graph(
     org_id: str,
@@ -1586,9 +1590,8 @@ async def get_user_graph(
     ps_assignments_query = select(PermissionSetAssignmentSnapshot).where(
         PermissionSetAssignmentSnapshot.organization_id == org_id,
         PermissionSetAssignmentSnapshot.assignee_id == user_sf_id
-    ).limit(10)  # Limit to avoid overwhelming the graph
-    ps_assignments = (await db.execute(ps_assignments_query)).scalars().all()
-    assigned_ids = [a.permission_set_id for a in ps_assignments]
+    ).order_by(PermissionSetAssignmentSnapshot.permission_set_id)
+    all_assignments = (await db.execute(ps_assignments_query)).scalars().all()
 
     async def _ps_rows(ids):
         if not ids:
@@ -1599,7 +1602,15 @@ async def get_user_graph(
         ))).scalars().all()
         return {ps.salesforce_id: ps for ps in rows}
 
-    ps_rows = await _ps_rows(assigned_ids)
+    ps_rows = await _ps_rows([a.permission_set_id for a in all_assignments])
+    # Draw at most GRAPH_MAX_ASSIGNMENTS sets and groups; the metadata says
+    # how many were left out so the UI can show "+N more". Object cards'
+    # permissions come from effective access, which always uses them all.
+    profile_owned = [a for a in all_assignments
+                     if a.permission_set_id in ps_rows and ps_rows[a.permission_set_id].is_owned_by_profile]
+    others = [a for a in all_assignments if a not in profile_owned]
+    ps_assignments = profile_owned + others[:GRAPH_MAX_ASSIGNMENTS]
+    hidden_assignments = max(0, len(others) - GRAPH_MAX_ASSIGNMENTS)
 
     # Group node id -> PermissionSetGroup id (None if not synced yet).
     group_of_node: Dict[str, Optional[str]] = {}
@@ -2016,6 +2027,8 @@ async def get_user_graph(
             "nodeCount": len(nodes),
             "edgeCount": len(edges),
             "centerNodeId": user_sf_id,
+            "assignmentsShown": len(ps_assignments) - len(profile_owned),
+            "assignmentsHidden": hidden_assignments,
             "generatedAt": datetime.utcnow().isoformat()
         }
     }

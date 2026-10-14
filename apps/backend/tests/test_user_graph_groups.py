@@ -143,3 +143,53 @@ async def test_explain_labels_an_aggregate_group_assignment_as_the_group(client,
     assert path["permissions"] == ["Read"]
     assert "Group access as calculated by Salesforce, after any muting" in path["steps"]
     assert r.json()["access"]["edit"] is False
+
+
+async def _synthetic(db):
+    org = Organization(name="Lumenvale", is_demo=True)
+    db.add(org)
+    await db.commit()
+    data = json.loads((FIXTURES / "synthetic_mid_market.json").read_text())
+    await SnapshotPersister(db).persist_all(org.id, data)
+    held = {}
+    for a in data["permission_set_assignments"]:
+        held.setdefault(a["AssigneeId"], []).append(a["PermissionSetId"])
+    accumulator = max(held, key=lambda u: len(held[u]))
+    return org.id, accumulator, held[accumulator]
+
+
+@pytest.mark.asyncio
+async def test_graph_draws_every_assignment_of_an_accumulator(client, async_db_session):  # noqa: F811
+    admin, _ = await _users(async_db_session)
+    org_id, user, assigned = await _synthetic(async_db_session)
+    assert len(assigned) > 10
+
+    graph = (await client.get(f"/orgs/{org_id}/graph/user/{user}", cookies=_cookie(admin))).json()
+
+    drawn = {e["target"] for e in graph["edges"] if e["source"] == user
+             and e["type"] in ("ASSIGNED_PERMISSION_SET", "ASSIGNED_PERMISSION_SET_GROUP")}
+    assert drawn == set(assigned)
+    assert graph["metadata"]["assignmentsHidden"] == 0
+
+
+@pytest.mark.asyncio
+async def test_object_cards_use_effective_access_even_when_assignments_are_hidden(
+        client, async_db_session, monkeypatch):  # noqa: F811
+    from app.api.routes import users as users_routes
+    from app.services.effective_access import EffectiveAccessService
+
+    admin, _ = await _users(async_db_session)
+    org_id, user, assigned = await _synthetic(async_db_session)
+    monkeypatch.setattr(users_routes, "GRAPH_MAX_ASSIGNMENTS", 3)
+
+    graph = (await client.get(f"/orgs/{org_id}/graph/user/{user}", cookies=_cookie(admin))).json()
+
+    assert graph["metadata"]["assignmentsHidden"] == len(assigned) - 3
+    effective = {o["object"]: o["access"] for o in
+                 (await EffectiveAccessService(async_db_session).get_user_object_access(org_id, user))["objects"]}
+    cards = [n for n in graph["nodes"] if n["type"] == "object" and n["label"] in effective]
+    assert cards
+    for card in cards:
+        a = effective[card["label"]]
+        assert (card["properties"]["canRead"], card["properties"]["canEdit"], card["properties"]["canDelete"]) == (
+            a["read"], a["edit"], a["delete"])
