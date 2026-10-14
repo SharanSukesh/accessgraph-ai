@@ -1214,11 +1214,24 @@ class OrgAnalyzerService:
         salesforce_price = ctx.price_book.get("Salesforce", 16500)
         platform_price = ctx.price_book.get("Platform", 2500)
         cost_delta = max(salesforce_price - platform_price, 0)
-        sales_objects = {"Opportunity", "Lead", "Campaign", "Quote", "Order"}
+        # CRM objects a Platform licence can't use; Case keeps Service users off the list.
+        sales_objects = {"Opportunity", "Lead", "Campaign", "Quote", "Order", "Case"}
 
+        # Object permissions hang off permission sets: a profile's live on
+        # its profile-owned set, and a group's on its component sets. Resolve
+        # both, or users whose Sales access comes from their profile or a
+        # group look over-licensed.
+        group_components: Dict[str, set] = defaultdict(set)
+        for c in ctx.psg_components:
+            group_components[c.permission_set_group_id].add(c.permission_set_id)
+        profile_owned_ps = {
+            p.profile_id: p.salesforce_id
+            for p in ctx.permission_sets if p.is_owned_by_profile and p.profile_id
+        }
         user_parent_ids: Dict[str, set] = defaultdict(set)
         for a in ctx.assignments:
             user_parent_ids[a.assignee_id].add(a.permission_set_id)
+            user_parent_ids[a.assignee_id] |= group_components.get(a.permission_set_id, set())
 
         # ObjectPermission parent_id can be a profile-owned PS or a real PS.
         # We accumulate sales-object grants per (parent_id).
@@ -1256,7 +1269,7 @@ class OrgAnalyzerService:
                 continue
             user_parents = user_parent_ids.get(u.salesforce_id, set())
             for parent_id in list(user_parents) + (
-                [u.profile_id] if u.profile_id else []
+                [u.profile_id, profile_owned_ps.get(u.profile_id)] if u.profile_id else []
             ):
                 if parent_id in sales_grants_by_parent:
                     break
