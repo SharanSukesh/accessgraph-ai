@@ -25,10 +25,11 @@ export interface SalesforceField {
   fieldLabel?: string
   apiName: string
   objectName: string
-  dataType: string
+  // Not synced yet: null means unknown, so the UI hides it.
+  dataType: string | null
   isCustom: boolean
   isSensitive: boolean
-  isEncrypted: boolean
+  isEncrypted: boolean | null
   userCount?: number
   description?: string
   length?: number

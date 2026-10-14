@@ -1020,9 +1020,10 @@ async def list_fields(
                 "objectName": field.sobject_type,
                 "apiName": field.field,
                 "label": create_label(field.field),
-                "dataType": "String",  # We don't have this info yet
+                # Field type and encryption aren't synced; null, never a guess.
+                "dataType": None,
                 **_field_sensitivity(field.field),
-                "isEncrypted": False,  # Would need field metadata to determine
+                "isEncrypted": None,
                 "isCustom": field.field.endswith('__c'),
                 "userCount": field.permission_count,
                 "permissionCount": field.permission_count,
@@ -1214,9 +1215,10 @@ async def get_field_details(
         "fieldName": field_name,
         "label": create_label(field_name),
         "isCustom": field_name.endswith('__c'),
-        "dataType": "String",  # We don't have this metadata yet
+        # Field type and encryption aren't synced; null, never a guess.
+        "dataType": None,
         **_field_sensitivity(field_name),
-        "isEncrypted": False,  # Would need field metadata
+        "isEncrypted": None,
         "profilesWithAccess": profiles_with_access,
         "permissionSetsWithAccess": permission_sets_with_access,
         "usersWithAccess": users_with_access,
