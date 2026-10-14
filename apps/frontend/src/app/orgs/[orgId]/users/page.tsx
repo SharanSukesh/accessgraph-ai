@@ -7,9 +7,10 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Search, Filter, GitCompare, Users as UsersIcon } from 'lucide-react'
+import { Search, Filter, GitCompare, Download, Users as UsersIcon } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { exportStamp, exportUsersToCSV } from '@/lib/utils/exports'
 import { RiskBadge, Badge } from '@/components/shared/Badge'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -66,6 +67,15 @@ function UsersContent() {
           subtitle="Browse and investigate user access"
           eyebrow="Explore · people"
           actions={
+            <>
+            <Button
+              variant="secondary"
+              disabled={!users?.length}
+              onClick={() => exportUsersToCSV(users ?? [], `users-${exportStamp()}`)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
             <Button
               variant="primary"
               onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
@@ -73,6 +83,7 @@ function UsersContent() {
               <GitCompare className="h-4 w-4 mr-2" />
               Compare Users
             </Button>
+            </>
           }
         />
       </Reveal>

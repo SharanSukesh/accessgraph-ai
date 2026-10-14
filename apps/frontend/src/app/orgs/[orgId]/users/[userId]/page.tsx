@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { fileSlug } from '@/lib/utils/exports'
 import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -555,6 +556,7 @@ function UserDetailContent() {
                     selectedObjects={selectedObjects}
                     onNodeSelect={(node) => setSelectedGraphNode(node)}
                     height="800px"
+                    exportName={`access-graph-${fileSlug(user?.name ?? userId)}`}
                   />
                   <div className="mt-4">
                     <GraphLegend compact />

@@ -10,6 +10,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { Search, Network } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { fileSlug } from '@/lib/utils/exports'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -201,6 +202,7 @@ export default function GraphExplorerPage() {
                   selectedObjects={selectedObjects}
                   onNodeSelect={handleNodeSelect}
                   height="800px"
+                  exportName={`access-graph-${fileSlug(selectedUser?.name ?? selectedUserId ?? 'user')}`}
                 />
                 <GraphLegend compact />
               </>

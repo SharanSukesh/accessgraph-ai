@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { exportRecommendationsToCSV, exportStamp } from '@/lib/utils/exports'
 import { Badge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -134,22 +135,8 @@ export default function RecommendationsPage() {
   }
 
   const handleExport = () => {
-    if (!recommendations) return
-    const data = recommendations.map((rec: any) => ({
-      id: rec.id,
-      title: rec.title,
-      description: rec.description,
-      severity: rec.severity,
-      status: rec.status,
-      action: rec.action,
-    }))
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `recommendations-${orgId}.json`
-    link.click()
-    URL.revokeObjectURL(url)
+    if (!recommendations?.length) return
+    exportRecommendationsToCSV(recommendations, `priority-actions-${exportStamp()}`)
   }
 
   if (error) {
@@ -182,7 +169,7 @@ export default function RecommendationsPage() {
               )}
               <Button variant="secondary" size="sm" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-2" />
-                Export
+                Export CSV
               </Button>
             </>
           }

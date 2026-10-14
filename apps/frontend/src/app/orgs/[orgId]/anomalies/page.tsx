@@ -7,9 +7,10 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { AlertTriangle, Filter, Search, User, Calendar, Info } from 'lucide-react'
+import { AlertTriangle, Filter, Search, User, Calendar, Info, Download } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { exportAnomaliesToCSV, exportStamp } from '@/lib/utils/exports'
 import { Badge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -73,6 +74,17 @@ function AnomaliesContent() {
           title="Anomalies"
           eyebrow="Attention · detection"
           subtitle="Review detected access anomalies and unusual patterns"
+          actions={
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!anomalies?.length}
+              onClick={() => exportAnomaliesToCSV(anomalies ?? [], `anomalies-${exportStamp()}`)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          }
         />
       </Reveal>
 
