@@ -497,7 +497,7 @@ def _methodology(snapshot: OrgAnalysisSnapshot) -> str:
     <section class="page methodology">
       <h2>Methodology</h2>
       <p><strong>Health score.</strong> Starts at 100 and deducts points per open finding by severity{f' ({_esc(weight_text)})' if weight_text else ''}. Findings marked as ignored are excluded from this report.</p>
-      <p><strong>Savings.</strong> Estimated from licence counts and the price book configured for this engagement. They indicate scale, not a quote.</p>
+      <p><strong>Savings.</strong> Estimated from licence counts at Salesforce's published list prices; negotiated rates replace them where entered in the price book. They indicate scale, not a quote.</p>
       <p><strong>Data scope.</strong> Newton reads Salesforce configuration metadata, the org's users and their access, recent login history and the Setup Audit Trail. Record-level figures (counts, completeness, duplicates) come from aggregate queries; the contents of business records are never read.</p>
       <p><strong>Risk and anomalies.</strong> User risk combines privileged system permissions, access to sensitive data, unusual access compared with peers, inactivity and sole ownership of access. Anomalies are users whose access pattern differs statistically from their peers or whose sign-ins look unusual.</p>
       <p><strong>Point in time.</strong> All figures reflect the org on the date of this report and should be confirmed before changes are made.</p>
