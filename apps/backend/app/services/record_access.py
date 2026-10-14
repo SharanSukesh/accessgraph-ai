@@ -86,7 +86,7 @@ class RecordAccessService:
 
         # Calculate summary
         summary = {
-            "total_owned_records": sum(owned_records.values()),
+            "total_owned_records": sum(c for c in owned_records.values() if c is not None),
             "total_manual_shares": len(manual_shares),
             "total_team_memberships": len(team_access),
             "total_sharing_rule_grants": len(sharing_rules),
@@ -109,9 +109,11 @@ class RecordAccessService:
         self,
         org_id: str,
         user_sf_id: str,
-    ) -> Dict[str, int]:
+    ) -> Dict[str, Optional[int]]:
         """
-        Get count of records owned by this user
+        Get count of records owned by this user. None means not analysed:
+        Case, Contact and Lead share records aren't synced, so their
+        ownership is unknown rather than zero.
 
         Uses a lightweight approach:
         1. Count share records where RowCause='Owner' (no record storage needed!)
@@ -140,10 +142,10 @@ class RecordAccessService:
         opp_count_result = await self.db.execute(opp_count_query)
         counts['Opportunity'] = opp_count_result.scalar() or 0
 
-        # TODO: Add Case, Contact, Lead when we sync those share objects
-        counts['Case'] = 0
-        counts['Contact'] = 0
-        counts['Lead'] = 0
+        # Not synced yet: unknown, not zero.
+        counts['Case'] = None
+        counts['Contact'] = None
+        counts['Lead'] = None
 
         # Enhanced logging for debugging
         total_shares = counts['Account'] + counts['Opportunity']
