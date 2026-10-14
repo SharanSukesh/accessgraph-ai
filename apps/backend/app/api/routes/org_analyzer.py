@@ -1305,14 +1305,19 @@ async def download_report(
     from app.services.report.context import gather_report_context
 
     report_ctx = await gather_report_context(db, org_id, snap)
-    pdf_bytes = build_report_pdf(
-        org_name=org_name,
-        snapshot=snap,
-        findings=findings,
-        brand=brand_ctx,
-        ctx=report_ctx,
-        is_demo=bool(org and org.is_demo),
-    )
+    try:
+        pdf_bytes = build_report_pdf(
+            org_name=org_name,
+            snapshot=snap,
+            findings=findings,
+            brand=brand_ctx,
+            ctx=report_ctx,
+            is_demo=bool(org and org.is_demo),
+        )
+    except OSError as e:
+        # WeasyPrint loads Pango when rendering, not on import.
+        logger.exception("PDF rendering libraries missing: %s", e)
+        raise HTTPException(status_code=503, detail="PDF generation unavailable. Check server logs.")
     filename = (
         f"{'demo-' if org and org.is_demo else ''}org-assessment-"
         f"{snap.snapshot_at.strftime('%Y%m%d')}.pdf"

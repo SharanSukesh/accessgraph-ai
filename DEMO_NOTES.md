@@ -13,10 +13,11 @@
 ## 0. Local demo seed
 
 `apps/backend/scripts/seed_local_demo.py` creates a local admin login and a
-demo org (`is_demo`) from `fixtures/demo_org.json`, then runs the sync
-analysis and the Health Report. It refuses to run unless
-`NEWTON_LOCAL_SEED=1`, `DEMO_MODE=true` and `DATABASE_URL` is SQLite or a
-localhost database.
+demo org (`is_demo`) from a committed fixture, then runs the sync, analysis,
+Health Report and License Fit. It refuses to run unless
+`NEWTON_LOCAL_SEED=1` and `DATABASE_URL` is SQLite or a localhost database.
+`SEED_FIXTURE=synthetic_mid_market` (default, Lumenvale, 400 users) or
+`SEED_FIXTURE=acme` (8 users).
 
 ```bash
 docker run -d --rm --name newton-pg-local -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=newton -p 55439:5432 postgres:16-alpine
@@ -24,11 +25,13 @@ cd apps/backend
 export DATABASE_URL=postgresql://postgres:pw@localhost:55439/newton JWT_SECRET_KEY=local NEWTON_LOCAL_SEED=1
 .venv/bin/alembic upgrade head
 .venv/bin/python scripts/seed_local_demo.py
+# API (PDF needs Homebrew Pango; don't start it with nohup, which drops DYLD_*):
+DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib .venv/bin/python -m uvicorn app.main:app --port 8000
+# Frontend: cd apps/frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npx next dev -p 3000
 ```
 
 Login: `admin@newton-demo.com` / `Local-demo-only-1` (override with
-`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`). The fixture is small (8 users),
-so it exercises every page but won't show rich anomalies.
+`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`).
 
 ## 1. PDF health report
 
@@ -58,7 +61,8 @@ summary no longer calls an org "production" when its type is unknown.
   Railpack would need `RAILPACK_DEPLOY_APT_PACKAGES` for the same libraries
   (untested).
 - How to tell it's broken: Download PDF returns 503 "PDF generation
-  unavailable", and the logs say WeasyPrint could not import external libraries.
+  unavailable", and the logs say "PDF rendering libraries missing" or that
+  WeasyPrint could not load `libgobject`/Pango.
 
 **Railway build settings (handled by the owner on `main` before Thursday's merge):** backend service, Settings, Build: Builder = Dockerfile, root directory `apps/backend`, Dockerfile path `Dockerfile`, no custom start command. Rollback: switch the builder back to its previous value and redeploy.
 
@@ -142,6 +146,84 @@ cross-department access.
 - Health Report → **Download Excel**: Summary, Findings, License Fit,
   Anomalies, User Risk, Sprawl Summary, Data Quality. Sheets for modules
   that haven't run say "not run yet". Needs `openpyxl` (in requirements).
+
+## Verification (2026-10-14, local, Lumenvale, headless Chrome)
+
+Checked: Dashboard, Users, Anomalies, Noor Whitlock's graph (Sales Manager
+Bundle with its muting set) and Why? on Opportunity, graph PNG, Health
+Report, License Fit, Compliance, Sprawl, Admin → Demo orgs, user compare,
+Record Access, the PDF (9 pages) and the Excel workbook. No browser console
+errors after login.
+
+Avoid or explain in a live demo:
+- **Users page and Dashboard tiles are wrong (pre-existing, not fixed):** the
+  list returns the first 100 users in database order, so the Dashboard says
+  100 users (not 400) and the Users page opens with the planted users first;
+  the Risk column and the "High-risk users" tile are always empty/0 because
+  the frontend drops the API's `risk` field; search and the risk filter are
+  ignored by the API. Use Anomalies, the Health Report and user pages instead.
+- **User detail "Last Login" always shows "-"** (the endpoint hardcodes it).
+- Graph: object cards appear only after ticking objects in the right panel.
+- Anomalies: all eight are Critical (see backlog), and every access anomaly
+  is tagged "excessive permissions", including the sole-access ones.
+- Lumenvale has no sharing or team data: Record Access is all zeros and
+  Equity reports index 1.0 / disparity 0 (and adds 20 equity items to
+  Priority Actions). Show Equity on the dev org instead.
+- Sprawl, Data Quality and Change Risk are greyed out for the demo org; use
+  the dev org.
+
+## Thursday runbook
+
+No migrations in this branch: alembic head is `f2c8d4a6b1e9` on both `main`
+and `demo-hardening`, and `app/domain/models.py` is unchanged. New data is
+JSON only (`organizations.settings.demo_fixture`, `PermissionSetGroupId` in
+assignment `raw_data`), which the old code ignores, so rolling back to the
+previous deploy needs no database step. Only new dependency: `openpyxl`.
+No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
+
+**Before merging**
+1. Note the current production deployment of both Railway services
+   (Deployments tab) for rollback.
+2. Tag what's live: `git fetch origin && git tag -a pre-demo-2026-10-15 origin/main -m "Production before demo-hardening" && git push origin pre-demo-2026-10-15`.
+3. Backend service, Settings, Build: Builder = **Dockerfile**, root directory
+   `apps/backend`, Dockerfile path `Dockerfile`, no custom start command.
+   Confirm the last deploy of `main` built with it and Download PDF works on
+   an existing org.
+
+**Merge and deploy**
+4. Merge `demo-hardening` into `main` (PR, then merge) and push. Both
+   services redeploy. In the backend build log, check `openpyxl` installs and
+   migrations report nothing to do.
+5. Smoke test: `/health`, log in, open a client org, open the Health Report.
+
+**Set up the demo**
+6. Admin → Demo orgs → Create **Lumenvale Systems (Demo)**. Wait for "Sync
+   completed" (about a minute). Open it and check the "Demo data" badge.
+7. On Lumenvale: Health Report → Run analysis; License Fit → Re-analyse;
+   Compliance → Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS.
+   Expected: Health 35 (Critical), 12 findings, $183,180/yr; License Fit
+   $116,220/yr; 8 anomalies.
+8. Dev org: **Sync from Salesforce** first (needed for the group/muting
+   graph), then Health Report, Data Quality, all four Sprawl tabs, License
+   Fit, Compliance (five frameworks), Equity and Change Risk.
+9. Logos: Admin → Users → firm branding (firm logo); Health Report → Report
+   branding on each demo org (client logo).
+10. Download the PDF and the Excel once per org and open both. Lumenvale's
+    PDF has the Demo data banner and DEMO DATA in each footer.
+11. Walk the demo path: Anomalies (Jun Jovanovic, Fatima Abernathy at the
+    top), Noor Whitlock → Graph (tick Opportunity and Account), Object
+    Access → Why? on Opportunity (Delete muted), Health Report, License Fit,
+    Download PDF / Excel.
+
+**Rollback**
+- Fast: Railway → each service → Deployments → the deployment noted in
+  step 1 → Redeploy. No database step.
+- Code: `git revert -m 1 <merge commit>` on `main` and push (redeploys).
+  Don't force-push `main`; the tag from step 2 marks the old state.
+- Before rolling back, delete Lumenvale (Admin → Demo orgs): the old code
+  doesn't recognise demo orgs and would print its PDF without the banner.
+- Builder trouble: switch the builder back and redeploy the step-1
+  deployment; PDF download is then unavailable.
 
 ## Backlog (not before Friday)
 
