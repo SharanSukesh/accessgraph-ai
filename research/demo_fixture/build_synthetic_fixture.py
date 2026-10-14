@@ -78,6 +78,7 @@ OBJECT_FIELDS: Dict[str, List[str]] = {
     "Benefits_Enrollment__c": ["Plan__c", "Medical_Condition__c", "Dependents__c"],
     "Performance_Review__c": ["Rating__c", "Manager_Notes__c"],
     "Incident__c": ["Severity__c", "Root_Cause__c"],
+    "Treasury_Account__c": ["Account_Number__c", "Routing_Number__c"],
     "Asset": ["SerialNumber", "Status"],
 }
 HR_RESTRICTED = {"Employee__c", "Compensation__c", "Benefits_Enrollment__c", "Performance_Review__c"}
@@ -108,6 +109,7 @@ def crud(level: str) -> Dict[str, bool]:
         "read": {"PermissionsRead": True},
         "edit": {"PermissionsRead": True, "PermissionsCreate": True, "PermissionsEdit": True},
         "full": {"PermissionsRead": True, "PermissionsCreate": True, "PermissionsEdit": True, "PermissionsDelete": True},
+        "readall": {"PermissionsRead": True, "PermissionsViewAllRecords": True},
         "viewall": {"PermissionsRead": True, "PermissionsCreate": True, "PermissionsEdit": True,
                     "PermissionsDelete": True, "PermissionsViewAllRecords": True},
         "modifyall": {"PermissionsRead": True, "PermissionsCreate": True, "PermissionsEdit": True,
@@ -193,7 +195,7 @@ def build(seed: int, n_users: int, prevalence: float) -> Tuple[dict, dict]:
     def dept_set(dept: str, name: str, label: str, grants: List[Tuple[str, str]], sys=(), assignable=True) -> str:
         ps_id = perm_set(name, label, sys)
         for obj, level in grants:
-            grant(ps_id, obj, level, "edit" if level != "read" else "read")
+            grant(ps_id, obj, level, "read" if level in ("read", "readall") else "edit")
         ps_by_name[name] = ps_id
         if assignable:
             dept_ps[dept].append(ps_id)
@@ -219,13 +221,17 @@ def build(seed: int, n_users: int, prevalence: float) -> Tuple[dict, dict]:
     # Powerful sets used by planted archetypes (not handed out normally).
     dept_set("IT", "Legacy_Integration_Admin", "Legacy Integration Admin", [],
              sys=("ModifyAllData", "AuthorApex", "ApiEnabled", "ViewSetup"), assignable=False)
-    dept_set("HR", "Compensation_Admin", "Compensation Admin", [("Compensation__c", "viewall"), ("Employee__c", "viewall")],
+    dept_set("HR", "Compensation_Admin", "Compensation Admin", [("Compensation__c", "readall"), ("Employee__c", "readall")],
              assignable=False)
     dept_set("Finance", "Finance_Director_Access", "Finance Director Access",
              [("Contract", "modifyall"), ("Invoice__c", "modifyall"), ("Payment__c", "viewall")],
              sys=("ExportReport",), assignable=False)
-    dept_set("HR", "Payroll_Data_Steward", "Payroll Data Steward", [("Compensation__c", "full"), ("Payment__c", "full")],
+    # Sole-access archetype: each steward is the only holder of these grants
+    # (Compensation edit/delete; anything on Treasury Account).
+    dept_set("HR", "Payroll_Data_Steward", "Payroll Data Steward", [("Compensation__c", "full")], assignable=False)
+    dept_set("Finance", "Treasury_Data_Steward", "Treasury Data Steward", [("Treasury_Account__c", "full")],
              assignable=False)
+    stewards = ["Payroll_Data_Steward", "Treasury_Data_Steward"]
     # Unused sets (configuration bloat for the Health Report).
     for i, label in enumerate(["Q3 Promo Pilot", "Old Territory Mgmt", "Temp Contractor Access", "Pilot Chatter Bot"]):
         perm_set(f"Unused_Set_{i + 1}", label, ("ApiEnabled",))
@@ -332,7 +338,7 @@ def build(seed: int, n_users: int, prevalence: float) -> Tuple[dict, dict]:
             for ps_id in rng.choice(extra, size=min(len(extra), 10), replace=False):
                 assign(u.user_id, str(ps_id))
         elif arch == AnomalyArchetype.SOLE_ACCESS_RISK:
-            assign(u.user_id, ps_by_name["Payroll_Data_Steward"])
+            assign(u.user_id, ps_by_name[stewards.pop(0) if stewards else "Payroll_Data_Steward"])
 
         # Record ownership drives License Fit's usage signal. Never-logged-in
         # and HR/IT users own nothing; a share of Sales licences sit idle.
