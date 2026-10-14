@@ -2,6 +2,8 @@
  * User Types
  */
 
+import type { RiskFactor, RiskLevel } from './risk'
+
 export interface User {
   id: string
   organizationId: string
@@ -73,18 +75,4 @@ export interface UserRiskProfile {
   riskLevel: RiskLevel
   factors: RiskFactor[]
   lastAssessedAt: Date
-}
-
-export enum RiskLevel {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical',
-}
-
-export interface RiskFactor {
-  type: string
-  description: string
-  severity: number
-  detectedAt: Date
 }
