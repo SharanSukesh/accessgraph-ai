@@ -42,6 +42,41 @@ DEFAULT_ANOMALY_FRACTION = 0.02
 # which is exactly the DORMANT_POWERFUL pattern.
 NEVER_LOGGED_IN_DAYS = 9999
 
+# Reason-text thresholds. These only decide which explanations a flagged
+# user gets; they never decide who is flagged.
+DORMANT_DAYS = 90
+CROSS_DEPARTMENT_GAP = 0.2
+
+_FEATURE_LABELS: Dict[str, str] = {
+    "num_permission_sets": "permission sets",
+    "num_permission_set_groups": "permission set groups",
+    "num_objects_read": "readable objects",
+    "num_objects_edit": "editable objects",
+    "num_objects_delete": "deletable objects",
+    "num_fields_read": "readable fields",
+    "num_fields_edit": "editable fields",
+    "num_sensitive_objects": "sensitive objects",
+    "num_sensitive_fields": "sensitive fields",
+    "permission_breadth_score": "permission breadth score",
+    "last_login_days_ago": "days since last login",
+    "cross_department_access_ratio": "share of access outside own department",
+    "unique_access_count": "permissions no one else holds",
+}
+
+
+def _format_feature(col: str, value) -> str:
+    if col == "cross_department_access_ratio":
+        return f"{round(float(value) * 100)}%"
+    if col == "last_login_days_ago" and float(value) >= NEVER_LOGGED_IN_DAYS:
+        return "never"
+    value = float(value)
+    return str(int(value)) if value.is_integer() else f"{value:.1f}"
+
+
+def _format_grant(grant: tuple) -> str:
+    kind, name, perm = grant
+    return f"{perm.capitalize()} on {'field ' if kind == 'field' else ''}{name}"
+
 # Standard Salesforce object → primary business department mapping. Used
 # by the cross_department_access_ratio feature to flag cross-domain
 # over-reach (e.g., Sales user with HR object access). Custom objects
@@ -344,7 +379,8 @@ class AnomalyDetectionService:
         # tuple, build the set of users with that grant; users who appear
         # in singleton sets get their unique_access_count incremented.
         # Closes the SOLE_ACCESS_RISK blind spot from REPORT.md § 7.2.
-        unique_access_counts = self._compute_unique_access_counts(all_user_access)
+        unique_grants = self._compute_unique_grants(all_user_access)
+        unique_access_counts = {sf_id: len(g) for sf_id, g in unique_grants.items()}
 
         # Phase 3: per-user feature extraction (now O(1) work per user since
         # access is already loaded; previously each call re-queried).
@@ -398,63 +434,56 @@ class AnomalyDetectionService:
         detector.fit(X)
         raw_scores = detector.score(X)
 
-        # Normalize to 0-1 so the rest of this method (severity bands,
-        # `score > 0.5` threshold check) keeps working unchanged. Higher
-        # = more anomalous in both the raw and normalized scores.
+        # Normalize to 0-1 for the severity bands. Higher = more anomalous
+        # in both the raw and normalized scores.
         score_min = raw_scores.min()
         score_max = raw_scores.max()
         anomaly_scores_norm = (raw_scores - score_min) / (
             score_max - score_min + 1e-10
         )
 
-        # Mark the top-k highest-scoring users as ML-flagged anomalies.
-        # k = floor(n_users * DEFAULT_ANOMALY_FRACTION), with a floor of 1
-        # so we always flag at least one user when the org has any users.
+        # Flag exactly the top-k users by ensemble score: k = 2% of active
+        # users, with a floor of 1. The normalised score only sets severity.
+        # It is never a second way in: on min-max-normalised rank averages,
+        # "score > 0.5" admits about half the org. Every top-k user is kept,
+        # whether or not a reason template matches or they have peers.
         n_users = len(X)
         k = max(1, int(n_users * DEFAULT_ANOMALY_FRACTION))
-        # argpartition is O(n) — cheaper than a full sort for big orgs.
-        top_k_idx = set(np.argpartition(-raw_scores, k - 1)[:k].tolist())
+        top_k_idx = np.argsort(-raw_scores, kind="stable")[:k]
 
-        # Create anomaly records
+        org_medians = df[feature_cols].median()
+        org_stds = df[feature_cols].std(ddof=0)
+
         anomalies = []
-        for idx, user in enumerate(users):
+        for rank, idx in enumerate(top_k_idx.tolist(), start=1):
+            user = users[idx]
             score = float(anomaly_scores_norm[idx])
-            is_anomaly = idx in top_k_idx
-
-            # Compute peer stats for context
             peer_stats = await self._compute_peer_stats(
                 org_id, user, df, feature_cols, idx
             )
+            peer_stats["rank"] = rank
+            peer_stats["users_scored"] = n_users
+            reasons = self._generate_reasons(
+                feature_data[idx],
+                peer_stats,
+                unique_grants=unique_grants.get(user.salesforce_id, []),
+                top_features=self._top_contributing_features(
+                    feature_data[idx], org_medians, org_stds, feature_cols
+                ),
+            )
+            severity = self._determine_severity(score, len(reasons))
 
-            # Skip if this is the ONLY user with this profile (e.g., sole System Admin)
-            if peer_stats.get("peer_count", 0) == 0:
-                logger.info(f"Skipping {user.name} - no peers found (profile_id: {user.profile_id})")
-                continue
-
-            # Only flag if anomaly score is significant OR flagged by ML
-            if score > 0.5 or is_anomaly:
-                # Generate context-aware reasons with peer comparison details
-                reasons = self._generate_reasons(feature_data[idx], peer_stats)
-
-                # Skip if no significant deviations found
-                if not reasons or len(reasons) == 0:
-                    continue
-
-                # Determine severity
-                severity = self._determine_severity(score, len(reasons))
-
-                anomaly = AccessAnomaly(
-                    organization_id=org_id,
-                    user_id=user.salesforce_id,
-                    anomaly_score=score,
-                    severity=severity,
-                    reasons=reasons,
-                    features=feature_data[idx],
-                    peer_stats=peer_stats,
-                    detected_at=datetime.now(timezone.utc),
-                    category="access",
-                )
-                anomalies.append(anomaly)
+            anomalies.append(AccessAnomaly(
+                organization_id=org_id,
+                user_id=user.salesforce_id,
+                anomaly_score=score,
+                severity=severity,
+                reasons=reasons,
+                features=feature_data[idx],
+                peer_stats=peer_stats,
+                detected_at=datetime.now(timezone.utc),
+                category="access",
+            ))
 
         # Persist
         if anomalies:
@@ -593,16 +622,17 @@ class AnomalyDetectionService:
         }
 
     @staticmethod
-    def _compute_unique_access_counts(
+    def _compute_unique_grants(
         all_user_access: Dict[str, tuple],
-    ) -> Dict[str, int]:
-        """Walk every user's effective access; count grants where they're
-        the sole grantee in the org.
+    ) -> Dict[str, List[tuple]]:
+        """Walk every user's effective access; return the grants each user
+        is the only one in the org to hold.
 
         all_user_access[sf_user_id] = (obj_access_dict, field_access_dict).
-        Returns sf_user_id → count of singleton grants.
+        Returns sf_user_id -> sorted list of (kind, identifier, perm_type),
+        object grants before field grants.
         """
-        # (kind, identifier, perm_type) → set of sf_user_ids with that grant
+        # (kind, identifier, perm_type) -> set of sf_user_ids with that grant
         grants_by_users: Dict[tuple, set] = defaultdict(set)
         for sf_id, (obj_access, field_access) in all_user_access.items():
             for obj in obj_access.get("objects", []):
@@ -616,11 +646,21 @@ class AnomalyDetectionService:
                     if f.get("access", {}).get(perm_kind):
                         grants_by_users[("field", fid, perm_kind)].add(sf_id)
 
-        counts: Dict[str, int] = {sf_id: 0 for sf_id in all_user_access}
-        for user_set in grants_by_users.values():
+        unique: Dict[str, List[tuple]] = {sf_id: [] for sf_id in all_user_access}
+        for grant, user_set in grants_by_users.items():
             if len(user_set) == 1:
-                counts[next(iter(user_set))] += 1
-        return counts
+                unique[next(iter(user_set))].append(grant)
+        for grants in unique.values():
+            grants.sort(key=lambda g: (g[0] != "obj", g[1], g[2]))
+        return unique
+
+    @classmethod
+    def _compute_unique_access_counts(
+        cls,
+        all_user_access: Dict[str, tuple],
+    ) -> Dict[str, int]:
+        """sf_user_id -> count of grants where they're the sole grantee."""
+        return {sf_id: len(g) for sf_id, g in cls._compute_unique_grants(all_user_access).items()}
 
     async def _compute_peer_stats(
         self, org_id: str, user: UserSnapshot, df: pd.DataFrame, feature_cols: List[str], user_idx: int
@@ -629,13 +669,19 @@ class AnomalyDetectionService:
         # Primary peer group: same role
         role_peers = df[df["role_id"] == user.user_role_id]
 
+        profile_peers = df[df["profile_id"] == user.profile_id]
+
         if len(role_peers) > 1:
             peer_group = "role"
             peers = role_peers
+        elif len(profile_peers) > 1:
+            peer_group = "profile"
+            peers = profile_peers
         else:
-            # Fallback to profile
-            peers = df[df["profile_id"] == user.profile_id]
-            peer_group = "profile" if len(peers) > 1 else "org"
+            # Nobody shares the role or profile (e.g. a sole System
+            # Administrator): compare against everyone else in the org.
+            peer_group = "org"
+            peers = df
 
         # Exclude self
         peers = peers[peers["user_id"] != user.salesforce_id]
@@ -665,20 +711,87 @@ class AnomalyDetectionService:
             "deviations": deviations,
         }
 
-    def _generate_reasons(self, features: Dict, peer_stats: Dict) -> List[str]:
-        """Generate context-aware anomaly reasons with peer comparison details"""
+    @staticmethod
+    def _top_contributing_features(
+        features: Dict, org_medians, org_stds, feature_cols: List[str], limit: int = 3,
+    ) -> List[str]:
+        """The features where this user sits furthest above the org, in
+        standard deviations; used to explain a flag no template covers."""
+        z = []
+        for col in feature_cols:
+            std = float(org_stds[col])
+            if std <= 0:
+                continue
+            dist = (float(features[col]) - float(org_medians[col])) / std
+            if dist > 0:
+                z.append((dist, col))
+        z.sort(reverse=True)
+        return [
+            f"{_FEATURE_LABELS.get(col, col)} {_format_feature(col, features[col])} "
+            f"(org median {_format_feature(col, org_medians[col])})"
+            for _, col in z[:limit]
+        ]
+
+    def _generate_reasons(
+        self,
+        features: Dict,
+        peer_stats: Dict,
+        unique_grants: Optional[List[tuple]] = None,
+        top_features: Optional[List[str]] = None,
+    ) -> List[str]:
+        """Generate context-aware anomaly reasons with peer comparison details.
+
+        Always returns at least one reason: when no template matches, the
+        fallback names the features that put the user in the top 2%.
+        """
         reasons = []
 
-        if peer_stats.get("peer_count", 0) == 0:
-            return []  # Return empty - will be skipped by caller
-
-        # Build peer context string
         peer_count = peer_stats.get("peer_count", 0)
-        peer_type = peer_stats.get("peer_type", "organization")
-        peer_context = f"Compared to {peer_count} peers with the same {peer_type}"
+        peer_group = peer_stats.get("peer_group", "org")
+        if peer_group == "org":
+            peer_context = (
+                f"No other active user shares this user's role or profile, so this compares "
+                f"against all {peer_count} other active users in the org"
+            )
+        else:
+            peer_context = f"Compared to {peer_count} peers with the same {peer_group}"
 
         deviations = peer_stats.get("deviations", {})
         medians = peer_stats.get("peer_medians", {})
+
+        # Exclusive access: the user is the only grantee of these permissions.
+        unique_count = features.get("unique_access_count", 0)
+        if unique_count > 0 and unique_count > medians.get("unique_access_count", 0):
+            examples = ", ".join(_format_grant(g) for g in (unique_grants or [])[:3])
+            reasons.append(
+                f"Is the only user in the org with {unique_count} permission{'s' if unique_count != 1 else ''}"
+                + (f", including {examples}" if examples else "")
+                + ". If this account is lost or disabled, nobody else can do this work."
+            )
+
+        # Dormancy.
+        days = features.get("last_login_days_ago", 0)
+        peer_days = medians.get("last_login_days_ago", 0)
+        if days >= NEVER_LOGGED_IN_DAYS and peer_days < NEVER_LOGGED_IN_DAYS:
+            reasons.append(
+                f"Has never logged in, yet the account is active and keeps all its access. "
+                f"{peer_context}, whose median last login was {int(peer_days)} days ago."
+            )
+        elif DORMANT_DAYS <= days < NEVER_LOGGED_IN_DAYS and days > peer_days:
+            reasons.append(
+                f"Last logged in {days} days ago vs peer median of {int(peer_days)} days. "
+                f"{peer_context}; the account keeps its access while unused."
+            )
+
+        # Cross-department reach.
+        ratio = features.get("cross_department_access_ratio", 0.0)
+        peer_ratio = medians.get("cross_department_access_ratio", 0.0)
+        if ratio - peer_ratio >= CROSS_DEPARTMENT_GAP:
+            dept = features.get("department") or "this user's"
+            reasons.append(
+                f"{round(ratio * 100)}% of the objects and fields this {dept} user can read belong to other "
+                f"departments vs peer median of {round(peer_ratio * 100)}%. {peer_context}."
+            )
 
         # Check significant deviations with context
         if deviations.get("num_permission_sets", 0) > 2.0:
@@ -715,6 +828,23 @@ class AnomalyDetectionService:
             reasons.append(
                 f"Accesses {user_val} sensitive objects vs peer median of {int(peer_val)}. {peer_context}, unusual sensitive object access detected."
             )
+
+        if not reasons:
+            rank = peer_stats.get("rank")
+            total = peer_stats.get("users_scored")
+            position = f"Ranked #{rank} of {total} users" if rank and total else "Ranked in the top 2% of users"
+            if peer_group == "org":
+                position = f"{peer_context}. {position}"
+            if top_features:
+                reasons.append(
+                    f"{position} by the anomaly model on the combination of its access features. "
+                    f"Furthest above the org: {'; '.join(top_features)}."
+                )
+            else:
+                reasons.append(
+                    f"{position} by the anomaly model on the combination of its access features; "
+                    f"no single feature stands out."
+                )
 
         return reasons[:5]  # Top 5 most significant reasons
 

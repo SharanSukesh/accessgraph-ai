@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { RiskBadge, StatusBadge, Badge } from '@/components/shared/Badge'
+import { RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
 // Grove Refined — motion + chart primitives ported from the /v2
 // prototype. Presentational only.
 import { Reveal, Stagger, StaggerItem, CountUp } from '@/components/v2/motion'
@@ -333,7 +333,7 @@ export default function DashboardPage() {
                           score
                         </p>
                       </div>
-                      <RiskBadge level={anomaly.severity} showLabel={false} />
+                      <SeverityBadge severity={anomaly.severity} />
                     </div>
                   </div>
                 ))}
