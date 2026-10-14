@@ -65,7 +65,7 @@ Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBO
 | 4 | Shorter sessions: 12-hour absolute, 2-hour idle for admins. | Reduces the impact of a stolen session. |
 | 5 | Deployable "Newton Read Only" permission set (metadata plus a one-command `sf` deploy) matching the onboarding guide. | Removes manual setup errors at the client. |
 | 6 | Verify against a real org which features work with the read-only user (LoginHistory, View All Data trade-offs) and record it in the guide. | Set accurate expectations with clients. |
-| 7 | Confirm `DATABASE_ENCRYPTION_KEY` is set in production and write a key-rotation runbook. | Tokens must be encrypted at rest. |
+| 7 | Confirm `DATABASE_ENCRYPTION_KEY` is set in production and write a key-rotation runbook. Confirm production does not use the key that previously appeared in ENCRYPTION_SETUP.md; rotate if it does. | Tokens must be encrypted at rest. |
 | 8 | Staging environment (Railway preview or a second service) and a rule that `main` deploys only after staging passes. | A push to `main` currently goes straight to production. |
 
 ## P1: next quarter

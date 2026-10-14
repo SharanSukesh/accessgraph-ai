@@ -35,6 +35,8 @@ const CONNECT_ERRORS: Record<string, string> = {
   salesforce_org_unknown: 'Newton could not identify that Salesforce org. Please try connecting again.',
   org_not_granted:
     "That Salesforce org is already connected to Newton and hasn't been shared with you. Ask an admin for access.",
+  demo_org_cannot_connect:
+    'That Salesforce org is linked to a demo org, and demo orgs never hold real Salesforce access. Ask an admin to delete the demo org first.',
 }
 
 const FALLBACK_CONNECT_ERROR = 'The Salesforce org could not be connected. Please try again.'

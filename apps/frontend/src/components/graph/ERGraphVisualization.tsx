@@ -9,9 +9,10 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import cytoscape, { Core, NodeSingular, ElementDefinition } from 'cytoscape'
 // @ts-ignore - No types available for cose-bilkent
 import coseBilkent from 'cytoscape-cose-bilkent'
-import { Loader2 } from 'lucide-react'
+import { Download, Loader2 } from 'lucide-react'
 import { ERObjectCard } from './ERObjectCard'
 import { getLayoutOptions } from '@/lib/utils/graph-transforms'
+import { exportGraphToJSON, exportStamp } from '@/lib/utils/exports'
 
 // Register layout
 if (typeof window !== 'undefined') {
@@ -38,6 +39,9 @@ interface Graph {
     edgeCount: number
     centerNodeId?: string
     generatedAt: string
+    // Permission sets and groups drawn, and how many were left out.
+    assignmentsShown?: number
+    assignmentsHidden?: number
   }
 }
 
@@ -47,6 +51,8 @@ interface ERGraphVisualizationProps {
   onNodeSelect?: (node: any) => void
   height?: string
   className?: string
+  /** Filename stem for PNG / JSON downloads; omit to hide the export buttons. */
+  exportName?: string
 }
 
 export function ERGraphVisualization({
@@ -55,6 +61,7 @@ export function ERGraphVisualization({
   onNodeSelect,
   height = '800px',
   className = '',
+  exportName,
 }: ERGraphVisualizationProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
@@ -147,6 +154,20 @@ export function ERGraphVisualization({
           'border-color': '#146b4a',
           'border-width': 1.5,
           shape: 'round-rectangle',
+        },
+      },
+      // Permission set group nodes — deeper mint with a double border, so the
+      // group reads as a container for the sets hanging off it.
+      {
+        selector: 'node[type="permission_set_group"]',
+        style: {
+          'background-color': '#3fa47a',
+          'border-color': '#094230',
+          'border-width': 4,
+          'border-style': 'double',
+          shape: 'round-rectangle',
+          color: '#fdfaf1',
+          'text-outline-color': '#146b4a',
         },
       },
       // Muting permission set nodes — distinct red treatment so they read as
@@ -275,6 +296,37 @@ export function ERGraphVisualization({
       // regular grant edges. Communicates "this path removes access".
       {
         selector: 'edge[type="ASSIGNED_MUTING_PERMISSION_SET"]',
+        style: {
+          'line-color': '#dc2626',
+          'target-arrow-color': '#dc2626',
+          'line-style': 'dashed',
+          'line-dash-pattern': [6, 4],
+          width: 1.75,
+        },
+      },
+      // ASSIGNED_PERMISSION_SET_GROUP edge — matches the group node
+      {
+        selector: 'edge[type="ASSIGNED_PERMISSION_SET_GROUP"]',
+        style: {
+          'line-color': '#3fa47a',
+          'target-arrow-color': '#146b4a',
+          width: 2,
+        },
+      },
+      // INCLUDES_PERMISSION_SET edge — group to component set, dotted:
+      // display only, the group's own edges carry its access.
+      {
+        selector: 'edge[type="INCLUDES_PERMISSION_SET"]',
+        style: {
+          'line-color': '#6bbf95',
+          'target-arrow-color': '#146b4a',
+          'line-style': 'dotted',
+          width: 1.5,
+        },
+      },
+      // MUTES edge — group to its muting set, red dashed.
+      {
+        selector: 'edge[type="MUTES"]',
         style: {
           'line-color': '#dc2626',
           'target-arrow-color': '#dc2626',
@@ -530,8 +582,69 @@ export function ERGraphVisualization({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedObjects, graph])
 
+  // Object cards are HTML overlays the canvas can't capture, so for the
+  // PNG the object nodes briefly draw themselves as labelled boxes, e.g.
+  // "Account (R E)", then go back to being invisible anchors.
+  const exportPng = () => {
+    const cy = cyRef.current
+    if (!cy || !exportName) return
+    const objects = cy.nodes('[type="object"]')
+    objects.forEach((n) => {
+      const perms = (['canRead', 'canCreate', 'canEdit', 'canDelete'] as const)
+        .filter((k) => n.data(k))
+        .map((k) => k.charAt(3))
+        .join(' ')
+      n.data('exportLabel', `${n.data('objectName') ?? n.id()}${perms ? ` (${perms})` : ''}`)
+    })
+    objects.style({
+      'background-opacity': 1,
+      'background-color': '#146b4a',
+      'border-opacity': 1,
+      label: 'data(exportLabel)',
+      color: '#fdfaf1',
+      'text-valign': 'center',
+      'text-halign': 'center',
+      'font-size': '12px',
+      width: 150,
+      height: 44,
+      shape: 'round-rectangle',
+    })
+    const uri = cy.png({ full: true, scale: 2, bg: '#fdfaf1', output: 'base64uri' })
+    objects.removeStyle()
+    const link = document.createElement('a')
+    link.href = uri
+    link.download = `${exportName}-${exportStamp()}.png`
+    link.click()
+  }
+
   return (
     <div className={`relative ${className}`} style={{ height }}>
+      {exportName && !isLoading && (
+        <div className="absolute right-3 top-3 z-20 flex gap-1.5">
+          <button
+            type="button"
+            onClick={exportPng}
+            className="inline-flex items-center gap-1 rounded-md border border-grove-border bg-grove-surface/90 px-2 py-1 text-xs font-medium text-grove-ink/80 hover:bg-primary-50 dark:border-grove-border-dk dark:bg-grove-surface-dk/90 dark:text-grove-ink-dk/80"
+            title="Download the graph as an image"
+          >
+            <Download className="h-3.5 w-3.5" /> PNG
+          </button>
+          <button
+            type="button"
+            onClick={() => exportGraphToJSON(graph, `${exportName}-${exportStamp()}`)}
+            className="inline-flex items-center gap-1 rounded-md border border-grove-border bg-grove-surface/90 px-2 py-1 text-xs font-medium text-grove-ink/80 hover:bg-primary-50 dark:border-grove-border-dk dark:bg-grove-surface-dk/90 dark:text-grove-ink-dk/80"
+            title="Download the nodes and edges as JSON"
+          >
+            <Download className="h-3.5 w-3.5" /> JSON
+          </button>
+        </div>
+      )}
+      {!isLoading && (graph.metadata.assignmentsHidden ?? 0) > 0 && (
+        <div className="absolute left-3 top-3 z-20 rounded-md border border-copper-200 bg-copper-50/95 px-2 py-1 text-xs text-copper-700 dark:border-copper-800 dark:bg-copper-900/40 dark:text-copper-300">
+          +{graph.metadata.assignmentsHidden} more permission sets or groups not drawn. The Object Access tab
+          includes them all.
+        </div>
+      )}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-grove-surface/80 dark:bg-grove-canvas-dk/80 z-10">
           <div className="flex items-center gap-2 text-grove-ink/65 dark:text-grove-ink-dk/65">

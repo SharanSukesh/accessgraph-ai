@@ -31,6 +31,9 @@ interface Graph {
     edgeCount: number
     centerNodeId?: string
     generatedAt: string
+    // Permission sets and groups drawn, and how many were left out.
+    assignmentsShown?: number
+    assignmentsHidden?: number
   }
 }
 

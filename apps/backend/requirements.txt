@@ -58,6 +58,9 @@ networkx==3.2.1
 # missing system dep doesn't break the rest of the analyzer.
 weasyprint>=62.0
 
+# Excel export of the Health Report (report.xlsx).
+openpyxl==3.1.5
+
 # Development
 pytest==7.4.4
 pytest-asyncio==0.23.3

@@ -35,6 +35,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.services.salesforce_sync import SalesforceSyncService
+from app.ingestion.demo_orgs import ensure_live_org
 
 
 logger = logging.getLogger(__name__)
@@ -119,6 +120,7 @@ class ReportingGraphService:
         # Resolve a working SF API client. Reuses the existing sync service's
         # token-refresh logic so we never bother the user with stale-token
         # 401s mid-write.
+        await ensure_live_org(self.db, org_id, "Salesforce write-back")
         sync_service = SalesforceSyncService(self.db, org_id)
         sf_client = await sync_service._refresh_access_token()
 

@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
@@ -129,68 +129,71 @@ class RecommendationStatusUpdate(BaseModel):
 # ============================================================================
 
 
+RISK_LEVEL_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
 @router.get("/orgs/{org_id}/users")
 async def list_users(
     org_id: str,
     is_active: Optional[bool] = None,
     department: Optional[str] = None,
-    limit: int = Query(100, le=1000),
+    search: Optional[str] = None,
+    riskLevel: Optional[str] = Query(None, description="critical | high | medium | low"),
+    sort: str = Query("risk", description="risk (highest first) or name"),
+    limit: int = Query(5000, le=5000),
     db: AsyncSession = Depends(get_database),
 ):
-    """List users in organization"""
+    """List users in organization, highest risk first by default.
+
+    Profiles, roles and each user's latest risk score are loaded in bulk
+    rather than per user.
+    """
     from app.domain.models import ProfileSnapshot, RoleSnapshot, RiskScore
 
     query = select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
-
     if is_active is not None:
         query = query.where(UserSnapshot.is_active == is_active)
     if department:
         query = query.where(UserSnapshot.department == department)
+    if search and search.strip():
+        needle = f"%{search.strip().lower()}%"
+        query = query.where(or_(
+            func.lower(UserSnapshot.name).like(needle),
+            func.lower(UserSnapshot.username).like(needle),
+            func.lower(UserSnapshot.email).like(needle),
+        ))
+    users = (await db.execute(query)).scalars().all()
 
-    query = query.limit(limit)
+    profiles = dict((await db.execute(
+        select(ProfileSnapshot.salesforce_id, ProfileSnapshot.name)
+        .where(ProfileSnapshot.organization_id == org_id)
+    )).all())
+    roles = dict((await db.execute(
+        select(RoleSnapshot.salesforce_id, RoleSnapshot.name)
+        .where(RoleSnapshot.organization_id == org_id)
+    )).all())
+    latest = (
+        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
+        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        .group_by(RiskScore.entity_id)
+        .subquery()
+    )
+    risks = {
+        r.entity_id: r
+        for r in (await db.execute(
+            select(RiskScore).join(
+                latest,
+                (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at),
+            ).where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        )).scalars().all()
+    }
 
-    result = await db.execute(query)
-    users = result.scalars().all()
-
-    # Build response with role, profile, and risk data
     user_list = []
     for u in users:
-        # Get profile name
-        profile_name = None
-        if u.profile_id:
-            profile_query = select(ProfileSnapshot).where(
-                ProfileSnapshot.organization_id == org_id,
-                ProfileSnapshot.salesforce_id == u.profile_id
-            )
-            profile_result = await db.execute(profile_query)
-            profile = profile_result.scalar_one_or_none()
-            if profile:
-                profile_name = profile.name
-
-        # Get role name
-        role_name = None
-        if u.user_role_id:
-            role_query = select(RoleSnapshot).where(
-                RoleSnapshot.organization_id == org_id,
-                RoleSnapshot.salesforce_id == u.user_role_id
-            )
-            role_result = await db.execute(role_query)
-            role = role_result.scalar_one_or_none()
-            if role:
-                role_name = role.name
-
-        # Get risk level
-        risk_level = None
-        risk_query = select(RiskScore).where(
-            RiskScore.organization_id == org_id,
-            RiskScore.entity_type == "user",
-            RiskScore.entity_id == u.salesforce_id
-        ).order_by(RiskScore.calculated_at.desc()).limit(1)
-        risk_result = await db.execute(risk_query)
-        risk = risk_result.scalar_one_or_none()
-        if risk:
-            risk_level = risk.risk_level.value
-
+        risk = risks.get(u.salesforce_id)
+        risk_level = risk.risk_level.value if risk else None
+        if riskLevel and risk_level != riskLevel.lower():
+            continue
         user_list.append({
             "id": u.id,
             "salesforceUserId": u.salesforce_id,
@@ -202,12 +205,22 @@ async def list_users(
             "title": u.title,
             "isActive": u.is_active,
             "is_active": u.is_active,
-            "role": role_name,
-            "profile": profile_name,
+            "role": roles.get(u.user_role_id) if u.user_role_id else None,
+            "profile": profiles.get(u.profile_id) if u.profile_id else None,
             "risk": risk_level,
+            "riskLevel": risk_level,
+            "riskScore": round(risk.risk_score, 1) if risk else None,
+            "lastLoginDate": u.last_login_at.isoformat() if u.last_login_at else None,
         })
 
-    return user_list
+    if sort == "name":
+        user_list.sort(key=lambda r: (r["name"] or "").lower())
+    else:
+        # Highest risk first; unscored users last; ties by name.
+        user_list.sort(key=lambda r: (
+            r["riskScore"] is None, -(r["riskScore"] or 0), (r["name"] or "").lower(),
+        ))
+    return user_list[:limit]
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}")
@@ -280,7 +293,7 @@ async def get_user(
         "role": role_name,
         "profile": profile_name,
         "riskLevel": risk_level,
-        "lastLoginDate": None,  # We don't have this data yet
+        "lastLoginDate": user.last_login_at.isoformat() if user.last_login_at else None,
     }
 
 
@@ -467,6 +480,8 @@ async def list_anomalies(
     org_id: str,
     severity: Optional[str] = None,
     category: Optional[str] = None,
+    type: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = Query(100, le=1000),
     db: AsyncSession = Depends(get_database),
 ):
@@ -474,6 +489,8 @@ async def list_anomalies(
 
     `category` filter accepts "access" (ML permission-based detector) or
     "session" (LoginHistory rule-based detector). Omit to see both.
+    `type` matches the anomaly type shown on each card; `search` matches
+    the user's name and the reason text.
     """
     query = (
         select(AccessAnomaly, UserSnapshot.name)
@@ -489,7 +506,7 @@ async def list_anomalies(
     if category:
         query = query.where(AccessAnomaly.category == category)
 
-    query = query.order_by(AccessAnomaly.anomaly_score.desc()).limit(limit)
+    query = query.order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
 
     result = await db.execute(query)
     anomaly_user_pairs = result.all()
@@ -499,7 +516,7 @@ async def list_anomalies(
             return f"Session anomaly detected for {user_name}"
         return f"Anomalous access pattern detected for {user_name}"
 
-    return [
+    rows = [
         {
             "id": a.id,
             "userId": a.user_id,  # Frontend expects camelCase
@@ -516,12 +533,24 @@ async def list_anomalies(
             # Type mapping: session anomalies get their own type so the
             # frontend legend + filter dropdown group them separately from
             # the ML permission anomalies.
-            "type": "session_anomaly" if a.category == "session" else "excessive_permissions",
+            # Access anomalies are typed by their strongest reason; rows
+            # from before that existed fall back to the old generic type.
+            "type": "session_anomaly" if a.category == "session"
+            else (a.peer_stats or {}).get("anomaly_type") or "excessive_permissions",
+            "rank": (a.peer_stats or {}).get("rank"),
+            "usersScored": (a.peer_stats or {}).get("users_scored"),
             "title": _display_title(a.category, user_name),
             "description": a.reasons[0] if a.reasons else "Access pattern deviates from peer baseline",
         }
         for a, user_name in anomaly_user_pairs
     ]
+    if type:
+        rows = [r for r in rows if r["type"] == type]
+    if search and search.strip():
+        needle = search.strip().lower()
+        rows = [r for r in rows if needle in (r["userName"] or "").lower()
+                or any(needle in reason.lower() for reason in r["reasons"] or [])]
+    return rows[:limit]
 
 
 class TopAnomalousUserResponse(BaseModel):
@@ -532,6 +561,9 @@ class TopAnomalousUserResponse(BaseModel):
     severity: str
     topReasons: List[str]
     riskScore: Optional[float] = None
+    anomalyType: Optional[str] = None
+    rank: Optional[int] = None
+    usersScored: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -552,7 +584,7 @@ async def get_top_anomalous_users(
             AccessAnomaly.organization_id == org_id,
             UserSnapshot.organization_id == org_id,
         )
-        .order_by(AccessAnomaly.anomaly_score.desc())
+        .order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
         .limit(limit)
     )
 
@@ -568,6 +600,10 @@ async def get_top_anomalous_users(
             "severity": anomaly.severity.value,
             "topReasons": anomaly.reasons[:3] if anomaly.reasons else [],
             "riskScore": None,  # Could be joined from RiskScore if needed
+            "anomalyType": "session_anomaly" if anomaly.category == "session"
+            else (anomaly.peer_stats or {}).get("anomaly_type"),
+            "rank": (anomaly.peer_stats or {}).get("rank"),
+            "usersScored": (anomaly.peer_stats or {}).get("users_scored"),
         }
         for anomaly, user in rows
     ]
@@ -685,8 +721,10 @@ async def get_user_record_access(
     - Manual shares
     - Team access (Account Teams, Opportunity Teams)
     """
+    from app.ingestion.demo_orgs import refuse_demo_org
     from app.services.record_access import RecordAccessService
 
+    await refuse_demo_org(db, org_id, "Record Access")
     # Create service instance
     service = RecordAccessService(db)
 
@@ -1020,9 +1058,10 @@ async def list_fields(
                 "objectName": field.sobject_type,
                 "apiName": field.field,
                 "label": create_label(field.field),
-                "dataType": "String",  # We don't have this info yet
+                # Field type and encryption aren't synced; null, never a guess.
+                "dataType": None,
                 **_field_sensitivity(field.field),
-                "isEncrypted": False,  # Would need field metadata to determine
+                "isEncrypted": None,
                 "isCustom": field.field.endswith('__c'),
                 "userCount": field.permission_count,
                 "permissionCount": field.permission_count,
@@ -1214,9 +1253,10 @@ async def get_field_details(
         "fieldName": field_name,
         "label": create_label(field_name),
         "isCustom": field_name.endswith('__c'),
-        "dataType": "String",  # We don't have this metadata yet
+        # Field type and encryption aren't synced; null, never a guess.
+        "dataType": None,
         **_field_sensitivity(field_name),
-        "isEncrypted": False,  # Would need field metadata
+        "isEncrypted": None,
         "profilesWithAccess": profiles_with_access,
         "permissionSetsWithAccess": permission_sets_with_access,
         "usersWithAccess": users_with_access,
@@ -1479,6 +1519,10 @@ def _extract_system_permissions(raw_data: dict) -> dict[str, list[dict]]:
     return result
 
 
+# Permission sets and groups drawn per user before "+N more" kicks in.
+GRAPH_MAX_ASSIGNMENTS = 50
+
+
 @router.get("/orgs/{org_id}/graph/user/{user_sf_id}")
 async def get_user_graph(
     org_id: str,
@@ -1568,53 +1612,204 @@ async def get_user_graph(
                 "label": "has role"
             })
 
-    # Add permission set nodes and edges
+    # Permission sets and permission set groups. A group assignment comes in
+    # one of two shapes: Salesforce assigns the group's aggregate permission
+    # set (Type = Group, with PermissionSetGroupId on the assignment), while
+    # the demo fixtures assign the group id (0PG) directly. Either way the
+    # group node carries the group's net access, and its component
+    # permission sets and muting set hang off it for display only.
+    from collections import defaultdict
+    from types import SimpleNamespace
+    from app.domain.models import PermissionSetGroupComponentSnapshot, PermissionSetGroupSnapshot
+    from app.services.effective_access import (
+        FIELD_FLAGS, OBJECT_FLAGS, EffectiveAccessService, _Component, _Source, _evaluate,
+    )
+
     ps_assignments_query = select(PermissionSetAssignmentSnapshot).where(
         PermissionSetAssignmentSnapshot.organization_id == org_id,
         PermissionSetAssignmentSnapshot.assignee_id == user_sf_id
-    ).limit(10)  # Limit to avoid overwhelming the graph
-    ps_assignments_result = await db.execute(ps_assignments_query)
-    ps_assignments = ps_assignments_result.scalars().all()
+    ).order_by(PermissionSetAssignmentSnapshot.permission_set_id)
+    all_assignments = (await db.execute(ps_assignments_query)).scalars().all()
+
+    async def _ps_rows(ids):
+        if not ids:
+            return {}
+        rows = (await db.execute(select(PermissionSetSnapshot).where(
+            PermissionSetSnapshot.organization_id == org_id,
+            PermissionSetSnapshot.salesforce_id.in_(list(ids)),
+        ))).scalars().all()
+        return {ps.salesforce_id: ps for ps in rows}
+
+    ps_rows = await _ps_rows([a.permission_set_id for a in all_assignments])
+    # Draw at most GRAPH_MAX_ASSIGNMENTS sets and groups; the metadata says
+    # how many were left out so the UI can show "+N more". Object cards'
+    # permissions come from effective access, which always uses them all.
+    profile_owned = [a for a in all_assignments
+                     if a.permission_set_id in ps_rows and ps_rows[a.permission_set_id].is_owned_by_profile]
+    others = [a for a in all_assignments if a not in profile_owned]
+    ps_assignments = profile_owned + others[:GRAPH_MAX_ASSIGNMENTS]
+    hidden_assignments = max(0, len(others) - GRAPH_MAX_ASSIGNMENTS)
+
+    # Group node id -> PermissionSetGroup id (None if not synced yet).
+    group_of_node: Dict[str, Optional[str]] = {}
+    for a in ps_assignments:
+        ps = ps_rows.get(a.permission_set_id)
+        if ps is not None and ps.ps_type == "Group":
+            group_of_node[a.permission_set_id] = (
+                (a.raw_data or {}).get("PermissionSetGroupId")
+                or (ps.raw_data or {}).get("PermissionSetGroupId")
+            )
+        elif ps is None:
+            group_of_node[a.permission_set_id] = a.permission_set_id  # 0PG id, fixture shape
+    candidate_group_ids = {g for g in group_of_node.values() if g}
+    groups = {
+        g.salesforce_id: g
+        for g in (await db.execute(select(PermissionSetGroupSnapshot).where(
+            PermissionSetGroupSnapshot.organization_id == org_id,
+            PermissionSetGroupSnapshot.salesforce_id.in_(list(candidate_group_ids)),
+        ))).scalars().all()
+    } if candidate_group_ids else {}
+    # An unknown id that isn't a synced group is neither a set nor a group.
+    group_of_node = {
+        node: gid for node, gid in group_of_node.items()
+        if node in ps_rows or gid in groups
+    }
+    components_of_group: Dict[str, List[str]] = defaultdict(list)
+    if groups:
+        for gid, comp_id in (await db.execute(select(
+            PermissionSetGroupComponentSnapshot.permission_set_group_id,
+            PermissionSetGroupComponentSnapshot.permission_set_id,
+        ).where(
+            PermissionSetGroupComponentSnapshot.organization_id == org_id,
+            PermissionSetGroupComponentSnapshot.permission_set_group_id.in_(list(groups)),
+        ))).all():
+            components_of_group[gid].append(comp_id)
+    component_rows = await _ps_rows({c for ids in components_of_group.values() for c in ids})
+
+    def _is_muting(ps_id: str) -> bool:
+        comp = component_rows.get(ps_id)
+        # Salesforce may report a muting set only as a MutingPermissionSet (0QM).
+        return comp.is_muting if comp is not None else ps_id.startswith("0QM")
+
+    def _add_node(node: Dict) -> None:
+        if not any(n["id"] == node["id"] for n in nodes):
+            nodes.append(node)
 
     permission_set_ids = []  # Collect non-profile permission set IDs
     profile_owned_ps_id = None  # The profile-owned permission set ID
+    fixture_groups: List[_Source] = []  # groups whose net access we compute here
 
     for assignment in ps_assignments:
-        ps_query = select(PermissionSetSnapshot).where(
-            PermissionSetSnapshot.organization_id == org_id,
-            PermissionSetSnapshot.salesforce_id == assignment.permission_set_id
-        )
-        ps_result = await db.execute(ps_query)
-        ps = ps_result.scalar_one_or_none()
-        if ps:
-            if ps.is_owned_by_profile:
-                # This is the profile-owned permission set
-                # Store its ID to use for querying permissions, but don't create a node
-                # The permissions will be attributed to the profile node instead
-                profile_owned_ps_id = ps.salesforce_id
-                continue
+        pid = assignment.permission_set_id
+        ps = ps_rows.get(pid)
+        if ps is not None and ps.is_owned_by_profile:
+            # Profile permissions are attributed to the profile node.
+            profile_owned_ps_id = ps.salesforce_id
+            continue
 
-            # Regular permission set (not owned by profile).
-            # Surface ps_type / is_muting so the frontend can render muting
-            # permission sets distinctly (red border, dashed edges, etc).
-            permission_set_ids.append(ps.salesforce_id)
-            is_muting = ps.ps_type == "Muting"
-            nodes.append({
-                "id": ps.salesforce_id,
-                "type": "muting_permission_set" if is_muting else "permission_set",
-                "label": ps.label or ps.name,
+        if pid in group_of_node:
+            gid = group_of_node[pid]
+            group = groups.get(gid) if gid else None
+            label = (group.master_label or group.developer_name) if group else (ps.label or ps.name)
+            comp_ids = components_of_group.get(gid, []) if gid else []
+            _add_node({
+                "id": pid,
+                "type": "permission_set_group",
+                "label": label,
                 "properties": {
-                    "ps_type": ps.ps_type or "Regular",
-                    "is_muting": is_muting,
+                    "group_id": gid,
+                    "component_count": sum(1 for c in comp_ids if not _is_muting(c)),
+                    "muting_set_count": sum(1 for c in comp_ids if _is_muting(c)),
                 },
             })
             edges.append({
-                "id": f"user_ps_{user_sf_id}_{ps.salesforce_id}",
+                "id": f"user_psg_{user_sf_id}_{pid}",
                 "source": user_sf_id,
-                "target": ps.salesforce_id,
-                "type": "ASSIGNED_MUTING_PERMISSION_SET" if is_muting else "ASSIGNED_PERMISSION_SET",
-                "label": "mutes via" if is_muting else "assigned",
+                "target": pid,
+                "type": "ASSIGNED_PERMISSION_SET_GROUP",
+                "label": "assigned",
             })
+            for comp_id in comp_ids:
+                comp = component_rows.get(comp_id)
+                muting = _is_muting(comp_id)
+                _add_node({
+                    "id": comp_id,
+                    "type": "muting_permission_set" if muting else "permission_set",
+                    "label": (comp.label or comp.name) if comp else (
+                        "Muting permission set" if muting else comp_id),
+                    "properties": {
+                        "ps_type": (comp.ps_type if comp else None) or ("Muting" if muting else "Regular"),
+                        "is_muting": muting,
+                        "in_group": label,
+                    },
+                })
+                edges.append({
+                    "id": f"psg_{'mutes' if muting else 'includes'}_{pid}_{comp_id}",
+                    "source": pid,
+                    "target": comp_id,
+                    "type": "MUTES" if muting else "INCLUDES_PERMISSION_SET",
+                    "label": "mutes" if muting else "includes",
+                })
+            if ps is not None:
+                # Aggregate permission set: Salesforce's own post-muting result.
+                permission_set_ids.append(pid)
+            else:
+                fixture_groups.append(_Source(
+                    "permission_set_group", label,
+                    [_Component(c, c, _is_muting(c)) for c in comp_ids], group_id=pid,
+                ))
+            continue
+
+        if ps is None:
+            continue
+
+        # Regular permission set (not owned by profile).
+        # Surface ps_type / is_muting so the frontend can render muting
+        # permission sets distinctly (red border, dashed edges, etc).
+        permission_set_ids.append(ps.salesforce_id)
+        is_muting = ps.ps_type == "Muting"
+        _add_node({
+            "id": ps.salesforce_id,
+            "type": "muting_permission_set" if is_muting else "permission_set",
+            "label": ps.label or ps.name,
+            "properties": {
+                "ps_type": ps.ps_type or "Regular",
+                "is_muting": is_muting,
+            },
+        })
+        edges.append({
+            "id": f"user_ps_{user_sf_id}_{ps.salesforce_id}",
+            "source": user_sf_id,
+            "target": ps.salesforce_id,
+            "type": "ASSIGNED_MUTING_PERMISSION_SET" if is_muting else "ASSIGNED_PERMISSION_SET",
+            "label": "mutes via" if is_muting else "assigned",
+        })
+
+    # Fixture-shaped groups have no aggregate permission set, so their net
+    # access is the same per-group evaluation effective access uses (union
+    # of components minus the muting set), fed in as synthetic rows.
+    extra_obj_perms: List[SimpleNamespace] = []
+    extra_field_perms: List[SimpleNamespace] = []
+    if fixture_groups:
+        access_service = EffectiveAccessService(db)
+        comp_ids = {c.ps_id for g in fixture_groups for c in g.components}
+        obj_by_parent = await access_service._object_perms(org_id, comp_ids)
+        field_by_parent = await access_service._field_perms(org_id, comp_ids)
+        for source in fixture_groups:
+            for obj, p in _evaluate(source, obj_by_parent, OBJECT_FLAGS).granted.items():
+                if any(p.values()):
+                    extra_obj_perms.append(SimpleNamespace(
+                        parent_id=source.group_id, sobject_type=obj,
+                        permissions_read=p["read"], permissions_create=p["create"],
+                        permissions_edit=p["edit"], permissions_delete=p["delete"],
+                    ))
+            for fld, p in _evaluate(source, field_by_parent, FIELD_FLAGS).granted.items():
+                if any(p.values()):
+                    extra_field_perms.append(SimpleNamespace(
+                        sobject_type=fld.split(".", 1)[0], field=fld,
+                        permissions_read=p["read"], permissions_edit=p["edit"],
+                    ))
+            permission_set_ids.append(source.group_id)
 
     # Build permission source IDs for querying
     # For profile: use the profile-owned permission set ID (where permissions are actually stored)
@@ -1642,7 +1837,7 @@ async def get_user_graph(
             FieldPermissionSnapshot.parent_id.in_(permission_source_ids)
         )
         field_perms_result = await db.execute(field_perms_query)
-        field_perms = field_perms_result.scalars().all()
+        field_perms = list(field_perms_result.scalars().all()) + extra_field_perms
 
         # Group fields by object
         for field_perm in field_perms:
@@ -1682,7 +1877,7 @@ async def get_user_graph(
             ObjectPermissionSnapshot.parent_id.in_(permission_source_ids)
         )
         obj_perms_result = await db.execute(obj_perms_query)
-        obj_perms = obj_perms_result.scalars().all()
+        obj_perms = list(obj_perms_result.scalars().all()) + extra_obj_perms
 
         # System-required fields that are always accessible
         # These are the same across all Salesforce orgs
@@ -1850,6 +2045,19 @@ async def get_user_graph(
                             }
                         })
 
+    # Object cards show the user's effective object access (every source,
+    # after muting), not whichever source's row happened to come first.
+    effective = {
+        o["object"]: o["access"]
+        for o in (await EffectiveAccessService(db).get_user_object_access(org_id, user_sf_id))["objects"]
+    }
+    for node in nodes:
+        if node["type"] == "object" and node["label"] in effective:
+            a = effective[node["label"]]
+            node["properties"].update(
+                canRead=a["read"], canCreate=a["create"], canEdit=a["edit"], canDelete=a["delete"],
+            )
+
     return {
         "nodes": nodes,
         "edges": edges,
@@ -1857,6 +2065,8 @@ async def get_user_graph(
             "nodeCount": len(nodes),
             "edgeCount": len(edges),
             "centerNodeId": user_sf_id,
+            "assignmentsShown": len(ps_assignments) - len(profile_owned),
+            "assignmentsHidden": hidden_assignments,
             "generatedAt": datetime.utcnow().isoformat()
         }
     }

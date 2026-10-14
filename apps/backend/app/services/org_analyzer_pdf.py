@@ -57,7 +57,6 @@ SEVERITY_ORDER = [
 SEVERITY_LABEL = {s: s.value.capitalize() for s in SEVERITY_ORDER}
 SEV_RANK = {s: i for i, s in enumerate(SEVERITY_ORDER)}
 
-HEALTH_BANDS = [(85, "Healthy"), (70, "Fair"), (50, "Needs attention"), (0, "At risk")]
 
 
 def _esc(value: object) -> str:
@@ -114,7 +113,10 @@ def _sev_chip(sev: FindingSeverity) -> str:
 
 
 def _health_band(score: float) -> str:
-    return next(label for threshold, label in HEALTH_BANDS if score >= threshold)
+    # Same bands as the analyzer's executive summary, so the two never disagree.
+    from app.services.org_analyzer import _health_band as analyzer_band
+
+    return analyzer_band(int(score)).capitalize()
 
 
 def _stat(label: str, value: str, note: str = "") -> str:
@@ -130,7 +132,7 @@ def _signed(n: float, unit: str = "") -> str:
 
 
 def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFinding],
-           ctx: ReportContext, brand) -> str:
+           ctx: ReportContext, brand, is_demo: bool = False) -> str:
     metrics = snapshot.metrics or {}
     score = float(metrics.get("org_health_score") or 0)
     sev_counts = _severity_counts(findings)
@@ -161,11 +163,11 @@ def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFindi
         if (firm_logo or firm_name) else ""
     )
     snapshot_at = snapshot.snapshot_at or datetime.now(timezone.utc)
-    meter_color = charts.SERIES if score >= 70 else (charts.WARNING if score >= 50 else charts.CRITICAL)
+    meter_color = charts.SERIES if score >= 75 else (charts.WARNING if score >= 60 else charts.CRITICAL)
 
     kpis = "".join([
         _stat("Findings", f"{len(findings)}", f"{urgent} critical or high" if urgent else "None critical or high"),
-        _stat("Estimated annual savings", _fmt_money_cents(savings), "From the configured price book"),
+        _stat("Estimated annual savings", _fmt_money_cents(savings), "Published list prices; negotiated rates replace them"),
         _stat("Active users", _compact(metrics.get("total_active_users") or 0)),
         _stat("Change since last run", change_value, change_note),
     ])
@@ -175,8 +177,14 @@ def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFindi
         f'<p>{_esc(snapshot.executive_summary)}</p></div>'
         if snapshot.executive_summary else ""
     )
+    demo_banner = (
+        '<div class="demo-banner">Demo data: a synthetic org generated for demonstration, '
+        'not a real Salesforce org.</div>'
+        if is_demo else ""
+    )
     return f"""
     <section class="cover">
+      {demo_banner}
       {logo}
       <div class="eyebrow">Salesforce org assessment</div>
       <h1 class="org-name">{_esc(org_name)}</h1>
@@ -378,7 +386,8 @@ def _risk_and_governance(ctx: ReportContext) -> str:
             for c in ctx.compliance
         )
         blocks.append(
-            f'<h3 class="block-title">Compliance control coverage</h3>'
+            f'<h3 class="block-title">Compliance Control Indicators</h3>'
+            f'<p class="caption">Automated indicators based on org configuration. Not an audit opinion, attestation, or certification.</p>'
             f'<table class="data"><thead><tr><th>Framework</th><th>Controls passed</th><th class="num">Score</th><th class="num">Controls</th></tr></thead><tbody>{rows}</tbody></table>'
         )
 
@@ -488,7 +497,7 @@ def _methodology(snapshot: OrgAnalysisSnapshot) -> str:
     <section class="page methodology">
       <h2>Methodology</h2>
       <p><strong>Health score.</strong> Starts at 100 and deducts points per open finding by severity{f' ({_esc(weight_text)})' if weight_text else ''}. Findings marked as ignored are excluded from this report.</p>
-      <p><strong>Savings.</strong> Estimated from licence counts and the price book configured for this engagement. They indicate scale, not a quote.</p>
+      <p><strong>Savings.</strong> Estimated from licence counts at Salesforce's published list prices; negotiated rates replace them where entered in the price book. They indicate scale, not a quote.</p>
       <p><strong>Data scope.</strong> Newton reads Salesforce configuration metadata, the org's users and their access, recent login history and the Setup Audit Trail. Record-level figures (counts, completeness, duplicates) come from aggregate queries; the contents of business records are never read.</p>
       <p><strong>Risk and anomalies.</strong> User risk combines privileged system permissions, access to sensitive data, unusual access compared with peers, inactivity and sole ownership of access. Anomalies are users whose access pattern differs statistically from their peers or whose sign-ins look unusual.</p>
       <p><strong>Point in time.</strong> All figures reflect the org on the date of this report and should be confirmed before changes are made.</p>
@@ -504,6 +513,7 @@ STYLE = """
   .lh-logo { max-height: 26px; max-width: 150px; }
   .lh-text { font-size: 8pt; color: #898781; font-weight: 600; }
   .cover-logos { margin-bottom: 1.4em; }
+  .demo-banner { border: 1.5px solid #b45309; color: #b45309; font-weight: 600; padding: 6px 10px; margin-bottom: 1.2em; border-radius: 4px; }
   .cover-client-logo { max-height: 64px; max-width: 260px; }
   .cover-firm-logo { max-height: 22px; max-width: 140px; vertical-align: middle; margin-left: 4px; }
   body { font-family: 'Helvetica Neue', Arial, 'DejaVu Sans', sans-serif; color: #0b0b0b; font-size: 10pt; line-height: 1.45; }
@@ -573,16 +583,18 @@ def _build_html(
     findings: List[OrgFinding],
     brand: Optional["BrandContext"] = None,
     ctx: Optional[ReportContext] = None,
+    is_demo: bool = False,
 ) -> str:
     ctx = ctx or ReportContext()
+    footer_left = f"{_esc(org_name)} · Salesforce org assessment" + (" · DEMO DATA" if is_demo else "")
     accent = (brand.accent_hex if brand else None) or "#14532d"
     footer = _esc(brand.firm_name) if (brand and brand.firm_name) else "Newton"
     style = STYLE.replace("ACCENT", accent) + (
-        f'@page {{ @bottom-left {{ content: "{_esc(org_name)} · Salesforce org assessment"; {FOOTER_FONT} }}'
+        f'@page {{ @bottom-left {{ content: "{footer_left}"; {FOOTER_FONT} }}'
         f' @bottom-right {{ content: "{footer} · page " counter(page) " of " counter(pages); {FOOTER_FONT} }} }}'
     )
     body = _letterhead(org_name, brand) + "".join([
-        _cover(org_name, snapshot, findings, ctx, brand),
+        _cover(org_name, snapshot, findings, ctx, brand, is_demo=is_demo),
         _glance(findings, ctx),
         _profile(snapshot),
         _risk_and_governance(ctx),
@@ -624,7 +636,8 @@ def build_report_pdf(
     findings: List[OrgFinding],
     brand: Optional[BrandContext] = None,
     ctx: Optional[ReportContext] = None,
+    is_demo: bool = False,
 ) -> bytes:
     from weasyprint import HTML  # type: ignore
 
-    return HTML(string=_build_html(org_name, snapshot, findings, brand=brand, ctx=ctx)).write_pdf()
+    return HTML(string=_build_html(org_name, snapshot, findings, brand=brand, ctx=ctx, is_demo=is_demo)).write_pdf()

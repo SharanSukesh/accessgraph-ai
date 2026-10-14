@@ -6,6 +6,7 @@
  */
 
 import { Database, GripVertical } from 'lucide-react'
+import { BLOCKED_EDIT_TOOLTIP, fieldEditState } from './fieldPermissions'
 
 interface Field {
   name: string
@@ -117,7 +118,8 @@ export function ERObjectCard({
             {fields.map((field, index) => {
               const fieldPerms = []
               if (field.canRead) fieldPerms.push('R')
-              if (field.canEdit) fieldPerms.push('E')
+              const editState = fieldEditState(field.canEdit, permissions.canEdit)
+              if (editState !== 'none') fieldPerms.push('E')
 
               return (
                 <div
@@ -139,12 +141,15 @@ export function ERObjectCard({
                       {fieldPerms.map((perm) => (
                         <span
                           key={perm}
+                          title={perm === 'E' && editState === 'blocked' ? BLOCKED_EDIT_TOOLTIP : undefined}
                           className={`
                             text-xs px-1.5 py-0.5 rounded font-medium
                             ${
                               perm === 'R'
                                 ? 'bg-primary-50 dark:bg-primary-900/25 text-primary-700 dark:text-primary-300'
-                                : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                : editState === 'blocked'
+                                  ? 'bg-grove-border/50 dark:bg-grove-border-dk/50 text-grove-ink/35 dark:text-grove-ink-dk/35 line-through'
+                                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                             }
                           `}
                         >

@@ -29,6 +29,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.services.salesforce_sync import SalesforceSyncService
+from app.ingestion.demo_orgs import ensure_live_org
 
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ class ApplyFixService:
 
         # Get the SF client via the existing sync-service refresh path so
         # we don't ever hit a stale-token 401.
+        await ensure_live_org(self.db, self.org_id, "Salesforce write-back")
         sync_service = SalesforceSyncService(self.db, self.org_id)
         sf_client = await sync_service._refresh_access_token()
 

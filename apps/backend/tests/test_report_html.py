@@ -33,3 +33,22 @@ def test_optional_sections_are_skipped_without_data():
     html = _build_html("Org", snap, [], ctx=ReportContext())
     assert "Access, risk &amp; governance" not in html
     assert "No findings" in html
+
+
+def test_demo_org_report_is_marked_on_cover_and_every_page():
+    snap = NS(snapshot_at=datetime(2026, 10, 9, tzinfo=timezone.utc), executive_summary=None,
+              metrics={"org_health_score": 70}, org_limits={})
+    demo = _build_html("Lumenvale", snap, [], ctx=ReportContext(), is_demo=True)
+    real = _build_html("Lumenvale", snap, [], ctx=ReportContext())
+    assert 'class="demo-banner"' in demo and "Demo data" in demo
+    assert "· DEMO DATA" in demo
+    assert "Demo data" not in real and "DEMO DATA" not in real
+
+
+def test_compliance_section_is_framed_as_indicators():
+    snap = NS(snapshot_at=datetime(2026, 10, 9, tzinfo=timezone.utc), executive_summary=None,
+              metrics={"org_health_score": 70}, org_limits={})
+    ctx = ReportContext(compliance=[{"framework": "SOX", "score_pct": 80, "passed": 8, "failed": 2, "na": 0}])
+    html = _build_html("Org", snap, [], ctx=ctx)
+    assert "Compliance Control Indicators" in html
+    assert "Not an audit opinion, attestation, or certification." in html

@@ -78,7 +78,7 @@ export const NODE_TYPES = {
   PERMISSION_SET_GROUP: {
     value: 'permission_set_group',
     label: 'Permission Set Group',
-    color: '#f59e0b',
+    color: '#3fa47a',
     icon: 'Layers',
   },
   OBJECT: { value: 'object', label: 'Object', color: '#10b981', icon: 'Database' },
@@ -97,6 +97,9 @@ export const EDGE_TYPES = {
   HAS_PROFILE: { value: 'HAS_PROFILE', label: 'Has Profile', color: '#8b5cf6' },
   HAS_PERMISSION_SET: { value: 'ASSIGNED_PERMISSION_SET', label: 'Has Permission Set', color: '#06b6d4' },
   HAS_MUTING_PERMISSION_SET: { value: 'ASSIGNED_MUTING_PERMISSION_SET', label: 'Has Muting Permission Set', color: '#dc2626' },
+  HAS_PERMISSION_SET_GROUP: { value: 'ASSIGNED_PERMISSION_SET_GROUP', label: 'Has Permission Set Group', color: '#3fa47a' },
+  INCLUDES_PERMISSION_SET: { value: 'INCLUDES_PERMISSION_SET', label: 'Includes', color: '#6bbf95' },
+  MUTES: { value: 'MUTES', label: 'Mutes', color: '#dc2626' },
   INHERITS_FROM: { value: 'inherits_from', label: 'Inherits From', color: '#ec4899' },
   GRANTS_ACCESS: { value: 'GRANTS_ACCESS', label: 'Grants Access', color: '#10b981' },
   GRANTS_FIELD_ACCESS: { value: 'GRANTS_FIELD_ACCESS', label: 'Grants Field Access', color: '#a3e635' },

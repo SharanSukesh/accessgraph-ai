@@ -5,7 +5,7 @@
  * Compare permissions and access between multiple users side by side
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ChevronLeft, GitCompare, Plus, X, AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
@@ -17,6 +17,7 @@ import { Reveal } from '@/components/v2/motion'
 import { useUsers } from '@/lib/api/hooks/useUsers'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
+import { compareObjects, type ObjectPerms } from '@/lib/compare/objectCompare'
 
 export default function UserComparePage() {
   const params = useParams()
@@ -150,40 +151,57 @@ interface UserAccessData {
   userId: string
   userName: string
   objectAccess: any[]
-  fieldAccess: any[]
+}
+
+const PAGE_SIZE = 100
+
+function PermBadges({ perms }: { perms: ObjectPerms | null }) {
+  if (!perms) return <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>
+  const letters = ([['canRead', 'R'], ['canCreate', 'C'], ['canEdit', 'E'], ['canDelete', 'D']] as const)
+    .filter(([k]) => perms[k])
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      {letters.map(([k, letter]) => (
+        <Badge key={k} variant="success" size="sm">
+          {letter}
+        </Badge>
+      ))}
+    </div>
+  )
 }
 
 function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string[] }) {
   const { data: users } = useUsers(orgId)
+  const [objectSearch, setObjectSearch] = useState('')
+  const [differencesOnly, setDifferencesOnly] = useState(false)
+  const [visible, setVisible] = useState(PAGE_SIZE)
 
   // Fetch access data for all selected users in a single query
   const { data: comparisonData, isLoading } = useQuery<UserAccessData[]>({
-    queryKey: ['user-access-comparison', orgId, userIds.sort().join(',')],
-    queryFn: async (): Promise<UserAccessData[]> => {
-      const results = await Promise.all(
+    queryKey: ['user-access-comparison', orgId, [...userIds].sort().join(',')],
+    queryFn: async (): Promise<UserAccessData[]> =>
+      Promise.all(
         userIds.map(async (userId): Promise<UserAccessData> => {
-          const [objectAccess, fieldAccess] = await Promise.all([
-            apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/objects`),
-            apiClient.get(`/orgs/${orgId}/users/${userId}/effective-access/fields`),
-          ])
-
-          // Get user name from users list
-          const user = users?.find(u => u.salesforceUserId === userId)
-
+          const access = await apiClient.get<{ objects: any[] }>(
+            `/orgs/${orgId}/users/${userId}/effective-access/objects`
+          )
+          const user = users?.find((u) => u.salesforceUserId === userId)
           return {
             userId,
             userName: user?.name || userId.slice(0, 8) + '...',
-            objectAccess: objectAccess as any[],
-            fieldAccess: fieldAccess as any[]
+            objectAccess: access?.objects ?? [],
           }
         })
-      )
-      return results
-    },
+      ),
     enabled: !!users, // Only run when users data is available
   })
 
-  const data: UserAccessData[] = comparisonData || []
+  const data: UserAccessData[] = useMemo(() => comparisonData || [], [comparisonData])
+  const allRows = useMemo(() => compareObjects(data, userIds), [data, userIds])
+  const rows = useMemo(
+    () => compareObjects(data, userIds, { search: objectSearch, differencesOnly }),
+    [data, userIds, objectSearch, differencesOnly]
+  )
 
   if (isLoading) {
     return (
@@ -195,14 +213,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
     )
   }
 
-  // Collect all unique objects and fields
-  const allObjects = new Set<string>()
-  const allFields = new Set<string>()
-
-  data.forEach((userData) => {
-    userData?.objectAccess?.forEach((obj: any) => allObjects.add(obj.objectName))
-    userData?.fieldAccess?.forEach((field: any) => allFields.add(field.fieldName))
-  })
+  const differing = allRows.filter((r) => r.differs).length
 
   return (
     <div className="space-y-6">
@@ -213,6 +224,33 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
           <CardTitle>Object Permissions Comparison</CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              value={objectSearch}
+              onChange={(e) => {
+                setObjectSearch(e.target.value)
+                setVisible(PAGE_SIZE)
+              }}
+              placeholder="Search objects"
+              className="w-56 rounded-md border border-grove-border bg-grove-canvas px-3 py-1.5 text-sm text-grove-ink dark:border-grove-border-dk dark:bg-grove-surface-dk dark:text-grove-ink-dk"
+            />
+            <label className="flex items-center gap-2 text-sm text-grove-ink/80 dark:text-grove-ink-dk/80">
+              <input
+                type="checkbox"
+                checked={differencesOnly}
+                onChange={(e) => {
+                  setDifferencesOnly(e.target.checked)
+                  setVisible(PAGE_SIZE)
+                }}
+                className="rounded border-grove-border dark:border-grove-border-dk"
+              />
+              Differences only
+            </label>
+            <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+              {allRows.length} objects, {differing} differ
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-primary-50/40 dark:bg-primary-900/10">
@@ -231,80 +269,39 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
                 </tr>
               </thead>
               <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
-                {Array.from(allObjects)
-                  .slice(0, 20)
-                  .map((objectName) => {
-                    // Find if there are any differences
-                    const permissions = userIds.map((userId) => {
-                      const userData = data.find((d) => d?.userId === userId)
-                      const obj = userData?.objectAccess?.find((o: any) => o.objectName === objectName)
-                      return obj?.permissions || {}
-                    })
-
-                    const hasDifference =
-                      permissions.some((p) => p.canRead) !== permissions.every((p) => p.canRead) ||
-                      permissions.some((p) => p.canCreate) !== permissions.every((p) => p.canCreate) ||
-                      permissions.some((p) => p.canEdit) !== permissions.every((p) => p.canEdit) ||
-                      permissions.some((p) => p.canDelete) !== permissions.every((p) => p.canDelete)
-
-                    return (
-                      <tr
-                        key={objectName}
-                        className={
-                          hasDifference ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''
-                        }
-                      >
-                        <td className="px-4 py-3 font-medium text-grove-ink dark:text-grove-ink-dk sticky left-0 bg-grove-surface dark:bg-grove-canvas-dk">
-                          {objectName}
-                          {hasDifference && (
-                            <Badge variant="warning" size="sm" className="ml-2">
-                              Differs
-                            </Badge>
-                          )}
-                        </td>
-                        {userIds.map((userId) => {
-                          const userData = data.find((d) => d?.userId === userId)
-                          const obj = userData?.objectAccess?.find(
-                            (o: any) => o.objectName === objectName
-                          )
-                          return (
-                            <td key={userId} className="px-4 py-3 text-center">
-                              <div className="flex flex-wrap justify-center gap-1">
-                                {obj?.permissions?.canRead && (
-                                  <Badge variant="success" size="sm">
-                                    R
-                                  </Badge>
-                                )}
-                                {obj?.permissions?.canCreate && (
-                                  <Badge variant="success" size="sm">
-                                    C
-                                  </Badge>
-                                )}
-                                {obj?.permissions?.canEdit && (
-                                  <Badge variant="success" size="sm">
-                                    E
-                                  </Badge>
-                                )}
-                                {obj?.permissions?.canDelete && (
-                                  <Badge variant="success" size="sm">
-                                    D
-                                  </Badge>
-                                )}
-                                {!obj && <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>}
-                              </div>
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    )
-                  })}
+                {rows.slice(0, visible).map((row) => (
+                  <tr key={row.objectName} className={row.differs ? 'bg-yellow-50 dark:bg-yellow-900/10' : ''}>
+                    <td className="px-4 py-3 font-medium text-grove-ink dark:text-grove-ink-dk sticky left-0 bg-grove-surface dark:bg-grove-canvas-dk">
+                      {row.objectName}
+                      {row.differs && (
+                        <Badge variant="warning" size="sm" className="ml-2">
+                          Differs
+                        </Badge>
+                      )}
+                    </td>
+                    {row.perms.map((perms, i) => (
+                      <td key={userIds[i]} className="px-4 py-3 text-center">
+                        <PermBadges perms={perms} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-          {allObjects.size > 20 && (
+          {rows.length === 0 && (
             <p className="mt-4 text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 text-center">
-              Showing first 20 of {allObjects.size} objects
+              {differencesOnly ? 'No differences' : 'No objects'}
+              {objectSearch ? ` match "${objectSearch}"` : ''}.
             </p>
+          )}
+          {rows.length > visible && (
+            <div className="mt-4 flex items-center justify-center gap-3 text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
+              Showing {visible} of {rows.length} objects
+              <Button variant="secondary" size="sm" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+                Show {Math.min(PAGE_SIZE, rows.length - visible)} more
+              </Button>
+            </div>
           )}
         </CardContent>
       </Card>

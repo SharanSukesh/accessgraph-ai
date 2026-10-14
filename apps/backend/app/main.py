@@ -163,12 +163,13 @@ from app.api.routes import (
     auth, accounts, orgs, users, privacy, package, deeplink,
     equity, reporting_graph, org_analyzer, data_quality,
     change_risk_radar, package_sprawl, restructure, report_sprawl,
-    automation_sprawl, license_fit, integration_sprawl, compliance,
+    automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs,
 )
 
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["authentication"])
 app.include_router(accounts.router, tags=["accounts"])
+app.include_router(demo_orgs.router, tags=["demo-orgs"])
 app.include_router(orgs.router, tags=["organizations"])
 # Routers whose every path is /orgs/{org_id}/... are guarded as a whole.
 # tests/test_route_auth.py fails if any route is reachable without auth.

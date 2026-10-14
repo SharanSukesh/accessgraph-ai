@@ -40,6 +40,8 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
   })
 
   const fields = data?.fields || []
+  // Field types aren't synced yet; the column appears only when some are known.
+  const showType = fields.some((f: any) => f.dataType)
   const pagination = data?.pagination
 
   const handleLetterClick = (letter: string) => {
@@ -230,9 +232,11 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                       <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         API Name
                       </th>
-                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                        Type
-                      </th>
+                      {showType && (
+                        <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
+                          Type
+                        </th>
+                      )}
                       <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Properties
                       </th>
@@ -269,11 +273,15 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                             {field.apiName}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge variant="default" size="sm">
-                            {field.dataType}
-                          </Badge>
-                        </td>
+                        {showType && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {field.dataType && (
+                              <Badge variant="default" size="sm">
+                                {field.dataType}
+                              </Badge>
+                            )}
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-1">
                             {field.isSensitive && (

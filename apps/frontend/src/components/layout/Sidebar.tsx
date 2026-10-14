@@ -29,8 +29,10 @@ import {
   Shield,
   ShieldCheck,
   UserPlus,
+  FlaskConical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { DEMO_UNAVAILABLE_MESSAGE, unavailableForDemo } from '@/lib/demoOrg'
 import { apiClient, ApiError } from '@/lib/api/client'
 import { Logo } from '@/components/shared/Logo'
 import { MarqueeLabel } from '@/components/layout/MarqueeLabel'
@@ -126,6 +128,12 @@ export const navigationSections: {
         icon: UserPlus,
         adminOnly: true,
       },
+      {
+        name: 'Demo orgs',
+        path: '/admin/demo-orgs',
+        icon: FlaskConical,
+        adminOnly: true,
+      },
       { name: 'Org Chart', path: 'reporting-graph', icon: Users2, privacyFeature: 'reporting_graph' },
       { name: 'Privacy', path: 'privacy', icon: Shield },
     ],
@@ -149,6 +157,9 @@ export function Sidebar() {
   const orgId = orgIdMatch ? orgIdMatch[1] : null
   // Sync/Reconnect write to the org, so read-only roles don't get them.
   const showOrgControls = !!orgId && canWrite
+  // A demo org has no Salesforce connection: sync reloads its fixture.
+  const isDemoOrg = !!currentOrg?.is_demo
+  const syncLabel = isDemoOrg ? 'Reload demo data' : 'Sync from Salesforce'
 
   // useSyncJobs polls every 5 seconds while the latest job is in
   // pending/running state (see useOrgs.ts:164). We derive the spinner
@@ -200,7 +211,8 @@ export function Sidebar() {
         .map(item => ({
           ...item,
           unavailable:
-            !!item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature),
+            (!!item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature)) ||
+            unavailableForDemo(isDemoOrg, item.path),
           // Without an org in the URL, org-scoped items lead to the picker.
           href: item.path.startsWith('/')
             ? item.path
@@ -317,7 +329,10 @@ export function Sidebar() {
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + '/')
                 if (item.unavailable) {
-                  const reason = unavailableMessage(privacyModeOf(currentOrg))
+                  const reason =
+                    unavailableForDemo(isDemoOrg, item.path)
+                      ? DEMO_UNAVAILABLE_MESSAGE
+                      : unavailableMessage(privacyModeOf(currentOrg))
                   return (
                     <span
                       key={item.name}
@@ -413,6 +428,7 @@ export function Sidebar() {
           {showOrgControls && (
             <>
               {/* Reconnect Button */}
+              {!isDemoOrg && (
               <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
                 <button
                   onClick={handleReconnect}
@@ -438,9 +454,10 @@ export function Sidebar() {
                   )}
                 </button>
               </div>
+              )}
 
               {/* Sync Button */}
-              <div className={cn("p-2 pt-0", isExpanded ? "" : "flex justify-center")}>
+              <div className={cn("p-2", !isDemoOrg && "pt-0", isExpanded ? "" : "flex justify-center")}>
                 <button
                   onClick={handleSync}
                   disabled={isSyncing}
@@ -454,7 +471,7 @@ export function Sidebar() {
                       ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
                       : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
                   )}
-                  title={!isExpanded ? 'Sync from Salesforce' : undefined}
+                  title={!isExpanded ? syncLabel : undefined}
                 >
                   <RefreshCw className={cn(
                     "h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out",
@@ -463,12 +480,12 @@ export function Sidebar() {
                     // spin animation stays evergreen (matches brand).
                     !isSyncing && "group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400",
                   )} />
-                  {isExpanded && <span className="whitespace-nowrap">Sync from Salesforce</span>}
+                  {isExpanded && <span className="whitespace-nowrap">{syncLabel}</span>}
 
                   {/* Tooltip for collapsed state */}
                   {!isExpanded && (
                     <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
-                      Sync from Salesforce
+                      {syncLabel}
                     </div>
                   )}
                 </button>

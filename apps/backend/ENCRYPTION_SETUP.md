@@ -23,10 +23,8 @@ Generate a secure 32-byte encryption key using Python:
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Example output:
-```
-tkWjRtmDLvfXubtZFmYhXlVP1lVRkh_V9ADm2B-nL0A
-```
+The output is a random 43-character string. Generate your own for each
+environment; never reuse a key that has appeared in documentation.
 
 ### Step 2: Set Environment Variables
 
@@ -39,7 +37,7 @@ Add these environment variables to your deployment:
 ENABLE_FIELD_ENCRYPTION=true
 
 # Set encryption key (use the key generated in Step 1)
-DATABASE_ENCRYPTION_KEY=tkWjRtmDLvfXubtZFmYhXlVP1lVRkh_V9ADm2B-nL0A
+DATABASE_ENCRYPTION_KEY=<generate-your-own-key>
 ```
 
 #### Railway Deployment
@@ -59,7 +57,7 @@ services:
   backend:
     environment:
       - ENABLE_FIELD_ENCRYPTION=true
-      - DATABASE_ENCRYPTION_KEY=tkWjRtmDLvfXubtZFmYhXlVP1lVRkh_V9ADm2B-nL0A
+      - DATABASE_ENCRYPTION_KEY=<generate-your-own-key>
 ```
 
 ## Security Best Practices

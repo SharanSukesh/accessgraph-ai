@@ -3,6 +3,8 @@
  * CSV and JSON export helpers
  */
 
+import { anomalyTypeLabel } from '../anomalyTypes'
+
 /**
  * Convert array of objects to CSV string
  */
@@ -35,6 +37,8 @@ export function arrayToCSV<T extends Record<string, any>>(
  * Escape CSV value (handle quotes, commas, newlines)
  */
 function escapeCSVValue(value: string): string {
+  // Client data opened in Excel: a leading = + - @ would run as a formula.
+  if (/^[=+\-@\t\r]/.test(value)) value = `'${value}`
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {
     return `"${value.replace(/"/g, '""')}"`
   }
@@ -124,21 +128,40 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
+/** Filename-safe stem, e.g. "Mina Tanaka" -> "mina-tanaka". */
+export function fileSlug(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'export'
+}
+
+/** Date stamp for export filenames, e.g. 20261014. */
+export function exportStamp(date: Date = new Date()): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, '')
+}
+
 /**
- * Export anomalies to CSV with formatted columns
+ * Export anomalies to CSV, in the order shown (rank 1 first).
  */
 export function exportAnomaliesToCSV(anomalies: any[], filename: string = 'anomalies'): void {
-  const columns = [
-    { key: 'id', label: 'ID' },
-    { key: 'title', label: 'Title' },
-    { key: 'severity', label: 'Severity' },
+  const rows = anomalies.map((a) => ({
+    rank: a.rank ?? '',
+    user: a.userName ?? a.user_name ?? '',
+    category: a.category ?? 'access',
+    type: anomalyTypeLabel(a.type) ?? '',
+    severity: a.severity,
+    score: typeof a.score === 'number' ? a.score.toFixed(3) : '',
+    reasons: (a.reasons ?? []).join(' | '),
+    detectedAt: a.detectedAt ?? a.detected_at ?? '',
+  }))
+  exportToCSV(rows, filename, [
+    { key: 'rank', label: 'Rank' },
+    { key: 'user', label: 'User' },
+    { key: 'category', label: 'Category' },
     { key: 'type', label: 'Type' },
-    { key: 'description', label: 'Description' },
-    { key: 'userName', label: 'User' },
-    { key: 'detectedAt', label: 'Detected At' },
-  ]
-
-  exportToCSV(anomalies, filename, columns)
+    { key: 'severity', label: 'Severity' },
+    { key: 'score', label: 'Anomaly score' },
+    { key: 'reasons', label: 'Reasons' },
+    { key: 'detectedAt', label: 'Detected at' },
+  ])
 }
 
 /**
@@ -148,34 +171,45 @@ export function exportRecommendationsToCSV(
   recommendations: any[],
   filename: string = 'recommendations'
 ): void {
-  const columns = [
-    { key: 'id', label: 'ID' },
+  const rows = recommendations.map((r) => ({
+    title: r.title,
+    severity: r.severity,
+    status: r.status,
+    track: r.track ?? '',
+    type: r.rec_type ?? r.type ?? '',
+    user: (r.affected_access as any)?.user_name ?? r.userName ?? '',
+    description: r.description,
+    rationale: r.rationale ?? '',
+  }))
+  exportToCSV(rows, filename, [
     { key: 'title', label: 'Title' },
     { key: 'severity', label: 'Severity' },
     { key: 'status', label: 'Status' },
+    { key: 'track', label: 'Track' },
+    { key: 'type', label: 'Type' },
+    { key: 'user', label: 'User' },
     { key: 'description', label: 'Description' },
-    { key: 'action', label: 'Recommended Action' },
-  ]
-
-  exportToCSV(recommendations, filename, columns)
+    { key: 'rationale', label: 'Rationale' },
+  ])
 }
 
 /**
  * Export users to CSV with formatted columns
  */
 export function exportUsersToCSV(users: any[], filename: string = 'users'): void {
-  const columns = [
-    { key: 'salesforceUserId', label: 'User ID' },
+  exportToCSV(users, filename, [
     { key: 'name', label: 'Name' },
+    { key: 'username', label: 'Username' },
     { key: 'email', label: 'Email' },
     { key: 'profile', label: 'Profile' },
     { key: 'role', label: 'Role' },
-    { key: 'riskLevel', label: 'Risk Level' },
+    { key: 'department', label: 'Department' },
+    { key: 'title', label: 'Title' },
+    { key: 'riskLevel', label: 'Risk level' },
+    { key: 'riskScore', label: 'Risk score' },
     { key: 'isActive', label: 'Active' },
-    { key: 'lastLoginDate', label: 'Last Login' },
-  ]
-
-  exportToCSV(users, filename, columns)
+    { key: 'lastLoginDate', label: 'Last login' },
+  ])
 }
 
 /**

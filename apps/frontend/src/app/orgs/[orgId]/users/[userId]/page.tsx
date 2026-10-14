@@ -5,7 +5,7 @@
  * Comprehensive view of user access, permissions, and risk
  */
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -19,9 +19,12 @@ import {
   Network,
   FileCheck,
   Calendar,
+  HelpCircle,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { fileSlug } from '@/lib/utils/exports'
+import { ExplainAccessPanel } from '@/components/users/ExplainAccessPanel'
 import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -30,6 +33,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { MaskedUsersBanner, PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { isPrivacyModeError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
+import { DEMO_UNAVAILABLE_MESSAGE, unavailableForDemo } from '@/lib/demoOrg'
 import { privacyModeOf } from '@/lib/privacy'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -68,13 +72,16 @@ function UserDetailContent() {
   const userId = params.userId as string
 
   const [activeTab, setActiveTab] = useState('overview')
-  const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
+  const { currentOrg } = useAuth()
+  const masked = privacyModeOf(currentOrg) === 'masked'
+  const recordsUnavailable = unavailableForDemo(currentOrg?.is_demo, 'records')
   const [selectedObjects, setSelectedObjects] = useState<string[]>([])
   const [selectedGraphNode, setSelectedGraphNode] = useState<any>(null)
 
   // Fetch user data
   const { data: user, isLoading: userLoading, error: userError } = useUser(orgId, userId)
   const { data: objectAccess, isLoading: objectsLoading } = useUserObjectAccess(orgId, userId)
+  const [explainObject, setExplainObject] = useState<string | null>(null)
   const { data: fieldAccess, isLoading: fieldsLoading } = useUserFieldAccess(orgId, userId)
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
   const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
@@ -219,10 +226,12 @@ function UserDetailContent() {
             <FileText className="h-4 w-4 mr-2" />
             Field Access
           </TabsTrigger>
-          <TabsTrigger value="records">
-            <Shield className="h-4 w-4 mr-2" />
-            Record Access
-          </TabsTrigger>
+          <span title={recordsUnavailable ? DEMO_UNAVAILABLE_MESSAGE : undefined}>
+            <TabsTrigger value="records" disabled={recordsUnavailable}>
+              <Shield className="h-4 w-4 mr-2" />
+              Record Access
+            </TabsTrigger>
+          </span>
           <TabsTrigger value="graph">
             <Network className="h-4 w-4 mr-2" />
             Graph
@@ -380,11 +389,13 @@ function UserDetailContent() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
                           Sensitivity
                         </th>
+                        <th className="px-6 py-3" />
                       </tr>
                     </thead>
                     <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
                       {objectAccess.map((obj: any) => (
-                        <tr key={obj.objectName} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+                        <Fragment key={obj.objectName}>
+                        <tr className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
                             {obj.objectLabel || obj.objectName}
                           </td>
@@ -423,7 +434,28 @@ function UserDetailContent() {
                               <Badge variant="default" size="sm">Standard</Badge>
                             )}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExplainObject(explainObject === obj.objectName ? null : obj.objectName)
+                              }
+                              aria-expanded={explainObject === obj.objectName}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-primary-700 hover:underline dark:text-primary-400"
+                            >
+                              <HelpCircle className="h-3.5 w-3.5" />
+                              {explainObject === obj.objectName ? 'Hide' : 'Why?'}
+                            </button>
+                          </td>
                         </tr>
+                        {explainObject === obj.objectName && (
+                          <tr className="bg-primary-50/30 dark:bg-primary-900/10">
+                            <td colSpan={7} className="px-6 py-4">
+                              <ExplainAccessPanel orgId={orgId} userId={userId} objectName={obj.objectName} />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -555,6 +587,7 @@ function UserDetailContent() {
                     selectedObjects={selectedObjects}
                     onNodeSelect={(node) => setSelectedGraphNode(node)}
                     height="800px"
+                    exportName={`access-graph-${fileSlug(user?.name ?? userId)}`}
                   />
                   <div className="mt-4">
                     <GraphLegend compact />

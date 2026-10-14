@@ -87,6 +87,9 @@ class SalesforcePermissionSetAssignment(BaseModel):
     Id: str
     AssigneeId: str
     PermissionSetId: str
+    # Set when the assignment is to a group: PermissionSetId is then the
+    # group's aggregate permission set (Type = Group).
+    PermissionSetGroupId: Optional[str] = None
 
 
 class SalesforcePermissionSetGroup(BaseModel):

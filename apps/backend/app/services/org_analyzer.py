@@ -61,21 +61,24 @@ logger = logging.getLogger(__name__)
 # Defaults — overridable per-org via the license_price_book table.
 # ---------------------------------------------------------------------------
 
-# Default price catalog — approximate Salesforce Enterprise-tier LIST
-# prices as published by Salesforce. Real customer pricing varies with
-# contract terms, discounts, and bundles, so these are starting points
-# that the consultant overrides via the price-book editor with the
-# customer's negotiated rates.
+# Default price catalog — Salesforce published list prices. Real
+# customer pricing varies with contract terms, discounts, and bundles, so
+# these are starting points that the consultant overrides via the
+# price-book editor with the customer's negotiated rates.
 #
 # Lookup is substring-based on the SKU label (case-insensitive). The
 # table is ordered most-specific → least-specific; the FIRST pattern
 # that matches wins, so "salesforce platform" must come before plain
 # "salesforce".
 #
-# Last reviewed 2026-06; refresh from sf.com pricing pages when major
-# SKUs are added or repriced.
+# Last reviewed 2026-10-14 against salesforce.com list prices (USD, per
+# user per month, billed annually). Entries without a source comment were
+# not re-verified. Enterprise was replaced by Core ($195) on the current
+# Sales and Service Cloud pages; existing contracts may still be on the
+# older Enterprise price, which the per-engagement price book overrides.
 DEFAULT_PRICE_CATALOG: List[tuple] = [
     # --- Salesforce core licenses (UserLicense.MasterLabel) ---
+    # Platform Starter $25: https://www.salesforce.com/editions-pricing/platform/
     ("salesforce platform - one app", 2500),
     ("salesforce limited access - free", 0),
     ("salesforce platform", 2500),
@@ -83,9 +86,17 @@ DEFAULT_PRICE_CATALOG: List[tuple] = [
     # We special-case "salesforce" as exact-match only via an alias below
     # to avoid catching "salesforce limited" / "salesforce platform" etc.
 
+    # --- Einstein add-ons: must precede "sales cloud" / "service cloud",
+    # which would otherwise match first and price them as full seats.
+    # No published list price found; kept at the previous estimate.
+    ("sales cloud einstein", 5000),
+    ("service cloud einstein", 5000),
+
     # --- Add-on user licenses + clouds ---
-    ("service cloud", 16500),
-    ("sales cloud", 16500),  # Used both as UserLicense + PSL
+    # Core edition: https://www.salesforce.com/service/pricing/
+    ("service cloud", 19500),
+    # Core edition: https://www.salesforce.com/sales/pricing/
+    ("sales cloud", 19500),  # Used both as UserLicense + PSL
     ("field service lightning", 15000),
     ("field service mobile", 4000),
     ("field service", 15000),
@@ -97,15 +108,15 @@ DEFAULT_PRICE_CATALOG: List[tuple] = [
     ("pardot growth", 125000),
     ("pardot", 125000),
     ("marketing cloud", 40000),
-    ("tableau crm plus", 7500),
-    ("tableau crm growth", 7500),
-    ("crm analytics plus", 7500),
+    # CRM Analytics Plus $165, Growth $140: https://www.salesforce.com/analytics/crm/pricing/
+    ("tableau crm plus", 16500),
+    ("tableau crm growth", 14000),
+    ("crm analytics plus", 16500),
+    ("crm analytics growth", 14000),
     ("crm analytics", 5000),
     ("einstein analytics", 7500),
 
     # --- Sales / Service add-ons ---
-    ("sales cloud einstein", 5000),
-    ("service cloud einstein", 5000),
     ("sales engagement", 7500),
     ("high velocity sales", 7500),
     ("inbox", 2500),
@@ -143,7 +154,8 @@ DEFAULT_PRICE_CATALOG: List[tuple] = [
 
 # Exact-match alias so the catch-all "salesforce" pattern doesn't shadow
 # more specific entries above. Resolved after the substring scan.
-_SALESFORCE_FULL_PRICE_CENTS = 16500
+# Core edition: https://www.salesforce.com/sales/pricing/
+_SALESFORCE_FULL_PRICE_CENTS = 19500
 
 
 def _lookup_default_price(sku_name: Optional[str]) -> Optional[int]:
@@ -175,8 +187,8 @@ def _lookup_default_price(sku_name: Optional[str]) -> Optional[int]:
 DEFAULT_PRICE_BOOK_CENTS: Dict[str, int] = {
     "Salesforce": _SALESFORCE_FULL_PRICE_CENTS,
     "Salesforce Platform": 2500,
-    "Service Cloud": 16500,
-    "Sales Cloud": 16500,
+    "Service Cloud": 19500,
+    "Sales Cloud": 19500,
     "Field Service": 15000,
     "Salesforce CPQ": 7500,
     "Customer Community": 500,
@@ -317,7 +329,7 @@ def _compose_executive_summary(
         )
     else:
         edition_prefix = (
-            f"This {ctx.org_type or 'production'} Salesforce org "
+            f"This {ctx.org_type + ' ' if ctx.org_type else ''}Salesforce org "
         )
 
     # Top opportunity = highest-savings active finding
@@ -1023,7 +1035,7 @@ class OrgAnalyzerService:
             if not u.is_active:
                 continue
             last_login = u.last_login_at
-            created = u.created_at
+            created = _salesforce_created_at(u)
             cls = _classify(u)
             base = {
                 "id": u.salesforce_id,
@@ -1211,14 +1223,27 @@ class OrgAnalyzerService:
         # user_type=='Standard' (too coarse — covers Platform users too).
         # Now we check the resolved UserLicense and only consider users
         # whose license is "Salesforce" (the full SKU).
-        salesforce_price = ctx.price_book.get("Salesforce", 16500)
+        salesforce_price = ctx.price_book.get("Salesforce", _SALESFORCE_FULL_PRICE_CENTS)
         platform_price = ctx.price_book.get("Platform", 2500)
         cost_delta = max(salesforce_price - platform_price, 0)
-        sales_objects = {"Opportunity", "Lead", "Campaign", "Quote", "Order"}
+        # CRM objects a Platform licence can't use; Case keeps Service users off the list.
+        sales_objects = {"Opportunity", "Lead", "Campaign", "Quote", "Order", "Case"}
 
+        # Object permissions hang off permission sets: a profile's live on
+        # its profile-owned set, and a group's on its component sets. Resolve
+        # both, or users whose Sales access comes from their profile or a
+        # group look over-licensed.
+        group_components: Dict[str, set] = defaultdict(set)
+        for c in ctx.psg_components:
+            group_components[c.permission_set_group_id].add(c.permission_set_id)
+        profile_owned_ps = {
+            p.profile_id: p.salesforce_id
+            for p in ctx.permission_sets if p.is_owned_by_profile and p.profile_id
+        }
         user_parent_ids: Dict[str, set] = defaultdict(set)
         for a in ctx.assignments:
             user_parent_ids[a.assignee_id].add(a.permission_set_id)
+            user_parent_ids[a.assignee_id] |= group_components.get(a.permission_set_id, set())
 
         # ObjectPermission parent_id can be a profile-owned PS or a real PS.
         # We accumulate sales-object grants per (parent_id).
@@ -1256,7 +1281,7 @@ class OrgAnalyzerService:
                 continue
             user_parents = user_parent_ids.get(u.salesforce_id, set())
             for parent_id in list(user_parents) + (
-                [u.profile_id] if u.profile_id else []
+                [u.profile_id, profile_owned_ps.get(u.profile_id)] if u.profile_id else []
             ):
                 if parent_id in sales_grants_by_parent:
                     break
@@ -1604,10 +1629,19 @@ class OrgAnalyzerService:
 
         # PS_UNUSED
         assigned_ps_ids = {a.permission_set_id for a in ctx.assignments}
-        # Skip profile-owned PSes — they're not directly assignable.
+        # A permission set is in use if it's assigned directly OR is a
+        # component of an assigned group. Profile-owned, muting and group
+        # aggregate sets are never directly assignable, so never "unused".
+        assigned_group_components = {
+            c.permission_set_id for c in ctx.psg_components
+            if c.permission_set_group_id in assigned_ps_ids
+        }
         unused_ps = [
             p for p in ctx.permission_sets
-            if not p.is_owned_by_profile and p.salesforce_id not in assigned_ps_ids
+            if not p.is_owned_by_profile
+            and p.ps_type not in ("Muting", "Group")
+            and p.salesforce_id not in assigned_ps_ids
+            and p.salesforce_id not in assigned_group_components
         ]
         if unused_ps:
             n = len(unused_ps)
@@ -2181,7 +2215,7 @@ class OrgAnalyzerService:
                     category=FindingCategory.SHARING_POSTURE,
                     code="OVERPRIVILEGED_PROFILE",
                     severity=FindingSeverity.HIGH,
-                    title=f"{len(sample)} profiles grant Modify All on multiple sensitive objects",
+                    title=(f"{len(sample)} profile grants" if len(sample) == 1 else f"{len(sample)} profiles grant") + " Modify All on multiple sensitive objects",
                     description=(
                         "These profiles grant Modify All Records on two or "
                         "more sensitive objects, to more than one active "
@@ -2630,6 +2664,20 @@ class OrgAnalyzerService:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+def _salesforce_created_at(user: UserSnapshot) -> Optional[datetime]:
+    """When the user was created in Salesforce. UserSnapshot.created_at is
+    when Newton first stored the row, so on a first sync every user looks
+    brand new; fall back to it only for snapshots synced before CreatedDate
+    was pulled."""
+    raw = (user.raw_data or {}).get("CreatedDate")
+    if raw:
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00").replace("+0000", "+00:00"))
+        except ValueError:
+            pass
+    return user.created_at
 
 
 def _ensure_aware(dt: datetime) -> datetime:

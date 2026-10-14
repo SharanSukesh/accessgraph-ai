@@ -185,6 +185,16 @@ export default function OrgAnalyzerPage() {
                 Download PDF
               </a>
             )}
+            {hasRun && (
+              <a
+                href={`${API_BASE}${endpoints.orgAnalyzerReportXlsx(orgId)}`}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-grove-border dark:border-grove-border-dk rounded-md hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
+                title="Summary, findings, License Fit, anomalies, user risk, sprawl and data quality as an Excel workbook"
+              >
+                <Download className="h-4 w-4" />
+                Download Excel
+              </a>
+            )}
             <Button
               variant="primary"
               size="md"
@@ -1792,8 +1802,8 @@ function PriceBookTab({ orgId }: { orgId: string }) {
           <span className="font-semibold text-primary-700 dark:text-primary-300">In org</span>{' '}
           are the actual{' '}
           <code>UserLicense</code> + <code>PermissionSetLicense</code>{' '}
-          records this org owns. Default prices come from a built-in
-          catalog of Salesforce Enterprise list prices; rows flagged{' '}
+          records this org owns. Default prices are Salesforce&apos;s published
+          list prices; negotiated contract rates replace them. Rows flagged{' '}
           <span className="font-semibold text-green-700 dark:text-green-400">Custom</span>{' '}
           have been overridden by you. The{' '}
           <span className="font-semibold">Billed</span> toggle controls

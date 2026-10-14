@@ -7,9 +7,10 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Search, Filter, GitCompare, Users as UsersIcon } from 'lucide-react'
+import { Search, Filter, GitCompare, Download, Users as UsersIcon } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
+import { exportStamp, exportUsersToCSV } from '@/lib/utils/exports'
 import { RiskBadge, Badge } from '@/components/shared/Badge'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -40,11 +41,13 @@ function UsersContent() {
 
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<string>('')
+  const [sort, setSort] = useState<'risk' | 'name'>('risk')
   const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
 
   const { data: users, isLoading, error } = useUsers(orgId, {
     search,
     riskLevel: riskFilter || undefined,
+    sort,
   })
 
   if (error) {
@@ -66,6 +69,15 @@ function UsersContent() {
           subtitle="Browse and investigate user access"
           eyebrow="Explore · people"
           actions={
+            <>
+            <Button
+              variant="secondary"
+              disabled={!users?.length}
+              onClick={() => exportUsersToCSV(users ?? [], `users-${exportStamp()}`)}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
             <Button
               variant="primary"
               onClick={() => router.push(`/orgs/${orgId}/users/compare`)}
@@ -73,6 +85,7 @@ function UsersContent() {
               <GitCompare className="h-4 w-4 mr-2" />
               Compare Users
             </Button>
+            </>
           }
         />
       </Reveal>
@@ -107,6 +120,17 @@ function UsersContent() {
               <option value="high">High</option>
               <option value="medium">Medium</option>
               <option value="low">Low</option>
+            </select>
+
+            {/* Sort */}
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as 'risk' | 'name')}
+              aria-label="Sort users"
+              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="risk">Highest risk first</option>
+              <option value="name">Name A–Z</option>
             </select>
           </div>
         </CardContent>
@@ -191,7 +215,14 @@ function UsersContent() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {user.riskLevel ? (
-                          <RiskBadge level={user.riskLevel} />
+                          <div className="flex items-center gap-2">
+                            <RiskBadge level={user.riskLevel} />
+                            {user.riskScore != null && (
+                              <span className="text-xs tabular-nums text-grove-ink/60 dark:text-grove-ink-dk/60">
+                                {Math.round(user.riskScore)}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-sm text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>
                         )}

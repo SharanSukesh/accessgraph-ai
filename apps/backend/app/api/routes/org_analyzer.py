@@ -10,6 +10,7 @@ Exposes the consulting-grade org-health analyzer:
 - POST  /orgs/{org_id}/org-analyzer/findings/{id}/apply-fix  — SF write-back (v1.8)
 - GET   /orgs/{org_id}/org-analyzer/history             — snapshot trend
 - GET   /orgs/{org_id}/org-analyzer/report.pdf          — server-rendered PDF
+- GET   /orgs/{org_id}/org-analyzer/report.xlsx         — Excel workbook
 - GET   /orgs/{org_id}/org-analyzer/price-book          — read price book
 - PUT   /orgs/{org_id}/org-analyzer/price-book          — write price book
 - GET   /orgs/{org_id}/org-analyzer/brand               — read brand settings (v1.8)
@@ -872,6 +873,9 @@ async def pull_client_logo_from_salesforce(
     from app.services.client_logo import fetch_client_logo
     from app.services.salesforce_sync import SalesforceSyncService
 
+    org = await db.get(Organization, org_id)
+    if org is not None and org.is_demo:
+        raise HTTPException(status_code=409, detail="This is a demo org. Upload a logo instead.")
     try:
         sf_client = await SalesforceSyncService(db, org_id)._refresh_access_token()
     except Exception:
@@ -1172,6 +1176,58 @@ async def update_price_book(
     return await get_price_book(org_id, org_id, db)
 
 
+@router.get("/orgs/{org_id}/org-analyzer/report.xlsx")
+async def download_report_xlsx(
+    org_id: str,
+    request: Request,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> StreamingResponse:
+    """Excel workbook of the latest Health Report plus the per-user rows
+    behind License Fit, anomalies and risk (see services/report/workbook.py)."""
+    from app.services.report.context import gather_report_context
+    from app.services.report.workbook import build_report_workbook
+
+    snap = await _latest_snapshot(db, org_id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="No analyzer run yet. POST /run first.")
+    org = await db.get(Organization, org_id)
+    findings = list((await db.execute(
+        select(OrgFinding).where(
+            OrgFinding.organization_id == org_id,
+            OrgFinding.snapshot_id == snap.id,
+            OrgFinding.is_ignored.is_(False),
+        )
+    )).scalars().all())
+
+    # Same branding precedence as the PDF: per-client override, then the
+    # firm-wide default on the operator's own org.
+    org_brand = await _get_brand_row(db, org_id)
+    home_org_id = getattr(getattr(request.state, "principal", None), "home_org_id", None)
+    firm_brand = await _get_brand_row(db, home_org_id) if home_org_id else None
+
+    def _first(attr: str):
+        for row in (org_brand, firm_brand):
+            if row is not None and getattr(row, attr):
+                return getattr(row, attr)
+        return None
+
+    brand = {
+        "firm_name": _first("firm_name"),
+        "logo_bytes": _first("logo_bytes"),
+        "client_logo_bytes": org_brand.client_logo_bytes if org_brand else None,
+    }
+    data = await build_report_workbook(
+        db, org, snap, findings, await gather_report_context(db, org_id, snap), brand,
+    )
+    filename = f"{'demo-' if org.is_demo else ''}org-assessment-{snap.snapshot_at.strftime('%Y%m%d')}.xlsx"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get(
     "/orgs/{org_id}/org-analyzer/report.pdf",
 )
@@ -1249,15 +1305,21 @@ async def download_report(
     from app.services.report.context import gather_report_context
 
     report_ctx = await gather_report_context(db, org_id, snap)
-    pdf_bytes = build_report_pdf(
-        org_name=org_name,
-        snapshot=snap,
-        findings=findings,
-        brand=brand_ctx,
-        ctx=report_ctx,
-    )
+    try:
+        pdf_bytes = build_report_pdf(
+            org_name=org_name,
+            snapshot=snap,
+            findings=findings,
+            brand=brand_ctx,
+            ctx=report_ctx,
+            is_demo=bool(org and org.is_demo),
+        )
+    except OSError as e:
+        # WeasyPrint loads Pango when rendering, not on import.
+        logger.exception("PDF rendering libraries missing: %s", e)
+        raise HTTPException(status_code=503, detail="PDF generation unavailable. Check server logs.")
     filename = (
-        f"org-assessment-"
+        f"{'demo-' if org and org.is_demo else ''}org-assessment-"
         f"{snap.snapshot_at.strftime('%Y%m%d')}.pdf"
     )
     return StreamingResponse(
