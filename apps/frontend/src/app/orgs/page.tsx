@@ -403,7 +403,7 @@ function OrgRow({ org, canRename }: { org: Organization; canRename: boolean }) {
           )}
           <OrgEnvPill isSandbox={org.is_sandbox} />
           {org.is_demo ? (
-            <Pill>Demo</Pill>
+            <Pill tone="copper">Demo data</Pill>
           ) : org.is_connected ? (
             <Pill tone="mint">Connected</Pill>
           ) : (

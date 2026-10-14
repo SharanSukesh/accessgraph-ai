@@ -200,6 +200,10 @@ async def callback(
 
     is_new_org = connection is None
     if connection is not None:
+        linked_org = await db.get(Organization, connection.organization_id)
+        if linked_org is not None and linked_org.is_demo:
+            # Demo orgs hold synthetic data only and never get real tokens.
+            return _error_redirect("demo_org_cannot_connect")
         if not principal.is_admin:
             granted = (
                 await db.execute(

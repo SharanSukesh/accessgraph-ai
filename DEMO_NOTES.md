@@ -21,7 +21,7 @@ localhost database.
 ```bash
 docker run -d --rm --name newton-pg-local -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=newton -p 55439:5432 postgres:16-alpine
 cd apps/backend
-export DATABASE_URL=postgresql://postgres:pw@localhost:55439/newton JWT_SECRET_KEY=local NEWTON_LOCAL_SEED=1 DEMO_MODE=true
+export DATABASE_URL=postgresql://postgres:pw@localhost:55439/newton JWT_SECRET_KEY=local NEWTON_LOCAL_SEED=1
 .venv/bin/alembic upgrade head
 .venv/bin/python scripts/seed_local_demo.py
 ```
@@ -98,6 +98,32 @@ never dropped: users with no role or profile peers are compared against
 the whole org, and a fallback reason names the features that put them in
 the top 2%. New reason templates: exclusive access, last login,
 cross-department access.
+
+## 4. Demo org in production (admin only)
+
+- Admin → **Demo orgs** (`/admin/demo-orgs`): create "Lumenvale Systems
+  (Demo)" from `fixtures/synthetic_mid_market.json`, or the 8-user Acme
+  fixture. Creating it runs the normal sync on the fixture. Then run the
+  Health Report and License Fit from the org as usual.
+- Guardrails:
+  - `is_demo=True` plus `settings.demo_fixture`. Sync always loads the
+    fixture for a demo org, whatever `DEMO_MODE` says.
+  - The OAuth callback refuses a connection linked to a demo org; new
+    connections always create real orgs.
+  - Health Report and License Fit read licences, edition, limits and
+    ownership from the fixture's `demo_live` section. Data Quality, the
+    four Sprawl tabs and Change Risk refuse demo orgs (greyed out in the
+    sidebar). Every Salesforce write refuses.
+  - "Demo data" badge in the top bar and the org list. The PDF has a cover
+    banner, "DEMO DATA" in every page footer, and a `demo-` filename prefix.
+  - Delete from the same admin page. It refuses non-demo orgs and uses the
+    same erasure as Privacy → delete all data.
+- Fallback (local): `NEWTON_LOCAL_SEED=1 JWT_SECRET_KEY=local
+  DATABASE_URL=postgresql://postgres:pw@localhost:55439/newton
+  .venv/bin/python scripts/seed_local_demo.py` (from `apps/backend`;
+  `SEED_FIXTURE=acme` for the small one). `DEMO_MODE` is no longer needed.
+- Before the demo, the Demo orgs page also lists any older `is_demo` orgs
+  already in production, so check it once after the merge.
 
 ## Backlog (not before Friday)
 

@@ -71,6 +71,7 @@ from app.domain.models import (
     SalesforceConnection,
     UserSnapshot,
 )
+from app.ingestion.demo_orgs import demo_client_for
 from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
 from app.services.org_analyzer import (
@@ -880,6 +881,9 @@ class LicenseFitService:
     # ------------------------------------------------------------------
 
     async def _client(self) -> SalesforceAPIClient:
+        demo = await demo_client_for(self.db, self.org_id)
+        if demo is not None:
+            return demo
         row = await self.db.execute(
             select(SalesforceConnection)
             .where(SalesforceConnection.organization_id == self.org_id)
@@ -897,6 +901,9 @@ class LicenseFitService:
         )
 
     async def _refresh_access_token(self) -> SalesforceAPIClient:
+        demo = await demo_client_for(self.db, self.org_id)
+        if demo is not None:
+            return demo
         from app.salesforce.oauth import SalesforceOAuthClient
 
         row = await self.db.execute(

@@ -872,6 +872,9 @@ async def pull_client_logo_from_salesforce(
     from app.services.client_logo import fetch_client_logo
     from app.services.salesforce_sync import SalesforceSyncService
 
+    org = await db.get(Organization, org_id)
+    if org is not None and org.is_demo:
+        raise HTTPException(status_code=409, detail="This is a demo org. Upload a logo instead.")
     try:
         sf_client = await SalesforceSyncService(db, org_id)._refresh_access_token()
     except Exception:
@@ -1255,9 +1258,10 @@ async def download_report(
         findings=findings,
         brand=brand_ctx,
         ctx=report_ctx,
+        is_demo=bool(org and org.is_demo),
     )
     filename = (
-        f"org-assessment-"
+        f"{'demo-' if org and org.is_demo else ''}org-assessment-"
         f"{snap.snapshot_at.strftime('%Y%m%d')}.pdf"
     )
     return StreamingResponse(

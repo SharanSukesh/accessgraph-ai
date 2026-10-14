@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
 import { openCommandPalette } from '@/components/shared/CommandPalette'
 import { OrgEnvPill } from '@/components/shared/OrgEnvPill'
+import { Pill } from '@/components/v2/primitives'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -60,6 +61,11 @@ export function Topbar() {
               {currentOrg.name}
             </p>
             <OrgEnvPill isSandbox={currentOrg.is_sandbox} />
+            {currentOrg.is_demo && (
+              <span title="Synthetic data from a committed fixture, not a real Salesforce org.">
+                <Pill tone="copper">Demo data</Pill>
+              </span>
+            )}
             <Link
               href="/orgs"
               className="inline-flex shrink-0 items-center gap-1 text-xs text-grove-ink/50 transition-colors hover:text-primary-700 dark:text-grove-ink-dk/50 dark:hover:text-primary-400"

@@ -35,6 +35,7 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.salesforce.oauth import SalesforceOAuthClient
+from app.ingestion.demo_orgs import demo_client_for
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,9 @@ class SalesforceSyncService:
         Returns:
             New SalesforceAPIClient with refreshed token
         """
+        demo = await demo_client_for(self.db, self.org_id)
+        if demo is not None:
+            return demo
         # Get organization's Salesforce connection
         stmt = select(SalesforceConnection).where(
             SalesforceConnection.organization_id == self.org_id,

@@ -2215,7 +2215,7 @@ class OrgAnalyzerService:
                     category=FindingCategory.SHARING_POSTURE,
                     code="OVERPRIVILEGED_PROFILE",
                     severity=FindingSeverity.HIGH,
-                    title=f"{len(sample)} profiles grant Modify All on multiple sensitive objects",
+                    title=(f"{len(sample)} profile grants" if len(sample) == 1 else f"{len(sample)} profiles grant") + " Modify All on multiple sensitive objects",
                     description=(
                         "These profiles grant Modify All Records on two or "
                         "more sensitive objects, to more than one active "

@@ -132,7 +132,7 @@ def _signed(n: float, unit: str = "") -> str:
 
 
 def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFinding],
-           ctx: ReportContext, brand) -> str:
+           ctx: ReportContext, brand, is_demo: bool = False) -> str:
     metrics = snapshot.metrics or {}
     score = float(metrics.get("org_health_score") or 0)
     sev_counts = _severity_counts(findings)
@@ -177,8 +177,14 @@ def _cover(org_name: str, snapshot: OrgAnalysisSnapshot, findings: List[OrgFindi
         f'<p>{_esc(snapshot.executive_summary)}</p></div>'
         if snapshot.executive_summary else ""
     )
+    demo_banner = (
+        '<div class="demo-banner">Demo data: a synthetic org generated for demonstration, '
+        'not a real Salesforce org.</div>'
+        if is_demo else ""
+    )
     return f"""
     <section class="cover">
+      {demo_banner}
       {logo}
       <div class="eyebrow">Salesforce org assessment</div>
       <h1 class="org-name">{_esc(org_name)}</h1>
@@ -506,6 +512,7 @@ STYLE = """
   .lh-logo { max-height: 26px; max-width: 150px; }
   .lh-text { font-size: 8pt; color: #898781; font-weight: 600; }
   .cover-logos { margin-bottom: 1.4em; }
+  .demo-banner { border: 1.5px solid #b45309; color: #b45309; font-weight: 600; padding: 6px 10px; margin-bottom: 1.2em; border-radius: 4px; }
   .cover-client-logo { max-height: 64px; max-width: 260px; }
   .cover-firm-logo { max-height: 22px; max-width: 140px; vertical-align: middle; margin-left: 4px; }
   body { font-family: 'Helvetica Neue', Arial, 'DejaVu Sans', sans-serif; color: #0b0b0b; font-size: 10pt; line-height: 1.45; }
@@ -575,16 +582,18 @@ def _build_html(
     findings: List[OrgFinding],
     brand: Optional["BrandContext"] = None,
     ctx: Optional[ReportContext] = None,
+    is_demo: bool = False,
 ) -> str:
     ctx = ctx or ReportContext()
+    footer_left = f"{_esc(org_name)} · Salesforce org assessment" + (" · DEMO DATA" if is_demo else "")
     accent = (brand.accent_hex if brand else None) or "#14532d"
     footer = _esc(brand.firm_name) if (brand and brand.firm_name) else "Newton"
     style = STYLE.replace("ACCENT", accent) + (
-        f'@page {{ @bottom-left {{ content: "{_esc(org_name)} · Salesforce org assessment"; {FOOTER_FONT} }}'
+        f'@page {{ @bottom-left {{ content: "{footer_left}"; {FOOTER_FONT} }}'
         f' @bottom-right {{ content: "{footer} · page " counter(page) " of " counter(pages); {FOOTER_FONT} }} }}'
     )
     body = _letterhead(org_name, brand) + "".join([
-        _cover(org_name, snapshot, findings, ctx, brand),
+        _cover(org_name, snapshot, findings, ctx, brand, is_demo=is_demo),
         _glance(findings, ctx),
         _profile(snapshot),
         _risk_and_governance(ctx),
@@ -626,7 +635,8 @@ def build_report_pdf(
     findings: List[OrgFinding],
     brand: Optional[BrandContext] = None,
     ctx: Optional[ReportContext] = None,
+    is_demo: bool = False,
 ) -> bytes:
     from weasyprint import HTML  # type: ignore
 
-    return HTML(string=_build_html(org_name, snapshot, findings, brand=brand, ctx=ctx)).write_pdf()
+    return HTML(string=_build_html(org_name, snapshot, findings, brand=brand, ctx=ctx, is_demo=is_demo)).write_pdf()

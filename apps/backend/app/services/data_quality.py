@@ -60,6 +60,7 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
+from app.ingestion.demo_orgs import ensure_live_org
 
 
 logger = logging.getLogger(__name__)
@@ -883,6 +884,7 @@ class DataQualityService:
 
     async def _client(self) -> SalesforceAPIClient:
         """Build a live Salesforce client bound to this org's connection."""
+        await ensure_live_org(self.db, self.org_id, "Data Quality")
         row = await self.db.execute(
             select(SalesforceConnection)
             .where(SalesforceConnection.organization_id == self.org_id)
@@ -905,6 +907,7 @@ class DataQualityService:
         path so we hit the same test.salesforce.com fallback for
         sandboxes / scratch orgs.
         """
+        await ensure_live_org(self.db, self.org_id, "Data Quality")
         from app.salesforce.oauth import SalesforceOAuthClient
 
         row = await self.db.execute(

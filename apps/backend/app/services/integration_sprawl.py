@@ -48,6 +48,7 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
+from app.ingestion.demo_orgs import ensure_live_org
 
 
 logger = logging.getLogger(__name__)
@@ -738,6 +739,7 @@ class IntegrationSprawlService:
     # ------------------------------------------------------------------
 
     async def _client(self) -> SalesforceAPIClient:
+        await ensure_live_org(self.db, self.org_id, "Integration Sprawl")
         row = await self.db.execute(
             select(SalesforceConnection)
             .where(SalesforceConnection.organization_id == self.org_id)
@@ -755,6 +757,7 @@ class IntegrationSprawlService:
         )
 
     async def _refresh_access_token(self) -> SalesforceAPIClient:
+        await ensure_live_org(self.db, self.org_id, "Integration Sprawl")
         from app.salesforce.oauth import SalesforceOAuthClient
 
         row = await self.db.execute(

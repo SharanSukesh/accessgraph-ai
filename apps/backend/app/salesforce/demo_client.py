@@ -2,7 +2,7 @@
 
 A demo org has no Salesforce connection. The few org-level facts Newton
 normally reads live (licences, edition, limits, record ownership) come
-from the fixture's "demo_live" section instead. Every other call returns
+from the fixture's "demo_live" section instead. Every other read returns
 "no data", which the analyzers already treat like a permission-denied
 query. Nothing here can reach the network.
 """
@@ -12,6 +12,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Any method that would change Salesforce refuses instead of quietly "succeeding".
+_WRITE_PREFIXES = ("update", "create", "delete", "insert", "upsert", "patch", "post", "put", "deploy", "assign")
 
 
 class DemoSalesforceClient:
@@ -46,6 +49,14 @@ class DemoSalesforceClient:
         return None
 
     def __getattr__(self, name: str):
+        if name.startswith(_WRITE_PREFIXES):
+            async def _refuse(*_args, **_kwargs):
+                from app.ingestion.demo_orgs import DemoOrgUnsupported
+                raise DemoOrgUnsupported(
+                    "This is a demo org with synthetic data; nothing can be written to Salesforce."
+                )
+            return _refuse
+
         async def _no_data(*_args, **_kwargs):
             logger.debug("demo client: %s has no demo data", name)
             return []

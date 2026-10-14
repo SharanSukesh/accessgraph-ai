@@ -29,6 +29,7 @@ import {
   Shield,
   ShieldCheck,
   UserPlus,
+  FlaskConical,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { apiClient, ApiError } from '@/lib/api/client'
@@ -82,6 +83,8 @@ export const navigationSections: {
     // Feature the current org's privacy level can switch off; the item
     // renders disabled when it does.
     privacyFeature?: PrivacyFeature
+    // Reads live Salesforce data, so it renders disabled on a demo org.
+    liveOnly?: boolean
   }[]
 }[] = [
   {
@@ -103,7 +106,7 @@ export const navigationSections: {
     items: [
       { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
       { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle, privacyFeature: 'anomalies' },
-      { name: 'Change Risk', path: 'change-risk', icon: Radar, privacyFeature: 'change_risk' },
+      { name: 'Change Risk', path: 'change-risk', icon: Radar, privacyFeature: 'change_risk', liveOnly: true },
     ],
   },
   {
@@ -112,7 +115,7 @@ export const navigationSections: {
       { name: 'Health Report', path: 'org-analyzer', icon: Stethoscope },
       { name: 'Equity', path: 'equity', icon: Scale, privacyFeature: 'equity' },
       { name: 'Restructure Studio', path: 'restructure', icon: Wrench, privacyFeature: 'restructure' },
-      { name: 'Sprawl', path: 'sprawl', icon: Boxes },
+      { name: 'Sprawl', path: 'sprawl', icon: Boxes, liveOnly: true },
       { name: 'License Fit', path: 'license-fit', icon: DollarSign, privacyFeature: 'license_fit' },
       { name: 'Compliance', path: 'compliance', icon: ShieldCheck },
     ],
@@ -124,6 +127,12 @@ export const navigationSections: {
         name: 'Users',
         path: '/admin/users',
         icon: UserPlus,
+        adminOnly: true,
+      },
+      {
+        name: 'Demo orgs',
+        path: '/admin/demo-orgs',
+        icon: FlaskConical,
         adminOnly: true,
       },
       { name: 'Org Chart', path: 'reporting-graph', icon: Users2, privacyFeature: 'reporting_graph' },
@@ -149,6 +158,9 @@ export function Sidebar() {
   const orgId = orgIdMatch ? orgIdMatch[1] : null
   // Sync/Reconnect write to the org, so read-only roles don't get them.
   const showOrgControls = !!orgId && canWrite
+  // A demo org has no Salesforce connection: sync reloads its fixture.
+  const isDemoOrg = !!currentOrg?.is_demo
+  const syncLabel = isDemoOrg ? 'Reload demo data' : 'Sync from Salesforce'
 
   // useSyncJobs polls every 5 seconds while the latest job is in
   // pending/running state (see useOrgs.ts:164). We derive the spinner
@@ -200,7 +212,8 @@ export function Sidebar() {
         .map(item => ({
           ...item,
           unavailable:
-            !!item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature),
+            (!!item.privacyFeature && !isFeatureAvailable(currentOrg, item.privacyFeature)) ||
+            (!!item.liveOnly && isDemoOrg),
           // Without an org in the URL, org-scoped items lead to the picker.
           href: item.path.startsWith('/')
             ? item.path
@@ -317,7 +330,10 @@ export function Sidebar() {
                 const isActive =
                   pathname === item.href || pathname.startsWith(item.href + '/')
                 if (item.unavailable) {
-                  const reason = unavailableMessage(privacyModeOf(currentOrg))
+                  const reason =
+                    item.liveOnly && isDemoOrg
+                      ? 'Needs a live Salesforce connection, so it is not available for a demo org.'
+                      : unavailableMessage(privacyModeOf(currentOrg))
                   return (
                     <span
                       key={item.name}
@@ -413,6 +429,7 @@ export function Sidebar() {
           {showOrgControls && (
             <>
               {/* Reconnect Button */}
+              {!isDemoOrg && (
               <div className={cn("p-2", isExpanded ? "" : "flex justify-center")}>
                 <button
                   onClick={handleReconnect}
@@ -438,9 +455,10 @@ export function Sidebar() {
                   )}
                 </button>
               </div>
+              )}
 
               {/* Sync Button */}
-              <div className={cn("p-2 pt-0", isExpanded ? "" : "flex justify-center")}>
+              <div className={cn("p-2", !isDemoOrg && "pt-0", isExpanded ? "" : "flex justify-center")}>
                 <button
                   onClick={handleSync}
                   disabled={isSyncing}
@@ -454,7 +472,7 @@ export function Sidebar() {
                       ? 'bg-grove-border/40 text-grove-ink/40 dark:bg-grove-surface-dk dark:text-grove-ink-dk/40 cursor-not-allowed'
                       : 'text-grove-ink/85 dark:text-grove-ink-dk/85 hover:bg-primary-50 hover:text-primary-700 dark:hover:bg-primary-900/25 dark:hover:text-primary-300'
                   )}
-                  title={!isExpanded ? 'Sync from Salesforce' : undefined}
+                  title={!isExpanded ? syncLabel : undefined}
                 >
                   <RefreshCw className={cn(
                     "h-5 w-5 flex-shrink-0 transition-transform duration-200 ease-out",
@@ -463,12 +481,12 @@ export function Sidebar() {
                     // spin animation stays evergreen (matches brand).
                     !isSyncing && "group-hover:scale-105 group-hover:text-copper-500 dark:group-hover:text-copper-400",
                   )} />
-                  {isExpanded && <span className="whitespace-nowrap">Sync from Salesforce</span>}
+                  {isExpanded && <span className="whitespace-nowrap">{syncLabel}</span>}
 
                   {/* Tooltip for collapsed state */}
                   {!isExpanded && (
                     <div className="absolute left-full ml-2 px-2 py-1 bg-grove-ink dark:bg-grove-surface-dk text-grove-canvas dark:text-grove-ink-dk text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-grove-lift">
-                      Sync from Salesforce
+                      {syncLabel}
                     </div>
                   )}
                 </button>

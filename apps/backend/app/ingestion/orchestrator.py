@@ -94,8 +94,14 @@ class SyncOrchestrator:
         await self.db.commit()
 
         try:
-            # Extract data
-            if settings.DEMO_MODE:
+            # Extract data. A demo org always loads its fixture, whatever
+            # DEMO_MODE says; it has no Salesforce connection to read.
+            org = await self.db.get(Organization, org_id)
+            if org is not None and org.is_demo:
+                from app.ingestion.demo_orgs import fixture_key, load_fixture
+                logger.info("Demo org: loading fixture %s", fixture_key(org))
+                data = load_fixture(fixture_key(org))
+            elif settings.DEMO_MODE:
                 logger.info("Running in DEMO mode")
                 data = await self._extract_demo_data(org_id)
             else:

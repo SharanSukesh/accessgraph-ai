@@ -9,12 +9,17 @@ from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
+# apps/backend, so fixture paths don't depend on the working directory.
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+FIXTURES_DIR = BACKEND_DIR / "fixtures"
+
 
 class FixtureLoader:
     """Load demo data from fixture files"""
 
     def __init__(self, fixture_path: str = "fixtures/demo_org.json"):
-        self.fixture_path = Path(fixture_path)
+        path = Path(fixture_path)
+        self.fixture_path = path if path.is_absolute() else BACKEND_DIR / path
 
     def load(self) -> Dict[str, Any]:
         """
