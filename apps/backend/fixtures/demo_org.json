@@ -220,6 +220,14 @@
       "Label": "Sensitive Data Access",
       "IsOwnedByProfile": false,
       "ProfileId": null
+    },
+    {
+      "Id": "0PS000000001MMM",
+      "Name": "Sales_Manager_PSG_Muting",
+      "Label": "Sales Manager PSG Muting",
+      "IsOwnedByProfile": false,
+      "ProfileId": null,
+      "Type": "Muting"
     }
   ],
   "permission_set_groups": [
@@ -249,6 +257,11 @@
       "Id": "0PC000000001CCC",
       "PermissionSetGroupId": "0PG000000001BBB",
       "PermissionSetId": "0PS000000001FFF"
+    },
+    {
+      "Id": "0PC000000001DDD",
+      "PermissionSetGroupId": "0PG000000001AAA",
+      "PermissionSetId": "0PS000000001MMM"
     }
   ],
   "permission_set_assignments": [
@@ -470,6 +483,17 @@
       "PermissionsDelete": true,
       "PermissionsViewAllRecords": false,
       "PermissionsModifyAllRecords": false
+    },
+    {
+      "Id": "100000000001MMM",
+      "ParentId": "0PS000000001MMM",
+      "SobjectType": "Account",
+      "PermissionsRead": false,
+      "PermissionsCreate": false,
+      "PermissionsEdit": true,
+      "PermissionsDelete": true,
+      "PermissionsViewAllRecords": false,
+      "PermissionsModifyAllRecords": false
     }
   ],
   "field_permissions": [
@@ -538,7 +562,9 @@
       "PermissionsEdit": true
     }
   ],
-  "sensitive_objects": ["Quote"],
+  "sensitive_objects": [
+    "Quote"
+  ],
   "sensitive_fields": [
     "Account.AnnualRevenue",
     "Account.CreditScore__c",

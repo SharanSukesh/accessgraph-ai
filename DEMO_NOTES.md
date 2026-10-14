@@ -61,3 +61,29 @@ summary no longer calls an org "production" when its type is unknown.
   unavailable", and the logs say WeasyPrint could not import external libraries.
 
 **Railway build settings (handled by the owner on `main` before Thursday's merge):** backend service, Settings, Build: Builder = Dockerfile, root directory `apps/backend`, Dockerfile path `Dockerfile`, no custom start command. Rollback: switch the builder back to its previous value and redeploy.
+
+## 2. Permission set group muting (item 1)
+
+- `effective_access.py` now evaluates each grant source separately: the
+  profile, each directly assigned permission set, and each group. A group
+  contributes the union of its non-muting components minus what its muting set
+  mutes; muting never removes a permission granted by another source.
+  This mirrors `risk_scoring.py`'s `bundle()`.
+- Explain (`/users/{id}/explain/object/{obj}`): a muting set is never a grant
+  source. Each path has `granted_via` and `muted: [{permission, muted_by}]`,
+  and the steps end with "Muted: Edit by muting permission set ...".
+- Tests: `tests/test_effective_access_muting.py` (group mute removes edit;
+  the profile's edit survives; field read muting; explain reporting).
+- Demo fixture: "Sales Manager PSG Muting" mutes Account Edit and Delete in
+  Sales Manager PSG. Alice keeps Account Edit (from her profile) and loses
+  Account Delete (it came only from the group).
+- Also fixed: the Health Report's "permission sets with zero assignees" rule
+  counted sets used through groups, muting sets and group aggregate sets as
+  unused. On the fixture this removes a false finding (3 to 2 findings).
+- Shift on the fixture, old code vs new: only Alice's access changes (objects
+  she can delete, 4 to 3). Anomaly scores and flagged users are unchanged.
+  Risk scores are unchanged, because the risk scorer already applied muting.
+- To verify on real data: create a permission set group with a muting
+  permission set in the dev org and sync. The code assumes Salesforce reports
+  muting sets as PermissionSet with Type "Muting", like the rest of the
+  codebase. Unverified against a live org.

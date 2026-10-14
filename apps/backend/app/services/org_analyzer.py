@@ -1604,10 +1604,19 @@ class OrgAnalyzerService:
 
         # PS_UNUSED
         assigned_ps_ids = {a.permission_set_id for a in ctx.assignments}
-        # Skip profile-owned PSes — they're not directly assignable.
+        # A permission set is in use if it's assigned directly OR is a
+        # component of an assigned group. Profile-owned, muting and group
+        # aggregate sets are never directly assignable, so never "unused".
+        assigned_group_components = {
+            c.permission_set_id for c in ctx.psg_components
+            if c.permission_set_group_id in assigned_ps_ids
+        }
         unused_ps = [
             p for p in ctx.permission_sets
-            if not p.is_owned_by_profile and p.salesforce_id not in assigned_ps_ids
+            if not p.is_owned_by_profile
+            and p.ps_type not in ("Muting", "Group")
+            and p.salesforce_id not in assigned_ps_ids
+            and p.salesforce_id not in assigned_group_components
         ]
         if unused_ps:
             n = len(unused_ps)
