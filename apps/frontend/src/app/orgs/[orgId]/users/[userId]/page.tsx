@@ -590,7 +590,7 @@ function UserDetailContent() {
                     exportName={`access-graph-${fileSlug(user?.name ?? userId)}`}
                   />
                   <div className="mt-4">
-                    <GraphLegend compact />
+                    <GraphLegend compact graph={graph} />
                   </div>
                 </>
               ) : (

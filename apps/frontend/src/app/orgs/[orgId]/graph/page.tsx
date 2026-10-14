@@ -204,7 +204,7 @@ export default function GraphExplorerPage() {
                   height="800px"
                   exportName={`access-graph-${fileSlug(selectedUser?.name ?? selectedUserId ?? 'user')}`}
                 />
-                <GraphLegend compact />
+                <GraphLegend compact graph={graph} />
               </>
             ) : (
               <EmptyState
