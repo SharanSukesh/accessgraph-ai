@@ -210,8 +210,8 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    branding on each demo org (client logo).
 10. Download the PDF and the Excel once per org and open both. Lumenvale's
     PDF has the Demo data banner and DEMO DATA in each footer.
-11. Walk the demo path: Anomalies (Jun Jovanovic, Fatima Abernathy at the
-    top), Noor Whitlock → Graph (tick Opportunity and Account), Object
+11. Walk the demo path: Anomalies (Jun Jovanovic first, Fatima Abernathy sixth: the
+    two sole-access users), Noor Whitlock → Graph (tick Opportunity and Account), Object
     Access → Why? on Opportunity (Delete muted), Health Report, License Fit,
     Download PDF / Excel.
 
