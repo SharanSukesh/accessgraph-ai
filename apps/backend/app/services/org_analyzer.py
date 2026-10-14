@@ -1023,7 +1023,7 @@ class OrgAnalyzerService:
             if not u.is_active:
                 continue
             last_login = u.last_login_at
-            created = u.created_at
+            created = _salesforce_created_at(u)
             cls = _classify(u)
             base = {
                 "id": u.salesforce_id,
@@ -2652,6 +2652,20 @@ class OrgAnalyzerService:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+def _salesforce_created_at(user: UserSnapshot) -> Optional[datetime]:
+    """When the user was created in Salesforce. UserSnapshot.created_at is
+    when Newton first stored the row, so on a first sync every user looks
+    brand new; fall back to it only for snapshots synced before CreatedDate
+    was pulled."""
+    raw = (user.raw_data or {}).get("CreatedDate")
+    if raw:
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00").replace("+0000", "+00:00"))
+        except ValueError:
+            pass
+    return user.created_at
 
 
 def _ensure_aware(dt: datetime) -> datetime:

@@ -85,3 +85,21 @@ def test_case_access_needs_a_full_licence():
     ctx.users = [_user("005agent", "00eSvc")]
 
     assert _oversized_ids(ctx) == set()
+
+
+def _never_ids(ctx):
+    found = _findings(ctx, "LICENSE_NEVER_LOGGED_IN")
+    return {s["id"] for s in found[0].evidence["sample"]} if found else set()
+
+
+def test_never_logged_in_uses_salesforce_created_date():
+    ctx = _ctx()
+    p, ps, _ = _profile("00eP", "0PSp")
+    ctx.profiles, ctx.permission_sets = [p], [ps]
+    old = _user("005old", "00eP", last_login=None, created_days_ago=200)
+    new = _user("005new", "00eP", last_login=None, created_days_ago=1)
+    # Newton stored both rows today, as on a first sync.
+    old.created_at = new.created_at = NOW
+    ctx.users = [old, new]
+
+    assert _never_ids(ctx) == {"005old"}
