@@ -1,334 +1,93 @@
 'use client'
 
 /**
- * Graph Legend Component
- * Shows node types, edge types, and their meanings
+ * Graph Legend
+ *
+ * Only the node types (and includes / mutes edges) present in the current
+ * graph, each drawn as the chip the graph uses, grouped Who / Grants /
+ * Removes / What. Colors come from graphStyle.ts. Without a graph, every
+ * type is shown.
  */
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
-import { Badge } from '@/components/shared/Badge'
-import { NODE_TYPES, EDGE_TYPES } from '@/lib/constants'
-import { ChevronDown, ChevronUp } from 'lucide-react'
-import { useState } from 'react'
-
-interface LegendItem {
-  label: string
-  color: string
-  shape?: string
-  description?: string
-}
-
-// Swatch hexes intentionally mirror the Cytoscape stylesheet in
-// ERGraphVisualization (canvas ink is theme-invariant, so no dark:
-// swap here — the graph paints the same colors in both themes).
-const nodeLegend: LegendItem[] = [
-  {
-    label: NODE_TYPES.USER.label,
-    color: 'bg-[#d8794a]',
-    shape: 'ellipse',
-    description: 'Salesforce users',
-  },
-  {
-    label: NODE_TYPES.PROFILE.label,
-    color: 'bg-[#2e8064]',
-    shape: 'rounded-rectangle',
-    description: 'User profiles defining base permissions',
-  },
-  {
-    label: NODE_TYPES.PERMISSION_SET.label,
-    color: 'bg-[#6bbf95]',
-    shape: 'rounded-rectangle',
-    description: 'Permission sets granting additional access',
-  },
-  {
-    label: NODE_TYPES.PERMISSION_SET_GROUP.label,
-    color: 'bg-[#3fa47a]',
-    shape: 'rounded-rectangle',
-    description: "Permission set groups; their access edges show the group's net access after muting",
-  },
-  {
-    label: NODE_TYPES.MUTING_PERMISSION_SET.label,
-    color: 'bg-red-500',
-    shape: 'rounded-rectangle',
-    description: 'Muting permission sets — remove access within a permission set group',
-  },
-  {
-    label: NODE_TYPES.ROLE.label,
-    color: 'bg-[#b8d1c0]',
-    shape: 'diamond',
-    description: 'Roles in role hierarchy',
-  },
-  {
-    label: NODE_TYPES.OBJECT.label,
-    color: 'bg-[#146b4a]',
-    shape: 'rounded-rectangle',
-    description: 'Salesforce objects (e.g., Account, Opportunity)',
-  },
-  {
-    label: NODE_TYPES.FIELD.label,
-    color: 'bg-[#9ccfb2]',
-    shape: 'ellipse',
-    description: 'Object fields',
-  },
-  {
-    label: NODE_TYPES.GROUP.label,
-    color: 'bg-[#c26b47]',
-    shape: 'hexagon',
-    description: 'Public groups',
-  },
-]
-
-const edgeLegend: LegendItem[] = [
-  {
-    label: EDGE_TYPES.HAS_PROFILE.label,
-    color: 'border-[#2e8064]',
-    description: 'User assigned to profile',
-  },
-  {
-    label: EDGE_TYPES.HAS_PERMISSION_SET.label,
-    color: 'border-[#6bbf95]',
-    description: 'User has permission set',
-  },
-  {
-    label: EDGE_TYPES.HAS_PERMISSION_SET_GROUP.label,
-    color: 'border-[#3fa47a]',
-    description: 'User has permission set group',
-  },
-  {
-    label: EDGE_TYPES.INCLUDES_PERMISSION_SET.label,
-    color: 'border-[#6bbf95]',
-    description: 'Permission set included in the group (dotted)',
-  },
-  {
-    label: EDGE_TYPES.MUTES.label,
-    color: 'border-red-600',
-    description: "Group's muting set removes access its other sets grant (dashed)",
-  },
-  {
-    label: EDGE_TYPES.HAS_ROLE.label,
-    color: 'border-[#b8d1c0]',
-    description: 'User has role',
-  },
-  {
-    label: EDGE_TYPES.INHERITS_FROM.label,
-    color: 'border-[#d8794a]',
-    description: 'Role hierarchy inheritance (dashed)',
-  },
-  {
-    label: EDGE_TYPES.CAN_ACCESS.label,
-    color: 'border-[#2e8064]',
-    description: 'Can access object',
-  },
-  {
-    label: EDGE_TYPES.CAN_READ.label,
-    color: 'border-[#9ccfb2]',
-    description: 'Read permission (dotted)',
-  },
-  {
-    label: EDGE_TYPES.CAN_CREATE.label,
-    color: 'border-[#9ccfb2]',
-    description: 'Create permission (dotted)',
-  },
-  {
-    label: EDGE_TYPES.CAN_EDIT.label,
-    color: 'border-[#9ccfb2]',
-    description: 'Edit permission (dotted)',
-  },
-  {
-    label: EDGE_TYPES.CAN_DELETE.label,
-    color: 'border-[#9ccfb2]',
-    description: 'Delete permission (dotted)',
-  },
-  {
-    label: EDGE_TYPES.MEMBER_OF.label,
-    color: 'border-[#c26b47]',
-    description: 'Member of group',
-  },
-]
+import { Card, CardContent } from '@/components/shared/Card'
+import { GRAPH_PALETTE, NODE_TYPE_STYLES, SPECIAL_EDGES, legendFor, type GraphNodeType } from './graphStyle'
+import { NODE_TYPE_ICONS } from './graphChips'
+import { useGraphTheme } from './useGraphTheme'
 
 interface GraphLegendProps {
   className?: string
+  /** Kept for existing callers; the legend is always compact. */
   compact?: boolean
+  graph?: { nodes: { type: string }[]; edges: { type: string }[] } | null
 }
 
-export function GraphLegend({ className = '', compact = false }: GraphLegendProps) {
-  const [showNodes, setShowNodes] = useState(true)
-  const [showEdges, setShowEdges] = useState(true)
+const EDGE_LABELS: Record<string, string> = {
+  INCLUDES_PERMISSION_SET: 'includes',
+  MUTES: 'mutes',
+}
 
-  if (compact) {
+function LegendChip({ type, fill }: { type: GraphNodeType; fill: string }) {
+  const style = NODE_TYPE_STYLES[type]
+  const Icon = NODE_TYPE_ICONS[type]
+  if (type === 'user') {
     return (
-      <Card variant="bordered" className={className}>
-        <CardContent className="py-3">
-          <div className="space-y-3">
-            {/* Compact node legend */}
-            <div>
-              <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
-                Nodes
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {nodeLegend.map((item) => (
-                  <div key={item.label} className="flex items-center gap-1.5">
-                    <div className={`w-3 h-3 rounded-full ${item.color}`} />
-                    <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Compact edge legend */}
-            <div>
-              <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
-                Relationships
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {edgeLegend.slice(0, 5).map((item) => (
-                  <div key={item.label} className="flex items-center gap-1.5">
-                    <div className={`w-6 h-0.5 border-t-2 ${item.color}`} />
-                    <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-                      {item.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold"
+          style={{ border: `2px solid ${style.color}`, background: fill, color: style.color, boxShadow: `0 0 0 3px ${style.color}22` }}
+        >
+          U
+        </span>
+        <span className="text-xs text-grove-ink/75 dark:text-grove-ink-dk/75">{style.label}</span>
+      </span>
     )
   }
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1"
+      style={{
+        border: `1.5px ${style.dashed ? 'dashed' : 'solid'} ${style.color}`,
+        background: style.outline ? 'transparent' : fill,
+      }}
+    >
+      <Icon className="h-3.5 w-3.5" style={{ color: style.color }} strokeWidth={2} />
+      <span className="text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85">{style.label}</span>
+    </span>
+  )
+}
+
+function LegendEdge({ type }: { type: string }) {
+  const edge = SPECIAL_EDGES[type]
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-block w-7" style={{ borderTop: `2px ${edge.lineStyle} ${edge.color}` }} />
+      <span className="text-xs text-grove-ink/75 dark:text-grove-ink-dk/75">{EDGE_LABELS[type]}</span>
+    </span>
+  )
+}
+
+export function GraphLegend({ className = '', graph }: GraphLegendProps) {
+  const theme = useGraphTheme()
+  const fill = GRAPH_PALETTE[theme].chip
+  const groups = legendFor(graph)
 
   return (
     <Card variant="bordered" className={className}>
-      <CardHeader>
-        <CardTitle className="text-lg">Graph Legend</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Node Types */}
-        <div>
-          <button
-            onClick={() => setShowNodes(!showNodes)}
-            className="flex items-center justify-between w-full v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
-          >
-            <span>Node Types</span>
-            {showNodes ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </button>
-          {showNodes && (
-            <div className="space-y-2">
-              {nodeLegend.map((item) => (
-                <div key={item.label} className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-4 h-4 rounded-full flex-shrink-0 ${item.color}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                      {item.label}
-                    </div>
-                    {item.description && (
-                      <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
-                        {item.description}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Edge Types */}
-        <div>
-          <button
-            onClick={() => setShowEdges(!showEdges)}
-            className="flex items-center justify-between w-full v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2 hover:text-grove-ink dark:hover:text-grove-ink-dk"
-          >
-            <span>Relationship Types</span>
-            {showEdges ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </button>
-          {showEdges && (
-            <div className="space-y-2">
-              {edgeLegend.map((item) => (
-                <div key={item.label} className="flex items-start gap-3">
-                  <div className={`mt-1.5 w-8 h-0.5 border-t-2 flex-shrink-0 ${item.color}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                      {item.label}
-                    </div>
-                    {item.description && (
-                      <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
-                        {item.description}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Special Indicators */}
-        <div>
-          <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
-            Special Indicators
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-[#d8794a] border-4 border-[#c26b47]" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Center Node
-                </div>
-                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
-                  Primary focus of the graph (highlighted with copper border)
-                </div>
+      <CardContent className="py-3">
+        <div className="flex flex-wrap gap-x-8 gap-y-3">
+          {groups.map((group) => (
+            <div key={group.title}>
+              <div className="v2-micro mb-1.5 text-grove-ink/55 dark:text-grove-ink-dk/55">{group.title}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                {group.types.map((type) => (
+                  <LegendChip key={type} type={type} fill={fill} />
+                ))}
+                {group.edges.map((type) => (
+                  <LegendEdge key={type} type={type} />
+                ))}
               </div>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 bg-grove-border border-4 border-yellow-500" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                  Selected Node
-                </div>
-                <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-0.5">
-                  Currently selected node (yellow border)
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Line Styles */}
-        <div>
-          <div className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
-            Line Styles
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-0.5 bg-grove-ink/40" />
-              <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Solid = Direct relationship
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-0.5 border-t-2 border-dashed border-grove-ink/40" />
-              <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Dashed = Inheritance
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-0.5 border-t-2 border-dotted border-grove-ink/40" />
-              <span className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Dotted = CRUD permissions
-              </span>
-            </div>
-          </div>
+          ))}
         </div>
       </CardContent>
     </Card>

@@ -2,6 +2,8 @@
  * Application Constants
  */
 
+import { NODE_TYPE_STYLES as GRAPH_COLORS } from '@/components/graph/graphStyle'
+
 // ======================
 // Risk Levels
 // ======================
@@ -59,31 +61,33 @@ export const RECOMMENDATION_TYPES = {
 // Graph Node Types
 // ======================
 
+// Colors come from the access graph's style module so the graph, its
+// legend, the detail panel and the PNG export all agree.
 export const NODE_TYPES = {
-  USER: { value: 'user', label: 'User', color: '#8b5cf6', icon: 'User' }, // purple-500 (brand)
-  ROLE: { value: 'role', label: 'Role', color: '#f59e0b', icon: 'Shield' },
-  PROFILE: { value: 'profile', label: 'Profile', color: '#6366f1', icon: 'UserCircle' }, // indigo-500
+  USER: { value: 'user', label: 'User', color: GRAPH_COLORS.user.color, icon: 'User' },
+  ROLE: { value: 'role', label: 'Role', color: GRAPH_COLORS.role.color, icon: 'Shield' },
+  PROFILE: { value: 'profile', label: 'Profile', color: GRAPH_COLORS.profile.color, icon: 'UserCircle' },
   PERMISSION_SET: {
     value: 'permission_set',
     label: 'Permission Set',
-    color: '#0891b2', // cyan-600
-    icon: 'Key',
+    color: GRAPH_COLORS.permission_set.color,
+    icon: 'KeyRound',
   },
   MUTING_PERMISSION_SET: {
     value: 'muting_permission_set',
-    label: 'Muting Permission Set',
-    color: '#dc2626', // red-600
-    icon: 'KeyRound',
+    label: 'Muting Set',
+    color: GRAPH_COLORS.muting_permission_set.color,
+    icon: 'Ban',
   },
   PERMISSION_SET_GROUP: {
     value: 'permission_set_group',
     label: 'Permission Set Group',
-    color: '#3fa47a',
+    color: GRAPH_COLORS.permission_set_group.color,
     icon: 'Layers',
   },
-  OBJECT: { value: 'object', label: 'Object', color: '#10b981', icon: 'Database' },
+  OBJECT: { value: 'object', label: 'Object', color: GRAPH_COLORS.object.color, icon: 'Database' },
   FIELD: { value: 'field', label: 'Field', color: '#a3e635', icon: 'FileText' },
-  GROUP: { value: 'group', label: 'Group', color: '#ec4899', icon: 'Users' },
+  GROUP: { value: 'group', label: 'Public Group', color: GRAPH_COLORS.group.color, icon: 'Users' },
 } as const
 
 export type NodeType = keyof typeof NODE_TYPES
