@@ -1,7 +1,8 @@
 'use client'
 
 /**
- * Compliance Scorecards — Roadmap #8.
+ * Compliance Control Indicators — Roadmap #8. Automated pass/fail
+ * indicators per framework control; not an audit opinion.
  *
  * One-click scoring against SOX 404 / SOC 2 / HIPAA / GDPR / PCI DSS
  * control libraries. Every control maps to a signal Newton already
@@ -91,10 +92,14 @@ export default function CompliancePage() {
         <PageHeader
           icon={ShieldCheck}
           eyebrow="Optimize · assurance"
-          title="Compliance"
-          subtitle="One-click auditor-ready scorecards mapped to SOX, SOC 2, HIPAA, GDPR, and PCI DSS controls"
+          title="Compliance Control Indicators"
+          subtitle="Pass/fail indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS controls, read from this org's configuration"
         />
       </Reveal>
+
+      <p className="rounded-lg border border-grove-border bg-grove-canvas px-4 py-2.5 text-sm text-grove-ink/75 dark:border-grove-border-dk dark:bg-grove-canvas-dk dark:text-grove-ink-dk/75">
+        Automated indicators based on org configuration. Not an audit opinion, attestation, or certification.
+      </p>
 
       {/* Framework picker */}
       <div className="flex flex-wrap gap-2">
@@ -152,8 +157,8 @@ export default function CompliancePage() {
       ) : (
         <EmptyState
           icon="default"
-          title={`No ${scorecard?.label ?? framework} scorecard yet`}
-          description="Run the scorecard to see pass/fail evidence for each control in this framework."
+          title={`No ${scorecard?.label ?? framework} indicators yet`}
+          description="Run the indicators to see pass/fail evidence for each control in this framework."
         />
       )}
     </div>
@@ -257,7 +262,7 @@ function ScoreHeader({
             {busy ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Running…</>
             ) : (
-              <><Sparkles className="h-4 w-4 mr-2" /> {scorecard?.has_data ? 'Refresh' : 'Run scorecard'}</>
+              <><Sparkles className="h-4 w-4 mr-2" /> {scorecard?.has_data ? 'Refresh' : 'Run indicators'}</>
             )}
           </Button>
         </div>

@@ -386,7 +386,8 @@ def _risk_and_governance(ctx: ReportContext) -> str:
             for c in ctx.compliance
         )
         blocks.append(
-            f'<h3 class="block-title">Compliance control coverage</h3>'
+            f'<h3 class="block-title">Compliance Control Indicators</h3>'
+            f'<p class="caption">Automated indicators based on org configuration. Not an audit opinion, attestation, or certification.</p>'
             f'<table class="data"><thead><tr><th>Framework</th><th>Controls passed</th><th class="num">Score</th><th class="num">Controls</th></tr></thead><tbody>{rows}</tbody></table>'
         )
 
