@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import cytoscape, { Core, NodeSingular, EdgeSingular, EdgeCollection, ElementDefinition, Collection } from 'cytoscape'
-import { Download, Loader2, Maximize2, Minus, Plus } from 'lucide-react'
+import { Download, Loader2, Maximize2, Minus, Plus, Tag } from 'lucide-react'
 import { ERObjectCard } from './ERObjectCard'
 import { exportGraphToJSON, exportStamp } from '@/lib/utils/exports'
 import {
@@ -31,6 +31,7 @@ import {
 } from './graphStyle'
 import { canvasMeasure, chipImage, userImage } from './graphChips'
 import { layeredPositions } from './layeredLayout'
+import { edgePath, placeLabels, routeEdge, type Box, type LabelInput, type Point } from './edgeGeometry'
 import { currentGraphTheme as currentTheme, useGraphTheme } from './useGraphTheme'
 
 interface Graph {
@@ -100,6 +101,7 @@ function decorate(cy: Core, theme: GraphTheme) {
         color: edgeColor(edge.data('type'), targetType, EDGE_REST_ALPHA),
         strong: edgeColor(edge.data('type'), targetType, 1),
         lineStyle: special?.lineStyle ?? 'solid',
+        labelOffset: edge.data('labelOffset') ?? 0,
       })
     })
   })
@@ -180,27 +182,29 @@ function stylesheet(theme: GraphTheme): any[] {
         'z-index-compare': 'manual',
         'z-index': 1,
         width: 1.5,
-        'curve-style': 'unbundled-bezier',
-        'control-point-distances': 0,
-        'control-point-weights': 0.5,
+        // Straight unless routeEdge() gives it a curve (see edgeGeometry.ts).
+        'curve-style': 'straight',
         'line-color': 'data(color)',
         'line-style': 'data(lineStyle)',
         'line-dash-pattern': [6, 4],
         'target-arrow-shape': 'triangle',
         'target-arrow-color': 'data(color)',
         'arrow-scale': 0.7,
-        label: 'data(label)',
-        'font-size': 10,
+        // The label rides along the edge at a distance from the source chosen
+        // by placeLabels(), so labels keep off chips and each other.
+        'source-label': 'data(label)',
+        'source-text-offset': 'data(labelOffset)',
+        'source-text-rotation': 'none',
+        'font-size': LABEL_FONT_SIZE,
         'font-family': 'system-ui, -apple-system, sans-serif',
         color: p.muted,
-        'text-opacity': 0,
-        'text-rotation': 'none',
+        'text-opacity': 1,
         'text-background-color': p.labelBackground,
         'text-background-opacity': 0.9,
         'text-background-shape': 'roundrectangle',
         'text-background-padding': '2px',
         'overlay-opacity': 0,
-        'transition-property': 'opacity, line-color, width',
+        'transition-property': 'opacity, line-color, width, text-opacity',
         'transition-duration': 150,
       },
     },
@@ -209,59 +213,87 @@ function stylesheet(theme: GraphTheme): any[] {
       style: { 'line-style': 'dotted' },
     },
     {
-      // "mutes" is the one label that always shows.
       selector: 'edge[type="MUTES"]',
-      style: { 'line-style': 'dashed', 'text-opacity': 1, color: SPECIAL_EDGES.MUTES.color, 'font-weight': 600 },
+      style: { 'line-style': 'dashed', color: SPECIAL_EDGES.MUTES.color, 'font-weight': 600 },
     },
     {
-      selector: 'edge.show-label',
+      // Labels toggle off: every label but "mutes".
+      selector: 'edge.labels-off',
+      style: { 'text-opacity': 0 },
+    },
+    {
+      selector: 'edge[type="MUTES"].labels-off',
       style: { 'text-opacity': 1 },
     },
     {
-      selector: 'edge.highlighted',
-      style: { 'line-color': 'data(strong)', 'target-arrow-color': 'data(strong)', width: 2, 'text-opacity': 1 },
+      // Too far out to read: fade all labels until zoomed back in.
+      selector: 'edge.zoomed-out',
+      style: { 'text-opacity': 0 },
     },
     {
+      selector: 'edge.highlighted',
+      style: { 'line-color': 'data(strong)', 'target-arrow-color': 'data(strong)', width: 2 },
+    },
+    {
+      // While a node or object is focused, only its paths keep their labels.
       selector: '.dimmed',
-      style: { opacity: 0.15 },
+      style: { opacity: 0.15, 'text-opacity': 0 },
     },
   ]
 }
 
-/**
- * S-shaped curve between two columns, leaving and arriving horizontally.
- * Edges within one column (a group including a set the user also holds
- * directly) bow out past the column's right edge instead.
- */
-function curve(edge: EdgeSingular) {
-  const source = edge.source()
-  const target = edge.target()
-  const s = source.position()
-  const t = target.position()
-  const length = Math.hypot(t.x - s.x, t.y - s.y)
-  if (length < 1 || Math.abs(t.y - s.y) < 2) {
-    edge.style({ 'control-point-distances': 0, 'control-point-weights': 0.5 })
-    return
-  }
-  let controls: { x: number; y: number }[]
-  if (Math.abs(t.x - s.x) < 40) {
-    const right = Math.max(s.x + source.width() / 2, t.x + target.width() / 2) + 36
-    controls = [{ x: right, y: s.y }, { x: right, y: t.y }]
-  } else {
-    const dx = t.x - s.x
-    controls = [{ x: s.x + dx * 0.4, y: s.y }, { x: s.x + dx * 0.6, y: t.y }]
-  }
-  const ux = (t.x - s.x) / length
-  const uy = (t.y - s.y) / length
-  const weights = controls.map((c) => ((c.x - s.x) * ux + (c.y - s.y) * uy) / length)
-  // Cytoscape measures control-point distance perpendicular to source→target,
-  // positive to the left of the direction of travel.
-  const distances = controls.map((c) => (c.y - s.y) * ux - (c.x - s.x) * uy)
-  edge.style({ 'control-point-distances': distances, 'control-point-weights': weights })
+const LABEL_FONT_SIZE = 10
+const LABEL_FONT = `600 ${LABEL_FONT_SIZE}px system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif`
+/** Below this zoom a 10px label renders under ~6px and stops being readable. */
+const LABEL_MIN_ZOOM = 0.6
+
+function nodeBox(node: NodeSingular): Box {
+  const p = node.position()
+  return { x: p.x, y: p.y, w: node.width(), h: node.height() }
 }
 
-function curveAll(edges: EdgeCollection) {
-  edges.forEach((e: EdgeSingular) => curve(e))
+/** Curve or straighten each edge for where its nodes are now (any position). */
+function routeEdges(edges: EdgeCollection) {
+  edges.forEach((edge: EdgeSingular) => {
+    const route = routeEdge(nodeBox(edge.source()), nodeBox(edge.target()))
+    if (route.kind === 'straight') {
+      edge.style({ 'curve-style': 'straight' })
+    } else {
+      edge.style({
+        'curve-style': 'unbundled-bezier',
+        'control-point-distances': route.distances,
+        'control-point-weights': route.weights,
+      })
+    }
+  })
+}
+
+/** Slide each label along its edge so it sits off chips, cards and other labels. */
+function placeEdgeLabels(cy: Core) {
+  const measure = canvasMeasure()
+  const nodes = cy.nodes().map((n) => nodeBox(n))
+  const paths = new Map<string, Point[]>()
+  const labels: LabelInput[] = []
+  cy.edges().forEach((edge) => {
+    const source = nodeBox(edge.source())
+    const target = nodeBox(edge.target())
+    const path = edgePath(source, target, routeEdge(source, target))
+    paths.set(edge.id(), path)
+    const text = String(edge.data('label') ?? '')
+    labels.push({
+      id: edge.id(),
+      path,
+      width: measure(text, LABEL_FONT) + 8,
+      height: LABEL_FONT_SIZE + 6,
+      priority: edge.data('type') === 'MUTES',
+    })
+  })
+  const offsets = placeLabels(labels, nodes, paths)
+  cy.batch(() => {
+    cy.edges().forEach((edge) => {
+      edge.data('labelOffset', offsets[edge.id()] ?? 0)
+    })
+  })
 }
 
 export function ERGraphVisualization({
@@ -284,6 +316,19 @@ export function ERGraphVisualization({
   // Element ids kept bright while something is hovered or an object is pinned.
   const [lit, setLit] = useState<Set<string> | null>(null)
   const pinned = useRef(false)
+  // Edge labels: on by default; the toggle hides all but "mutes".
+  const [labelsOn, setLabelsOn] = useState(true)
+  const labelsOnRef = useRef(true)
+
+  /** Labels toggle and zoom fade, applied to every edge (new ones included). */
+  const applyLabelClasses = useCallback(() => {
+    const cy = cyRef.current
+    if (!cy) return
+    cy.batch(() => {
+      cy.edges().toggleClass('labels-off', !labelsOnRef.current)
+      cy.edges().toggleClass('zoomed-out', cy.zoom() < LABEL_MIN_ZOOM)
+    })
+  }, [])
 
   // Update object card positions when graph changes
   const updateObjectCardPositions = useCallback(() => {
@@ -332,7 +377,7 @@ export function ERGraphVisualization({
       graph.metadata.centerNodeId,
     )
     // Straight edges while nodes move; curves are recomputed where they land.
-    cy.edges().removeStyle('control-point-distances control-point-weights')
+    cy.edges().removeStyle('curve-style control-point-distances control-point-weights')
     const layout = cy.layout({
       name: 'preset',
       positions: (node: any) => positions[node.id()],
@@ -343,12 +388,14 @@ export function ERGraphVisualization({
       animationEasing: 'ease-out',
     } as any)
     layout.one('layoutstop', () => {
-      curveAll(cy.edges())
+      routeEdges(cy.edges())
+      placeEdgeLabels(cy)
+      applyLabelClasses()
       setIsLoading(false)
       updateObjectCardPositions()
     })
     layout.run()
-  }, [graph, updateObjectCardPositions])
+  }, [graph, updateObjectCardPositions, applyLabelClasses])
 
   const highlight = useCallback((keep: Collection | null) => {
     const cy = cyRef.current
@@ -443,6 +490,8 @@ export function ERGraphVisualization({
     })
 
     cyRef.current = cy
+    // Lets local browser checks find nodes and drag them; not set in production builds.
+    if (process.env.NODE_ENV !== 'production') (window as any).__accessGraph = cy
     decorate(cy, currentTheme())
     runLayout(false)
 
@@ -478,18 +527,21 @@ export function ERGraphVisualization({
     cy.on('mouseout', 'node', () => {
       if (!pinned.current) highlight(null)
     })
-    cy.on('mouseover', 'edge', (event) => event.target.addClass('show-label'))
-    cy.on('mouseout', 'edge', (event) => event.target.removeClass('show-label'))
+    cy.on('zoom', applyLabelClasses)
 
     // Update positions on pan/zoom
     cy.on('pan zoom', updateObjectCardPositions)
 
-    // Dragging a node keeps its edges curved and its card attached.
+    // Dragging a node re-routes its edges for wherever it goes (left of the
+    // user, above the top row, anywhere) and keeps its card attached.
     cy.on('drag', 'node', (event) => {
-      curveAll(event.target.connectedEdges())
+      routeEdges(event.target.connectedEdges())
       if (event.target.data('type') === 'object') updateObjectCardPositions()
     })
-    cy.on('dragfree', 'node[type="object"]', updateObjectCardPositions)
+    cy.on('dragfree', 'node', (event) => {
+      placeEdgeLabels(cy)
+      if (event.target.data('type') === 'object') updateObjectCardPositions()
+    })
 
     return () => {
       cy.destroy()
@@ -497,6 +549,11 @@ export function ERGraphVisualization({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph])
+
+  useEffect(() => {
+    labelsOnRef.current = labelsOn
+    applyLabelClasses()
+  }, [labelsOn, applyLabelClasses])
 
   // Restyle on theme change: chip art carries its text colors.
   useEffect(() => {
@@ -599,10 +656,12 @@ export function ERGraphVisualization({
     const measure = canvasMeasure()
     const dimmed = cy.elements('.dimmed')
     const highlighted = cy.elements('.highlighted')
+    const faded = cy.edges('.zoomed-out')
     const images: Promise<void>[] = []
     cy.batch(() => {
       dimmed.removeClass('dimmed')
       highlighted.removeClass('highlighted')
+      faded.removeClass('zoomed-out')
       objects.forEach((n) => {
         const perms = (['canRead', 'canCreate', 'canEdit', 'canDelete'] as const)
           .filter((k) => n.data(k))
@@ -628,6 +687,9 @@ export function ERGraphVisualization({
         })
       })
     })
+    // Objects are chip-sized now: re-route their edges and labels to match.
+    routeEdges(cy.edges())
+    placeEdgeLabels(cy)
     // Cytoscape paints new background images once they've loaded.
     await Promise.all(images)
     // ...and once highlight colors have faded back (150ms transitions).
@@ -637,7 +699,10 @@ export function ERGraphVisualization({
       objects.removeStyle()
       dimmed.addClass('dimmed')
       highlighted.addClass('highlighted')
+      faded.addClass('zoomed-out')
     })
+    routeEdges(cy.edges())
+    placeEdgeLabels(cy)
     const link = document.createElement('a')
     link.href = uri
     link.download = `${exportName}-${exportStamp()}.png`
@@ -687,6 +752,22 @@ export function ERGraphVisualization({
             <Maximize2 className="h-4 w-4" />
           </button>
         </div>
+      )}
+      {!isLoading && (
+        <button
+          type="button"
+          onClick={() => setLabelsOn((on) => !on)}
+          aria-pressed={labelsOn}
+          title={labelsOn ? 'Hide edge labels ("mutes" stays)' : 'Show edge labels'}
+          className={`absolute bottom-3 right-14 z-20 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-sm ${
+            labelsOn
+              ? 'border-primary-300 bg-primary-50 text-primary-800 dark:border-primary-700 dark:bg-primary-900/40 dark:text-primary-200'
+              : 'border-grove-border bg-grove-surface/95 text-grove-ink/70 dark:border-grove-border-dk dark:bg-grove-surface-dk/95 dark:text-grove-ink-dk/70'
+          }`}
+        >
+          <Tag className="h-3.5 w-3.5" />
+          Labels {labelsOn ? 'on' : 'off'}
+        </button>
       )}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-grove-surface/80 dark:bg-grove-canvas-dk/80 z-10">
@@ -762,7 +843,7 @@ export function ERGraphVisualization({
                   x: modelX,
                   y: modelY,
                 })
-                curveAll(node.connectedEdges())
+                routeEdges(node.connectedEdges())
 
                 // Update HTML card position immediately
                 updateObjectCardPositions()
@@ -770,6 +851,7 @@ export function ERGraphVisualization({
             }
 
             const handleMouseUp = () => {
+              if (hasMoved) placeEdgeLabels(cy)
               document.removeEventListener('mousemove', handleMouseMove)
               document.removeEventListener('mouseup', handleMouseUp)
             }
