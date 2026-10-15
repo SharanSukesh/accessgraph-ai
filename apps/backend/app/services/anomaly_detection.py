@@ -255,6 +255,7 @@ from app.domain.models import (
     SalesforceConnection,
     UserSnapshot,
 )
+from app.services.replace_lock import lock_for_replace
 from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
 from app.services.effective_access import EffectiveAccessService
@@ -495,13 +496,25 @@ class AnomalyDetectionService:
                 category="access",
             ))
 
-        # Persist
-        if anomalies:
-            self.db.add_all(anomalies)
-            await self.db.commit()
-
+        await self._replace_anomalies(org_id, "access", anomalies)
         logger.info(f"Detected {len(anomalies)} anomalies")
         return anomalies
+
+    async def _replace_anomalies(self, org_id: str, category: str, anomalies: List[AccessAnomaly]) -> None:
+        """Swap the org's anomalies of this category for these, in one
+        locked transaction, so overlapping runs never leave both sets."""
+        from sqlalchemy import delete
+
+        await lock_for_replace(self.db, org_id, f"access_anomalies:{category}")
+        await self.db.execute(
+            delete(AccessAnomaly).where(
+                AccessAnomaly.organization_id == org_id,
+                AccessAnomaly.category == category,
+            )
+        )
+        if anomalies:
+            self.db.add_all(anomalies)
+        await self.db.commit()
 
     async def _extract_user_features(
         self,
@@ -1188,9 +1201,7 @@ class AnomalyDetectionService:
             )
             anomalies.append(anomaly)
 
-        if anomalies:
-            self.db.add_all(anomalies)
-            await self.db.commit()
+        await self._replace_anomalies(org_id, "session", anomalies)
 
         logger.info(f"Detected {len(anomalies)} session anomalies")
         return anomalies

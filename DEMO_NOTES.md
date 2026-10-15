@@ -198,17 +198,26 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
 5. Smoke test: `/health`, log in, open a client org, open the Health Report.
 
 **Set up the demo**
-6. Admin → Demo orgs → Create **Lumenvale Systems (Demo)**. Wait for "Sync
-   completed" (about a minute). Open it and check the "Demo data" badge.
-7. On Lumenvale: Health Report → Run analysis; License Fit → Re-analyse;
-   Compliance → Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS.
-   Do not run Equity on Lumenvale (it is greyed out; the fixture has no
-   sharing data). Expected: Dashboard 400 users, 40 high-risk, 8 critical
-   anomalies; Health 35 (Critical), 12 findings, $183,180/yr; License Fit
-   $116,220/yr; anomalies #1 Jun Jovanovic (Exclusive access) to #8.
+6. Admin → Demo orgs → Create **Lumenvale Systems (Demo)**. Creating it
+   runs the sync, and the sync runs anomaly detection, risk scoring and
+   recommendations at its end. Wait until the sidebar spinner stops and
+   the Dashboard shows "Completed" with 400 users / 40 high-risk / 8
+   critical. Never click "Analyze Access", "Reload demo data" or "Sync"
+   while a sync is running (the button is now hidden and the API refuses,
+   but don't rely on it).
+7. On Lumenvale, one at a time, each after the previous finishes:
+   Health Report → Run analysis; License Fit → Re-analyse; Compliance →
+   Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS. Do not run
+   Equity on Lumenvale (greyed out; the fixture has no sharing data).
+   Expected: Dashboard 400 users, 40 high-risk, 8 critical anomalies,
+   7 recommendations; Health 35 (Critical), 12 findings, $183,180/yr;
+   License Fit $116,220/yr; anomalies #1 Jun Jovanovic (Exclusive access)
+   to #8.
 8. Dev org: **Sync from Salesforce** first (needed for the group/muting
-   graph), then Health Report, Data Quality, all four Sprawl tabs, License
-   Fit, Compliance (five frameworks), Equity and Change Risk.
+   graph) and wait for it to finish; it includes the anomaly, risk and
+   recommendation analysis, so don't click "Analyze Access" afterwards.
+   Then, one at a time: Health Report, Data Quality, the four Sprawl tabs,
+   License Fit, Compliance (five frameworks), Equity, Change Risk.
 9. Logos: Admin → Users → firm branding (firm logo); Health Report → Report
    branding on each demo org (client logo).
 10. Download the PDF and the Excel once per org and open both. Lumenvale's
