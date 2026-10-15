@@ -107,8 +107,10 @@ export default function UserComparePage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk"
               />
+              {/* Results sit in the card's flow: Card clips overflow, so an
+                  absolutely positioned dropdown was cut off below the input. */}
               {searchTerm && filteredUsers && filteredUsers.length > 0 && (
-                <div className="absolute z-10 w-full mt-2 bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                <div className="w-full mt-2 bg-grove-surface dark:bg-grove-surface-dk border border-grove-border dark:border-grove-border-dk rounded-lg shadow-sm max-h-60 overflow-y-auto">
                   {filteredUsers.slice(0, 10).map((user) => (
                     <button
                       key={user.id}
@@ -124,6 +126,11 @@ export default function UserComparePage() {
                     </button>
                   ))}
                 </div>
+              )}
+              {searchTerm && filteredUsers && filteredUsers.length === 0 && (
+                <p className="mt-2 text-sm text-grove-ink/60 dark:text-grove-ink-dk/60">
+                  No users match &ldquo;{searchTerm}&rdquo;.
+                </p>
               )}
             </div>
           )}
