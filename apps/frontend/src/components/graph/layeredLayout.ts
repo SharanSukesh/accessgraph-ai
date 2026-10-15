@@ -29,7 +29,7 @@ export type Positions = Record<string, { x: number; y: number }>
 const ROW_GAP = 14
 const OBJECT_GAP = 28
 const COLUMN_GAP = 110
-const OBJECT_COLUMN_GAP = 150
+const OBJECT_COLUMN_GAP = 90
 const GROUP_CHILD_EDGES = new Set(['INCLUDES_PERMISSION_SET', 'MUTES'])
 const COLUMN1_ORDER = ['profile', 'role', 'group', 'permission_set_group', 'permission_set', 'muting_permission_set']
 
