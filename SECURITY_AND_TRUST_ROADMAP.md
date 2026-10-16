@@ -8,6 +8,16 @@ what comes after. Update it as items land.
 
 Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBOARDING_SECURITY.md)
 
+## Positioning (guides every product decision)
+
+Newton is built for **consultants**, not for a client's security team. One
+read-only assessment covers **access, cost and health**, and ends in a
+**client-ready, priced roadmap** that becomes paid work, plus **proof
+afterwards** that the work succeeded. Native Salesforce tools, Security
+Center, Config Workbook, Varonis and Arovy each cover a slice for a
+different buyer. When choosing between items, prefer what strengthens
+that consulting workflow: assess → prioritise and price → deliver → prove.
+
 ## Principles
 
 1. **Least privilege everywhere.** Read-only integration user, minimal
@@ -18,6 +28,16 @@ Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBO
 4. **Every action is attributable** to a named person and audit-logged.
 5. **Our legal pages describe what the code actually does.** If they
    diverge, the code or the page is a bug.
+6. **Never invent numbers.** A figure Newton can't measure is shown as
+   unknown, sampled or estimated, with the reason.
+
+## Owner: Sharan
+
+| Item | Notes |
+|------|-------|
+| Make the repository private | |
+| Rotate the encryption key if needed | See P0 item 7. |
+| Product name | |
 
 ## Done (October 2026)
 
@@ -54,6 +74,13 @@ Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBO
   data immediately.
 - Client report: two-logo letterhead (client + firm), severity-ordered
   findings, charts and cross-module insights.
+- Demo hardening (PRs #2-#5): permission set group muting in effective
+  access, explain and the graph; admin-only demo orgs from committed
+  fixtures (synthetic 400-user "Lumenvale"), never connected to
+  Salesforce and labelled on screen and in every export; anomaly flagging
+  at exactly the top 2% with typed, ranked reasons; current list prices;
+  Excel export; "Why?" access paths; access-graph redesign; analysis
+  re-runs replace results instead of duplicating them.
 
 ## P0: before the next client engagement
 
@@ -65,7 +92,7 @@ Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBO
 | 4 | Shorter sessions: 12-hour absolute, 2-hour idle for admins. | Reduces the impact of a stolen session. |
 | 5 | Deployable "Newton Read Only" permission set (metadata plus a one-command `sf` deploy) matching the onboarding guide. | Removes manual setup errors at the client. |
 | 6 | Verify against a real org which features work with the read-only user (LoginHistory, View All Data trade-offs) and record it in the guide. | Set accurate expectations with clients. |
-| 7 | Confirm `DATABASE_ENCRYPTION_KEY` is set in production and write a key-rotation runbook. Confirm production does not use the key that previously appeared in ENCRYPTION_SETUP.md; rotate if it does. | Tokens must be encrypted at rest. |
+| 7 | Confirm `DATABASE_ENCRYPTION_KEY` is set in production and write a key-rotation runbook. Confirm production does not use the key that previously appeared in ENCRYPTION_SETUP.md; rotate if it does. **Owner: Sharan.** | Tokens must be encrypted at rest. |
 | 8 | Staging environment (Railway preview or a second service) and a rule that `main` deploys only after staging passes. | A push to `main` currently goes straight to production. |
 
 ## P1: next quarter
@@ -122,35 +149,609 @@ Client-facing setup guide: [docs/CLIENT_ONBOARDING_SECURITY.md](docs/CLIENT_ONBO
 - Internal data-handling policy for consultants: no exports to personal
   devices, PDFs shared only through the client's channel.
 
-## Product roadmap (client value; none of this is native to Salesforce)
+---
 
-1. **Access drift:** "who gained what since the last sync, through which
-   permission set or profile". Requires versioned snapshots.
-2. **Separation-of-duties rules:** toxic permission combinations (e.g.
-   Modify All Data + Author Apex, Export Reports + View All Data), mapped
-   into the SOX and SOC 2 scorecards.
-3. **What-if impact:** preview who loses or gains access before changing
-   a permission set, group or profile (extends Restructure Studio).
-4. **Access reviews and certification:** managers attest to their team's
-   access; evidence exports for auditors.
-5. **Fixes as deployable metadata:** generate `package.xml`,
-   `destructiveChanges.xml` and permission-set changes for the client's
-   own release process, instead of writing directly.
-6. **Before/after engagement scorecard:** baseline at kickoff compared
-   with the end of the engagement, to show the value delivered.
-7. **Salesforce Health Check score pulled in,** so one report covers
-   security settings and who has access.
-8. **Ongoing monitoring:** scheduled syncs with an email digest of new
-   risk (new admin grants, new connected apps, off-hours changes).
-9. **Cross-engagement benchmarks:** anonymised aggregates only, with
-   explicit client opt-in in the engagement letter.
+# Product roadmap
+
+## How to read an item
+
+Each item lists:
+
+- **Problem**: what it solves for the consultant or the client.
+- **Approach**: how we'd build it.
+- **Salesforce sources**: what we read. A ✓ means confirmed against
+  current Salesforce documentation (see [Sources](#salesforce-sources-checked));
+  **UNVERIFIED** means we couldn't confirm it from the docs and must test
+  it in a sandbox before relying on it.
+- **New permissions**: additions to the "Newton Read Only" permission set.
+  Today that set has API Enabled, View Setup and Configuration, View All
+  Users, View All Profiles, and (optionally) View All Data.
+- **Privacy and demo**: behaviour at Full, Masked and Metadata only, and on
+  demo orgs (which never call Salesforce; they read the fixture).
+- **Fixture**: what the synthetic Lumenvale fixture needs so the feature
+  can be demoed.
+- **Depends on**, then **Effort**. Effort is in engineer-days:
+  **S** = 1-2, **M** = 3-5, **L** = 6-10, **XL** = more than 10. These
+  are estimates, not commitments.
+
+Item numbers match the lead's list (A1-A5) and the agreed backlog
+(B6 onwards). Merged items say so.
+
+## Build order
+
+The proposed order, with changes from the draft and why:
+
+| Phase | Items | Change from the draft, and why |
+|-------|-------|--------------------------------|
+| **A. Quick wins** | 23, 24, 25, 4, 2, and merge `fix-compare-search` | 26 and 27 are done (PRs #4, #5). The compare-search fix is pushed but has no PR. **2 is M, not S**, because it extends Data Quality and has to run on demo orgs. Moved to the end of A. |
+| **B. Client-facing** | 5, then 3 | **3 after 5**: the image pack needs visuals for every module it shows (critical objects, coverage, API usage). Building it last avoids redoing it. |
+| **C. Foundations** | 8, 21, 20 + 10 | **21 before 20**: evidence records point at a snapshot. **10 moves up from G** and merges into 20: once findings carry a review status, recording reviewer feedback is small. It is also what makes the model credible on a consenting real org, which a consultant needs before trusting it with clients. |
+| **D. Access depth** | 1 (phase 1), 7, 6 | 6 is built as the first user of the shared comparison engine that 9 reuses. |
+| **E. Config Workbook parity** | 12, 11, 9 (v1), 13 | Unchanged. 13 depends on 2 (field population) and 8. |
+| **F. Differentiators** | 15, 16, 17, 18 + Proposal P1 | **Proposal P1 (priced roadmap builder) joins F.** It is the deliverable the positioning promises, and 15-18 feed its pricing and proof. If you want it sooner, it can follow phase C on its own. |
+| **G. Depth and scale** | 1 (phase 2), 19, 22, 9 (v2), 28, 29 | 10 moved to C. |
+
+## Phase A: quick wins
+
+### 23. Anomaly severity bands
+- **Problem:** every top-2% user scores 0.986+ on the normalised scale, so all of them show as "critical". Severity carries no information, and clients ask why eight people are critical.
+- **Approach:** severity becomes **rank-based within the flagged set**. Proposed bands, to confirm: top 25% of flagged = critical, next 25% = high, rest = medium. Low is used only for session anomalies. The rank stays visible ("#1 of 400"). Severity keeps meaning "how unusual"; risk level still means "how much damage". If you prefer, the alternative is to drop severity for access anomalies and show rank only.
+- **Salesforce sources:** none (computed).
+- **New permissions:** none.
+- **Privacy and demo:** unchanged; the same at every level.
+- **Fixture:** none.
+- **Depends on:** nothing. **Effort: S.**
+
+### 24. Equity adds Priority Actions when there's no disparity
+- **Problem:** on Lumenvale (equity index 1.0, disparity 0), running Equity added 20 Priority Actions. That's noise in a client deliverable.
+- **Approach:** generate equity recommendations only when disparity exceeds a threshold (default above 0, configurable). Otherwise report "no disparity to close" and add nothing.
+- **Salesforce sources:** none (computed from synced data).
+- **New permissions:** none.
+- **Privacy and demo:** Equity needs user records (off at Metadata only); it's already greyed out on demo orgs.
+- **Fixture:** none.
+- **Depends on:** nothing. **Effort: S.**
+
+### 25. Pardot and Marketing Cloud priced per org, not per seat
+- **Problem:** the price catalog stores them as per-seat monthly prices ($1,250 and $400), so any seat-based savings line overstates savings.
+- **Approach:** mark them as org-level SKUs in the catalog. Seat findings skip them; if they are unused, a separate "org-level subscription" finding is created only from Price Book entries the consultant has filled in.
+- **Salesforce sources:** UserLicense and PermissionSetLicense (already synced).
+- **New permissions:** none.
+- **Privacy and demo:** unchanged.
+- **Fixture:** add a Pardot / Account Engagement licence row to `demo_live` so the org-level path shows.
+- **Depends on:** nothing. **Effort: S.**
+
+### 4. Org code coverage
+- **Problem:** consultants need the deployment-readiness picture before quoting any change: org-wide coverage against the 75% gate, the weakest classes, triggers at 0%, and whether the numbers are current. Today the Health Report only lists classes under 75%.
+- **Approach:** read coverage (never run tests). Show:
+  - org-wide % against 75%;
+  - per class and per trigger;
+  - a list of classes and triggers at 0%;
+  - the last test run date.
+
+  A **staleness warning** appears when the last run is older than the latest Apex change. Salesforce says coverage isn't refreshed until tests rerun, and "Clear All Test History" wipes it. Managed-package code is excluded from the org-wide figure, as in Salesforce.
+
+  Outputs: a Health Report section, a Priority Action when org-wide coverage is below 75%, and a chart for the image pack.
+- **Salesforce sources:**
+  - Tooling `ApexOrgWideCoverage.PercentCovered` ✓
+  - Tooling `ApexCodeCoverageAggregate` (ApexClassOrTriggerId, NumLinesCovered, NumLinesUncovered) ✓
+  - Tooling `ApexTestRunResult` (StartTime, EndTime, Status, MethodsFailed) ✓
+  - `ApexClass` / `ApexTrigger` LastModifiedDate, to detect staleness.
+  - The 75% rule ✓. "Every trigger needs some coverage" is widely cited but **UNVERIFIED** on the pages we read.
+- **New permissions:** none (View Setup and Configuration covers coverage reads ✓).
+- **Privacy and demo:** metadata only, so it's the same at every level. Demo orgs read coverage from `demo_live`.
+- **Fixture:** org-wide 71% (below the gate), about 60 classes and 12 triggers with a realistic spread, 4 classes and 2 triggers at 0%, a last test run 40 days ago, and one class changed after it, to show the staleness warning.
+- **Depends on:** nothing. **Effort: S-M.**
+
+### 2. Critical objects in Schema
+- **Problem:** consultants need a quick, defensible list of objects whose data is unhealthy: stale, mostly empty, or with fields nobody fills in. Each needs a stated reason, because cleanup is billable work.
+- **Approach:** extend the existing Data Quality run rather than adding a new crawler.
+  - **Flags per object**, each with its reason and the numbers behind it:
+    - stale: share of records not modified within N days;
+    - high missing-value share: average fill rate below a threshold;
+    - fields never populated: 0 populated in the counted set.
+  - **Thresholds:** adjustable per org, stored with the run so results can be reproduced.
+  - **Large objects:** sized with the cached approximate record count. Above a size limit we sample (keyset paging on Id), and results are labelled **"estimated (sampled n of N)"**.
+  - **Fields SOQL can't filter** (long text, rich text, encrypted, base64): chosen per field from describe `filterable` and counted from the sample instead, labelled accordingly.
+  - **Outputs:** a "Critical objects" panel in Schema, Health Report findings, and Priority Actions.
+- **Salesforce sources:**
+  - Describe `filterable` / type ✓
+  - SOQL `COUNT()` with WHERE ✓
+  - REST `/limits/recordCount` (approximate, cached) ✓
+  - LastModifiedDate ✓
+  - The WHERE limits for long text, encrypted and base64 fields ✓
+- **New permissions:** none beyond the optional View All Data that Data Quality already uses. Without it, counts cover only records the integration user can see, and that is stated on screen.
+- **Privacy and demo:**
+  - Needs aggregate record statistics: on at Full and Masked, opt-in at Metadata only (existing capability). Values are never stored, only counts.
+  - Today Data Quality is refused on demo orgs. This item adds a fixture-backed path, so Lumenvale can demo Data Quality and critical objects without calling Salesforce.
+- **Fixture:** per-object record counts, per-field populated counts, last-modified distributions, and one large object (2M records) that triggers sampling. Plants:
+  - a stale custom object (`Legacy_Order__c`, 92% untouched in 2 years);
+  - a mostly empty object;
+  - three never-populated fields on Account;
+  - one long-text field that can't be filtered.
+- **Depends on:** nothing (13 builds on it). **Effort: M.**
+
+### Merge `fix-compare-search`
+The compare page's search results were clipped by their card. The fix is pushed on `fix-compare-search` with no PR yet. **Effort: S** (PR, CI, merge).
+
+## Phase B: client-facing
+
+### 5. API usage breakdown
+- **Problem:** clients hit their daily API limit, or pay for more, without knowing which integration is responsible. Consultants need calls per connected app, integration user and API type, the top consumers and a daily trend.
+- **Approach:**
+  1. Read the **API Total Usage event log**. It is available **without the Event Monitoring add-on**: free, daily files, **1-day retention** ✓. Each row is one request, so Newton aggregates on ingest and stores only counts per app, user, API type and day, never the raw rows.
+  2. Because retention is one day, a trend only exists if we **collect daily**. That needs the scheduled collector in Proposal P3. Until then the screen shows "yesterday only" and says so.
+  3. Show org totals against the limit from `/limits` (`DailyApiRequests`) ✓ alongside.
+  4. **Fallback** when the user lacks "View Event Log Files": the screen says why, and shows the org total plus connected apps with last-used dates where readable.
+  - We do **not** propose `OauthToken.UseCount`. Seeing all tokens requires **Customize Application** ✓, an elevated permission our own posture check flags. The count is cumulative per token, and Salesforce documents its Id as always null, so it can't drive a daily breakdown.
+  - Coverage gap, stated on screen: the log covers **REST, SOAP and Bulk** only ✓. It omits other surfaces.
+- **Salesforce sources:**
+  - `EventLogFile` with `EventType='ApiTotalUsage'` ✓. Fields include CONNECTED_APP_ID, CONNECTED_APP_NAME, USER_ID, API_FAMILY, COUNTS_AGAINST_API_LIMIT and TIMESTAMP. There is no count field; each row is a request.
+  - `/limits` ✓
+  - `ConnectedApplication` (already synced by Integration Sprawl).
+  - The "API Usage Last 7 Days" admin report can't be confirmed as readable through the Reports API, so treat it as **UNVERIFIED and not used**.
+- **New permissions:** **View Event Log Files** ✓ (plus API Enabled, already held). Optional; the feature degrades without it.
+- **Privacy and demo:**
+  - Full: user names shown. Masked: integration users shown as aliases.
+  - Metadata only: per-user rows dropped, with per-app and per-API-type rows kept, because user records are off.
+  - Demo: read from the fixture.
+- **Fixture:** 30 days of daily aggregates for 6 connected apps and 4 integration users. One app (a nightly ETL) takes 58% of calls, with a spike that nearly hits the limit, plus an org limit of 1,000,000 a day.
+- **Depends on:** Proposal P3 for the trend (v1 works without it, as "yesterday only"). **Effort: M.**
+
+### 3. Image pack for client presentations
+- **Problem:** consultants rebuild charts by hand in PowerPoint. They need ready-to-drop 16:9 visuals in the client's and firm's branding.
+- **Approach:** one HTML page per visual at 1920x1080 (CSS `@page`), rendered by the existing WeasyPrint pipeline to a multi-page PDF, then rasterised to PNG. A `.pptx` is built with one full-bleed image per slide, and both ship in a ZIP.
+  - **Visuals:** health score, savings breakdown, risk distribution, top anomalies (ranked), license fit, compliance summary, critical objects, code coverage, API usage.
+  - **Branding and labels:** each image carries the two-logo letterhead. Demo orgs carry the "Demo data" label on every image. Masked orgs use aliases, and user-level visuals are left out at Metadata only.
+  - **New dependencies:**
+    - `pypdfium2` for rasterising: a self-contained wheel, no system packages. Poppler isn't in the Docker image.
+    - `python-pptx`.
+- **Salesforce sources:** none new (reads Newton's stored results).
+- **New permissions:** none.
+- **Privacy and demo:** as above. Each visual is skipped, with a note in the ZIP, when its module hasn't run.
+- **Fixture:** none beyond what 2, 4 and 5 add.
+- **Depends on:** 2, 4 and 5 for their visuals (the rest exist). **Effort: M.**
+
+## Phase C: foundations
+
+### 8. Field metadata sync
+- **Problem:** several features need to know what a field is: its type, encryption, and whether it is a lookup or master-detail (ERD, documentation export, comparison, impact analysis, sensitive-data maps). Today the app shows field type and encryption as unknown.
+- **Approach:** sync describe metadata per object: field type, length, required, formula (and its formula), references and relationship name, master-detail status and cascade delete. Encryption is recorded as **Shield** or **Classic** separately.
+
+  For orgs with hundreds of objects, describe calls are batched and cached between syncs. A field's describe is refreshed only when its object's `LastModifiedDate` changes, **UNVERIFIED** that this is reliable for standard objects.
+- **Salesforce sources:**
+  - Describe field attributes: type, length, nillable, calculated / calculatedFormula, referenceTo, relationshipName ✓
+  - Classic encrypted text has type `encryptedstring` ✓
+  - Shield: describe `encrypted` (Shield Platform Encryption, returned only when true) ✓; Metadata `CustomField.encryptionScheme` ✓
+  - Tooling `EntityParticle.IsEncrypted` (Classic) ✓
+  - `cascadeDelete` / `relationshipOrder` on the parent's `ChildRelationship` ✓
+- **New permissions:** none.
+- **Privacy and demo:** metadata only, so it's the same at every level. Demo reads from the fixture.
+- **Fixture:** describe-shaped metadata for the fixture's objects. Plants:
+  - two master-detail relationships;
+  - a Shield-encrypted `Compensation__c.Salary__c`;
+  - a Classic encrypted field;
+  - formula fields.
+- **Depends on:** nothing. **Effort: M.**
+
+### 21. Shared, versioned data model with snapshots
+- **Problem:** comparison (6, 9), simulation (15), verification (17), drift and reports each need "the org as it was at time T". Today a sync overwrites the previous one.
+- **Approach:** each sync becomes an immutable **snapshot** (id, org, taken_at, source = live / fixture, coverage). Permission, assignment, share and metadata rows get a `snapshot_id`; only changed rows are written as new versions (copy-on-change), so storage stays proportional to change.
+  - Every module reads "latest" by default and can read any snapshot.
+  - Retention and erasure cover snapshots: the deletion certificate lists them.
+  - Old snapshots past retention are pruned, except approved baselines (see 9 and 17).
+- **Salesforce sources:** none new.
+- **New permissions:** none.
+- **Privacy and demo:** a snapshot is purged or masked under the privacy level in force, exactly as today's rows are.
+  - Tightening the level rewrites all snapshots.
+  - On demo orgs, the fixture can provide two dated snapshots, "kickoff" and "today", to demo drift and verification.
+- **Fixture:** a second fixture state ("today") with 14 changes from "kickoff":
+  - assignments removed and added;
+  - a muting set added;
+  - a profile permission removed;
+  - a new connected app.
+- **Depends on:** nothing, but it touches most services. **Effort: XL.** It's the largest foundation item; do it before 15-17 so they never build their own history.
+
+### 20 + 10. Evidence on every finding, reviewer feedback and validation
+- **Problem:**
+  - Consultants need to defend every finding in front of a client: where it came from, when, how complete the data was, and how sure we are.
+  - "No observed usage", "no access" and "no issue" are different claims and must never be merged.
+  - To validate the model on a real, consenting org, reviewers need to mark findings useful, not useful or expected, and we need to report how many proved useful.
+- **Approach:** a common **evidence block** on every finding, anomaly and recommendation:
+  - source (object or API), collection time and snapshot;
+  - coverage (e.g. "412 of 412 users", "sampled 50k of 2M");
+  - confidence: **confirmed / inferred / sampled / unknown**;
+  - required permission or licence, and whether we had it;
+  - methodology version.
+
+  **Review** (10): status and reason per finding (useful / not useful / expected), approved exceptions, reviewer and date. A **validation report** gives precision overall, by module and by anomaly type, with counts, never a single score. Its title states which org and period it covers. Every module shows "not measured" separately from "nothing found".
+- **Salesforce sources:** none new.
+- **New permissions:** none.
+- **Privacy and demo:**
+  - Review data is Newton's own, but reviewer comments can mention people. They follow the org's privacy level and are erased with the org.
+  - On demo orgs, review is allowed and labelled demo. It never counts towards validation.
+- **Fixture:** none (reviews are entered in the app). Optionally, pre-seed a few demo reviews for the validation screen.
+- **Depends on:** 21 (evidence points at a snapshot). **Effort: L.**
+
+## Phase D: access depth
+
+### 1. Page layouts and Lightning pages, plus access through Apex and Flows
+
+**Phase 1: assignments and "who can run".**
+- **Problem:** "Why does this user see this layout or page?" and "Which code and automation can this user run, and why?" Today the graph shows object and field access only.
+- **Approach:** for a user and an object:
+  - **Page layout:** the layout from their **profile + record type** (with the record types available to them). Layouts are assigned to **profiles only**. Salesforce cancelled moving this to permission sets ✓, so there is no permission-set path to show.
+  - **Lightning record page:** the resolved page and the rule that won, evaluated in Salesforce's precedence order: **app + record type + profile**, then **app default**, then **org default**, per form factor (desktop or phone). The precedence order is **UNVERIFIED** as an exact rule in the docs and must be tested in a sandbox. Shown as an explanation, like Why?.
+  - Stated on screen: **component visibility rules on a page aren't evaluated**.
+  - **Apex classes and Flows the user can run:** permission sets, profiles and groups that grant each class or flow, with the path, as in Why?. Flows that **require explicit access** (the "restrict access" override) are flagged. "Run Flows" is shown as a separate system permission, with Salesforce's rule that record-triggered, scheduled and platform-event flows don't need it ✓. The org's status for the "Restrict User Access to Run Flows" release update is shown when readable, **UNVERIFIED** how to read it via API.
+  - The graph gets layout, page, Apex and Flow nodes behind a filter (off by default to avoid clutter).
+- **Salesforce sources:**
+  - Layouts and record types:
+    - Tooling `ProfileLayout` (ProfileId, LayoutId, RecordTypeId, TableEnumOrId) ✓
+    - Tooling `Layout` ✓
+    - `RecordType` ✓
+    - Record-type visibility per profile: Metadata `Profile.recordTypeVisibilities`, **UNVERIFIED** how to read it without a Metadata retrieve. Fallback: describeLayout record-type mappings for the integration user only, which isn't enough. Needs a sandbox test.
+  - Lightning page assignments:
+    - Org default: describe `actionOverrides` (formFactor, pageId) ✓. Whether describe reflects app or profile assignments is not documented, so we use it for the org default only.
+    - App default and app + record type + profile: Tooling `CustomApplication.Metadata` → `actionOverrides`, `profileActionOverrides` ✓. Plan one query per app; whether the one-record rule applies is **UNVERIFIED**.
+    - Managed-package org defaults can't be retrieved ✓, so those are shown as unknown.
+  - Apex and Flow access:
+    - `SetupEntityAccess` (SetupEntityType `ApexClass` ✓, `FlowDefinition` from API 58 ✓)
+    - Flow `isAdditionalPermissionRequiredToRun` ✓ (Tooling `Flow.Metadata`, one record per query ✓, so one query per flow)
+    - `PermissionsRunFlow` ✓
+- **New permissions:** none (View Setup and Configuration covers SetupEntityAccess and the Tooling objects ✓). We avoid Metadata API retrieve, which would need extra permissions (**UNVERIFIED** which).
+- **Privacy and demo:** configuration only, so it works at every level. Per-user views follow user visibility (aliases when masked; no per-user view at Metadata only, but per-profile views still work). Demo reads from the fixture.
+- **Fixture:**
+  - 3 record types on Opportunity and 2 on Case;
+  - page layouts per profile and record type;
+  - 4 Lightning record pages: an org default, a Sales app default, and an app + record type + profile override for Sales Manager;
+  - about 20 Apex classes;
+  - about 15 flows with run modes;
+  - SetupEntityAccess grants through profiles, sets and groups;
+  - two flows with "restrict access" on, one of them granted only through the Sales Manager Bundle.
+- **Depends on:** 8 (record-type and relationship context). **Effort: L.**
+
+**Phase 2: what that Apex or Flow can reach in system context.** Planned in phase G.
+- **Approach:**
+  - For each class: its sharing mode, from Tooling `ApexClass.SymbolTable` modifiers ("with / without / inherited sharing") ✓, no Body parsing needed.
+  - For each flow: its run mode, from Tooling `Flow.RunInMode` (DefaultMode, SystemModeWithSharing, SystemModeWithoutSharing) ✓.
+  - Objects and fields touched: Salesforce's dependency data (Tooling `MetadataComponentDependency`, **Beta** ✓) plus static analysis of the Apex body and flow metadata. Dynamic SOQL and string-built references aren't caught.
+  - Every result is labelled **"potential exposure: code that runs without sharing and touches X"**, never as a confirmed access issue.
+  - Managed-package classes are opaque (source hidden ✓). Whether SymbolTable is returned for them is **UNVERIFIED**; shown as "managed: not analysable".
+- **Effort: L.**
+
+### 7. Record-level access for Cases, Contacts and Leads
+- **Problem:** the Record Access tab covers Accounts and Opportunities only, and says "not analyzed yet" for the rest.
+- **Approach:**
+  - Sync `CaseShare`, `ContactShare` and `LeadShare` the same way as the existing Account and Opportunity shares (owned, team, rule, manual), alongside each object's org-wide default.
+  - The screen states what the share tables **can't show** ✓:
+    - sharing sets store no share rows;
+    - with Faster Account Sharing Recalculation, `ImplicitChild` rows aren't returned for Case and Contact;
+    - Salesforce may stop storing some share rows.
+
+    So the claim is "explicit and stored shares", never "everyone with access".
+  - If Contact is "Controlled by Parent", ContactShare may be unavailable (**UNVERIFIED** in the docs). This is handled defensively and reported as "inherits from Account".
+- **Salesforce sources:**
+  - `CaseShare` / `ContactShare` / `LeadShare` (UserOrGroupId, *AccessLevel, RowCause) ✓
+  - Querying them needs read access to the parent ✓
+- **New permissions:** **View All Data** becomes required for this feature (today it's optional), because share rows are visible only for parents the user can read ✓. Without it, the tab says it's partial.
+- **Privacy and demo:** needs the Record shares capability (off at Metadata only, as today). Record IDs are stored only as keyed hashes. Demo reads from the fixture.
+- **Fixture:** share rows for Cases, Contacts and Leads, including team, rule and manual shares, with one user who can reach 3,000 Cases through a criteria-based sharing rule.
+- **Depends on:** nothing. **Effort: M.**
+
+### 6. Profile and permission set comparison (first user of the comparison engine)
+- **Problem:** "What's different between these two profiles or sets, and who would gain or lose access if we merged them?" This underpins most cleanup quotes.
+- **Approach:**
+  - **Engine:** build a generic **comparison engine** (left side, right side, matching keys, typed differences), shared later by 9.
+  - **Inputs:** 2-4 profiles (via their profile-owned set) or permission sets.
+  - **Compared:**
+    - object CRUD, View All and Modify All;
+    - field read and edit;
+    - system permissions;
+    - Apex, Flow and custom-permission grants (once 1 lands);
+    - assigned user counts.
+  - **Controls:** a "differences only" toggle, search, and CSV export.
+  - **Entry point:** a "Compare" button on the permission set page.
+- **Salesforce sources:** none new (synced permission data). System permission flags are already on PermissionSet ✓.
+- **New permissions:** none.
+- **Privacy and demo:** configuration only, so it works at every level. Assigned user counts are counts, not names. Demo works from the fixture.
+- **Fixture:** add two near-duplicate sets ("Sales Ops" and "Sales Operations", differing in 3 permissions) to show a merge candidate.
+- **Depends on:** 21 for comparing versions over time (works on latest without it). **Effort: M.**
+
+## Phase E: Config Workbook parity
+
+Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Salesforce product ✓. Its vendor documents an Excel documentation export, object ERDs, impact analysis and a dependency explorer, an audit trail explorer with risk scoring, and org and profile comparators. **Our parity bar is what Mike uses day to day, not the full vendor list.** The list of features he uses is **UNVERIFIED** (please confirm).
+
+### 12. ERDs from object relationships
+- **Problem:** consultants draw data-model diagrams by hand for discovery and design.
+- **Approach:** an interactive ERD reusing the access-graph renderer (chips, layered layout). Lookups are drawn as plain edges and master-detail as bold. Each diagram has a chosen focus object and depth (1-3). Options: hide system objects; export to PNG or SVG and into the image pack.
+- **Salesforce sources:** from 8 (referenceTo, relationshipName, child relationships) ✓.
+- **New permissions:** none.
+- **Privacy and demo:** metadata only, so it works at every level, including demo.
+- **Fixture:** covered by 8.
+- **Depends on:** 8. **Effort: M.**
+
+### 11. Documentation export
+- **Problem:** clients ask for "the org documented" as a deliverable.
+- **Approach:** add sheets to the existing Excel export:
+  - Objects and Fields (from 8);
+  - Page Layouts and Record Types (from 1);
+  - Validation Rules, with their formulas;
+  - Picklist values, including values per record type;
+  - Flows (type, trigger, active version, run mode);
+  - Apex classes and triggers (sharing mode, coverage from 4, API version).
+
+  Validation formulas need one Tooling query per rule ✓. They are fetched in the background with a progress count, and the sheet says so if any are skipped.
+- **Salesforce sources:**
+  - Tooling `ValidationRule` ✓, with the formula only in `Metadata`, one record per query ✓.
+  - Describe `picklistValues` ✓.
+  - Values per record type from describeLayout `recordTypeMappings` ✓.
+  - `FlowDefinitionView` (ApiName, ProcessType, TriggerType, IsActive, ActiveVersionId…) ✓.
+  - `ApexClass` / `ApexTrigger` (Body has no one-record limit) ✓.
+- **New permissions:** none.
+- **Privacy and demo:** configuration only, so it works at every level. Validation messages and formulas can contain client text but are configuration, not personal data. Demo uses the fixture.
+- **Fixture:** about 25 validation rules with formulas, picklists with record-type-specific values, and the flows and classes from 1.
+- **Depends on:** 8, 1. **Effort: M.**
+
+### 9 (v1). Org-to-org comparison
+- **Problem:** before a release, a merge or a sandbox refresh, consultants need to know what differs between two orgs, or within one org between two dates, and **what that difference means**: who gains or loses access, and what depends on it.
+- **Approach:** reuse the comparison engine (6) on two snapshots (21): production vs sandbox, any two orgs, or the same org on different dates.
+  - **v1 compares:** permissions and assignments, objects and fields, automations, packages and integrations, all from data we already sync.
+  - **Matching:** by API name and namespace, not by Salesforce ID. IDs differ between orgs; sandboxes keep them after a refresh but drift afterwards. An **explicit mapping screen** handles renames and namespace changes, and its decisions are saved per org pair.
+  - **Consequences, not just differences:**
+    - users who gain or lose object or field access (via effective access on each side);
+    - automations and integrations that depend on a changed object or field (via 13's dependency data);
+    - **expected vs unexpected**: a baseline lists approved differences, e.g. sandbox email deliverability off, and everything else is drift.
+  - **Baselines:** approved and stored per org (shared with 17).
+- **Salesforce sources:** none new for v1.
+- **New permissions:** none. Each org uses its own connection.
+- **Privacy and demo:**
+  - Comparing two orgs with different privacy levels uses the **stricter** level for the whole comparison.
+  - User-level consequences are hidden at Metadata only; counts remain.
+  - Demo: compare Lumenvale's two fixture snapshots ("kickoff" and "today") from 21, plus a "Lumenvale UAT" sandbox fixture.
+- **Fixture:** a small "Lumenvale UAT" sandbox fixture with 20 planted differences: renamed field, extra permission set, deactivated flow, a different package version. One namespace difference needs mapping.
+- **Depends on:** 21, 6, 8; 13 for dependency consequences. **Effort: XL.**
+
+### 13. Impact analysis for cleanup
+- **Problem:** "Can we delete this field?" is a frequent, billable question, and the wrong answer breaks production.
+- **Approach:** combine
+  1. **Salesforce's dependency data** (`MetadataComponentDependency`): Beta ✓, 2,000 rows per Tooling query ✓, 100,000 via Bulk API 2.0 ✓, no ORDER BY / COUNT / OFFSET ✓, reports excluded from Tooling queries ✓. There's no official list of supported types ✓, so coverage is **UNVERIFIED** by type.
+  2. **Our own scans:** validation rule formulas, formula fields, flow metadata, Apex bodies, layouts (from 1), report filters where readable. Package sprawl already does supplemental scans because the index is incomplete.
+  3. **Field population** (from 2).
+
+  The verdict is **never "safe to delete"**. It is "no references found in: [list of sources checked]; not checked: [list]; populated in 0 of N records (sampled)". It comes with a confidence level, plus a standing note on what isn't checkable: dynamic Apex, string references, external integrations, reports where the index excludes them.
+- **Salesforce sources:** as above; Bulk API 2.0 for large orgs ✓.
+- **New permissions:** none, **UNVERIFIED** for Bulk API 2.0 query on the Tooling dependency object with our permission set (test in a sandbox).
+- **Privacy and demo:** metadata plus aggregate counts, so population needs the aggregates capability at Metadata only. Demo uses the fixture.
+- **Fixture:** three cleanup candidates on Account:
+  - `Legacy_Region__c`: unused and unreferenced, a strong candidate;
+  - `Old_Score__c`: unpopulated but referenced by a validation rule, so not safe;
+  - `Fax_Ext__c`: referenced only by an inactive flow.
+- **Depends on:** 2, 8, 1. **Effort: L.**
+
+### 14. Change history: Change Risk Radar gaps against Config Workbook
+- **Status:** Change Risk Radar already ingests the Setup Audit Trail with blast-radius scoring. Salesforce keeps it **at least 180 days** ✓; `Section` and `Display` can't be filtered in SOQL ✓.
+- **Gaps:**
+  1. **History beyond 180 days** needs Newton to keep pulled rows. Only snapshots taken while connected (21) extend it, and it's subject to our retention.
+  2. **Field-level "what changed"** (old and new value) isn't in the audit trail. Snapshot diffs (21, 9) supply it for synced metadata.
+  3. **Export:** the change-history sheet joins the Excel export (11).
+  4. Config Workbook's audit trail explorer and risk levels are vendor-documented; any deeper feature parity is **UNVERIFIED**.
+- **Effort: S** (export sheet). Everything else is covered by 21 and 9.
+
+## Phase F: differentiators
+
+These four share one **access-delta engine** built on snapshots (21) and effective access: given a set of proposed or observed changes, it computes access gained, lost and kept per user and per object or field.
+
+### 15. What-if simulator (extends Restructure Studio)
+- **Problem:** clients won't approve permission changes without knowing who breaks. Today Restructure Studio reports one "access preserved %", which hides who loses what.
+- **Approach:**
+  - **Staged changes:** assignments, group membership, muting sets, roles and sharing rules, never applied.
+  - **Output:**
+    - access **gained / lost / kept** per user and per object or field;
+    - **users affected**, each with a reason;
+    - **remaining paths** that undermine the intended restriction, e.g. removing a set while a group still grants the same access;
+    - **effects we can't predict**, stated plainly: Apex in system context, record-level effects of role changes beyond stored shares, managed packages.
+  - Replaces the single percentage with this breakdown.
+- **Salesforce sources:** none new.
+- **New permissions:** none.
+- **Privacy and demo:** per-user detail hidden at Metadata only (counts by profile and role remain); aliases when masked. Demo works.
+- **Fixture:** none beyond 21. Scenario presets for Lumenvale: "remove Legacy Integration Admin", "split Sales Manager Bundle".
+- **Depends on:** 21, effective access. **Effort: L.**
+
+### 16. Repair planner (extends Why?)
+- **Problem:** "Why can't this user do X, and what's the smallest appropriate change?" Consultants answer this daily, by hand.
+- **Approach:**
+  - **Options**, ranked by blast radius:
+    - reuse an existing set that grants exactly X;
+    - create a narrow new set;
+    - add to or change a group;
+    - remove redundant assignments.
+  - **Each option shows:** users affected (via 15), licence requirements, and permission dependencies (e.g. Edit needs Read).
+  - **Constraints:** Salesforce's licence and permission-dependency rules aren't fully published as data. The planner uses the dependencies Salesforce exposes and marks the rest **UNVERIFIED**, e.g. a permission set licence a set requires.
+  - **Output:** feeds 19 (bundles) and 17 (verification goals).
+- **Salesforce sources:**
+  - PermissionSetLicense / PermissionSetLicenseAssign (already synced).
+  - A permission-dependency source, **UNVERIFIED** (candidates: Tooling `PermissionDependency`; test in a sandbox).
+- **New permissions:** none.
+- **Privacy and demo:** as 15.
+- **Fixture:** a user missing Edit on Opportunity, with three candidate fixes of different blast radius.
+- **Depends on:** 15. **Effort: L.**
+
+### 17. Post-change verification and evidence pack
+- **Problem:** the positioning promises proof that the work succeeded: excess removed, no alternative path left, required access kept, nothing unexpected added, savings realised. Today none of that is shown.
+- **Approach:**
+  - **Approved goal:** from 15 or 16, or a manual list, stored as a baseline.
+  - **Re-scan:** a new snapshot, then checked against the goal.
+  - **Pass / fail per goal line**, with evidence:
+    - access removed or kept;
+    - no remaining path;
+    - unexpected additions, from a diff of everything outside the goal;
+    - savings realised, from licence counts before and after, using the savings ledger from 18.
+  - **Evidence pack:** a before/after PDF with both snapshot dates. It replaces the old "before/after engagement scorecard" idea.
+- **Salesforce sources:** none new.
+- **New permissions:** none.
+- **Privacy and demo:** as 15. The demo uses the "kickoff" and "today" fixture snapshots.
+- **Fixture:** the "today" snapshot from 21 implements two goals and misses one: a group still grants the removed access, to show a fail.
+- **Depends on:** 21, 15; 18 for savings realised. **Effort: L.**
+
+### 18. License renewal planner
+- **Problem:** savings estimates only become money at renewal. Clients need to know what to cut, when, and what's real vs reshuffled.
+- **Approach:**
+  - **Inputs:** contract rates and **renewal dates** entered per SKU in the Price Book. Salesforce doesn't expose contract terms, so this is manual entry by design.
+  - **Usage:** seasonal usage from login history, while available (UNVERIFIED retention; LoginHistory is commonly cited as 6 months). The scheduled collector (P3) extends it.
+  - **Reassignment vs reduction:** a freed seat that is needed elsewhere is not a saving.
+  - **Savings ledger:** each saving moves from **estimated → approved → realised**, with a single owner per user and licence so no saving is counted twice across recommendations. This fixes today's overlap between the Health Report and License Fit.
+  - **Output:** a renewal calendar with recommended counts per SKU.
+- **Salesforce sources:**
+  - UserLicense / PermissionSetLicense (synced)
+  - LoginHistory (synced, subject to privacy)
+- **New permissions:** none.
+- **Privacy and demo:**
+  - Login-based seasonality is unavailable at Metadata only; the planner then uses licence counts only and says so.
+  - Demo works from the fixture.
+- **Fixture:** renewal dates per SKU, a seasonal pattern (support seats peaking in Q4) and a reassignment case.
+- **Depends on:** 25; 21 for realised savings. **Effort: L.**
+
+### Proposal P1 joins this phase: priced roadmap builder (see Proposals).
+
+## Phase G: depth and scale
+
+### 1 (phase 2). Apex and Flow system-context reach
+See item 1 above. **Effort: L.**
+
+### 19. Remediation bundles
+- **Problem:** approved fixes are re-keyed by hand into the client's release process.
+- **Approach:** for fixes approved in 16 or 17, generate permission-set metadata and a `package.xml` / `destructiveChanges.xml`.
+  - Start with **permission set changes only**.
+  - Optionally open a **draft pull request** in the client's repository.
+  - Still behind our approval model: admin-only, recorded consent, write-back setting.
+  - Newton never deploys to Salesforce.
+- **Salesforce sources:** Metadata API formats for PermissionSet and package manifests (documented formats; generation only, no API call).
+- **New permissions:** none in Salesforce. A **GitHub app or token scoped to the client's repo** is a new integration. It needs client consent, and it's covered in the security review pack (28).
+- **Privacy and demo:** configuration only. Demo bundles are labelled demo, and PRs are disabled on demo orgs.
+- **Fixture:** none beyond 16.
+- **Depends on:** 16, 17. **Effort: L.**
+
+### 22. Anomaly engine
+- **Problem:** consultants need anomalies that hold up in front of a client.
+- **Approach:**
+  - **Peer groups by business role:** department and title families from synced data, with role and profile as fallbacks.
+  - **Reviewer feedback and approved exceptions** (from 20 + 10): approved exceptions are **suppressed on repeat**.
+  - **Alert-to-action tracking:** the share of anomalies that led to a change in a later snapshot.
+  - **"No actionable anomaly found"** is allowed as a result.
+  - **Ranking:** the top-2% ranking stays as a ranking aid, not as an alert threshold.
+- **Salesforce sources:** none new.
+- **New permissions:** none.
+- **Privacy and demo:** unchanged.
+- **Fixture:** department and title families already exist; add two approved exceptions.
+- **Depends on:** 20 + 10, 21. **Effort: L.**
+
+### 9 (v2). Org comparison: layouts, validation rules, picklists, record types
+Extends 9 using 1 and 11's metadata. **Effort: L.**
+
+### 28. Security review pack for client security teams
+- **Problem:** client security teams block engagements without documentation.
+- **Approach:** a generated pack covering:
+  - data flow diagram;
+  - what is collected at each privacy level;
+  - retention and erasure (with the deletion certificate);
+  - exact permissions requested, generated from the "Newton Read Only" definition so it can't drift;
+  - subprocessors;
+  - encryption;
+  - a **SOC 2 readiness checklist** stating honestly what's in place and what isn't. **We don't claim SOC 2 compliance.**
+- **Effort: M.** Depends on P1 and P2 security items for its content.
+
+### 29. Large-org sync performance and engagement roles
+- **Problem:** sync runs extractions one after another, and every query is single-threaded. Large orgs are slow, and multiple consultants on one engagement share one undifferentiated access level.
+- **Approach:**
+  - **Sync:** extraction runs in parallel within Salesforce's concurrency limits, with Bulk API 2.0 for large tables (PK chunking is automatic ✓) and incremental sync on snapshots (21).
+  - **Engagement roles:** lead, analyst and reviewer, scoped to an engagement. They extend today's org grants.
+- **Effort: L.** Depends on 21 for incremental sync.
+
+## Phase H: later backlog (one line each; no detailed plan yet)
+
+| Item | Approach | Effort |
+|------|----------|--------|
+| Engagement workspace | Comments on findings, evidence requests to the client, sign-off, and versioned deliverables, on top of 20. | L |
+| Finding-to-scope builder | **Promoted to Proposal P1.** | — |
+| Configurable policy packs | Org-specific rules (e.g. "no Modify All Data outside IT") evaluated on each snapshot, versioned per engagement. | M |
+| Access review campaigns | Managers attest to their team's access in Newton. Evidence exports for auditors (old roadmap item 4). | L |
+| Conflicting-permission checks | Separation-of-duties pairs (e.g. Modify All Data + Author Apex), mapped into SOX and SOC 2 indicators (old item 2). | M |
+| Impact graph tied to business processes and owners | Tag objects, flows and integrations with a process and an owner, then show change impact by process. | L |
+| Guest and external user assessment | Guest and portal profiles, sharing to guests, public sites, external OWD. | M |
+| Integration identity inventory | Every integration user and connected app: owner, scopes, permissions, last use (from 5). | M |
+| Agentforce readiness assessment | Data quality, permissions and knowledge coverage for agent use cases; scope after Salesforce's agent APIs settle (UNVERIFIED). | L |
+| Package retirement planner | From package sprawl: usage, dependencies (13), licence cost, retirement steps. | M |
+| Automation modernization planner | Workflow and Process Builder to Flow migration list with dependencies and risk. | M |
+| Org consolidation planner | Multi-org overlap and conflicts from 9, mapping and merge sequence. | XL |
+| Capacity forecasting | Storage, API and licence trends from snapshots and P3, with limit dates. | M |
+| Performance investigation | Slow pages, triggers and flows from free event logs where available (UNVERIFIED which). | L |
+| Natural-language questions | Answers drawn only from collected evidence, citing the finding, snapshot and source; refuses when the evidence doesn't cover the question. | L |
+| Cross-engagement benchmarks | Anonymised aggregates only, with opt-in in the engagement letter (old item 9). | M |
+
+---
+
+# Proposals
+
+## Better approaches to items above
+
+1. **Item 3, image pack: rasterise with `pypdfium2` instead of a browser or Poppler.** It's a self-contained wheel, so the Dockerfile needs no system packages, and it keeps the WeasyPrint pipeline as the single renderer: one source of truth for the PDF report and the slides.
+2. **Item 5, API usage: don't request Customize Application for OauthToken.** It's elevated, our posture check flags it, and the data it unlocks is a cumulative count per token. The free API Total Usage log plus daily collection (P3) gives a better breakdown with a lower-risk permission (View Event Log Files).
+3. **Item 1, Lightning pages: avoid Metadata API retrieve.** Describe and Tooling `CustomApplication.Metadata` cover org defaults and app and profile overrides without extra permissions. A retrieve would push the integration user towards Customize Application-level access.
+4. **Item 1 phase 2: use `SymbolTable` for the Apex sharing mode, not Body parsing.** It's structured and reports implicit modifiers ✓. Parse Body only for objects and fields touched, and label those results "potential".
+5. **Item 13: never output "safe to delete".** Salesforce's dependency index is Beta with no published type list ✓. Report what was checked, what wasn't, and the population count, with a confidence level. That protects the consultant as well as the client.
+6. **Items 6, 9, 15, 16, 17: build two shared engines, not five features.** A **comparison engine** (6 and 9) and an **access-delta engine** (15, 16 and 17), both on snapshots (21). It halves the work and makes results consistent across screens.
+7. **Item 18: fix savings double counting now, in the ledger.** The overlap between the Health Report's $59K user lines and License Fit's underused users was found during demo prep. One owner per user and licence, with estimated → approved → realised states, removes the "don't add these two numbers" caveat from every deck.
+8. **Item 7: require View All Data only for record access, and say so in onboarding.** Share rows are visible only for parents the integration user can read ✓. Making that explicit avoids a partial tab that looks complete.
+
+## Additional features recommended (8)
+
+| # | Feature | Consulting value | Effort |
+|---|---------|------------------|--------|
+| **P1** | **Priced roadmap builder** (promoted from "finding-to-scope builder"). Group findings into work packages (e.g. "permission set consolidation", "dormant licence reclaim"). Each package gets an effort range from a firm-level playbook (P2), a price from the firm's rate card, dependencies and sequencing. Export as the closing slides and an SOW appendix. | It's the deliverable the positioning promises: the assessment ends in priced, scoped paid work. Today it's built by hand after every assessment. | L |
+| **P2** | **Remediation playbooks per finding type**: steps, typical effort range, prerequisites and risks, maintained by the firm and versioned. | Makes P1's pricing consistent across consultants, and turns findings into repeatable delivery. | M |
+| **P3** | **Scheduled daily collector ("pulse")** for sources with short retention: API Total Usage (1 day ✓), login history, the Setup Audit Trail (180 days ✓). Runs with client consent during the engagement and stops when it closes. | Trends for API usage and seasonality become possible. The old "ongoing monitoring" item becomes a paid retainer. | M |
+| **P4** | **Salesforce Health Check import**: the native security-settings score and risks. Candidate sources: Tooling `SecurityHealthCheck` / `SecurityHealthCheckRisks`, UNVERIFIED. Shown beside our access findings. | One report covers settings (Salesforce's view) and access (ours); clients already know the Health Check score (old item 7). | S-M |
+| **P5** | **Target access model designer**: cluster users by actual access and role into personas, propose permission set groups per persona, and show the delta (15) and licence impact (18). | The most valuable design deliverable in access cleanups; today it's done in spreadsheets over weeks. | L |
+| **P6** | **Sensitive data exposure map**: for fields flagged sensitive or encrypted (8), how many users can read or edit them and through what. Combined with population (2) and usage, it shows "broadly readable but unused" fields. | A concrete, board-level risk story with a clear fix (tighten field-level security or delete), and it feeds P1. | M |
+| **P7** | **Multi-org portfolio view**: for clients with several orgs, one page of health, cost and risk per org, with cross-org licence pooling opportunities. | Opens enterprise and consolidation work; reuses 9 and 18. | M |
+| **P8** | **Engagement narrative deck**: extends 3 from images to a full branded deck (executive summary, findings, priced roadmap from P1, next steps) with speaker notes drawn from the evidence. | Cuts the last manual step between assessment and the client meeting. | M |
+
+---
+
+# Salesforce sources checked
+
+Checked in October 2026 against current documentation: API v62 to v68 developer guides, Tooling API and Object Reference PDFs (Winter '27), and the Metadata API, SOQL and REST guides. developer.salesforce.com blocks automated access, so pages were read through the official PDF guides and document endpoints. Anything not found is marked **UNVERIFIED** in the item text and must be tested in a sandbox before we rely on it.
+
+| Topic | Status | Notes |
+|-------|--------|-------|
+| API Total Usage event log free tier | Confirmed | Free in supported editions; daily files; 1-day retention; no count field (one row per request); covers REST, SOAP and Bulk. Needs View Event Log Files. |
+| OauthToken | Partly | UseCount, LastUsedDate, AppName, UserId documented; Id always null; all tokens visible only with Customize Application; CreatedDate not documented. |
+| `/limits` DailyApiRequests | Confirmed | No per-app breakdown. |
+| "API Usage Last 7 Days" report via Reports API | **UNVERIFIED** | Not used. |
+| ApexOrgWideCoverage, ApexCodeCoverageAggregate, ApexTestRunResult | Confirmed | View Setup and Configuration; coverage refreshes only when tests rerun. |
+| SetupEntityAccess for ApexClass and FlowDefinition | Confirmed | FlowDefinition from API 58. |
+| Flow `isAdditionalPermissionRequiredToRun`, `RunInMode`; "Run Flows" | Confirmed | Tooling Flow Metadata is one record per query. |
+| ApexClass SymbolTable sharing modifiers | Confirmed | Managed-package availability **UNVERIFIED**. |
+| MetadataComponentDependency | Confirmed (Beta) | 2,000 rows via Tooling; 100,000 via Bulk API 2.0; reports excluded from Tooling; no supported-type list. |
+| ProfileLayout, Layout | Confirmed | Layout assignment is profile-only (move to permission sets cancelled). |
+| Lightning page assignments | Partly | Describe actionOverrides (org default); Tooling CustomApplication.Metadata (app and profile overrides); precedence order **UNVERIFIED**; managed-package org defaults not retrievable. |
+| CaseShare, ContactShare, LeadShare | Confirmed | Need parent access; sharing sets store no rows; ImplicitChild omitted with faster recalculation; ContactShare under "Controlled by Parent" **UNVERIFIED**. |
+| Field describe (type, encrypted, referenceTo, cascadeDelete via ChildRelationship) | Confirmed | Shield vs Classic encryption distinguished. |
+| SOQL filter and aggregate limits; `/limits/recordCount` | Confirmed | Long text, encrypted and base64 can't be filtered; recordCount is cached and approximate. |
+| SetupAuditTrail | Confirmed | At least 180 days; Section and Display not filterable. |
+| ValidationRule, FlowDefinitionView, RecordType, picklists | Confirmed | ValidationRule formula only via one-record Metadata queries. |
+| Config Workbook | Confirmed | Third-party AppExchange app (CWB Software Tools); feature list from the vendor's guide. |
+| Profile record-type visibility via API without retrieve | **UNVERIFIED** | |
+| Permission dependency data | **UNVERIFIED** | |
+| Security Health Check via API | **UNVERIFIED** | |
+| LoginHistory retention | **UNVERIFIED** | Commonly cited as 6 months. |
 
 ## Known technical debt
 
-- Record-level access covers Account and Opportunity only.
+- Record-level access covers Account and Opportunity only (item 7).
 - Deactivated users remain "active" in snapshots (the User query pulls
-  active users only and never marks the rest inactive).
-- Sync runs extractions sequentially; large orgs are slow.
+  active users only and never marks the rest inactive). Fix with 21.
+- Sync runs extractions sequentially; large orgs are slow (item 29).
 - The Health Report's "predictive" findings function is a stub.
-- Effective access ignores permission-set-group muting (the risk scorer
-  handles it separately).
+- Data Quality is refused on demo orgs (fixed by item 2's fixture path).
+- Field type and encryption are shown as unknown until item 8.
