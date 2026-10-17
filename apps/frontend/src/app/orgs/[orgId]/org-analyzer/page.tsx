@@ -562,7 +562,12 @@ function HeroHealthCard({
                     <span className="w-32 shrink-0">{f.label}</span>
                     <span className="v2-num font-semibold">−{f.deduction}</span>
                     {f.uncapped_deduction > f.deduction && (
-                      <span className="whitespace-nowrap text-grove-ink/50 dark:text-grove-ink-dk/50">capped from −{f.uncapped_deduction}</span>
+                      <span
+                        className="whitespace-nowrap text-grove-ink/50 dark:text-grove-ink-dk/50"
+                        title={`−${f.uncapped_deduction} before the cap`}
+                      >
+                        capped (−{f.uncapped_deduction})
+                      </span>
                     )}
                   </li>
                 ))}
