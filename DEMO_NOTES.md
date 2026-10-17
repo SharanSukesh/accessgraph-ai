@@ -220,9 +220,12 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    Castellan's permission set review); anomalies #1 Jun Jovanovic
    (Exclusive access) to #8, "At high or critical base risk" 4 (#2-#5;
    #1, #6, #7 and #8 are Medium base risk).
-   Expected after Data Quality and the Health Report: Health 16
-   (Critical), 18 findings, $183,180/yr (savings unchanged; the new
-   findings are code coverage and critical objects); License Fit
+   Expected after Data Quality and the Health Report: Health 41
+   (Concerning), 18 findings, $183,180/yr (savings unchanged; the new
+   findings are code coverage and critical objects). The score card
+   lists each family's deduction: Licensing -20 (capped; -45 before the
+   cap), Code coverage -14, Access and sharing -8, Platform limits -8,
+   Data quality -5, Configuration -4; License Fit
    $116,220/yr; 11 Priority Actions (3 High, 6 Medium, 2 Low), adding
    "Raise Apex test coverage from 71% to at least 75%" and three data
    clean-ups (Legacy Order stale, Partner Survey mostly empty, Account
@@ -241,7 +244,9 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
     two sole-access users), Noor Whitlock → Graph (tick Opportunity and Account), Object
     Access → Why? on Opportunity (Delete muted), Health Report (Code
     coverage card: 71%, below the gate), Schema → Critical objects, License
-    Fit, Download PDF / Excel.
+    Fit, Anomalies → How anomalies are detected (benchmark table),
+   Priority Actions filters (Deployment readiness, Data quality),
+   Download PDF / Excel.
 
 **Rollback**
 - Fast: Railway → each service → Deployments → the deployment noted in
