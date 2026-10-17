@@ -4,6 +4,7 @@ Handles data extraction from Salesforce
 """
 import hashlib
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -32,8 +33,11 @@ from app.salesforce.models import (
 logger = logging.getLogger(__name__)
 
 # Objects whose owned-record counts the sync records per user (aggregate
-# SOQL on OwnerId; see owner_counts_or_none).
+# SOQL on OwnerId; see owner_counts_for).
 OWNED_RECORD_OBJECTS = ("Account", "Opportunity")
+# An aggregate query returns at most 2,000 grouped rows, so owner counts are
+# taken for at most this many owners per query.
+OWNER_COUNT_CHUNK = 200
 
 
 class SalesforceAPIClient:
@@ -1989,6 +1993,27 @@ class SalesforceAPIClient:
             logger.warning("Account COUNT failed: %s", e)
             return None
 
+    async def owner_counts_for(self, object_name: str, owner_ids: List[str]) -> Optional[Dict[str, int]]:
+        """Records of object_name owned by each of owner_ids, in chunks of
+        OWNER_COUNT_CHUNK owners so no aggregate query can exceed
+        Salesforce's 2,000 grouped-row limit, however large the org.
+        Owners with no records are absent (0). None if any chunk fails, so
+        a partial count is never reported as complete."""
+        ids = sorted({i for i in owner_ids if i and re.fullmatch(r"[A-Za-z0-9]{15,18}", i)})
+        out: Dict[str, int] = {}
+        for start in range(0, len(ids), OWNER_COUNT_CHUNK):
+            chunk = ", ".join(f"'{i}'" for i in ids[start:start + OWNER_COUNT_CHUNK])
+            try:
+                res = await self.query(
+                    f"SELECT OwnerId, COUNT(Id) cnt FROM {object_name} WHERE OwnerId IN ({chunk}) GROUP BY OwnerId")
+            except Exception as e:  # noqa: BLE001
+                logger.info("owner_counts_for(%s) failed on chunk %d: %s", object_name, start // OWNER_COUNT_CHUNK, e)
+                return None
+            for row in res.records or []:
+                if row.get("OwnerId"):
+                    out[row["OwnerId"]] = int(row.get("cnt") or 0)
+        return out
+
     async def owner_counts_or_none(self, object_name: str) -> Optional[Dict[str, int]]:
         """Like owner_counts_by_object, but None when the query failed, so
         "couldn't count" is never reported as "owns nothing"."""
@@ -2515,7 +2540,7 @@ class SalesforceAPIClient:
         # Owned records per user, from the owner field. The share extracts
         # skip RowCause = 'Owner' rows, so ownership can't come from them.
         record_owner_counts = (
-            {obj: await self.owner_counts_or_none(obj) for obj in OWNED_RECORD_OBJECTS}
+            {obj: await self.owner_counts_for(obj, [u.Id for u in users]) for obj in OWNED_RECORD_OBJECTS}
             if include_record_shares else {}
         )
 
