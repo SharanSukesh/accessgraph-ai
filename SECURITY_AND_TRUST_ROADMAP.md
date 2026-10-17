@@ -184,7 +184,7 @@ items below.
 
 | Phase | Items | Notes |
 |-------|-------|-------|
-| **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | 26 and 27 are done (PRs #4, #5). 2 is M because it extends Data Quality and must run on demo orgs. 31-34 added on 18 Oct. |
+| **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | **Built 18 Oct, awaiting review** (branches below). 26 and 27 are done (PRs #4, #5). |
 | **B. Client-facing** | 5, then 3 | The image pack needs the critical objects, coverage and API usage visuals, so it comes last. |
 | **C. Foundations** | 8, 21, 20 + 10, 30 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
 | **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
@@ -194,6 +194,29 @@ items below.
 | **G. Depth and scale** | 1 (phase 2), 19 (v1: downloadable ZIP), 22, 9 (v2), 28, 29 | The GitHub piece of 19 moved to the later backlog. |
 
 ## Phase A: quick wins
+
+**Status (18 Oct): built, each on its own branch, not merged.** Suggested
+merge order (later branches build on earlier ones; all merged together
+pass 346 backend and 44 frontend tests):
+
+| Order | Branch | Items |
+|---|---|---|
+| 1 | `feat/anomaly-rank-display` | 23 (rank, reason, base risk; Priority Actions on base risk) |
+| 2 | `feat/anomaly-methodology` | 34 (contains 1) |
+| 3 | `feat/equity-no-disparity` | 24 |
+| 4 | `chore/demo-fixture-parts` | per-feature fixture files (needed by 25, 31, 4, 2) |
+| 5 | `feat/org-level-skus` | 25 |
+| 6 | `fix/owned-record-counts` | 32 |
+| 7 | `feat/record-access-coverage` | 31 |
+| 8 | `feat/code-coverage` | 4 |
+| 9 | `feat/critical-objects` | 2 (contains 7 and 8) |
+| 10 | `fix/info-badge-dark` | 33 |
+| 11 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
+
+Expected conflicts are small: `DEMO_NOTES.md` backlog lines (each branch
+removes the item it fixed), two tests appended at the same place in
+`test_report_html.py`, and two adjacent demo lines in `orchestrator.py`
+(keep both).
 
 ### 23. Anomaly severity for access anomalies: replaced by rank, reason and risk
 - **Problem:** every top-2% user scored 0.986+ on the normalised scale, so all showed as "critical". Severity implies impact, which is the risk score's job; rank bands would label someone "medium" just for being 7th of 8.
@@ -255,8 +278,8 @@ items below.
     - high missing-value share: average fill rate below a threshold;
     - fields never populated: 0 populated in the counted set.
   - **Thresholds:** adjustable per org, stored with the run so results can be reproduced.
-  - **Large objects:** sized with the cached approximate record count. Above a size limit we sample (keyset paging on Id), and results are labelled **"estimated (sampled n of N)"**.
-  - **Fields SOQL can't filter** (long text, rich text, encrypted, base64): chosen per field from describe `filterable` and counted from the sample instead, labelled accordingly.
+  - **Large objects:** sized with the cached approximate record count. Above a size limit we count over the first n records by Id: Ids are read (keyset paging) only to find where the sample ends, then one aggregate query bounded by that Id. Results are labelled **"estimated (sampled n of N)"**. No record contents are read.
+  - **Fields SOQL can't aggregate** (long text, rich text, multi-select): counting them would mean reading record contents, which the DPA, privacy, terms and security pages say Newton never does. **Built (18 Oct):** listed as "not counted", with the reason. *To decide:* keep this, or have counsel update the legal pages so a sample may read these fields in transit.
   - **Outputs:** a "Critical objects" panel in Schema, Health Report findings, and Priority Actions.
 - **Salesforce sources:**
   - Describe `filterable` / type ✓
@@ -278,7 +301,7 @@ items below.
 ### 31. Record access says when it's partial
 - **Problem:** without View All on Account and Opportunity, the sync sees only the share rows of records the integration user can see, and the Record Access tab under-reports without saying so (see 7).
 - **Approach:** at sync, record whether the integration user holds View All on each analysed object (or View All Data). When it doesn't, every record-access view (user tab, PDF, workbook) says **"Based on records the integration user can see"**. Full opt-in and per-object View All follow in 7.
-- **Salesforce sources:** the connected user's ObjectPermissions (`PermissionsViewAllRecords`) and system permission View All Data ✓ (already synced for the connection posture).
+- **Salesforce sources:** the connected user's permission set assignments (View All Data) and ObjectPermissions (`PermissionsViewAllRecords`) ✓. The connection posture doesn't record these (corrected 18 Oct), so each sync checks them, read-only.
 - **New permissions:** none.
 - **Privacy and demo:** unchanged. Demo orgs read the flag from the fixture.
 - **Fixture:** Lumenvale's integration user has no View All, so the label shows.
