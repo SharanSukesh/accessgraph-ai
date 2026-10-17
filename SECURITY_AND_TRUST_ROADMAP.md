@@ -199,20 +199,21 @@ items below.
 merge order (later branches build on earlier ones; all merged together
 pass 356 backend and 48 frontend tests):
 
-| Order | Branch | Items |
-|---|---|---|
-| 1 | `feat/anomaly-rank-display` | 23 (rank, reason, base risk; Priority Actions on base risk) |
-| 2 | `feat/anomaly-methodology` | 34 (contains 1) |
-| 3 | `feat/equity-no-disparity` | 24 |
-| 4 | `chore/demo-fixture-parts` | per-feature fixture files (needed by 25, 31, 4, 2) |
-| 5 | `feat/org-level-skus` | 25 |
-| 6 | `fix/owned-record-counts` | 32 |
-| 7 | `feat/record-access-coverage` | 31 |
-| 8 | `feat/code-coverage` | 4 |
-| 9 | `feat/critical-objects` | 2 (contains 7 and 8) |
-| 10 | `fix/info-badge-dark` | 33, plus distinct High and Medium badge colours |
-| 11 | `feat/health-score-cap` | each family of findings can lower the health score by at most 20 (decided 20 Oct) |
-| 12 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
+| Order | PR | Branch | Items |
+|---|---|---|---|
+| 1 | #7 | `feat/anomaly-rank-display` | 23 (rank, reason, base risk; Priority Actions on base risk) |
+| 2 | #8 | `feat/anomaly-methodology` | 34 (contains #7); figures from the IEEE TPS-ISA 2026 camera-ready, Fig. 4 |
+| 3 | #9 | `feat/equity-no-disparity` | 24 |
+| 4 | #10 | `chore/demo-fixture-parts` | per-feature fixture files (needed by 25, 31, 4, 2) |
+| 5 | #11 | `feat/org-level-skus` | 25 |
+| 6 | #12 | `fix/owned-record-counts` | 32 |
+| 7 | #13 | `feat/record-access-coverage` | 31 |
+| 8 | #14 | `feat/code-coverage` | 4 |
+| 9 | #15 | `feat/critical-objects` | 2 (contains #13 and #14) |
+| 10 | #16 | `fix/info-badge-dark` | 33, plus distinct High and Medium badge colours |
+| 11 | #17 | `feat/health-score-cap` | each family of findings can lower the health score by at most 20 (decided 20 Oct) |
+| 12 | #18 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
+| 13 | this roadmap | `roadmap-v2` | this file and the onboarding-guide pointer in DEMO_NOTES.md |
 
 Expected conflicts are small: `DEMO_NOTES.md` backlog lines (each branch
 removes the item it fixed), two tests appended at the same place in
