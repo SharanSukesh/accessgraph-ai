@@ -209,17 +209,25 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    while a sync is running (the button is now hidden and the API refuses,
    but don't rely on it).
 7. On Lumenvale, one at a time, each after the previous finishes:
-   Health Report → Run analysis; License Fit → Re-analyse; Compliance →
-   Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS. Do not run
-   Equity on Lumenvale (greyed out; the fixture has no sharing data).
-   Expected: Dashboard 400 users, 40 high-risk, 8 flagged anomalies,
-   7 recommendations (2 High, 4 Medium, 1 Low: Freya Castellan's
-   permission set review); Health 35 (Critical), 12 findings,
-   $183,180/yr; License Fit $116,220/yr; anomalies #1 Jun Jovanovic
-   (Exclusive access) to #8, with "At high or critical base risk" 4
-   (#2-#5; #1, #6, #7 and #8 are Medium base risk); SOX control
-   "Flagged access anomalies on high base-risk users are triaged" fails
-   with 4.
+   Schema → Objects → **Run Data Quality** (it now runs on demo orgs, from
+   the fixture; run it before the Health Report so critical objects reach
+   the report); Health Report → Run analysis; License Fit → Re-analyse;
+   Compliance → Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS.
+   Do not run Equity on Lumenvale (greyed out; the fixture has no sharing
+   data).
+   Expected after the sync: Dashboard 400 users, 40 high-risk, 8 flagged
+   anomalies, 7 Priority Actions (2 High, 4 Medium, 1 Low: Freya
+   Castellan's permission set review); anomalies #1 Jun Jovanovic
+   (Exclusive access) to #8, "At high or critical base risk" 4 (#2-#5;
+   #1, #6, #7 and #8 are Medium base risk).
+   Expected after Data Quality and the Health Report: Health 16
+   (Critical), 18 findings, $183,180/yr (savings unchanged; the new
+   findings are code coverage and critical objects); License Fit
+   $116,220/yr; 11 Priority Actions (3 High, 6 Medium, 2 Low), adding
+   "Raise Apex test coverage from 71% to at least 75%" and three data
+   clean-ups (Legacy Order stale, Partner Survey mostly empty, Account
+   fields never populated); SOX control "Flagged access anomalies on high
+   base-risk users are triaged" fails with 4.
 8. Dev org: **Sync from Salesforce** first (needed for the group/muting
    graph) and wait for it to finish; it includes the anomaly, risk and
    recommendation analysis, so don't click "Analyze Access" afterwards.
@@ -231,8 +239,9 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
     PDF has the Demo data banner and DEMO DATA in each footer.
 11. Walk the demo path: Anomalies (Jun Jovanovic first, Fatima Abernathy sixth: the
     two sole-access users), Noor Whitlock → Graph (tick Opportunity and Account), Object
-    Access → Why? on Opportunity (Delete muted), Health Report, License Fit,
-    Download PDF / Excel.
+    Access → Why? on Opportunity (Delete muted), Health Report (Code
+    coverage card: 71%, below the gate), Schema → Critical objects, License
+    Fit, Download PDF / Excel.
 
 **Rollback**
 - Fast: Railway → each service → Deployments → the deployment noted in
