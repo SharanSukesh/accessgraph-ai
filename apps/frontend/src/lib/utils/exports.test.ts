@@ -14,14 +14,14 @@ describe('CSV export', () => {
     expect(exportStamp(new Date('2026-10-14T12:00:00Z'))).toBe('20261014')
   })
 
-  it('exports access anomalies with rank, type and risk level, not severity', () => {
+  it('exports access anomalies with rank, type and base risk, not severity', () => {
     const [access, session] = anomalyCSVRows([
       { rank: 3, userName: 'User 4F2A9C', category: 'access', type: 'permission_accumulation',
-        riskLevel: 'high', severity: null, score: 0.91234, reasons: ['a', 'b'] },
+        riskLevel: 'high', baseRiskLevel: 'medium', severity: null, score: 0.91234, reasons: ['a', 'b'] },
       { userName: 'User 77B1D0', category: 'session', type: 'session_anomaly', severity: 'high',
         riskLevel: 'low', score: 0.8, reasons: ['impossible travel'] },
     ])
-    expect(access).toMatchObject({ rank: 3, type: 'Permission accumulation', riskLevel: 'high',
+    expect(access).toMatchObject({ rank: 3, type: 'Permission accumulation', baseRisk: 'medium',
       sessionSeverity: '', score: '0.912', reasons: 'a | b' })
     expect(session).toMatchObject({ rank: '', type: 'Session', sessionSeverity: 'high' })
     expect(ANOMALY_CSV_COLUMNS.map((c) => c.label)).not.toContain('Severity')

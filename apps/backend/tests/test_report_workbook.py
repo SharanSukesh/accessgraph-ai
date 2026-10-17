@@ -43,8 +43,9 @@ async def test_report_workbook_has_every_sheet_with_rows(client, async_db_sessio
     assert wb["Anomalies"].max_row - 1 == 8  # top 2% of 400 users
     assert wb["Anomalies"]["A2"].value == 1
     header = [c.value for c in wb["Anomalies"][1]]
-    assert "Severity" not in header and {"Risk level", "Session severity"} <= set(header)
-    risk_col = header.index("Risk level") + 1
+    assert "Severity" not in header and {"Base risk", "Session severity"} <= set(header)
+    risk_col = header.index("Base risk") + 1
+    assert "without the anomaly flag" in wb["Anomalies"].cell(row=1, column=risk_col).comment.text
     ranks = [r[0].value for r in wb["Anomalies"].iter_rows(min_row=2)]
     assert ranks == sorted(ranks)
     assert {wb["Anomalies"].cell(row=i, column=risk_col).value for i in range(2, 10)} <= {"Low", "Medium", "High", "Critical"}

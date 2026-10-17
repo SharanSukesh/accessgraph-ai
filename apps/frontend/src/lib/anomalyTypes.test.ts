@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anomalySummary, anomalyTypeLabel, rankLabel, riskLevelLabel } from './anomalyTypes'
+import { anomalySummary, anomalyTypeLabel, baseRiskLabel, rankLabel } from './anomalyTypes'
 
 describe('anomaly display', () => {
   it('names each type by its strongest reason', () => {
@@ -17,13 +17,13 @@ describe('anomaly display', () => {
     expect(rankLabel(null, 400)).toBeNull()
   })
 
-  it('summarises an access anomaly as rank, reason and risk level', () => {
-    expect(anomalySummary({ rank: 3, usersScored: 400, type: 'permission_accumulation', riskLevel: 'high' }))
-      .toBe('#3 of 400 · Permission accumulation · High risk')
+  it('summarises an access anomaly as rank, reason and base risk', () => {
+    expect(anomalySummary({ rank: 3, usersScored: 400, type: 'permission_accumulation', baseRiskLevel: 'high' }))
+      .toBe('#3 of 400 · Permission accumulation · Base risk: High')
     // No risk score yet: rank and reason only, never an invented level.
-    expect(anomalySummary({ rank: 1, usersScored: 400, type: 'exclusive_access', riskLevel: null }))
+    expect(anomalySummary({ rank: 1, usersScored: 400, type: 'exclusive_access', baseRiskLevel: null }))
       .toBe('#1 of 400 · Exclusive access')
-    expect(riskLevelLabel('CRITICAL')).toBe('Critical risk')
-    expect(riskLevelLabel(undefined)).toBeNull()
+    expect(baseRiskLabel('CRITICAL')).toBe('Base risk: Critical')
+    expect(baseRiskLabel(undefined)).toBeNull()
   })
 })

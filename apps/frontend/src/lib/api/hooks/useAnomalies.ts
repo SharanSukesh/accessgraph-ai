@@ -41,9 +41,12 @@ export interface Anomaly {
   detectedAt: string
   rank?: number | null
   usersScored?: number | null
-  /** The user's latest risk level (impact), shown beside the rank. */
+  /** The user's latest overall risk (includes the anomaly flag). */
   riskLevel?: string | null
   riskScore?: number | null
+  /** Risk without the anomaly flag: what sits beside the rank. */
+  baseRiskLevel?: string | null
+  baseRiskScore?: number | null
 }
 
 export interface TopAnomalousUser {
@@ -56,6 +59,8 @@ export interface TopAnomalousUser {
   topReasons: string[]
   riskScore?: number | null
   riskLevel?: string | null
+  baseRiskLevel?: string | null
+  baseRiskScore?: number | null
   anomalyType?: string | null
   rank?: number | null
   usersScored?: number | null

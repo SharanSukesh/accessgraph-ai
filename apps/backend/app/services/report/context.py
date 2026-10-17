@@ -40,7 +40,7 @@ class ReportContext:
     anomaly_counts: Dict[str, int] = field(default_factory=dict)
     anomaly_by_category: Dict[str, int] = field(default_factory=dict)
     # Flagged access anomalies in rank order: rank, users scored, name,
-    # strongest reason (type label) and the user's risk level.
+    # strongest reason (type label) and the user's base risk level.
     flagged_access: List[Dict[str, Any]] = field(default_factory=list)
     data_quality: Optional[Dict[str, Any]] = None
     compliance: List[Dict[str, Any]] = field(default_factory=list)
@@ -136,6 +136,7 @@ async def gather_report_context(
     ).scalars().all()
     if anomalies:
         from app.services.anomaly_detection import ANOMALY_TYPE_LABELS
+        from app.services.risk_scoring import base_risk
 
         ctx.anomaly_counts = dict(Counter(_value(a.severity) for a in anomalies if _value(a.category) == "session"))
         ctx.anomaly_by_category = dict(Counter(_value(a.category) or "access" for a in anomalies))
@@ -150,7 +151,8 @@ async def gather_report_context(
                 UserSnapshot.salesforce_id.in_([a.user_id for a in access]),
             ))).scalars().all()
         } if access else {}
-        levels = {r.entity_id: _value(r.risk_level) for r in risks}
+        # Base risk (without the anomaly flag) sits next to the rank.
+        levels = {r.entity_id: _value(base_risk(r.factors)[1]) for r in risks}
         for a in access:
             stats = a.peer_stats or {}
             ctx.flagged_access.append({
@@ -158,7 +160,7 @@ async def gather_report_context(
                 "users_scored": stats.get("users_scored"),
                 "name": people.get(a.user_id) or a.user_id,
                 "reason": ANOMALY_TYPE_LABELS.get(stats.get("anomaly_type"), "Unusual access"),
-                "risk_level": levels.get(a.user_id),
+                "base_risk_level": levels.get(a.user_id),
             })
 
     dq = await _latest(db, DataQualityRun, org_id)

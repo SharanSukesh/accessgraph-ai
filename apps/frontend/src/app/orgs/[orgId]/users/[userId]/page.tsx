@@ -25,7 +25,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/shared/Button'
 import { fileSlug } from '@/lib/utils/exports'
 import { ExplainAccessPanel } from '@/components/users/ExplainAccessPanel'
-import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
+import { Badge, BaseRiskBadge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
@@ -667,7 +667,7 @@ function UserDetailContent() {
                                 {rankLabel(anomaly.rank, anomaly.usersScored) && (
                                   <Badge variant="info" size="sm">{rankLabel(anomaly.rank, anomaly.usersScored)}</Badge>
                                 )}
-                                {anomaly.riskLevel && <RiskBadge level={anomaly.riskLevel} suffix=" risk" size="sm" />}
+                                {anomaly.baseRiskLevel && <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />}
                               </>
                             )}
                             <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">

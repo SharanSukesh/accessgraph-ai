@@ -11,8 +11,8 @@ import { AlertTriangle, Filter, Search, User, Calendar, Info, Download } from 'l
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { exportAnomaliesToCSV, exportStamp } from '@/lib/utils/exports'
-import { ANOMALY_TYPE_FILTERS, anomalyTypeLabel, rankLabel, riskLevelLabel } from '@/lib/anomalyTypes'
-import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
+import { ANOMALY_TYPE_FILTERS, anomalyTypeLabel, baseRiskLabel, rankLabel } from '@/lib/anomalyTypes'
+import { BASE_RISK_TOOLTIP, Badge, BaseRiskBadge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -60,7 +60,8 @@ function AnomaliesContent() {
   const { data: allAnomalies, isLoading: allLoading } = useAnomalies(orgId)
   const flagged = allAnomalies?.filter((a) => (a.category ?? 'access') === 'access') ?? []
   const sessions = allAnomalies?.filter((a) => a.category === 'session') ?? []
-  const highRisk = flagged.filter((a) => a.riskLevel === 'high' || a.riskLevel === 'critical')
+  // Base risk, so no user counts just for being flagged.
+  const highRisk = flagged.filter((a) => a.baseRiskLevel === 'high' || a.baseRiskLevel === 'critical')
   const usersScored = flagged.find((a) => a.usersScored)?.usersScored
   const affected = new Set(allAnomalies?.map((a) => a.userId) ?? []).size
   const count = (n: number) => (allLoading ? '...' : n)
@@ -127,7 +128,9 @@ function AnomaliesContent() {
           <Card variant="bordered" className="p-6">
             <div>
               <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                On high or critical-risk users
+                <span title={BASE_RISK_TOOLTIP} className="cursor-help underline decoration-dotted">
+                  At high or critical base risk
+                </span>
               </p>
               <p className="v2-num mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
                 {count(highRisk.length)}
@@ -309,9 +312,7 @@ function AnomaliesContent() {
                                     {anomalyTypeLabel(anomaly.type)}
                                   </Badge>
                                 )}
-                                {anomaly.riskLevel && (
-                                  <RiskBadge level={anomaly.riskLevel} suffix=" risk" size="sm" />
-                                )}
+                                {anomaly.baseRiskLevel && <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />}
                               </>
                             )}
                           </div>
@@ -400,10 +401,10 @@ function AnomaliesContent() {
                     </div>
                     <div>
                       <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
-                        User risk level
+                        <span title={BASE_RISK_TOOLTIP} className="cursor-help underline decoration-dotted">Base risk</span>
                       </div>
-                      {selectedAnomaly.riskLevel ? (
-                        <RiskBadge level={selectedAnomaly.riskLevel} suffix=" risk" size="sm" />
+                      {selectedAnomaly.baseRiskLevel ? (
+                        <RiskBadge level={selectedAnomaly.baseRiskLevel} title={BASE_RISK_TOOLTIP} size="sm" />
                       ) : (
                         <span className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">Not scored</span>
                       )}
@@ -488,7 +489,7 @@ function AnomaliesContent() {
                               {user.userName}
                             </div>
                             <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-                              {[anomalyTypeLabel(user.anomalyType) ?? 'Anomaly', riskLevelLabel(user.riskLevel)]
+                              {[anomalyTypeLabel(user.anomalyType) ?? 'Anomaly', baseRiskLabel(user.baseRiskLevel)]
                                 .filter(Boolean)
                                 .join(' · ')}
                             </div>
@@ -528,8 +529,8 @@ function AnomaliesContent() {
                   <p className="font-medium mb-1">About Anomalies</p>
                   <p className="text-xs">
                     Access anomalies are the top 2% of users whose access stands out most from
-                    their peers. Rank says how unusual; the user&apos;s risk level says how much
-                    damage the access could do. Session anomalies come from sign-in rules and
+                    their peers. Rank says how unusual; base risk (the risk score calculated without
+                    the anomaly flag) says how much damage the access could do. Session anomalies come from sign-in rules and
                     keep a severity.
                   </p>
                 </div>

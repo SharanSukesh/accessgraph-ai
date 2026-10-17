@@ -201,44 +201,37 @@ async def _eval_no_critical_anomalies_open(
     """Flagged access anomalies on high-risk users should be triaged.
 
     Pass criterion: no flagged access anomaly whose user is at High or
-    Critical risk. Access anomalies carry no severity of their own (that
-    would imply impact); the user's risk level is the impact measure.
+    Critical *base* risk (risk calculated without the anomaly flag, so a
+    user never counts just for being flagged). Access anomalies carry no
+    severity of their own; base risk is the impact measure.
     """
-    from app.domain.models import RiskScore, RiskLevel
+    from app.domain.models import RiskLevel
+    from app.services.risk_scoring import base_risk, latest_user_risks
 
-    flagged = (await db.execute(
+    flagged = set((await db.execute(
         select(AccessAnomaly.user_id).where(
             AccessAnomaly.organization_id == org_id,
             AccessAnomaly.category == "access",
         )
-    )).scalars().all()
-    n = 0
-    if flagged:
-        latest = (
-            select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
-            .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user",
-                   RiskScore.entity_id.in_(list(set(flagged))))
-            .group_by(RiskScore.entity_id)
-            .subquery()
-        )
-        n = int((await db.execute(
-            select(func.count()).select_from(RiskScore).join(
-                latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at)
-            ).where(RiskScore.organization_id == org_id,
-                    RiskScore.risk_level.in_([RiskLevel.HIGH, RiskLevel.CRITICAL]))
-        )).scalar_one() or 0)
+    )).scalars().all())
+    risks = await latest_user_risks(db, org_id, list(flagged))
+    # Base risk: without the anomaly flag, so no user counts just for being flagged.
+    n = sum(
+        1 for uid in flagged
+        if uid in risks and base_risk(risks[uid].factors)[1] in (RiskLevel.HIGH, RiskLevel.CRITICAL)
+    )
     if n == 0:
         return ControlResult(
             status=PASSED,
-            metric="0 flagged access anomalies on high-risk users open",
+            metric="0 flagged access anomalies on users at high base risk open",
             metric_value=0,
             deep_link=f"/orgs/{org_id}/anomalies",
         )
     return ControlResult(
         status=FAILED,
-        metric=f"{n} flagged access anomalies on high or critical-risk users unresolved",
+        metric=f"{n} flagged access anomalies on users at high or critical base risk unresolved",
         metric_value=float(n),
-        recommendation="Review each flagged user at high or critical risk and revoke or justify the access.",
+        recommendation="Review each flagged user at high or critical base risk and revoke or justify the access.",
         deep_link=f"/orgs/{org_id}/anomalies",
     )
 
@@ -566,10 +559,11 @@ def build_control_library() -> List[ComplianceControl]:
             control_id="SOX-404-ITGC-3.2",
             framework="SOX",
             section="IT General Controls — Access Management",
-            name="Flagged access anomalies on high-risk users are triaged",
+            name="Flagged access anomalies on high base-risk users are triaged",
             description=(
                 "Users flagged as access outliers who are also at high or "
-                "critical risk must be reviewed. Open ones indicate a "
+                "critical base risk (risk without the anomaly flag) must be "
+                "reviewed. Open ones indicate a "
                 "broken review cadence."
             ),
             evaluator=_eval_no_critical_anomalies_open,

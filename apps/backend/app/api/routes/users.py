@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
 from app.services.grant_sources import KIND_PROFILE, resolve_grant_sources
-from app.services.risk_scoring import classify_sensitive_field, classify_sensitive_object
+from app.services.risk_scoring import base_risk, classify_sensitive_field, classify_sensitive_object, latest_user_risks
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
 
@@ -420,32 +420,15 @@ async def get_user_risk(
     }
 
 
-async def _latest_risk_by_user(db: AsyncSession, org_id: str, user_ids: List[str]) -> Dict[str, RiskScore]:
-    """Each user's latest risk score, in one query."""
-    if not user_ids:
-        return {}
-    latest = (
-        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
-        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user",
-               RiskScore.entity_id.in_(user_ids))
-        .group_by(RiskScore.entity_id)
-        .subquery()
-    )
-    rows = (await db.execute(
-        select(RiskScore).join(
-            latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at)
-        ).where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
-    )).scalars().all()
-    return {r.entity_id: r for r in rows}
-
-
 def _anomaly_fields(a: AccessAnomaly, risk: Optional[RiskScore]) -> Dict:
     """What every anomaly view shows. Access anomalies: rank, strongest
-    reason (type) and the user's risk level; severity is withheld because
-    it implies impact, which is the risk level's job. Session anomalies
+    reason (type) and the user's base risk (risk without the anomaly flag,
+    so it doesn't restate the flag); severity is withheld because it
+    implies impact, which is the risk level's job. Session anomalies
     keep their rule-based severity."""
     stats = a.peer_stats or {}
     session = a.category == "session"
+    base_score, base_level = base_risk(risk.factors) if risk else (None, None)
     return {
         "category": a.category or "access",
         "severity": a.severity.value if session else None,
@@ -454,6 +437,9 @@ def _anomaly_fields(a: AccessAnomaly, risk: Optional[RiskScore]) -> Dict:
         "usersScored": None if session else stats.get("users_scored"),
         "riskLevel": risk.risk_level.value if risk else None,
         "riskScore": round(risk.risk_score, 1) if risk else None,
+        # Shown next to an anomaly rank: risk without the anomaly flag.
+        "baseRiskLevel": base_level.value if base_level else None,
+        "baseRiskScore": base_score,
     }
 
 
@@ -476,7 +462,7 @@ async def get_user_anomalies(
         ).order_by(AccessAnomaly.anomaly_score.desc())
     )
     anomalies = result.scalars().all()
-    risk = (await _latest_risk_by_user(db, org_id, [user_sf_id])).get(user_sf_id)
+    risk = (await latest_user_risks(db, org_id, [user_sf_id])).get(user_sf_id)
 
     return [
         {
@@ -556,7 +542,7 @@ async def list_anomalies(
 
     result = await db.execute(query)
     anomaly_user_pairs = result.all()
-    risks = await _latest_risk_by_user(db, org_id, list({a.user_id for a, _ in anomaly_user_pairs}))
+    risks = await latest_user_risks(db, org_id, list({a.user_id for a, _ in anomaly_user_pairs}))
 
     def _display_title(cat: str, user_name: str) -> str:
         if cat == "session":
@@ -602,6 +588,8 @@ class TopAnomalousUserResponse(BaseModel):
     topReasons: List[str]
     riskScore: Optional[float] = None
     riskLevel: Optional[str] = None
+    baseRiskLevel: Optional[str] = None
+    baseRiskScore: Optional[float] = None
     category: Optional[str] = None
     anomalyType: Optional[str] = None
     rank: Optional[int] = None
@@ -630,7 +618,7 @@ async def get_top_anomalous_users(
 
     result = await db.execute(query)
     rows = result.all()
-    risks = await _latest_risk_by_user(db, org_id, list({a.user_id for a, _ in rows}))
+    risks = await latest_user_risks(db, org_id, list({a.user_id for a, _ in rows}))
 
     out = []
     for anomaly, user in rows:
@@ -646,6 +634,8 @@ async def get_top_anomalous_users(
             "topReasons": anomaly.reasons[:3] if anomaly.reasons else [],
             "riskScore": fields["riskScore"],
             "riskLevel": fields["riskLevel"],
+            "baseRiskLevel": fields["baseRiskLevel"],
+            "baseRiskScore": fields["baseRiskScore"],
             "anomalyType": fields["type"],
             "rank": fields["rank"],
             "usersScored": fields["usersScored"],

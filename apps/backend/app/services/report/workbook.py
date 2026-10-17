@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from openpyxl import Workbook
+from openpyxl.comments import Comment
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
@@ -34,6 +35,7 @@ from app.domain.models import (
 )
 from app.services import privacy_mode
 from app.services.anomaly_detection import ANOMALY_TYPE_LABELS
+from app.services.risk_scoring import base_risk, latest_user_risks
 from app.services.report.context import ReportContext, _value
 
 logger = logging.getLogger(__name__)
@@ -182,7 +184,7 @@ async def _license_fit(ws: Worksheet, db: AsyncSession, ctx: ReportContext, user
 async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed: bool) -> None:
     columns = [
         Column("Rank", 7, "0"), Column("User", 24), Column("Category", 11), Column("Type", 24),
-        Column("Risk level", 11), Column("Session severity", 15),
+        Column("Base risk", 11), Column("Session severity", 15),
         Column("Anomaly score", 14, "0.000"), Column("Reasons", 100, wrap=True),
     ]
     if not users_allowed:
@@ -193,7 +195,8 @@ async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed
               & (UserSnapshot.organization_id == AccessAnomaly.organization_id))
         .where(AccessAnomaly.organization_id == org_id)
     )).all()
-    levels = {r.entity_id: _value(r.risk_level) for r in await _latest_risks(db, org_id)}
+    # Base risk: the risk score calculated without the anomaly flag.
+    levels = {uid: _value(base_risk(r.factors)[1]) for uid, r in (await latest_user_risks(db, org_id)).items()}
     # Access anomalies by rank, then session anomalies by score.
     rows = sorted(rows, key=lambda r: (
         r[0].category == "session", (r[0].peer_stats or {}).get("rank") or 10**9, -(r[0].anomaly_score or 0)))
@@ -205,19 +208,9 @@ async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed
          a.anomaly_score, "\n".join(a.reasons or []))
         for a, name in rows
     ), "No anomalies flagged.")
-
-
-async def _latest_risks(db: AsyncSession, org_id: str) -> List[RiskScore]:
-    latest = (
-        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
-        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
-        .group_by(RiskScore.entity_id)
-        .subquery()
-    )
-    return list((await db.execute(
-        select(RiskScore).join(latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at))
-        .where(RiskScore.organization_id == org_id)
-    )).scalars().all())
+    header = next((c for c in ws[1] if c.value == "Base risk"), None)
+    if header is not None:
+        header.comment = Comment("Risk score calculated without the anomaly flag.", "Newton")
 
 
 async def _user_risk(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed: bool) -> None:

@@ -17,7 +17,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
+import { BaseRiskBadge, RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
 import { anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { isSyncActive, syncJustFinished } from '@/lib/syncStatus'
 // Grove Refined — motion + chart primitives ported from the /v2
@@ -356,8 +356,8 @@ export default function DashboardPage() {
                       </div>
                       {anomaly.category === 'session' ? (
                         anomaly.severity && <SeverityBadge severity={anomaly.severity} />
-                      ) : anomaly.riskLevel ? (
-                        <RiskBadge level={anomaly.riskLevel} suffix=" risk" size="sm" />
+                      ) : anomaly.baseRiskLevel ? (
+                        <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />
                       ) : null}
                     </div>
                   </div>

@@ -141,8 +141,8 @@ export function exportStamp(date: Date = new Date()): string {
 /**
  * Export anomalies to CSV, in the order shown (rank 1 first).
  */
-/** Anomaly CSV columns. Access anomalies: rank, type and the user's risk
- * level; severity is filled for session anomalies only. */
+/** Anomaly CSV columns. Access anomalies: rank, type and base risk (risk
+ * without the anomaly flag); severity is filled for session anomalies only. */
 type AnomalyCSVRow = ReturnType<typeof anomalyCSVRows>[number]
 
 export const ANOMALY_CSV_COLUMNS: { key: keyof AnomalyCSVRow; label: string }[] = [
@@ -150,7 +150,7 @@ export const ANOMALY_CSV_COLUMNS: { key: keyof AnomalyCSVRow; label: string }[] 
   { key: 'user', label: 'User' },
   { key: 'category', label: 'Category' },
   { key: 'type', label: 'Type' },
-  { key: 'riskLevel', label: 'Risk level' },
+  { key: 'baseRisk', label: 'Base risk (without anomaly flag)' },
   { key: 'sessionSeverity', label: 'Session severity' },
   { key: 'score', label: 'Anomaly score' },
   { key: 'reasons', label: 'Reasons' },
@@ -163,7 +163,7 @@ export function anomalyCSVRows(anomalies: any[]) {
     user: a.userName ?? a.user_name ?? '',
     category: a.category ?? 'access',
     type: anomalyTypeLabel(a.type) ?? '',
-    riskLevel: a.riskLevel ?? '',
+    baseRisk: a.category === 'session' ? '' : a.baseRiskLevel ?? '',
     sessionSeverity: a.category === 'session' ? a.severity ?? '' : '',
     score: typeof a.score === 'number' ? a.score.toFixed(3) : '',
     reasons: (a.reasons ?? []).join(' | '),

@@ -371,16 +371,17 @@ def _risk_and_governance(ctx: ReportContext) -> str:
         scored = f" of {first['users_scored']:,} users" if first.get("users_scored") else ""
         rows = "".join(
             f"<tr><td class='num'>#{a['rank'] or '?'}</td><td>{_esc(a['name'])}</td>"
-            f"<td>{_esc(a['reason'])}</td><td>{_esc((a['risk_level'] or 'unknown').capitalize())} risk</td></tr>"
+            f"<td>{_esc(a['reason'])}</td><td>{_esc((a['base_risk_level'] or 'not scored').capitalize())}</td></tr>"
             for a in ctx.flagged_access[:10]
         )
         # One block so the heading never sits alone at the foot of a page.
         blocks.append(
             f'<div class="keep"><h3 class="block-title">Flagged access anomalies</h3>'
             f'<p class="caption">{len(ctx.flagged_access)} users flagged as the top 2%{scored} whose access '
-            f'stands out from their peers, in rank order. Rank says how unusual; risk level says how much damage.</p>'
+            f'stands out from their peers, in rank order. Rank says how unusual; base risk says how much damage '
+            f'the access could do. Base risk is the risk score calculated without the anomaly flag.</p>'
             f'<table class="data"><thead><tr><th class="num">Rank</th><th>User</th><th>Strongest reason</th>'
-            f'<th>Risk level</th></tr></thead><tbody>{rows}</tbody></table></div>'
+            f'<th>Base risk</th></tr></thead><tbody>{rows}</tbody></table></div>'
         )
     if ctx.anomaly_counts:
         bar = charts.stacked_bar(

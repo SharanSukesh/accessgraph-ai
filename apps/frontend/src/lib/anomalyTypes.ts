@@ -36,24 +36,25 @@ export function rankLabel(rank?: number | null, total?: number | null): string |
   return total ? `#${rank} of ${total.toLocaleString('en-US')}` : `#${rank}`
 }
 
-/** "High risk" from a risk level, or null when the user has no score yet. */
-export function riskLevelLabel(level?: string | null): string | null {
+/** "Base risk: High", or null when the user has no score yet. Base risk is
+ * the risk score calculated without the anomaly flag. */
+export function baseRiskLabel(level?: string | null): string | null {
   if (!level) return null
-  return `${level.charAt(0).toUpperCase()}${level.slice(1).toLowerCase()} risk`
+  return `Base risk: ${level.charAt(0).toUpperCase()}${level.slice(1).toLowerCase()}`
 }
 
 /**
- * One line for an access anomaly: "#3 of 400 · Permission accumulation · High risk".
- * Rank says how unusual, the reason says why, and the risk level says how much
- * damage. Access anomalies carry no severity of their own.
+ * One line for an access anomaly: "#3 of 400 · Permission accumulation · Base risk: High".
+ * Rank says how unusual, the reason says why, and base risk (risk without the
+ * anomaly flag) says how much damage. Access anomalies carry no severity.
  */
 export function anomalySummary(a: {
   rank?: number | null
   usersScored?: number | null
   type?: string | null
-  riskLevel?: string | null
+  baseRiskLevel?: string | null
 }): string {
-  return [rankLabel(a.rank, a.usersScored), anomalyTypeLabel(a.type), riskLevelLabel(a.riskLevel)]
+  return [rankLabel(a.rank, a.usersScored), anomalyTypeLabel(a.type), baseRiskLabel(a.baseRiskLevel)]
     .filter(Boolean)
     .join(' · ')
 }

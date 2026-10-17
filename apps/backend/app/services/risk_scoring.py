@@ -84,7 +84,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -301,6 +301,46 @@ def determine_risk_level(score: float) -> RiskLevel:
     if score >= 25:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
+
+
+ANOMALY_FACTOR = "peer_deviation"
+
+
+def base_risk(factors: Optional[Sequence[Dict]]) -> Tuple[float, RiskLevel]:
+    """Risk score calculated without the anomaly flag.
+
+    The same noisy-OR as the stored score, leaving out the peer-deviation
+    factor (which is driven by the access-anomaly flag). It is exactly the
+    score the user would have if they were not flagged, so it can sit next
+    to an anomaly rank without restating it. Shown as "Base risk".
+    """
+    score = round(combine_factors(
+        (f.get("weight", 0.0), f.get("score", 0.0))
+        for f in (factors or []) if f.get("factor") != ANOMALY_FACTOR
+    ), 1)
+    return score, determine_risk_level(score)
+
+
+async def latest_user_risks(
+    db: AsyncSession, org_id: str, user_ids: Optional[Sequence[str]] = None
+) -> Dict[str, RiskScore]:
+    """Each user's latest risk score, in one query (optionally for some users only)."""
+    if user_ids is not None and not user_ids:
+        return {}
+    latest = (
+        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
+        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        .group_by(RiskScore.entity_id)
+    )
+    if user_ids is not None:
+        latest = latest.where(RiskScore.entity_id.in_(list(user_ids)))
+    latest = latest.subquery()
+    rows = (await db.execute(
+        select(RiskScore).join(
+            latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at)
+        ).where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+    )).scalars().all()
+    return {r.entity_id: r for r in rows}
 
 
 def tokenize_api_name(name: str) -> List[str]:
