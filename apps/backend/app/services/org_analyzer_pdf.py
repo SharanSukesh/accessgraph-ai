@@ -22,7 +22,7 @@ from __future__ import annotations
 import html
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from app.domain.models import (
     FindingCategory,
@@ -330,7 +330,8 @@ def _profile(snapshot: OrgAnalysisSnapshot) -> str:
         f'<h3 class="block-title">Platform limits</h3><table class="data"><tbody>{"".join(limit_rows)}</tbody></table>'
         if limit_rows else ""
     )
-    if not (tiles or license_html or limits_html):
+    coverage_html = _coverage_block(m.get("code_coverage"))
+    if not (tiles or license_html or limits_html or coverage_html):
         return ""
     return f"""
     <section class="page">
@@ -338,7 +339,41 @@ def _profile(snapshot: OrgAnalysisSnapshot) -> str:
       <div class="tiles">{tiles}</div>
       {license_html}
       {limits_html}
+      {coverage_html}
     </section>"""
+
+
+def _coverage_block(cov: Optional[Dict[str, Any]]) -> str:
+    """Code coverage against the deployment gate (roadmap item 4)."""
+    if not cov or cov.get("org_wide_pct") is None:
+        return ""
+    pct, gate = cov["org_wide_pct"], cov["gate_pct"]
+    verdict = f"below the {gate:g}% deployment gate" if cov.get("below_gate") else f"meets the {gate:g}% deployment gate"
+
+    def names(rows):
+        return ", ".join(_esc(r["name"]) for r in rows or []) or "none"
+
+    rows = [
+        ("Org-wide coverage", f"<strong>{pct:g}%</strong>, {verdict}"),
+        (f"Below {gate:g}%", f"{cov.get('below_gate_items', 0)} of {cov.get('measured', 0)} classes and triggers"),
+        ("Classes at 0%", names(cov.get("zero_classes"))),
+        ("Triggers at 0%", names(cov.get("zero_triggers"))),
+    ]
+    days = cov.get("days_since_run")
+    if cov.get("last_test_run") and days is not None:
+        run = f"{_esc(cov['last_test_run'][:10])}, {days} days before this analysis" + (" (out of date)" if cov.get("stale") else "")
+    else:
+        run = "no test run found"
+    rows.append(("Last test run", run))
+    if cov.get("changed_since_run_count"):
+        rows.append(("Changed since that run", names(cov.get("changed_since_run"))))
+    body = "".join(f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in rows)
+    return (
+        '<h3 class="block-title">Code coverage</h3>'
+        '<p class="caption">Read from Salesforce\'s stored test results; Newton never runs tests. '
+        'Production deployments that include Apex need at least 75% org-wide coverage.</p>'
+        f'<table class="data"><tbody>{body}</tbody></table>'
+    )
 
 
 def _risk_and_governance(ctx: ReportContext) -> str:

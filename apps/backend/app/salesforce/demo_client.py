@@ -33,6 +33,9 @@ class DemoSalesforceClient:
     async def extract_organization(self) -> Optional[Dict[str, Any]]:
         return self._live.get("organization")
 
+    async def get_code_coverage(self) -> Dict[str, Any]:
+        return dict(self._live.get("code_coverage") or {})
+
     async def get_org_limits(self) -> Dict[str, Any]:
         return dict(self._live.get("org_limits", {}))
 
