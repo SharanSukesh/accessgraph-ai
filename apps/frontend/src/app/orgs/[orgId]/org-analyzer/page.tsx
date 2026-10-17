@@ -547,9 +547,24 @@ function HeroHealthCard({
           <p className={`text-lg font-semibold ${accent.text}`}>{accent.band}</p>
           {rubric && (
             <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
-              {rubric.deduction} pts deducted from a starting score of 100,
-              weighted by severity.
+              {rubric.deduction} pts deducted from a starting score of 100, weighted by severity
+              {rubric.family_cap ? `; no single family can take more than ${rubric.family_cap}` : ''}.
             </p>
+          )}
+          {Array.isArray(rubric?.families) && rubric.families.some((f: any) => f.deduction > 0) && (
+            <ul className="mt-2 space-y-0.5 text-xs text-grove-ink/70 dark:text-grove-ink-dk/70">
+              {rubric.families
+                .filter((f: any) => f.deduction > 0)
+                .map((f: any) => (
+                  <li key={f.family} className="flex gap-2">
+                    <span className="w-36">{f.label}</span>
+                    <span className="v2-num font-semibold">−{f.deduction}</span>
+                    {f.uncapped_deduction > f.deduction && (
+                      <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">capped from −{f.uncapped_deduction}</span>
+                    )}
+                  </li>
+                ))}
+            </ul>
           )}
         </div>
       </CardContent>
