@@ -76,6 +76,7 @@ from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
 from app.services.org_analyzer import (
     DEFAULT_PRICE_BOOK_CENTS,
+    _is_org_level_sku,
     _lookup_default_price,
 )
 
@@ -493,7 +494,9 @@ class LicenseFitService:
 
         # Cost lookup — org override → substring catalog → 0.
         current_cost = price_book.get(license_name or "", 0)
-        if current_cost == 0 and license_name:
+        if _is_org_level_sku(license_name):
+            current_cost = 0  # org-level subscription, never a per-seat cost
+        elif current_cost == 0 and license_name:
             catalog_hit = _lookup_default_price(license_name)
             if catalog_hit is not None:
                 current_cost = catalog_hit
@@ -950,7 +953,10 @@ def _find_price(
     price_book: Dict[str, int], needle: str
 ) -> Optional[int]:
     """Case-insensitive substring lookup in the merged price book.
-    Returns the first match's monthly cents or None."""
+    Returns the first match's monthly cents or None. Org-level
+    subscriptions have no per-seat price, so they return None."""
+    if _is_org_level_sku(needle):
+        return None
     needle_lc = needle.lower()
     for name, cents in price_book.items():
         if needle_lc in name.lower():

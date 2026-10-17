@@ -1,0 +1,9 @@
+{
+ "_source": "Roadmap item 25. Hand-written, synthetic. An Account Engagement (Pardot) subscription nobody is assigned to; the exact licence label Salesforce shows for it is unverified.",
+ "demo_live": {
+  "permission_set_licenses": [
+   {"Id": "0PL000000000025DMO", "DeveloperName": "MarketingCloudAccountEngagement",
+    "MasterLabel": "Marketing Cloud Account Engagement", "TotalLicenses": 10, "UsedLicenses": 0, "Status": "Active"}
+  ]
+ }
+}

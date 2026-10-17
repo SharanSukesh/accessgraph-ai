@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,9 +55,37 @@ def fixture_key(org: Organization) -> str:
     return key if key in DEMO_FIXTURES else LEGACY_FIXTURE
 
 
+def merge_fixture_part(base: Dict[str, Any], part: Dict[str, Any]) -> Dict[str, Any]:
+    """Deep-merge a fixture part into the base, in place: dicts merge key by
+    key, lists are appended to, anything else is replaced."""
+    for key, value in part.items():
+        current = base.get(key)
+        if isinstance(current, dict) and isinstance(value, dict):
+            merge_fixture_part(current, value)
+        elif isinstance(current, list) and isinstance(value, list):
+            current.extend(value)
+        else:
+            base[key] = value
+    return base
+
+
+def fixture_part_files(key: str) -> List[Path]:
+    """Extra demo data for a fixture, one file per feature, in
+    fixtures/<fixture name>.parts/*.json (applied in name order). Keeps each
+    feature's demo data out of the large generated fixture file."""
+    parts_dir = FIXTURES_DIR / f"{Path(DEMO_FIXTURES[key].file).stem}.parts"
+    return sorted(parts_dir.glob("*.json")) if parts_dir.is_dir() else []
+
+
 def load_fixture(key: str) -> Dict[str, Any]:
     with open(FIXTURES_DIR / DEMO_FIXTURES[key].file) as f:
-        return json.load(f)
+        data = json.load(f)
+    for path in fixture_part_files(key):
+        with open(path) as f:
+            part = json.load(f)
+        part.pop("_source", None)  # provenance note, not data
+        merge_fixture_part(data, part)
+    return data
 
 
 async def demo_client_for(db: AsyncSession, org_id: str) -> Optional[DemoSalesforceClient]:

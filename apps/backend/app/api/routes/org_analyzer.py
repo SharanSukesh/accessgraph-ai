@@ -59,6 +59,7 @@ from app.services.org_analyzer import (
     DEFAULT_PRICE_BOOK_CENTS,
     OrgAnalyzerService,
     _is_known_free_sku,
+    _is_org_level_sku,
     _lookup_default_price,
 )
 from app.services.org_analyzer_fix import APPLY_FIX_SUPPORTED, ApplyFixService
@@ -190,6 +191,9 @@ class PriceBookRow(BaseModel):
     # surfaces it in a tooltip so the consultant understands why a row
     # is Bundled vs Billed before they flip the toggle.
     billed_reason: Optional[str] = None
+    # "seat": per user per month. "org": an org-level subscription
+    # (Marketing Cloud, Account Engagement): one price per org per month.
+    pricing_unit: str = "seat"
 
 
 class PriceBookResponse(BaseModel):
@@ -1096,6 +1100,7 @@ async def get_price_book(
             is_override=(name in overrides),
             in_org=in_org,
             billed_reason=reason,
+            pricing_unit="org" if _is_org_level_sku(name) else "seat",
         )
 
     # Org's actual SKUs first — these are the ones the consultant cares
