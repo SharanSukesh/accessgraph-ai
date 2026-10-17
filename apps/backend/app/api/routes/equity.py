@@ -64,6 +64,8 @@ class DiagnosticResponse(BaseModel):
     # a small note explaining the tier + which SF field was used so
     # consultants aren't left wondering why the buckets look odd.
     grouping_key: Optional[str] = None
+    # "no_disparity": the latest run found no disparity to close.
+    reason: Optional[str] = None
 
 
 class HistoryPointResponse(BaseModel):
