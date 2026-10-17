@@ -239,10 +239,6 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
 
 ## Backlog (not before Friday)
 
-- Equity adds Priority Actions even when disparity is 0 (it created 20 on
-  the synthetic org at index 1.0). It should add nothing when there is no
-  disparity to close.
-
 - Anomaly severity: every top-2% user scores 0.986 or higher on the
   normalised scale, so all flagged users are "critical". Options:
   rank-based bands within the flagged set, or drop severity for anomalies

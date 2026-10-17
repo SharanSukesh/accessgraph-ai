@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -32,6 +32,7 @@ from app.domain.models import (
     EquitySnapshot,
     OpportunityShareSnapshot,
     OpportunityTeamMemberSnapshot,
+    Organization,
     PermissionSetAssignmentSnapshot,
     PermissionSetSnapshot,
     ProfileSnapshot,
@@ -44,6 +45,7 @@ from app.domain.models import (
     VIPDesignation,
     VIPDesignationKind,
 )
+from app.services.replace_lock import lock_for_replace
 
 
 logger = logging.getLogger(__name__)
@@ -85,6 +87,10 @@ NAME_PATTERN_TERMS = (
 
 DEFAULT_BUDGET = 20
 DEFAULT_LAMBDA = 0.5
+# Equity adds grants only while group disparity is above this. At 0 a fully
+# equal org (disparity 0) gets "no disparity to close" and nothing in
+# Priority Actions. Per org: Organization.settings["equity_min_disparity"].
+DEFAULT_MIN_DISPARITY = 0.0
 
 # Where the trained policy lives. Configurable via env var so research/
 # can checkpoint elsewhere without code changes.
@@ -166,10 +172,13 @@ class EquityRecommendationService:
         budget: int = DEFAULT_BUDGET,
         lambda_disparity: float = DEFAULT_LAMBDA,
         policy_path: Optional[str] = None,
+        min_disparity: Optional[float] = None,
     ):
         self.db = db
         self.budget = budget
         self.lambda_disparity = lambda_disparity
+        # None: read the org's setting at generate() time.
+        self.min_disparity = min_disparity
         self.policy_path = policy_path or os.environ.get(
             "EQUITY_POLICY_PATH", POLICY_PATH_DEFAULT
         )
@@ -178,12 +187,22 @@ class EquityRecommendationService:
     # Public entry point
     # ------------------------------------------------------------------
     async def generate(self, org_id: str) -> EquityRunResult:
+        if self.min_disparity is None:
+            org = await self.db.get(Organization, org_id)
+            raw = ((org.settings or {}) if org else {}).get("equity_min_disparity")
+            self.min_disparity = float(raw) if raw is not None else DEFAULT_MIN_DISPARITY
         graph = await self._build_graph(org_id)
         if graph.vip_indices.size == 0:
             logger.warning(
                 "Equity: no VIPs identified for org %s; skipping recs", org_id,
             )
             return await self._persist_empty_snapshot(org_id, graph)
+
+        _, disparity, _, _, _ = self._group_utilities(graph)
+        if disparity <= self.min_disparity:
+            # Nothing to close: report it and add nothing to Priority Actions.
+            logger.info("Equity: disparity %.4f <= %.4f for org %s; no grants", disparity, self.min_disparity, org_id)
+            return await self._persist(org_id, graph, [], reason="no_disparity")
 
         runner = _PolicyRunner.try_load(self.policy_path)
         proposals = self._roll_out(graph, runner)
@@ -666,7 +685,7 @@ class EquityRecommendationService:
         proposals: List[EquityProposal] = []
         for _ in range(self.budget):
             group_util, disparity, most_dis, _, _ = self._group_utilities(graph)
-            if most_dis is None:
+            if most_dis is None or disparity <= self.min_disparity:
                 break
 
             action = self._choose_action(graph, runner, group_util, most_dis)
@@ -785,6 +804,7 @@ class EquityRecommendationService:
         org_id: str,
         graph: EquityGraph,
         proposals: List[EquityProposal],
+        reason: Optional[str] = None,
     ) -> EquityRunResult:
         group_util, disparity, most_dis, _, grouping_key = self._group_utilities(graph)
         equity_index = self._equity_index(group_util)
@@ -820,12 +840,23 @@ class EquityRecommendationService:
                 # this to explain "grouped by X because Department was
                 # null on all juniors" in the UI.
                 "grouping_key": grouping_key,
+                "min_disparity": self.min_disparity,
+                # "no_disparity": disparity at or below min_disparity, so
+                # no grants were proposed.
+                "reason": reason,
             },
             recommendations_generated=len(proposals),
             created_at=now,
             updated_at=now,
         )
         self.db.add(snapshot)
+
+        # This run's grants replace the previous run's (they used to pile up).
+        await lock_for_replace(self.db, org_id, "equity_recommendations")
+        await self.db.execute(delete(Recommendation).where(
+            Recommendation.organization_id == org_id,
+            Recommendation.track == RecommendationTrack.EQUITY,
+        ))
 
         for p in proposals:
             # Resolve readable PS + user names; fall back to the raw
