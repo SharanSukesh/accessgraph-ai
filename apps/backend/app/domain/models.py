@@ -77,6 +77,8 @@ class RecommendationType(str, PyEnum):
     PSG_MIGRATION = "psg_migration"
     UNDER_PERMISSIONED = "under_permissioned"
     GRANT_FOR_EQUITY = "grant_for_equity"
+    # Org-level, from the Health Report (e.g. coverage below the deploy gate).
+    DEPLOYMENT_READINESS = "deployment_readiness"
 
 
 class RecommendationTrack(str, PyEnum):
