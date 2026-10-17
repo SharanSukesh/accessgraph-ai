@@ -11,8 +11,8 @@ import { AlertTriangle, Filter, Search, User, Calendar, Info, Download } from 'l
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { exportAnomaliesToCSV, exportStamp } from '@/lib/utils/exports'
-import { ANOMALY_TYPE_FILTERS, anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
-import { Badge, SeverityBadge } from '@/components/shared/Badge'
+import { ANOMALY_TYPE_FILTERS, anomalyTypeLabel, baseRiskLabel, rankLabel } from '@/lib/anomalyTypes'
+import { BASE_RISK_TOOLTIP, Badge, BaseRiskBadge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -56,6 +56,15 @@ function AnomaliesContent() {
   })
 
   const { data: topUsers } = useTopAnomalousUsers(orgId, 10)
+  // Unfiltered counts for the summary cards.
+  const { data: allAnomalies, isLoading: allLoading } = useAnomalies(orgId)
+  const flagged = allAnomalies?.filter((a) => (a.category ?? 'access') === 'access') ?? []
+  const sessions = allAnomalies?.filter((a) => a.category === 'session') ?? []
+  // Base risk, so no user counts just for being flagged.
+  const highRisk = flagged.filter((a) => a.baseRiskLevel === 'high' || a.baseRiskLevel === 'critical')
+  const usersScored = flagged.find((a) => a.usersScored)?.usersScored
+  const affected = new Set(allAnomalies?.map((a) => a.userId) ?? []).size
+  const count = (n: number) => (allLoading ? '...' : n)
 
   if (error) {
     if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
@@ -89,18 +98,24 @@ function AnomaliesContent() {
         />
       </Reveal>
 
-      {/* Summary Cards */}
+      {/* Summary Cards. Access anomalies have no severity: rank says how
+          unusual, the user's risk level says how much damage. */}
       <Stagger className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <StaggerItem>
           <Card variant="bordered" className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                  Total Anomalies
+                  Flagged access anomalies
                 </p>
                 <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                  {isLoading ? '...' : anomalies?.length || 0}
+                  {count(flagged.length)}
                 </p>
+                {usersScored ? (
+                  <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                    Top 2% of {usersScored.toLocaleString('en-US')} users
+                  </p>
+                ) : null}
               </div>
               <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900">
                 <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -111,34 +126,30 @@ function AnomaliesContent() {
 
         <StaggerItem>
           <Card variant="bordered" className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                  Critical
-                </p>
-                <p className="v2-num mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
-                  {isLoading
-                    ? '...'
-                    : anomalies?.filter((a: any) => a.severity === 'critical').length || 0}
-                </p>
-              </div>
+            <div>
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                <span title={BASE_RISK_TOOLTIP} className="cursor-help underline decoration-dotted">
+                  At high or critical base risk
+                </span>
+              </p>
+              <p className="v2-num mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
+                {count(highRisk.length)}
+              </p>
+              <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Triage these first</p>
             </div>
           </Card>
         </StaggerItem>
 
         <StaggerItem>
           <Card variant="bordered" className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                  High
-                </p>
-                <p className="v2-num mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
-                  {isLoading
-                    ? '...'
-                    : anomalies?.filter((a: any) => a.severity === 'high').length || 0}
-                </p>
-              </div>
+            <div>
+              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
+                Session anomalies
+              </p>
+              <p className="v2-num mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
+                {count(sessions.length)}
+              </p>
+              <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Sign-in rules, with severity</p>
             </div>
           </Card>
         </StaggerItem>
@@ -151,7 +162,7 @@ function AnomaliesContent() {
                   Affected Users
                 </p>
                 <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                  {isLoading ? '...' : topUsers?.length || 0}
+                  {count(affected)}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
@@ -181,14 +192,17 @@ function AnomaliesContent() {
           },
         ] as const).map((tab) => {
           const active = categoryFilter === tab.key
-          const count =
-            tab.key === ''
-              ? anomalies?.length ?? 0
-              : anomalies?.filter((a: any) => (a.category ?? 'access') === tab.key).length ?? 0
+          // Counts come from the unfiltered list so they don't change with the active tab.
+          const tabCount =
+            tab.key === '' ? allAnomalies?.length ?? 0 : tab.key === 'access' ? flagged.length : sessions.length
           return (
             <button
               key={tab.key || 'all'}
-              onClick={() => setCategoryFilter(tab.key as any)}
+              onClick={() => {
+                setCategoryFilter(tab.key as any)
+                // Severity applies to session anomalies only.
+                if (tab.key !== 'session') setSeverityFilter('')
+              }}
               title={tab.desc ?? undefined}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
                 active
@@ -197,7 +211,7 @@ function AnomaliesContent() {
               }`}
             >
               {tab.label}
-              <span className="ml-2 opacity-80">({isLoading ? '…' : count})</span>
+              <span className="ml-2 opacity-80">({allLoading ? '…' : tabCount})</span>
             </button>
           )
         })}
@@ -219,18 +233,21 @@ function AnomaliesContent() {
               />
             </div>
 
-            {/* Severity Filter */}
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="">All Severities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+            {/* Severity Filter: session anomalies only (access anomalies have no severity). */}
+            {categoryFilter === 'session' && (
+              <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+                aria-label="Session severity"
+                className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="">All session severities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            )}
 
             {/* Type Filter — set by the Category tabs above for the
                 Session case; kept as a manual filter for Access sub-types. */}
@@ -277,21 +294,26 @@ function AnomaliesContent() {
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <SeverityBadge severity={anomaly.severity} />
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
                             {anomaly.category === 'session' ? (
-                              <Badge variant="warning" size="sm">
-                                Session
-                              </Badge>
+                              <>
+                                {anomaly.severity && <SeverityBadge severity={anomaly.severity} />}
+                                <Badge variant="warning" size="sm">
+                                  Session
+                                </Badge>
+                              </>
                             ) : (
-                              <Badge variant="info" size="sm">
-                                Access
-                              </Badge>
-                            )}
-                            {anomaly.category !== 'session' && anomalyTypeLabel(anomaly.type) && (
-                              <Badge variant="info" size="sm">
-                                {anomalyTypeLabel(anomaly.type)}
-                              </Badge>
+                              <>
+                                <Badge variant="info" size="sm">
+                                  Access
+                                </Badge>
+                                {anomalyTypeLabel(anomaly.type) && (
+                                  <Badge variant="info" size="sm">
+                                    {anomalyTypeLabel(anomaly.type)}
+                                  </Badge>
+                                )}
+                                {anomaly.baseRiskLevel && <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />}
+                              </>
                             )}
                           </div>
                           <h3 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">
@@ -360,12 +382,35 @@ function AnomaliesContent() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
-                    Severity
+                {selectedAnomaly.category === 'session' ? (
+                  <div>
+                    <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
+                      Severity
+                    </div>
+                    {selectedAnomaly.severity && <SeverityBadge severity={selectedAnomaly.severity} />}
                   </div>
-                  <SeverityBadge severity={selectedAnomaly.severity} />
-                </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
+                        Rank
+                      </div>
+                      <div className="text-sm font-semibold tabular-nums text-grove-ink dark:text-grove-ink-dk">
+                        {rankLabel(selectedAnomaly.rank, selectedAnomaly.usersScored) ?? '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
+                        <span title={BASE_RISK_TOOLTIP} className="cursor-help underline decoration-dotted">Base risk</span>
+                      </div>
+                      {selectedAnomaly.baseRiskLevel ? (
+                        <RiskBadge level={selectedAnomaly.baseRiskLevel} title={BASE_RISK_TOOLTIP} size="sm" />
+                      ) : (
+                        <span className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">Not scored</span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 mb-1">
@@ -422,6 +467,9 @@ function AnomaliesContent() {
             <Card variant="bordered">
               <CardHeader>
                 <CardTitle>Top Anomalous Users</CardTitle>
+                <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+                  By rank: how far each user&apos;s access stands out from their peers.
+                </p>
               </CardHeader>
               <CardContent>
                 {topUsers && topUsers.length > 0 ? (
@@ -432,8 +480,8 @@ function AnomaliesContent() {
                         onClick={() => router.push(`/orgs/${orgId}/users/${user.userId}`)}
                         className="w-full flex items-center justify-between p-3 rounded-lg border border-grove-border dark:border-grove-border-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15 transition-colors"
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="h-10 w-10 shrink-0 rounded-full bg-red-100 dark:bg-red-900 flex items-center justify-center">
                             <User className="h-5 w-5 text-red-600 dark:text-red-400" />
                           </div>
                           <div className="text-left">
@@ -441,12 +489,14 @@ function AnomaliesContent() {
                               {user.userName}
                             </div>
                             <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-                              {anomalyTypeLabel(user.anomalyType) ?? 'Anomaly'}
+                              {[anomalyTypeLabel(user.anomalyType) ?? 'Anomaly', baseRiskLabel(user.baseRiskLevel)]
+                                .filter(Boolean)
+                                .join(' · ')}
                             </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="v2-num text-xl font-bold text-red-600 dark:text-red-400">
+                        <div className="ml-3 shrink-0 text-right">
+                          <div className="v2-num whitespace-nowrap text-base font-semibold text-grove-ink dark:text-grove-ink-dk">
                             {rankLabel(user.rank, user.usersScored) ??
                               (typeof user.anomalyScore === 'number' ? user.anomalyScore.toFixed(2) : user.anomalyScore)}
                           </div>
@@ -478,9 +528,10 @@ function AnomaliesContent() {
                 <div className="text-sm text-primary-800 dark:text-primary-300">
                   <p className="font-medium mb-1">About Anomalies</p>
                   <p className="text-xs">
-                    Anomalies are automatically detected patterns that deviate from normal
-                    access behavior. Review and investigate each one to determine if action
-                    is needed.
+                    Access anomalies are the top 2% of users whose access stands out most from
+                    their peers. Rank says how unusual; base risk (the risk score calculated without
+                    the anomaly flag) says how much damage the access could do. Session anomalies come from sign-in rules and
+                    keep a severity.
                   </p>
                 </div>
               </div>

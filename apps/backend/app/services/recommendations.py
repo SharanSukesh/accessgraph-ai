@@ -18,6 +18,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.services.replace_lock import lock_for_replace
+from app.services.risk_scoring import base_risk, latest_user_risks
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,10 @@ class RecommendationEngine:
             select(AccessAnomaly).where(AccessAnomaly.organization_id == org_id)
         )
         anomalies = result.scalars().all()
+        # Severity of the anomaly-driven rules comes from base risk and rank
+        # (risk scoring runs before this in both the sync and Analyze).
+        self._risks = await latest_user_risks(self.db, org_id, list({a.user_id for a in anomalies}))
+        self._flagged = sum(1 for a in anomalies if (a.category or "access") == "access")
 
         # Generate recs from anomalies
         for anomaly in anomalies:
@@ -76,6 +81,24 @@ class RecommendationEngine:
 
         logger.info(f"Generated {len(recommendations)} recommendations")
         return recommendations
+
+    def _escalated(self, anomaly: AccessAnomaly) -> bool:
+        """Whether an anomaly-driven rule takes its higher severity.
+
+        Yes when the user's base risk (risk without the anomaly flag) is
+        High or Critical, or Medium with a rank in the top half of the
+        flagged users. The detector's stored severity band is not used:
+        every top-2% user scored "critical" on it.
+        """
+        risk = getattr(self, "_risks", {}).get(anomaly.user_id)
+        if risk is None:
+            return False
+        level = base_risk(risk.factors)[1]
+        if level.value in ("high", "critical"):
+            return True
+        rank = (anomaly.peer_stats or {}).get("rank")
+        flagged = getattr(self, "_flagged", 0)
+        return level.value == "medium" and bool(rank) and flagged > 0 and rank <= (flagged + 1) // 2
 
     async def _recommendations_from_anomaly(
         self, org_id: str, anomaly: AccessAnomaly
@@ -104,7 +127,7 @@ class RecommendationEngine:
                 organization_id=org_id,
                 rec_type=RecommendationType.PSG_MIGRATION,
                 status=RecommendationStatus.PENDING,
-                severity=AnomalySeverity.MEDIUM if anomaly.severity in [AnomalySeverity.HIGH, AnomalySeverity.CRITICAL] else AnomalySeverity.LOW,
+                severity=AnomalySeverity.MEDIUM if self._escalated(anomaly) else AnomalySeverity.LOW,
                 target_entity_type="user",
                 target_entity_id=user.salesforce_id,
                 title=f"Review permission set assignments for {user.name}",
@@ -125,7 +148,7 @@ class RecommendationEngine:
                 organization_id=org_id,
                 rec_type=RecommendationType.ACCESS_REVIEW,
                 status=RecommendationStatus.PENDING,
-                severity=AnomalySeverity.HIGH if anomaly.severity == AnomalySeverity.CRITICAL else AnomalySeverity.MEDIUM,
+                severity=AnomalySeverity.HIGH if self._escalated(anomaly) else AnomalySeverity.MEDIUM,
                 target_entity_type="user",
                 target_entity_id=user.salesforce_id,
                 title=f"Review broad edit permissions for {user.name}",

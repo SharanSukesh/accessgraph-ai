@@ -25,7 +25,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/shared/Button'
 import { fileSlug } from '@/lib/utils/exports'
 import { ExplainAccessPanel } from '@/components/users/ExplainAccessPanel'
-import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
+import { Badge, BaseRiskBadge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
+import { anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -658,14 +659,25 @@ function UserDetailContent() {
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <SeverityBadge severity={anomaly.severity} />
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            {anomaly.category === 'session' ? (
+                              anomaly.severity && <SeverityBadge severity={anomaly.severity} />
+                            ) : (
+                              <>
+                                {rankLabel(anomaly.rank, anomaly.usersScored) && (
+                                  <Badge variant="info" size="sm">{rankLabel(anomaly.rank, anomaly.usersScored)}</Badge>
+                                )}
+                                {anomaly.baseRiskLevel && <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />}
+                              </>
+                            )}
                             <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                               Anomaly Score: {typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}
                             </span>
                           </div>
                           <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
-                            Anomalous Access Pattern Detected
+                            {anomaly.category === 'session'
+                              ? 'Unusual sign-in detected'
+                              : anomalyTypeLabel(anomaly.type) ?? 'Anomalous Access Pattern Detected'}
                           </div>
                           <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                             Detected {new Date(anomaly.detected_at).toLocaleString()}

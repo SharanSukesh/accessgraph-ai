@@ -17,8 +17,8 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
-import { rankLabel } from '@/lib/anomalyTypes'
+import { BaseRiskBadge, RiskBadge, SeverityBadge, StatusBadge, Badge } from '@/components/shared/Badge'
+import { anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { isSyncActive, syncJustFinished } from '@/lib/syncStatus'
 // Grove Refined — motion + chart primitives ported from the /v2
 // prototype. Presentational only.
@@ -42,9 +42,7 @@ export default function DashboardPage() {
 
   // Fetch data
   const { data: users, isLoading: usersLoading, error: usersError } = useUsers(orgId)
-  const { data: anomalies, isLoading: anomaliesLoading, refetch: refetchAnomalies } = useAnomalies(orgId, {
-    severity: 'critical',
-  })
+  const { data: anomalies, isLoading: anomaliesLoading, refetch: refetchAnomalies } = useAnomalies(orgId)
   const { data: topAnomalies, isLoading: topAnomaliesLoading, refetch: refetchTopAnomalies } =
     useTopAnomalousUsers(orgId, 5)
   const { data: recommendations, isLoading: recommendationsLoading, refetch: refetchRecommendations } =
@@ -113,7 +111,8 @@ export default function DashboardPage() {
   const highRiskUsers =
     users?.filter((u: any) => u.riskLevel === 'high' || u.riskLevel === 'critical')
       .length || 0
-  const criticalAnomalies = anomalies?.length || 0
+  // Every flagged anomaly: the access detector's top 2% plus session rule hits.
+  const flaggedAnomalies = anomalies?.length || 0
   const totalRecommendations = recommendations?.length || 0
 
   const latestSync = syncJobs?.[0]
@@ -294,8 +293,8 @@ export default function DashboardPage() {
         </StaggerItem>
         <StaggerItem>
           <MetricCard
-            title="Critical Anomalies"
-            value={criticalAnomalies}
+            title="Flagged Anomalies"
+            value={flaggedAnomalies}
             icon={AlertTriangle}
             iconColor="text-orange-600"
           />
@@ -333,6 +332,11 @@ export default function DashboardPage() {
                       <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
                         {anomaly.userEmail}
                       </p>
+                      {anomaly.category !== 'session' && anomalyTypeLabel(anomaly.anomalyType) && (
+                        <p className="text-xs font-medium text-grove-ink/75 dark:text-grove-ink-dk/75 mt-1">
+                          {anomalyTypeLabel(anomaly.anomalyType)}
+                        </p>
+                      )}
                       {anomaly.topReasons && anomaly.topReasons.length > 0 && (
                         <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
                           {anomaly.topReasons[0]}
@@ -350,7 +354,11 @@ export default function DashboardPage() {
                             : 'score'}
                         </p>
                       </div>
-                      <SeverityBadge severity={anomaly.severity} />
+                      {anomaly.category === 'session' ? (
+                        anomaly.severity && <SeverityBadge severity={anomaly.severity} />
+                      ) : anomaly.baseRiskLevel ? (
+                        <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />
+                      ) : null}
                     </div>
                   </div>
                 ))}

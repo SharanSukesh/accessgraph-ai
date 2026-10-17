@@ -47,9 +47,11 @@ export function Badge({
 export interface RiskBadgeProps extends Omit<BadgeProps, 'variant'> {
   level: 'low' | 'medium' | 'high' | 'critical'
   showLabel?: boolean
+  /** Put before the label, e.g. "Base risk: " to read "Base risk: High". */
+  prefix?: string
 }
 
-export function RiskBadge({ level, showLabel = true, ...props }: RiskBadgeProps) {
+export function RiskBadge({ level, showLabel = true, prefix = '', ...props }: RiskBadgeProps) {
   const variantMap = {
     low: 'success' as const,
     medium: 'warning' as const,
@@ -66,9 +68,19 @@ export function RiskBadge({ level, showLabel = true, ...props }: RiskBadgeProps)
 
   return (
     <Badge variant={variantMap[level]} {...props}>
-      {showLabel && labels[level]}
+      {showLabel && `${prefix}${labels[level]}`}
     </Badge>
   )
+}
+
+export const BASE_RISK_TOOLTIP = 'Risk score calculated without the anomaly flag.'
+
+/**
+ * Base risk: the user's risk without the anomaly flag. Shown wherever a
+ * risk level sits next to an anomaly rank, so it never restates the flag.
+ */
+export function BaseRiskBadge({ level, ...props }: Omit<RiskBadgeProps, 'prefix'>) {
+  return <RiskBadge level={level} prefix="Base risk: " title={BASE_RISK_TOOLTIP} {...props} />
 }
 
 /**
