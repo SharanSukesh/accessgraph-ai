@@ -35,3 +35,26 @@ export function rankLabel(rank?: number | null, total?: number | null): string |
   if (!rank) return null
   return total ? `#${rank} of ${total.toLocaleString('en-US')}` : `#${rank}`
 }
+
+/** "Base risk: High", or null when the user has no score yet. Base risk is
+ * the risk score calculated without the anomaly flag. */
+export function baseRiskLabel(level?: string | null): string | null {
+  if (!level) return null
+  return `Base risk: ${level.charAt(0).toUpperCase()}${level.slice(1).toLowerCase()}`
+}
+
+/**
+ * One line for an access anomaly: "#3 of 400 · Permission accumulation · Base risk: High".
+ * Rank says how unusual, the reason says why, and base risk (risk without the
+ * anomaly flag) says how much damage. Access anomalies carry no severity.
+ */
+export function anomalySummary(a: {
+  rank?: number | null
+  usersScored?: number | null
+  type?: string | null
+  baseRiskLevel?: string | null
+}): string {
+  return [rankLabel(a.rank, a.usersScored), anomalyTypeLabel(a.type), baseRiskLabel(a.baseRiskLevel)]
+    .filter(Boolean)
+    .join(' · ')
+}

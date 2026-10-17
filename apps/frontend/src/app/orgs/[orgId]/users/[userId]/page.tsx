@@ -6,6 +6,7 @@
  */
 
 import { Fragment, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowLeft,
@@ -25,7 +26,8 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Button } from '@/components/shared/Button'
 import { fileSlug } from '@/lib/utils/exports'
 import { ExplainAccessPanel } from '@/components/users/ExplainAccessPanel'
-import { Badge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
+import { Badge, BaseRiskBadge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
+import { anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -658,14 +660,25 @@ function UserDetailContent() {
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <SeverityBadge severity={anomaly.severity} />
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            {anomaly.category === 'session' ? (
+                              anomaly.severity && <SeverityBadge severity={anomaly.severity} />
+                            ) : (
+                              <>
+                                {rankLabel(anomaly.rank, anomaly.usersScored) && (
+                                  <Badge variant="info" size="sm">{rankLabel(anomaly.rank, anomaly.usersScored)}</Badge>
+                                )}
+                                {anomaly.baseRiskLevel && <BaseRiskBadge level={anomaly.baseRiskLevel} size="sm" />}
+                              </>
+                            )}
                             <span className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                               Anomaly Score: {typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}
                             </span>
                           </div>
                           <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
-                            Anomalous Access Pattern Detected
+                            {anomaly.category === 'session'
+                              ? 'Unusual sign-in detected'
+                              : anomalyTypeLabel(anomaly.type) ?? 'Anomalous Access Pattern Detected'}
                           </div>
                           <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
                             Detected {new Date(anomaly.detected_at).toLocaleString()}
@@ -689,9 +702,7 @@ function UserDetailContent() {
                                     <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk mb-1">
                                       {reason}
                                     </div>
-                                    <div className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-                                      This value is significantly different from peers with the same role, profile, or department.
-                                    </div>
+
                                   </div>
                                 </div>
                               </div>
@@ -699,38 +710,23 @@ function UserDetailContent() {
                           </div>
                         </div>
                       )}
-                      <div className="mt-3 pt-3 border-t border-grove-border dark:border-grove-border-dk">
-                        <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 space-y-2">
-                          <div>
-                            <strong className="text-grove-ink/85 dark:text-grove-ink-dk/85">How This Was Detected:</strong>
-                          </div>
-                          <div>
-                            <strong>1. Peer Comparison:</strong> We identified users similar to this user by matching:
-                            <ul className="list-disc list-inside ml-4 mt-1">
-                              <li>Same Role (if available)</li>
-                              <li>Same Profile (e.g., System Administrator)</li>
-                              <li>Same Department (fallback)</li>
-                            </ul>
-                          </div>
-                          <div>
-                            <strong>2. Feature Analysis:</strong> We analyzed 13 access-pattern signals including number
-                            of permission sets, object and field permissions, sensitive-data access, days since last
-                            login, cross-department access ratio, and how many of this user's grants are unique to them.
-                          </div>
-                          <div>
-                            <strong>3. ML Detection:</strong> A Mahalanobis-distance + Gaussian-Mixture rank-average
-                            ensemble flagged this user because their feature combination is statistically unusual
-                            compared to peers. The ensemble was selected after benchmarking 14 algorithms across 5
-                            paradigms; see <code>research/anomaly_benchmark/REPORT.md</code> for the methodology.
-                            Anomaly score of <strong>{typeof anomaly.anomaly_score === 'number' ? anomaly.anomaly_score.toFixed(2) : anomaly.anomaly_score}</strong>
-                            indicates deviation level (0 = normal, 1 = highly unusual).
-                          </div>
-                          <div>
-                            <strong>4. Why System Admins Get Flagged:</strong> If this user is the only System Administrator, or has
-                            significantly more/fewer permissions than other System Admins, they'll be flagged. This doesn't mean there's
-                            a security issue—it means their access pattern is unique and should be reviewed to ensure it's intentional.
-                          </div>
-                        </div>
+                      <div className="mt-3 pt-3 border-t border-grove-border dark:border-grove-border-dk text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+                        {anomaly.category === 'session' ? (
+                          <p>Found by a sign-in rule over this user&apos;s Salesforce login history.</p>
+                        ) : (
+                          <p>
+                            Newton scores every active user on 13 access signals with two statistical models and
+                            flags the 2% whose combination stands out most from the rest of the org. The reasons
+                            above compare this user with peers who share their role (or profile). Unusual access
+                            isn&apos;t necessarily wrong; review whether it is intended.
+                          </p>
+                        )}
+                        <Link
+                          href={`/orgs/${orgId}/anomalies/methodology`}
+                          className="mt-1 inline-block font-semibold text-grove-ink/85 underline underline-offset-2 dark:text-grove-ink-dk/85"
+                        >
+                          How anomalies are detected
+                        </Link>
                       </div>
                     </div>
                   ))}

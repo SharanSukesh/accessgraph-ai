@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
 from app.services.grant_sources import KIND_PROFILE, resolve_grant_sources
-from app.services.risk_scoring import classify_sensitive_field, classify_sensitive_object
+from app.services.risk_scoring import base_risk, classify_sensitive_field, classify_sensitive_object, latest_user_risks
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
 
@@ -82,7 +82,9 @@ class AnomalyResponse(BaseModel):
     user_name: Optional[str] = None
     score: Optional[float] = None
     anomaly_score: Optional[float] = None
-    severity: str
+    # Session anomalies only: access anomalies are described by rank,
+    # strongest reason and the user's risk level instead.
+    severity: Optional[str] = None
     reasons: List[str]
     detectedAt: Optional[str] = None
     detected_at: Optional[str] = None
@@ -418,6 +420,34 @@ async def get_user_risk(
     }
 
 
+def _anomaly_fields(a: AccessAnomaly, risk: Optional[RiskScore]) -> Dict:
+    """What every anomaly view shows. Access anomalies: rank, strongest
+    reason (type) and the user's base risk (risk without the anomaly flag,
+    so it doesn't restate the flag); severity is withheld because it
+    implies impact, which is the risk level's job. Session anomalies
+    keep their rule-based severity."""
+    stats = a.peer_stats or {}
+    session = a.category == "session"
+    base_score, base_level = base_risk(risk.factors) if risk else (None, None)
+    return {
+        "category": a.category or "access",
+        "severity": a.severity.value if session else None,
+        "type": "session_anomaly" if session else stats.get("anomaly_type") or "excessive_permissions",
+        "rank": None if session else stats.get("rank"),
+        "usersScored": None if session else stats.get("users_scored"),
+        "riskLevel": risk.risk_level.value if risk else None,
+        "riskScore": round(risk.risk_score, 1) if risk else None,
+        # Shown next to an anomaly rank: risk without the anomaly flag.
+        "baseRiskLevel": base_level.value if base_level else None,
+        "baseRiskScore": base_score,
+    }
+
+
+def _anomaly_sort_key(row: Dict):
+    """Access anomalies by rank first, then session anomalies by score."""
+    return (row["category"] == "session", row.get("rank") or 10**9, -(row.get("score") or 0), row.get("userId") or "")
+
+
 @router.get("/orgs/{org_id}/users/{user_sf_id}/anomalies", response_model=List[AnomalyResponse])
 async def get_user_anomalies(
     org_id: str,
@@ -432,15 +462,16 @@ async def get_user_anomalies(
         ).order_by(AccessAnomaly.anomaly_score.desc())
     )
     anomalies = result.scalars().all()
+    risk = (await latest_user_risks(db, org_id, [user_sf_id])).get(user_sf_id)
 
     return [
         {
             "id": a.id,
             "user_id": a.user_id,
             "anomaly_score": round(a.anomaly_score, 2),
-            "severity": a.severity.value,
             "reasons": a.reasons,
             "detected_at": a.detected_at.isoformat(),
+            **_anomaly_fields(a, risk),
         }
         for a in anomalies
     ]
@@ -502,7 +533,8 @@ async def list_anomalies(
     )
 
     if severity:
-        query = query.where(AccessAnomaly.severity == severity)
+        # Severity exists for session anomalies only.
+        query = query.where(AccessAnomaly.category == "session", AccessAnomaly.severity == severity)
     if category:
         query = query.where(AccessAnomaly.category == category)
 
@@ -510,6 +542,7 @@ async def list_anomalies(
 
     result = await db.execute(query)
     anomaly_user_pairs = result.all()
+    risks = await latest_user_risks(db, org_id, list({a.user_id for a, _ in anomaly_user_pairs}))
 
     def _display_title(cat: str, user_name: str) -> str:
         if cat == "session":
@@ -525,25 +558,18 @@ async def list_anomalies(
             "user_name": user_name,  # Keep for backwards compatibility
             "score": a.anomaly_score,  # Frontend expects 'score'
             "anomaly_score": a.anomaly_score,  # Keep for backwards compatibility
-            "severity": a.severity.value,
-            "category": a.category,
             "reasons": a.reasons,
             "detectedAt": a.detected_at.isoformat(),  # Frontend expects camelCase
             "detected_at": a.detected_at.isoformat(),  # Keep for backwards compatibility
-            # Type mapping: session anomalies get their own type so the
-            # frontend legend + filter dropdown group them separately from
-            # the ML permission anomalies.
-            # Access anomalies are typed by their strongest reason; rows
-            # from before that existed fall back to the old generic type.
-            "type": "session_anomaly" if a.category == "session"
-            else (a.peer_stats or {}).get("anomaly_type") or "excessive_permissions",
-            "rank": (a.peer_stats or {}).get("rank"),
-            "usersScored": (a.peer_stats or {}).get("users_scored"),
+            # Category, type, rank, risk level (and severity for session
+            # anomalies); rows from before typing fall back to the old type.
+            **_anomaly_fields(a, risks.get(a.user_id)),
             "title": _display_title(a.category, user_name),
             "description": a.reasons[0] if a.reasons else "Access pattern deviates from peer baseline",
         }
         for a, user_name in anomaly_user_pairs
     ]
+    rows.sort(key=_anomaly_sort_key)
     if type:
         rows = [r for r in rows if r["type"] == type]
     if search and search.strip():
@@ -558,9 +584,13 @@ class TopAnomalousUserResponse(BaseModel):
     userName: str
     userEmail: str
     anomalyScore: float
-    severity: str
+    severity: Optional[str] = None
     topReasons: List[str]
     riskScore: Optional[float] = None
+    riskLevel: Optional[str] = None
+    baseRiskLevel: Optional[str] = None
+    baseRiskScore: Optional[float] = None
+    category: Optional[str] = None
     anomalyType: Optional[str] = None
     rank: Optional[int] = None
     usersScored: Optional[int] = None
@@ -584,29 +614,34 @@ async def get_top_anomalous_users(
             AccessAnomaly.organization_id == org_id,
             UserSnapshot.organization_id == org_id,
         )
-        .order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
-        .limit(limit)
     )
 
     result = await db.execute(query)
     rows = result.all()
+    risks = await latest_user_risks(db, org_id, list({a.user_id for a, _ in rows}))
 
-    return [
-        {
+    out = []
+    for anomaly, user in rows:
+        fields = _anomaly_fields(anomaly, risks.get(anomaly.user_id))
+        out.append({
             "userId": user.salesforce_id,
             "userName": user.name,
             "userEmail": user.email or "",
             "anomalyScore": anomaly.anomaly_score,
-            "severity": anomaly.severity.value,
+            "score": anomaly.anomaly_score,
+            "severity": fields["severity"],
+            "category": fields["category"],
             "topReasons": anomaly.reasons[:3] if anomaly.reasons else [],
-            "riskScore": None,  # Could be joined from RiskScore if needed
-            "anomalyType": "session_anomaly" if anomaly.category == "session"
-            else (anomaly.peer_stats or {}).get("anomaly_type"),
-            "rank": (anomaly.peer_stats or {}).get("rank"),
-            "usersScored": (anomaly.peer_stats or {}).get("users_scored"),
-        }
-        for anomaly, user in rows
-    ]
+            "riskScore": fields["riskScore"],
+            "riskLevel": fields["riskLevel"],
+            "baseRiskLevel": fields["baseRiskLevel"],
+            "baseRiskScore": fields["baseRiskScore"],
+            "anomalyType": fields["type"],
+            "rank": fields["rank"],
+            "usersScored": fields["usersScored"],
+        })
+    out.sort(key=_anomaly_sort_key)
+    return out[:limit]
 
 
 @router.get("/orgs/{org_id}/recommendations", response_model=List[RecommendationResponse])

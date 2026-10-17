@@ -42,6 +42,14 @@ async def test_report_workbook_has_every_sheet_with_rows(client, async_db_sessio
     assert wb["Findings"].freeze_panes == "A2" and wb["Findings"].auto_filter.ref
     assert wb["Anomalies"].max_row - 1 == 8  # top 2% of 400 users
     assert wb["Anomalies"]["A2"].value == 1
+    header = [c.value for c in wb["Anomalies"][1]]
+    assert "Severity" not in header and {"Base risk", "Session severity"} <= set(header)
+    risk_col = header.index("Base risk") + 1
+    assert "without the anomaly flag" in wb["Anomalies"].cell(row=1, column=risk_col).comment.text
+    ranks = [r[0].value for r in wb["Anomalies"].iter_rows(min_row=2)]
+    assert ranks == sorted(ranks)
+    assert {wb["Anomalies"].cell(row=i, column=risk_col).value for i in range(2, 10)} <= {"Low", "Medium", "High", "Critical"}
+    assert all(wb["Anomalies"].cell(row=i, column=risk_col + 1).value is None for i in range(2, 10))
     assert wb["License Fit"].max_row - 1 == 400
     savings_col = next(c.column for c in wb["Findings"][1] if c.value == "Est. annual savings")
     assert wb["Findings"].cell(row=2, column=savings_col).number_format.startswith('"$"')

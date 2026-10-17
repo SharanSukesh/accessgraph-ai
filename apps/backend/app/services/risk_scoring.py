@@ -84,7 +84,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -271,7 +271,6 @@ MIN_USERS_FOR_UNIQUE = 3
 MIN_USERS_FOR_PAIR = 10
 # (key kind) -> value when the user is the sole holder; half when one of two.
 UNIQUE_VALUES = {"perm": 0.7, "modify_all": 0.5, "delete": 0.3}
-ANOMALY_SEVERITY_VALUES = {"critical": 1.0, "high": 0.75, "medium": 0.5, "low": 0.3, "info": 0.1}
 MAX_EVIDENCE = 8
 _ADMIN_PROFILE_RE = re.compile(r"\b(system\s*admin(istrator)?|sys\.?\s*admin)\b", re.IGNORECASE)
 
@@ -302,6 +301,46 @@ def determine_risk_level(score: float) -> RiskLevel:
     if score >= 25:
         return RiskLevel.MEDIUM
     return RiskLevel.LOW
+
+
+ANOMALY_FACTOR = "peer_deviation"
+
+
+def base_risk(factors: Optional[Sequence[Dict]]) -> Tuple[float, RiskLevel]:
+    """Risk score calculated without the anomaly flag.
+
+    The same noisy-OR as the stored score, leaving out the peer-deviation
+    factor (which is driven by the access-anomaly flag). It is exactly the
+    score the user would have if they were not flagged, so it can sit next
+    to an anomaly rank without restating it. Shown as "Base risk".
+    """
+    score = round(combine_factors(
+        (f.get("weight", 0.0), f.get("score", 0.0))
+        for f in (factors or []) if f.get("factor") != ANOMALY_FACTOR
+    ), 1)
+    return score, determine_risk_level(score)
+
+
+async def latest_user_risks(
+    db: AsyncSession, org_id: str, user_ids: Optional[Sequence[str]] = None
+) -> Dict[str, RiskScore]:
+    """Each user's latest risk score, in one query (optionally for some users only)."""
+    if user_ids is not None and not user_ids:
+        return {}
+    latest = (
+        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
+        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        .group_by(RiskScore.entity_id)
+    )
+    if user_ids is not None:
+        latest = latest.where(RiskScore.entity_id.in_(list(user_ids)))
+    latest = latest.subquery()
+    rows = (await db.execute(
+        select(RiskScore).join(
+            latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at)
+        ).where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+    )).scalars().all()
+    return {r.entity_id: r for r in rows}
 
 
 def tokenize_api_name(name: str) -> List[str]:
@@ -947,15 +986,18 @@ class RiskScoringService:
         anomaly = ctx.anomalies.get(user.salesforce_id)
         if anomaly is None:
             return self._factor(key, 0.0, "Access pattern is in line with peers (no anomaly flagged).", [])
-        severity = anomaly.severity.value if hasattr(anomaly.severity, "value") else str(anomaly.severity)
-        sev_value = ANOMALY_SEVERITY_VALUES.get(severity, 0.3)
-        score = 0.5 * sev_value + 0.5 * min(max(anomaly.anomaly_score or 0.0, 0.0), 1.0)
+        # Being flagged (top 2%) counts in full; the anomaly score refines it.
+        # Severity isn't used: for access anomalies it carried no information.
+        score = 0.5 + 0.5 * min(max(anomaly.anomaly_score or 0.0, 0.0), 1.0)
         evidence = [{"label": reason, "kind": "anomaly"} for reason in (anomaly.reasons or [])]
+        stats = anomaly.peer_stats or {}
+        rank, scored = stats.get("rank"), stats.get("users_scored")
+        position = f"#{rank} of {scored}" if rank and scored else "in the top 2%"
         description = (
-            f"Flagged as a {severity}-severity access outlier versus peers "
+            f"Flagged as an access outlier versus peers, ranked {position} "
             f"(anomaly score {anomaly.anomaly_score:.2f})."
         )
-        headline = f"was flagged as a {severity}-severity access outlier versus peers"
+        headline = f"was flagged as an access outlier versus peers ({position})"
         return self._factor(key, score, description, evidence, headline)
 
     def _dormancy_factor(

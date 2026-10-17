@@ -64,6 +64,17 @@ _FEATURE_LABELS: Dict[str, str] = {
 }
 
 
+# Display names for access anomaly types (the strongest reason).
+ANOMALY_TYPE_LABELS: Dict[str, str] = {
+    "exclusive_access": "Exclusive access",
+    "role_mismatch": "Role mismatch",
+    "permission_accumulation": "Permission accumulation",
+    "over_privilege": "Over-privilege",
+    "dormant_access": "Dormant access",
+    "unusual_access": "Unusual access",
+}
+
+
 def _format_feature(col: str, value) -> str:
     if col == "cross_department_access_ratio":
         return f"{round(float(value) * 100)}%"
