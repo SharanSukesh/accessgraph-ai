@@ -74,6 +74,14 @@ interface RecordAccessData {
     total_sharing_rule_grants: number
     has_role_hierarchy_access: boolean
   }
+  // Whether share rows cover every record. label is set ("Based on records
+  // the integration user can see") whenever coverage isn't complete.
+  coverage?: {
+    objects: Record<string, 'full' | 'partial' | 'unknown'>
+    complete: boolean
+    label: string | null
+    detail: string | null
+  }
 }
 
 export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
@@ -107,6 +115,19 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
 
   return (
     <div className="space-y-6">
+      {data.coverage?.label && (
+        <div
+          role="note"
+          className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold">{data.coverage.label}</p>
+            {data.coverage.detail && <p className="mt-1 text-xs">{data.coverage.detail}</p>}
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card variant="bordered" className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20">
