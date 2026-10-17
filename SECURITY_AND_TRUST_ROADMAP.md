@@ -197,7 +197,7 @@ items below.
 
 **Status (18 Oct): built, each on its own branch, not merged.** Suggested
 merge order (later branches build on earlier ones; all merged together
-pass 346 backend and 44 frontend tests):
+pass 356 backend and 48 frontend tests):
 
 | Order | Branch | Items |
 |---|---|---|
@@ -210,13 +210,22 @@ pass 346 backend and 44 frontend tests):
 | 7 | `feat/record-access-coverage` | 31 |
 | 8 | `feat/code-coverage` | 4 |
 | 9 | `feat/critical-objects` | 2 (contains 7 and 8) |
-| 10 | `fix/info-badge-dark` | 33 |
-| 11 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
+| 10 | `fix/info-badge-dark` | 33, plus distinct High and Medium badge colours |
+| 11 | `feat/health-score-cap` | each family of findings can lower the health score by at most 20 (decided 20 Oct) |
+| 12 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
 
 Expected conflicts are small: `DEMO_NOTES.md` backlog lines (each branch
 removes the item it fixed), two tests appended at the same place in
-`test_report_html.py`, and two adjacent demo lines in `orchestrator.py`
-(keep both).
+`test_report_html.py`, two adjacent demo lines in `orchestrator.py`, and
+two adjacent imports on the Health Report page (keep both sides in each).
+
+**Health score (decided 20 Oct):** findings are grouped into families
+(licensing, configuration, automation, code coverage, access and sharing,
+platform limits, data quality, predictive), and no family can lower the
+score by more than 20 points. Lumenvale: 35 to 60 on main alone; 41
+(Concerning) with all of phase A, where it was 16 uncapped. The planted
+coverage and data problems needed no tuning. Revisit the weights and the
+cap with item 30.
 
 ### 23. Anomaly severity for access anomalies: replaced by rank, reason and risk
 - **Problem:** every top-2% user scored 0.986+ on the normalised scale, so all showed as "critical". Severity implies impact, which is the risk score's job; rank bands would label someone "medium" just for being 7th of 8.
@@ -279,7 +288,7 @@ removes the item it fixed), two tests appended at the same place in
     - fields never populated: 0 populated in the counted set.
   - **Thresholds:** adjustable per org, stored with the run so results can be reproduced.
   - **Large objects:** sized with the cached approximate record count. Above a size limit we count over the first n records by Id: Ids are read (keyset paging) only to find where the sample ends, then one aggregate query bounded by that Id. Results are labelled **"estimated (sampled n of N)"**. No record contents are read.
-  - **Fields SOQL can't aggregate** (long text, rich text, multi-select): counting them would mean reading record contents, which the DPA, privacy, terms and security pages say Newton never does. **Built (18 Oct):** listed as "not counted", with the reason. *To decide:* keep this, or have counsel update the legal pages so a sample may read these fields in transit.
+  - **Fields SOQL can't aggregate** (long text, rich text, multi-select): counting them would mean reading record contents, which the DPA, privacy, terms and security pages say Newton never does. **Decided (20 Oct):** they stay "not counted, to keep our promise of never reading record contents"; the legal pages don't change. Opt-in content checks are in the later backlog (H).
   - **Outputs:** a "Critical objects" panel in Schema, Health Report findings, and Priority Actions.
 - **Salesforce sources:**
   - Describe `filterable` / type ✓
@@ -760,6 +769,7 @@ Extends 9 using 1 and 11's metadata. **Effort: L.**
 |------|----------|--------|
 | Engagement workspace | Comments on findings, evidence requests to the client, sign-off, and versioned deliverables, on top of 20. | L |
 | Finding-to-scope builder | **Promoted to Proposal P1** (now phase C2). | — |
+| Opt-in content checks | Per-engagement opt-in, recorded like write-back, letting Data Quality read long and rich text fields in transit to count which are populated (values never stored). Needs counsel to update the DPA, privacy, terms and security pages first; until then these fields stay "not counted" (decided 20 Oct). | M |
 | GitHub App for remediation bundles | Opt-in per client, scoped to **one repository**; opens **draft pull requests only**, never pushes to the default branch; short-lived installation tokens, never stored in plain text; listed in the security review pack (28) as a future, optional integration. | M |
 | Configurable policy packs | Org-specific rules (e.g. "no Modify All Data outside IT") evaluated on each snapshot, versioned per engagement. | M |
 | Access review campaigns | Managers attest to their team's access in Newton. Evidence exports for auditors (old roadmap item 4). | L |
