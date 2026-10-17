@@ -20,12 +20,14 @@ export function Badge({
 }: BadgeProps) {
   const baseStyles = 'inline-flex items-center justify-center rounded-full font-semibold shadow-sm transition-all duration-200 hover:scale-105 hover:shadow-md'
 
+  // Dark-mode rings are at least 3:1 against the dark card surface (#132821)
+  // so every badge reads as a chip, not loose text.
   const variants = {
-    default: 'bg-grove-canvas text-grove-ink/85 dark:bg-grove-surface-dk dark:text-grove-ink-dk/85 hover:bg-primary-50 dark:hover:bg-primary-900/20 ring-1 ring-grove-border dark:ring-grove-border-dk',
-    success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-800',
-    warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-800',
-    danger: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-800',
-    info: 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 hover:bg-primary-100 dark:hover:bg-primary-900/30 ring-1 ring-primary-200 dark:ring-primary-800',
+    default: 'bg-grove-canvas text-grove-ink/85 dark:bg-grove-surface-dk dark:text-grove-ink-dk/85 hover:bg-primary-50 dark:hover:bg-primary-900/20 ring-1 ring-grove-border dark:ring-grove-ink-dk/40',
+    success: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-600',
+    warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-600',
+    danger: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-600',
+    info: 'bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-200 hover:bg-primary-100 dark:hover:bg-primary-500/25 ring-1 ring-primary-200 dark:ring-primary-500',
   }
 
   const sizes = {
