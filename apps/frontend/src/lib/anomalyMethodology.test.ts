@@ -24,11 +24,12 @@ describe('anomaly methodology', () => {
     expect(text).not.toMatch(/\.md\b|research\/|\.py\b|github/i)
   })
 
-  it('reads the benchmark from the paper extraction', () => {
+  it('reads the published benchmark figures', () => {
     expect(BENCHMARK.synthetic_orgs).toBe(150)
     expect(pct(BENCHMARK.mean_recall)).toBe(28)
-    const over = BENCHMARK.per_pattern_recall.find((p) => p.paper_column === 'OverPriv')
+    const over = BENCHMARK.per_pattern_recall.find((p) => p.paper_archetype === 'Over-privileged')
     expect(over && pct(over.recall)).toBe(10)
-    expect(BENCHMARK.venue).toBe('IEEE TPS 2026')
+    expect(BENCHMARK.source).toBe('IEEE TPS-ISA 2026 camera-ready, Fig. 4')
+    expect(BENCHMARK.citation).toContain('IEEE TPS-ISA 2026')
   })
 })

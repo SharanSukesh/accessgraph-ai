@@ -161,7 +161,7 @@ export default function AnomalyMethodologyPage() {
             </thead>
             <tbody>
               {BENCHMARK.per_pattern_recall.map((p) => (
-                <tr key={p.paper_column} className="border-t border-grove-border dark:border-grove-border-dk">
+                <tr key={p.paper_archetype} className="border-t border-grove-border dark:border-grove-border-dk">
                   <td className="py-1 pr-4">{p.pattern}</td>
                   <td className="v2-num py-1 text-right">{pct(p.recall)}%</td>
                 </tr>
@@ -184,8 +184,15 @@ export default function AnomalyMethodologyPage() {
           be measured in a pilot, with reviewers marking each flag useful or not.
         </p>
         <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
-          Source: Newton&apos;s anomaly-detection paper, accepted at {BENCHMARK.venue} (per-pattern recall of the
-          production detector).
+          Source: {BENCHMARK.citation} {BENCHMARK.figure} (the deployed detector).
+          {BENCHMARK.doi && (
+            <>
+              {' '}
+              <a href={`https://doi.org/${BENCHMARK.doi}`} className="underline" target="_blank" rel="noreferrer">
+                doi:{BENCHMARK.doi}
+              </a>
+            </>
+          )}
         </p>
       </Section>
 

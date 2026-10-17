@@ -7,8 +7,9 @@
 
 import benchmark from './anomalyBenchmark.json'
 
-/** Benchmark figures extracted from the paper text (never retyped); see
- * research/paper_bundle/extract_benchmark_figures.py. */
+/** Published benchmark figures (IEEE TPS-ISA 2026 camera-ready, Fig. 4),
+ * built from research/paper_bundle/published_figures_tpsisa2026_fig4.json
+ * by build_benchmark_figures.py; a test fails if they differ. */
 export const BENCHMARK = benchmark
 
 /** 0.277 -> 28 */

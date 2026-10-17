@@ -1,33 +1,34 @@
 {
-  "source": "research/paper_bundle/PUBLISHABLE_PAPER_BUNDLE.md",
-  "source_note": "Draft paper text in the repo; confirm against the camera-ready Table II.",
-  "venue": "IEEE TPS 2026",
+  "source": "IEEE TPS-ISA 2026 camera-ready, Fig. 4",
+  "figure": "Fig. 4: v2 per-archetype recall",
+  "citation": "S. Sukesh, \"Permission Anomaly Detection in Salesforce Access Graphs: A Synthetic Benchmark and a Per-Archetype Diagnostic,\" accepted for presentation at the IEEE International Conference on Trust, Privacy and Security in Intelligent Systems and Applications (IEEE TPS-ISA 2026), Government/Industry Track, Milpitas, CA, USA, Nov. 2026. To appear in IEEE Xplore.",
+  "doi": null,
   "synthetic_orgs": 150,
   "mean_recall": 0.277,
   "per_pattern_recall": [
     {
       "pattern": "Over-privilege",
-      "paper_column": "OverPriv",
+      "paper_archetype": "Over-privileged",
       "recall": 0.104
     },
     {
       "pattern": "Dormant privileged accounts",
-      "paper_column": "DormantPow",
+      "paper_archetype": "Dormant powerful",
       "recall": 0.196
     },
     {
       "pattern": "Role mismatch",
-      "paper_column": "RoleMismatch",
+      "paper_archetype": "Role mismatch",
       "recall": 0.345
     },
     {
       "pattern": "Permission accumulation",
-      "paper_column": "Accumulator",
+      "paper_archetype": "Permission accumulator",
       "recall": 0.184
     },
     {
       "pattern": "Exclusive access",
-      "paper_column": "SoleAccess",
+      "paper_archetype": "Sole access",
       "recall": 0.556
     }
   ]
