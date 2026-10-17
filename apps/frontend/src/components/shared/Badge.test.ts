@@ -28,12 +28,24 @@ describe('badge dark-mode outlines', () => {
     const source = readFileSync(join(__dirname, 'Badge.tsx'), 'utf8')
     const variants = source.slice(source.indexOf('const variants = {'), source.indexOf('const sizes = {'))
     const rings = [...variants.matchAll(/dark:ring-([a-z]+(?:-[a-z]+)*?)-([a-z0-9-]+?)(?:\/(\d+))?['\s]/g)]
-    expect(rings.length).toBe(5)
+    expect(rings.length).toBe(6)
     for (const [cls, family, step, alpha] of rings) {
       const hex: string = colors[family][step]
       const a = alpha ? Number(alpha) / 100 : 1
       const ring = rgb(hex).map((c, i) => Math.round(c * a + rgb(surface)[i] * (1 - a)))
       expect(contrast(ring, rgb(surface)), cls).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('High and Medium never share a colour, in risk or severity badges', () => {
+    const source = readFileSync(join(__dirname, 'Badge.tsx'), 'utf8')
+    for (const fn of ['RiskBadge', 'SeverityBadge']) {
+      const body = source.slice(source.indexOf(`export function ${fn}`))
+      const start = body.indexOf('variantMap = {')
+      const map = body.slice(start, body.indexOf('}', start))
+      const variant = (level: string) => new RegExp(`${level}: '(\\w+)'`).exec(map)?.[1]
+      expect(variant('high'), fn).toBe('high')
+      expect(new Set(['low', 'medium', 'high', 'critical'].map(variant)).size, fn).toBe(4)
     }
   })
 })
