@@ -184,11 +184,11 @@ items below.
 
 | Phase | Items | Notes |
 |-------|-------|-------|
-| **A. Quick wins** | 23, 24, 25, 4, 2, and a PR for `fix-compare-search` | 26 and 27 are done (PRs #4, #5). 2 is M because it extends Data Quality and must run on demo orgs. |
+| **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | 26 and 27 are done (PRs #4, #5). 2 is M because it extends Data Quality and must run on demo orgs. 31-34 added on 18 Oct. |
 | **B. Client-facing** | 5, then 3 | The image pack needs the critical objects, coverage and API usage visuals, so it comes last. |
-| **C. Foundations** | 8, 21, 20 + 10 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. |
+| **C. Foundations** | 8, 21, 20 + 10, 30 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
 | **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
-| **D. Access depth** | 1 (phase 1), 7, 6 | 7 is now opt-in per org with per-object View All (no View All Data). 6 is the first user of the comparison engine. |
+| **D. Access depth** | 1 (phase 1), 7, 6 | 7 is opt-in per org with per-object View All on Account, Opportunity, Case, Contact and Lead (no View All Data). Its opt-in screen also holds Data Quality's object choice (2). 6 is the first user of the comparison engine. |
 | **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Order of 11, 12 and 13 held until Mike confirms which Config Workbook features he uses. |
 | **F. Differentiators** | 15, 16, 17, 18 | |
 | **G. Depth and scale** | 1 (phase 2), 19 (v1: downloadable ZIP), 22, 9 (v2), 28, 29 | The GitHub piece of 19 moved to the later backlog. |
@@ -203,6 +203,8 @@ items below.
 - **New permissions:** none.
 - **Privacy and demo:** unchanged; risk level is shown wherever the user is shown.
 - **Fixture:** none.
+- **Follow-up decision (18 Oct): base risk.** Being flagged feeds the risk score (the peer-deviation factor), so the risk level shown next to a rank partly repeated the flag. On Lumenvale all 8 flagged users showed High; without the flag 4 are High and 4 Medium. Wherever a risk level sits next to an anomaly rank, Newton now shows **"Base risk"**: the same noisy-OR score without the peer-deviation factor, i.e. the score the user would have if not flagged (tooltip: "Risk score calculated without the anomaly flag"). Base risk is also used by the "On high or critical-risk users" card and the compliance control, so neither counts a user just for being flagged. The risk formula itself is unchanged (see 30).
+- **Priority Actions (18 Oct):** the two anomaly-driven rules (permission set consolidation, broad edit access) no longer read the detector's stored band. Each rule takes its higher severity when the user's base risk is High or Critical, or Medium with a rank in the top half of the flagged users; otherwise its lower severity.
 - **Depends on:** nothing. **Effort: S-M** (touches several screens and exports).
 
 ### 24. Equity adds Priority Actions when there's no disparity
@@ -262,7 +264,7 @@ items below.
   - REST `/limits/recordCount` (approximate, cached) ✓
   - LastModifiedDate ✓
   - The WHERE limits for long text, encrypted and base64 fields ✓
-- **New permissions:** none beyond the optional View All Data that Data Quality already uses. Without it, counts cover only records the integration user can see, and that is stated on screen.
+- **New permissions (decided 18 Oct):** View All Data is no longer a requirement for Data Quality. The client chooses **per-object View All** for the objects being scored (default set: Account, Contact, Opportunity, Lead, Case), or View All Data if they prefer. When an object's counts are partial, the screen and exports label them "Based on records the integration user can see". The choice lives on the same opt-in screen as record access (7), and the onboarding guide lists permissions only for the features turned on. In phase A, item 2 adds the partial-count labels and drops View All Data from the guide's requirements; the opt-in screen itself arrives with 7.
 - **Privacy and demo:**
   - Needs aggregate record statistics: on at Full and Masked, opt-in at Metadata only (existing capability). Values are never stored, only counts.
   - Today Data Quality is refused on demo orgs. This item adds a fixture-backed path, so Lumenvale can demo Data Quality and critical objects without calling Salesforce.
@@ -272,6 +274,32 @@ items below.
   - three never-populated fields on Account;
   - one long-text field that can't be filtered.
 - **Depends on:** nothing (13 builds on it). **Effort: M.**
+
+### 31. Record access says when it's partial
+- **Problem:** without View All on Account and Opportunity, the sync sees only the share rows of records the integration user can see, and the Record Access tab under-reports without saying so (see 7).
+- **Approach:** at sync, record whether the integration user holds View All on each analysed object (or View All Data). When it doesn't, every record-access view (user tab, PDF, workbook) says **"Based on records the integration user can see"**. Full opt-in and per-object View All follow in 7.
+- **Salesforce sources:** the connected user's ObjectPermissions (`PermissionsViewAllRecords`) and system permission View All Data ✓ (already synced for the connection posture).
+- **New permissions:** none.
+- **Privacy and demo:** unchanged. Demo orgs read the flag from the fixture.
+- **Fixture:** Lumenvale's integration user has no View All, so the label shows.
+- **Depends on:** nothing. **Effort: S.**
+
+### 32. Owned-record counts are always 0 on live orgs (bug)
+- **Problem:** the sync skips `RowCause = 'Owner'` share rows, while the owned-records count looks only for those rows, so a live org always shows 0 owned Accounts and Opportunities. The demo path hides it because the fixture includes owner rows.
+- **Approach:** count owned records from the owner field with aggregate SOQL (`SELECT OwnerId, COUNT(Id) ... GROUP BY OwnerId`), stored per user; never from share rows. A test runs the live extraction path (mocked client) and checks the count.
+- **Salesforce sources:** aggregate SOQL on Account and Opportunity `OwnerId` ✓.
+- **New permissions:** none.
+- **Privacy and demo:** counts only; no record IDs stored.
+- **Fixture:** owner counts in `demo_live` match the share rows.
+- **Depends on:** nothing. **Effort: S.**
+
+### 33. Dark-mode outline on info badges
+- **Problem:** the blue "info" badge's outline almost disappears on the dark surface, app-wide.
+- **Approach:** raise the dark-mode ring and fill contrast for the info variant; check each badge variant against the dark surface. **Effort: XS.**
+
+### 34. Anomaly methodology a client can read
+- **Problem:** the user page's "How this was detected" cites a file path in our repository that a client can't open.
+- **Approach:** replace it with an in-app methodology explanation: peer groups, the 13 signals, the ensemble, top 2% flagging, rank, strongest reason, base risk, and the limits of the method. Linked from the user page and the Anomalies page. **Effort: S.**
 
 ### Merge `fix-compare-search`
 The compare page's search results were clipped by their card. The fix is pushed on `fix-compare-search` with no PR yet. **Effort: S** (PR, CI, merge).
@@ -376,6 +404,20 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Fixture:** none (reviews are entered in the app). Optionally, pre-seed a few demo reviews for the validation screen.
 - **Depends on:** 21 (evidence points at a snapshot). **Effort: L.**
 
+### 30. Should the anomaly flag feed the risk score?
+- **Problem:** the risk score includes a peer-deviation factor (weight 0.35) that is driven by the anomaly flag. A flagged user's risk level therefore partly restates the flag, so "rank" and "risk" aren't independent. Phase A works around it with **base risk** next to every rank (23); the formula is unchanged until this is decided.
+- **Options:**
+  1. **Keep the flag in the score and show both** overall risk and base risk everywhere a user's risk appears. No score changes; two numbers on every screen.
+  2. **Remove peer deviation from the risk score.** Risk measures impact only (privileges, sensitive data, breadth, dormancy, sole access); anomalies stay a separate signal. Simplest to explain to a client.
+  3. **Keep it at a lower weight** (e.g. 0.15) so being unusual nudges the score without moving a level on its own. Needs a rationale for the number, which is hard to defend.
+  4. **Keep it only as a tie-breaker** for sorting users within a level, never changing the level.
+- **Effect on Lumenvale** (400 users, measured 17 Oct; only the 8 flagged users change, because unflagged users have no peer-deviation points):
+  - Today (flag in score): Critical 5, High 35, Medium 197, Low 163. All 8 flagged users are High.
+  - Without the flag (options 2 and 4; also what base risk shows): Critical 5, High 31, Medium 201, Low 163. Flagged #2-#5 stay High (base 51-53); #1, #6, #7 and #8 become Medium (base 27-43).
+  - Option 3 needs a recalculation at the chosen weight before quoting numbers.
+- **Decide with:** 20 (methodology version on every score) so a change is versioned and old reports stay reproducible.
+- **Depends on:** 20. **Effort: S** to implement once decided; the decision is the work.
+
 ## Phase C2: priced roadmap
 
 ### P1 (+ P2). Priced roadmap builder with remediation playbooks
@@ -447,15 +489,16 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Problem:** record access covers Accounts and Opportunities only. It also depends on access we don't ask for. Today the sync queries `AccountShare`, `OpportunityShare` and the team tables with whatever records the integration user can see. View All Data is only "optional" in the onboarding guide, which ties it to Data Quality. So in a private-sharing org the Record Access tab under-reports **without saying so**. Separately, the sync skips `RowCause = 'Owner'` share rows while the owned-records count looks for exactly those rows, so live orgs always show 0 owned Accounts and Opportunities (bug).
 - **Decision (17 Oct):** View All Data is **not** requested: too broad for a third-party integration user, and contrary to our least-privilege position. Instead:
   - **Opt-in per org.** Record-access analysis is off by default. An admin turns it on per org on the Privacy & Data page, recording that the client agreed. The extra permissions are listed **only** when it's on.
-  - **Per-object "View All"** (the object permission, not View All Data) on exactly the objects being analysed: **Case, Contact and Lead**. View All on **Account and Opportunity** is needed too if those keep a full view. Without it they remain limited to what the user can see, and the tab will now say so. *To confirm: add Account and Opportunity to the opt-in list, or keep them partial and labelled.*
+  - **Per-object "View All"** (the object permission, not View All Data) on exactly the objects being analysed: **Account, Opportunity, Case, Contact and Lead** (Account and Opportunity confirmed 18 Oct). When it isn't granted, every record-access view says "Based on records the integration user can see"; that labelling ships early, in phase A (31).
   - **Contact controlled by parent:** when Contact's org-wide default is "Controlled by Parent", Contact access follows the parent Account. Newton reads it from the Account side (`AccountShare.ContactAccessLevel` and Account visibility), not `ContactShare`, which may be unavailable (**UNVERIFIED**; handled defensively). View All on Account is then what's needed, not on Contact.
-- **Approach:** sync `CaseShare`, `ContactShare` and `LeadShare` the same way as Account and Opportunity, with each object's org-wide default. Fix the owner-row bug: owned counts come from the owner field via aggregate counts, not share rows. The screen states what share tables **can't show** ✓ (sharing sets, `ImplicitChild` with faster recalculation, rows Salesforce stops storing). The claim is "explicit and stored shares", never "everyone with access".
+- **Approach:** sync `CaseShare`, `ContactShare` and `LeadShare` the same way as Account and Opportunity, with each object's org-wide default. The owner-row bug is fixed in phase A (32). The screen states what share tables **can't show** ✓ (sharing sets, `ImplicitChild` with faster recalculation, rows Salesforce stops storing). The claim is "explicit and stored shares", never "everyone with access".
 - **Salesforce sources:** `CaseShare` / `ContactShare` / `LeadShare` (UserOrGroupId, *AccessLevel, RowCause) ✓; reading them needs read access to the parent ✓. Whether per-object View All is assignable under the *Salesforce Integration* user licence for each object: **UNVERIFIED**, test in a sandbox.
-- **New permissions:** only when the org opts in: View All on Case, Contact and Lead (and Account and Opportunity if confirmed). The onboarding guide lists these under "only if you turn on record-access analysis".
+- **New permissions:** only when the org opts in: View All on Account, Opportunity, Case, Contact and Lead. The onboarding guide lists these under "only if you turn on record-access analysis".
+- **Opt-in screen:** one screen on the Privacy & Data page for record-level features: record-access analysis (this item) and Data Quality's scored objects (2), with the permissions each one needs listed only when it's on.
 - **Privacy and demo:** needs the Record shares capability (off at Metadata only). Opt-in sits on top of the privacy level. Record IDs are stored only as keyed hashes. Demo orgs read from the fixture, with the opt-in shown as on.
 - **Fixture:** share rows for Cases, Contacts and Leads (team, rule, manual), one user who reaches 3,000 Cases through a criteria-based sharing rule, and Contact set to "Controlled by Parent" so that path is demoed.
 - **Depends on:** nothing. **Effort: M-L** (opt-in setting, guide changes and the owner-count fix add to it).
-- **Related:** Data Quality and critical objects (2) also list View All Data as optional for full coverage. The same per-object, opt-in pattern can replace it. *To decide.*
+- **Related (decided 18 Oct):** Data Quality uses the same per-object, opt-in pattern instead of View All Data (see 2).
 
 ### 6. Profile and permission set comparison (first user of the comparison engine)
 - **Problem:** "What's different between these two profiles or sets, and who would gain or lose access if we merged them?" This underpins most cleanup quotes.
@@ -770,7 +813,8 @@ Checked in October 2026 against current documentation: API v62 to v68 developer 
 
 ## Known technical debt
 
-- Record-level access covers Account and Opportunity only (item 7).
+- Record-level access covers Account and Opportunity only (item 7), and under-reports without saying so until 31 lands.
+- The risk score includes the anomaly flag (peer deviation); base risk works around it until 30 is decided.
 - Deactivated users remain "active" in snapshots (the User query pulls
   active users only and never marks the rest inactive). Fix with 21.
 - Sync runs extractions sequentially; large orgs are slow (item 29).
