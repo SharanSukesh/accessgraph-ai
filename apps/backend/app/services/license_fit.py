@@ -306,8 +306,15 @@ class LicenseFitService:
         # -- Owner counts per object (behaviour signal) --------------
         owners_by_object: Dict[str, Dict[str, int]] = {}
         if privacy_mode.allows(org, privacy_mode.RECORD_AGGREGATES):
+            owner_ids = [u.salesforce_id for u in users]
             for obj_name in PROBED_OBJECTS:
-                counts = await client.owner_counts_by_object(obj_name)
+                # Chunked by owner so large orgs don't hit the aggregate
+                # row limit; a failed count is recorded as such, not as 0.
+                counter = getattr(client, "owner_counts_for", None)
+                counts = await counter(obj_name, owner_ids) if counter else await client.owner_counts_by_object(obj_name)
+                if counts is None:
+                    diagnostics["owner_counts"][obj_name] = "failed"
+                    continue
                 owners_by_object[obj_name] = counts
                 diagnostics["owner_counts"][obj_name] = len(counts)
 
