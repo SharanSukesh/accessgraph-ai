@@ -179,28 +179,31 @@ Item numbers match the lead's list (A1-A5) and the agreed backlog
 
 ## Build order
 
-The proposed order, with changes from the draft and why:
+Revised 17 October 2026 after review. Decisions taken are recorded in the
+items below.
 
-| Phase | Items | Change from the draft, and why |
-|-------|-------|--------------------------------|
-| **A. Quick wins** | 23, 24, 25, 4, 2, and merge `fix-compare-search` | 26 and 27 are done (PRs #4, #5). The compare-search fix is pushed but has no PR. **2 is M, not S**, because it extends Data Quality and has to run on demo orgs. Moved to the end of A. |
-| **B. Client-facing** | 5, then 3 | **3 after 5**: the image pack needs visuals for every module it shows (critical objects, coverage, API usage). Building it last avoids redoing it. |
-| **C. Foundations** | 8, 21, 20 + 10 | **21 before 20**: evidence records point at a snapshot. **10 moves up from G** and merges into 20: once findings carry a review status, recording reviewer feedback is small. It is also what makes the model credible on a consenting real org, which a consultant needs before trusting it with clients. |
-| **D. Access depth** | 1 (phase 1), 7, 6 | 6 is built as the first user of the shared comparison engine that 9 reuses. |
-| **E. Config Workbook parity** | 12, 11, 9 (v1), 13 | Unchanged. 13 depends on 2 (field population) and 8. |
-| **F. Differentiators** | 15, 16, 17, 18 + Proposal P1 | **Proposal P1 (priced roadmap builder) joins F.** It is the deliverable the positioning promises, and 15-18 feed its pricing and proof. If you want it sooner, it can follow phase C on its own. |
-| **G. Depth and scale** | 1 (phase 2), 19, 22, 9 (v2), 28, 29 | 10 moved to C. |
+| Phase | Items | Notes |
+|-------|-------|-------|
+| **A. Quick wins** | 23, 24, 25, 4, 2, and a PR for `fix-compare-search` | 26 and 27 are done (PRs #4, #5). 2 is M because it extends Data Quality and must run on demo orgs. |
+| **B. Client-facing** | 5, then 3 | The image pack needs the critical objects, coverage and API usage visuals, so it comes last. |
+| **C. Foundations** | 8, 21, 20 + 10 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. |
+| **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
+| **D. Access depth** | 1 (phase 1), 7, 6 | 7 is now opt-in per org with per-object View All (no View All Data). 6 is the first user of the comparison engine. |
+| **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Order of 11, 12 and 13 held until Mike confirms which Config Workbook features he uses. |
+| **F. Differentiators** | 15, 16, 17, 18 | |
+| **G. Depth and scale** | 1 (phase 2), 19 (v1: downloadable ZIP), 22, 9 (v2), 28, 29 | The GitHub piece of 19 moved to the later backlog. |
 
 ## Phase A: quick wins
 
-### 23. Anomaly severity bands
-- **Problem:** every top-2% user scores 0.986+ on the normalised scale, so all of them show as "critical". Severity carries no information, and clients ask why eight people are critical.
-- **Approach:** severity becomes **rank-based within the flagged set**. Proposed bands, to confirm: top 25% of flagged = critical, next 25% = high, rest = medium. Low is used only for session anomalies. The rank stays visible ("#1 of 400"). Severity keeps meaning "how unusual"; risk level still means "how much damage". If you prefer, the alternative is to drop severity for access anomalies and show rank only.
+### 23. Anomaly severity for access anomalies: replaced by rank, reason and risk
+- **Problem:** every top-2% user scored 0.986+ on the normalised scale, so all showed as "critical". Severity implies impact, which is the risk score's job; rank bands would label someone "medium" just for being 7th of 8.
+- **Decision (17 Oct):** drop severity for **access** anomalies. Each one shows **rank, strongest reason and the user's risk level** side by side, e.g. "#3 of 400 · Permission accumulation · High risk", and lists sort by rank. The Dashboard tile is renamed **"Flagged anomalies"**. Session anomalies keep their rule-based severity, because there it describes the rule that fired.
+- **Approach:** the API stops returning a severity for access anomalies (stored value kept for old rows, not shown). The Anomalies page, Dashboard, user page, CSV, Excel and PDF show rank · reason · risk level. Severity filters and counters apply to session anomalies only. The risk score's "peer deviation" factor no longer reads the anomaly severity: it uses "flagged or not" and the rank.
 - **Salesforce sources:** none (computed).
 - **New permissions:** none.
-- **Privacy and demo:** unchanged; the same at every level.
+- **Privacy and demo:** unchanged; risk level is shown wherever the user is shown.
 - **Fixture:** none.
-- **Depends on:** nothing. **Effort: S.**
+- **Depends on:** nothing. **Effort: S-M** (touches several screens and exports).
 
 ### 24. Equity adds Priority Actions when there's no disparity
 - **Problem:** on Lumenvale (equity index 1.0, disparity 0), running Equity added 20 Priority Actions. That's noise in a client deliverable.
@@ -297,21 +300,22 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Fixture:** 30 days of daily aggregates for 6 connected apps and 4 integration users. One app (a nightly ETL) takes 58% of calls, with a spike that nearly hits the limit, plus an org limit of 1,000,000 a day.
 - **Depends on:** Proposal P3 for the trend (v1 works without it, as "yesterday only"). **Effort: M.**
 
-### 3. Image pack for client presentations
-- **Problem:** consultants rebuild charts by hand in PowerPoint. They need ready-to-drop 16:9 visuals in the client's and firm's branding.
-- **Approach:** one HTML page per visual at 1920x1080 (CSS `@page`), rendered by the existing WeasyPrint pipeline to a multi-page PDF, then rasterised to PNG. A `.pptx` is built with one full-bleed image per slide, and both ship in a ZIP.
+### 3. Image pack and per-visual downloads
+- **Problem:** consultants rebuild charts by hand in PowerPoint. They need ready-to-drop visuals in the client's and firm's branding, one at a time or as a set.
+- **Approach:** one HTML page per visual at 2x resolution, rendered by the existing WeasyPrint pipeline, then rasterised with `pypdfium2`. A `.pptx` is built with `python-pptx`, one image per slide.
   - **Visuals:** health score, savings breakdown, risk distribution, top anomalies (ranked), license fit, compliance summary, critical objects, code coverage, API usage.
-  - **Branding and labels:** each image carries the two-logo letterhead. Demo orgs carry the "Demo data" label on every image. Masked orgs use aliases, and user-level visuals are left out at Metadata only.
-  - **New dependencies:**
-    - `pypdfium2` for rasterising: a self-contained wheel, no system packages. Poppler isn't in the Docker image.
-    - `python-pptx`.
+  - **Per-visual download:** a download button on each of those charts and cards in the app saves just that visual.
+  - **Image pack dialog:** tick the visuals to include, then download a ZIP, a `.pptx`, or both.
+  - **Format:** PNG or JPEG. PNG has a **transparent background** option so the image sits on the client's own template. JPEG is always opaque.
+  - **Two layouts per visual:** a **16:9 slide** (3840x2160 at 2x) with a title and a short caption, and a **tight crop** with no slide frame, for pasting into existing slides.
+  - **Logos:** optional toggles for our logo and the client's.
+  - **Labels:** masked orgs stay masked; demo orgs always carry the "Demo data" label, on every image, whatever the toggles say. User-level visuals are left out at Metadata only, and a visual whose module hasn't run is skipped with a note.
+  - **Tests:** every format (PNG, transparent PNG, JPEG, ZIP, PPTX) and both layouts: size, transparency, demo label present, masked names absent.
+- **Dependencies (approved 17 Oct):** `pypdfium2` (Apache-2.0 or BSD-3-Clause, plus PDFium's third-party notices; a self-contained wheel, no system packages) and `python-pptx` (MIT; its dependencies lxml, XlsxWriter and Pillow are BSD or MIT). Both must be confirmed in the Docker build, and the PDFium notices added to our licence notices.
 - **Salesforce sources:** none new (reads Newton's stored results).
 - **New permissions:** none.
-- **Privacy and demo:** as above. Each visual is skipped, with a note in the ZIP, when its module hasn't run.
 - **Fixture:** none beyond what 2, 4 and 5 add.
-- **Depends on:** 2, 4 and 5 for their visuals (the rest exist). **Effort: M.**
-
-## Phase C: foundations
+- **Depends on:** 2, 4 and 5 for their visuals. **Effort: L** (was M; per-visual downloads, the dialog and the two layouts add work).
 
 ### 8. Field metadata sync
 - **Problem:** several features need to know what a field is: its type, encryption, and whether it is a lookup or master-detail (ERD, documentation export, comparison, impact analysis, sensitive-data maps). Today the app shows field type and encryption as unknown.
@@ -372,6 +376,26 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Fixture:** none (reviews are entered in the app). Optionally, pre-seed a few demo reviews for the validation screen.
 - **Depends on:** 21 (evidence points at a snapshot). **Effort: L.**
 
+## Phase C2: priced roadmap
+
+### P1 (+ P2). Priced roadmap builder with remediation playbooks
+- **Problem:** the positioning promises an assessment that ends in a client-ready, priced roadmap. Today consultants build it by hand after every assessment.
+- **Decision (17 Oct):** build it right after phase C. It depends on the evidence model (20).
+- **Approach:**
+  - **Work packages:** findings are grouped into packages (e.g. "permission set consolidation", "dormant licence reclaim", "critical object cleanup"), each with its findings and evidence, dependencies and sequencing.
+  - **Effort as editable ranges** (low to high, in days), never single exact estimates. Each range starts from a firm-level **playbook** for that finding type (P2: steps, prerequisites, risks, typical range, versioned). The consultant can override it.
+  - **Inferred vs confirmed:** inferred effort (from the playbook and the finding's size) is shown separately from consultant-confirmed effort, and the deliverable shows which is which.
+  - **Configurable rate card** per firm (roles and day rates; optional per-engagement override). Prices are ranges derived from effort ranges and the rate card.
+  - **Output:** closing slides (via 3's renderer), an Excel workbook and an SOW appendix. Savings use the savings ledger (18) once it exists, and are labelled "estimated" until then.
+- **Salesforce sources:** none new.
+- **New permissions:** none.
+- **Privacy and demo:**
+  - Work packages reference findings, so they inherit their visibility (aliases when masked; counts only at Metadata only).
+  - Demo roadmaps carry the demo label.
+  - The rate card is the firm's data, not the client's.
+- **Fixture:** a demo rate card and playbooks for Lumenvale's main finding types.
+- **Depends on:** 20 (evidence and review status). **Effort: L.**
+
 ## Phase D: access depth
 
 ### 1. Page layouts and Lightning pages, plus access through Apex and Flows
@@ -419,24 +443,19 @@ The compare page's search results were clipped by their card. The fix is pushed 
   - Managed-package classes are opaque (source hidden ✓). Whether SymbolTable is returned for them is **UNVERIFIED**; shown as "managed: not analysable".
 - **Effort: L.**
 
-### 7. Record-level access for Cases, Contacts and Leads
-- **Problem:** the Record Access tab covers Accounts and Opportunities only, and says "not analyzed yet" for the rest.
-- **Approach:**
-  - Sync `CaseShare`, `ContactShare` and `LeadShare` the same way as the existing Account and Opportunity shares (owned, team, rule, manual), alongside each object's org-wide default.
-  - The screen states what the share tables **can't show** ✓:
-    - sharing sets store no share rows;
-    - with Faster Account Sharing Recalculation, `ImplicitChild` rows aren't returned for Case and Contact;
-    - Salesforce may stop storing some share rows.
-
-    So the claim is "explicit and stored shares", never "everyone with access".
-  - If Contact is "Controlled by Parent", ContactShare may be unavailable (**UNVERIFIED** in the docs). This is handled defensively and reported as "inherits from Account".
-- **Salesforce sources:**
-  - `CaseShare` / `ContactShare` / `LeadShare` (UserOrGroupId, *AccessLevel, RowCause) ✓
-  - Querying them needs read access to the parent ✓
-- **New permissions:** **View All Data** becomes required for this feature (today it's optional), because share rows are visible only for parents the user can read ✓. Without it, the tab says it's partial.
-- **Privacy and demo:** needs the Record shares capability (off at Metadata only, as today). Record IDs are stored only as keyed hashes. Demo reads from the fixture.
-- **Fixture:** share rows for Cases, Contacts and Leads, including team, rule and manual shares, with one user who can reach 3,000 Cases through a criteria-based sharing rule.
-- **Depends on:** nothing. **Effort: M.**
+### 7. Record-level access: opt-in, per-object View All, adds Cases, Contacts and Leads
+- **Problem:** record access covers Accounts and Opportunities only. It also depends on access we don't ask for. Today the sync queries `AccountShare`, `OpportunityShare` and the team tables with whatever records the integration user can see. View All Data is only "optional" in the onboarding guide, which ties it to Data Quality. So in a private-sharing org the Record Access tab under-reports **without saying so**. Separately, the sync skips `RowCause = 'Owner'` share rows while the owned-records count looks for exactly those rows, so live orgs always show 0 owned Accounts and Opportunities (bug).
+- **Decision (17 Oct):** View All Data is **not** requested: too broad for a third-party integration user, and contrary to our least-privilege position. Instead:
+  - **Opt-in per org.** Record-access analysis is off by default. An admin turns it on per org on the Privacy & Data page, recording that the client agreed. The extra permissions are listed **only** when it's on.
+  - **Per-object "View All"** (the object permission, not View All Data) on exactly the objects being analysed: **Case, Contact and Lead**. View All on **Account and Opportunity** is needed too if those keep a full view. Without it they remain limited to what the user can see, and the tab will now say so. *To confirm: add Account and Opportunity to the opt-in list, or keep them partial and labelled.*
+  - **Contact controlled by parent:** when Contact's org-wide default is "Controlled by Parent", Contact access follows the parent Account. Newton reads it from the Account side (`AccountShare.ContactAccessLevel` and Account visibility), not `ContactShare`, which may be unavailable (**UNVERIFIED**; handled defensively). View All on Account is then what's needed, not on Contact.
+- **Approach:** sync `CaseShare`, `ContactShare` and `LeadShare` the same way as Account and Opportunity, with each object's org-wide default. Fix the owner-row bug: owned counts come from the owner field via aggregate counts, not share rows. The screen states what share tables **can't show** ✓ (sharing sets, `ImplicitChild` with faster recalculation, rows Salesforce stops storing). The claim is "explicit and stored shares", never "everyone with access".
+- **Salesforce sources:** `CaseShare` / `ContactShare` / `LeadShare` (UserOrGroupId, *AccessLevel, RowCause) ✓; reading them needs read access to the parent ✓. Whether per-object View All is assignable under the *Salesforce Integration* user licence for each object: **UNVERIFIED**, test in a sandbox.
+- **New permissions:** only when the org opts in: View All on Case, Contact and Lead (and Account and Opportunity if confirmed). The onboarding guide lists these under "only if you turn on record-access analysis".
+- **Privacy and demo:** needs the Record shares capability (off at Metadata only). Opt-in sits on top of the privacy level. Record IDs are stored only as keyed hashes. Demo orgs read from the fixture, with the opt-in shown as on.
+- **Fixture:** share rows for Cases, Contacts and Leads (team, rule, manual), one user who reaches 3,000 Cases through a criteria-based sharing rule, and Contact set to "Controlled by Parent" so that path is demoed.
+- **Depends on:** nothing. **Effort: M-L** (opt-in setting, guide changes and the owner-count fix add to it).
+- **Related:** Data Quality and critical objects (2) also list View All Data as optional for full coverage. The same per-object, opt-in pattern can replace it. *To decide.*
 
 ### 6. Profile and permission set comparison (first user of the comparison engine)
 - **Problem:** "What's different between these two profiles or sets, and who would gain or lose access if we merged them?" This underpins most cleanup quotes.
@@ -459,7 +478,26 @@ The compare page's search results were clipped by their card. The fix is pushed 
 
 ## Phase E: Config Workbook parity
 
-Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Salesforce product ✓. Its vendor documents an Excel documentation export, object ERDs, impact analysis and a dependency explorer, an audit trail explorer with risk scoring, and org and profile comparators. **Our parity bar is what Mike uses day to day, not the full vendor list.** The list of features he uses is **UNVERIFIED** (please confirm).
+Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Salesforce product ✓. Its vendor documents an Excel documentation export, object ERDs, impact analysis and a dependency explorer, an audit trail explorer with risk scoring, and org and profile comparators. **Our parity bar is what Mike uses day to day, not the full vendor list.** Sharan is confirming with Mike which features he uses; until then **9 (v1) goes first** in this phase and the order of 11, 12 and 13 is held.
+
+### 9 (v1). Org-to-org comparison
+- **Problem:** before a release, a merge or a sandbox refresh, consultants need to know what differs between two orgs, or within one org between two dates, and **what that difference means**: who gains or loses access, and what depends on it.
+- **Approach:** reuse the comparison engine (6) on two snapshots (21): production vs sandbox, any two orgs, or the same org on different dates.
+  - **v1 compares:** permissions and assignments, objects and fields, automations, packages and integrations, all from data we already sync.
+  - **Matching:** by API name and namespace, not by Salesforce ID. IDs differ between orgs; sandboxes keep them after a refresh but drift afterwards. An **explicit mapping screen** handles renames and namespace changes, and its decisions are saved per org pair.
+  - **Consequences, not just differences:**
+    - users who gain or lose object or field access (via effective access on each side);
+    - automations and integrations that depend on a changed object or field (via 13's dependency data);
+    - **expected vs unexpected**: a baseline lists approved differences, e.g. sandbox email deliverability off, and everything else is drift.
+  - **Baselines:** approved and stored per org (shared with 17).
+- **Salesforce sources:** none new for v1.
+- **New permissions:** none. Each org uses its own connection.
+- **Privacy and demo:**
+  - Comparing two orgs with different privacy levels uses the **stricter** level for the whole comparison.
+  - User-level consequences are hidden at Metadata only; counts remain.
+  - Demo: compare Lumenvale's two fixture snapshots ("kickoff" and "today") from 21, plus a "Lumenvale UAT" sandbox fixture.
+- **Fixture:** a small "Lumenvale UAT" sandbox fixture with 20 planted differences: renamed field, extra permission set, deactivated flow, a different package version. One namespace difference needs mapping.
+- **Depends on:** 21, 6, 8; 13 for dependency consequences. **Effort: XL.**
 
 ### 12. ERDs from object relationships
 - **Problem:** consultants draw data-model diagrams by hand for discovery and design.
@@ -491,25 +529,6 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Privacy and demo:** configuration only, so it works at every level. Validation messages and formulas can contain client text but are configuration, not personal data. Demo uses the fixture.
 - **Fixture:** about 25 validation rules with formulas, picklists with record-type-specific values, and the flows and classes from 1.
 - **Depends on:** 8, 1. **Effort: M.**
-
-### 9 (v1). Org-to-org comparison
-- **Problem:** before a release, a merge or a sandbox refresh, consultants need to know what differs between two orgs, or within one org between two dates, and **what that difference means**: who gains or loses access, and what depends on it.
-- **Approach:** reuse the comparison engine (6) on two snapshots (21): production vs sandbox, any two orgs, or the same org on different dates.
-  - **v1 compares:** permissions and assignments, objects and fields, automations, packages and integrations, all from data we already sync.
-  - **Matching:** by API name and namespace, not by Salesforce ID. IDs differ between orgs; sandboxes keep them after a refresh but drift afterwards. An **explicit mapping screen** handles renames and namespace changes, and its decisions are saved per org pair.
-  - **Consequences, not just differences:**
-    - users who gain or lose object or field access (via effective access on each side);
-    - automations and integrations that depend on a changed object or field (via 13's dependency data);
-    - **expected vs unexpected**: a baseline lists approved differences, e.g. sandbox email deliverability off, and everything else is drift.
-  - **Baselines:** approved and stored per org (shared with 17).
-- **Salesforce sources:** none new for v1.
-- **New permissions:** none. Each org uses its own connection.
-- **Privacy and demo:**
-  - Comparing two orgs with different privacy levels uses the **stricter** level for the whole comparison.
-  - User-level consequences are hidden at Metadata only; counts remain.
-  - Demo: compare Lumenvale's two fixture snapshots ("kickoff" and "today") from 21, plus a "Lumenvale UAT" sandbox fixture.
-- **Fixture:** a small "Lumenvale UAT" sandbox fixture with 20 planted differences: renamed field, extra permission set, deactivated flow, a different package version. One namespace difference needs mapping.
-- **Depends on:** 21, 6, 8; 13 for dependency consequences. **Effort: XL.**
 
 ### 13. Impact analysis for cleanup
 - **Problem:** "Can we delete this field?" is a frequent, billable question, and the wrong answer breaks production.
@@ -611,8 +630,6 @@ These four share one **access-delta engine** built on snapshots (21) and effecti
 - **Fixture:** renewal dates per SKU, a seasonal pattern (support seats peaking in Q4) and a reassignment case.
 - **Depends on:** 25; 21 for realised savings. **Effort: L.**
 
-### Proposal P1 joins this phase: priced roadmap builder (see Proposals).
-
 ## Phase G: depth and scale
 
 ### 1 (phase 2). Apex and Flow system-context reach
@@ -620,16 +637,19 @@ See item 1 above. **Effort: L.**
 
 ### 19. Remediation bundles
 - **Problem:** approved fixes are re-keyed by hand into the client's release process.
-- **Approach:** for fixes approved in 16 or 17, generate permission-set metadata and a `package.xml` / `destructiveChanges.xml`.
-  - Start with **permission set changes only**.
-  - Optionally open a **draft pull request** in the client's repository.
-  - Still behind our approval model: admin-only, recorded consent, write-back setting.
-  - Newton never deploys to Salesforce.
-- **Salesforce sources:** Metadata API formats for PermissionSet and package manifests (documented formats; generation only, no API call).
-- **New permissions:** none in Salesforce. A **GitHub app or token scoped to the client's repo** is a new integration. It needs client consent, and it's covered in the security review pack (28).
-- **Privacy and demo:** configuration only. Demo bundles are labelled demo, and PRs are disabled on demo orgs.
+- **Decision (17 Oct):** version 1 is a **downloadable ZIP**, with no GitHub integration.
+- **Approach (v1):** for fixes approved in 16 or 17, starting with **permission set changes only**, the ZIP contains:
+  - the deployment manifest (`package.xml`, and `destructiveChanges.xml` where needed);
+  - the metadata changes;
+  - a README with steps, prerequisites (e.g. permission set licences), a rollback note per change, and the before/after access delta from 15.
+
+  It stays behind our approval model (admin-only, recorded consent), and Newton never deploys to Salesforce.
+- **Salesforce sources:** Metadata API file formats for PermissionSet and package manifests (generation only, no API call).
+- **New permissions:** none.
+- **Privacy and demo:** configuration only. Demo bundles carry the demo label in the README and the file name.
 - **Fixture:** none beyond 16.
-- **Depends on:** 16, 17. **Effort: L.**
+- **Depends on:** 16, 17. **Effort: M.**
+- **Later (backlog):** an opt-in GitHub App, see Phase H.
 
 ### 22. Anomaly engine
 - **Problem:** consultants need anomalies that hold up in front of a client.
@@ -658,6 +678,7 @@ Extends 9 using 1 and 11's metadata. **Effort: L.**
   - subprocessors;
   - encryption;
   - a **SOC 2 readiness checklist** stating honestly what's in place and what isn't. **We don't claim SOC 2 compliance.**
+  - future, optional integrations and their controls, starting with the GitHub App for remediation bundles (Phase H).
 - **Effort: M.** Depends on P1 and P2 security items for its content.
 
 ### 29. Large-org sync performance and engagement roles
@@ -672,7 +693,8 @@ Extends 9 using 1 and 11's metadata. **Effort: L.**
 | Item | Approach | Effort |
 |------|----------|--------|
 | Engagement workspace | Comments on findings, evidence requests to the client, sign-off, and versioned deliverables, on top of 20. | L |
-| Finding-to-scope builder | **Promoted to Proposal P1.** | — |
+| Finding-to-scope builder | **Promoted to Proposal P1** (now phase C2). | — |
+| GitHub App for remediation bundles | Opt-in per client, scoped to **one repository**; opens **draft pull requests only**, never pushes to the default branch; short-lived installation tokens, never stored in plain text; listed in the security review pack (28) as a future, optional integration. | M |
 | Configurable policy packs | Org-specific rules (e.g. "no Modify All Data outside IT") evaluated on each snapshot, versioned per engagement. | M |
 | Access review campaigns | Managers attest to their team's access in Newton. Evidence exports for auditors (old roadmap item 4). | L |
 | Conflicting-permission checks | Separation-of-duties pairs (e.g. Modify All Data + Author Apex), mapped into SOX and SOC 2 indicators (old item 2). | M |
@@ -707,8 +729,8 @@ Extends 9 using 1 and 11's metadata. **Effort: L.**
 
 | # | Feature | Consulting value | Effort |
 |---|---------|------------------|--------|
-| **P1** | **Priced roadmap builder** (promoted from "finding-to-scope builder"). Group findings into work packages (e.g. "permission set consolidation", "dormant licence reclaim"). Each package gets an effort range from a firm-level playbook (P2), a price from the firm's rate card, dependencies and sequencing. Export as the closing slides and an SOW appendix. | It's the deliverable the positioning promises: the assessment ends in priced, scoped paid work. Today it's built by hand after every assessment. | L |
-| **P2** | **Remediation playbooks per finding type**: steps, typical effort range, prerequisites and risks, maintained by the firm and versioned. | Makes P1's pricing consistent across consultants, and turns findings into repeatable delivery. | M |
+| **P1** | **Priced roadmap builder** (promoted from "finding-to-scope builder"; **accepted, now phase C2**). Group findings into work packages (e.g. "permission set consolidation", "dormant licence reclaim"). Each package gets an effort range from a firm-level playbook (P2), a price from the firm's rate card, dependencies and sequencing. Export as the closing slides and an SOW appendix. | It's the deliverable the positioning promises: the assessment ends in priced, scoped paid work. Today it's built by hand after every assessment. | L |
+| **P2** | **Remediation playbooks per finding type** (**accepted, built with P1**): steps, typical effort range, prerequisites and risks, maintained by the firm and versioned. | Makes P1's pricing consistent across consultants, and turns findings into repeatable delivery. | M |
 | **P3** | **Scheduled daily collector ("pulse")** for sources with short retention: API Total Usage (1 day ✓), login history, the Setup Audit Trail (180 days ✓). Runs with client consent during the engagement and stops when it closes. | Trends for API usage and seasonality become possible. The old "ongoing monitoring" item becomes a paid retainer. | M |
 | **P4** | **Salesforce Health Check import**: the native security-settings score and risks. Candidate sources: Tooling `SecurityHealthCheck` / `SecurityHealthCheckRisks`, UNVERIFIED. Shown beside our access findings. | One report covers settings (Salesforce's view) and access (ours); clients already know the Health Check score (old item 7). | S-M |
 | **P5** | **Target access model designer**: cluster users by actual access and role into personas, propose permission set groups per persona, and show the delta (15) and licence impact (18). | The most valuable design deliverable in access cleanups; today it's done in spreadsheets over weeks. | L |
