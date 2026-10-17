@@ -15,10 +15,12 @@ import { BASE_RISK_TOOLTIP } from '@/components/shared/Badge'
 import {
   ACCESS_SIGNALS,
   ANOMALY_TYPES,
+  BENCHMARK,
   FLAGGED_SHARE,
   LIMITS,
   SESSION_RULES,
   flaggedCount,
+  pct,
 } from '@/lib/anomalyMethodology'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -36,7 +38,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function AnomalyMethodologyPage() {
   const { orgId } = useParams() as { orgId: string }
-  const pct = Math.round(FLAGGED_SHARE * 100)
+  const flaggedPct = Math.round(FLAGGED_SHARE * 100)
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -97,7 +99,7 @@ export default function AnomalyMethodologyPage() {
 
       <Section title="Who is flagged, and what the rank means">
         <p>
-          The top {pct}% of active users by anomaly score are flagged, and at least one user. In an org of 400 active
+          The top {flaggedPct}% of active users by anomaly score are flagged, and at least one user. In an org of 400 active
           users that is {flaggedCount(400)}. Rank #1 is the most unusual user; &ldquo;#3 of 400&rdquo; means third
           most unusual of the 400 users scored. Users with the same score are ordered by Salesforce user ID.
         </p>
@@ -142,6 +144,49 @@ export default function AnomalyMethodologyPage() {
             <li key={r}>{r}</li>
           ))}
         </ul>
+      </Section>
+
+      <Section title="How well it works">
+        <p>
+          The method was tested on {BENCHMARK.synthetic_orgs} synthetic Salesforce orgs with planted problem users.
+          This table shows the share of each planted pattern the detector flagged (its recall):
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full max-w-md text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">
+                <th className="py-1 pr-4 font-medium">Planted pattern</th>
+                <th className="py-1 text-right font-medium">Found</th>
+              </tr>
+            </thead>
+            <tbody>
+              {BENCHMARK.per_pattern_recall.map((p) => (
+                <tr key={p.paper_column} className="border-t border-grove-border dark:border-grove-border-dk">
+                  <td className="py-1 pr-4">{p.pattern}</td>
+                  <td className="v2-num py-1 text-right">{pct(p.recall)}%</td>
+                </tr>
+              ))}
+              <tr className="border-t border-grove-border font-semibold dark:border-grove-border-dk">
+                <td className="py-1 pr-4">Average across the five</td>
+                <td className="v2-num py-1 text-right">{pct(BENCHMARK.mean_recall)}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          So on its own the detector misses most planted problems, and some patterns more than others. It is
+          still useful because it narrows a review of hundreds of users to a short ranked list, and it is not the
+          only check: the risk score separately catches much of what it misses, such as dormant privileged
+          accounts and over-privileged users, from privileged permissions, sensitive data and inactivity.
+        </p>
+        <p>
+          These are results on synthetic data. How often a flag proves useful in real client orgs (precision) will
+          be measured in a pilot, with reviewers marking each flag useful or not.
+        </p>
+        <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
+          Source: Newton&apos;s anomaly-detection paper, accepted at {BENCHMARK.venue} (per-pattern recall of the
+          production detector).
+        </p>
       </Section>
 
       <Section title="Limits">

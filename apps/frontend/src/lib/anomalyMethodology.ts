@@ -5,6 +5,17 @@
  * risk_scoring.py (base risk).
  */
 
+import benchmark from './anomalyBenchmark.json'
+
+/** Benchmark figures extracted from the paper text (never retyped); see
+ * research/paper_bundle/extract_benchmark_figures.py. */
+export const BENCHMARK = benchmark
+
+/** 0.277 -> 28 */
+export function pct(share: number): number {
+  return Math.round(share * 100)
+}
+
 /** Share of active users flagged as access anomalies (DEFAULT_ANOMALY_FRACTION). */
 export const FLAGGED_SHARE = 0.02
 

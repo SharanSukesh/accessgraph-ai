@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCESS_SIGNALS, ANOMALY_TYPES, LIMITS, SESSION_RULES, flaggedCount } from './anomalyMethodology'
+import { ACCESS_SIGNALS, ANOMALY_TYPES, BENCHMARK, LIMITS, SESSION_RULES, flaggedCount, pct } from './anomalyMethodology'
 import { ANOMALY_TYPE_FILTERS, anomalyTypeLabel } from './anomalyTypes'
 
 describe('anomaly methodology', () => {
@@ -22,5 +22,13 @@ describe('anomaly methodology', () => {
   it('points at nothing a client cannot open', () => {
     const text = JSON.stringify([ACCESS_SIGNALS, ANOMALY_TYPES, SESSION_RULES, LIMITS])
     expect(text).not.toMatch(/\.md\b|research\/|\.py\b|github/i)
+  })
+
+  it('reads the benchmark from the paper extraction', () => {
+    expect(BENCHMARK.synthetic_orgs).toBe(150)
+    expect(pct(BENCHMARK.mean_recall)).toBe(28)
+    const over = BENCHMARK.per_pattern_recall.find((p) => p.paper_column === 'OverPriv')
+    expect(over && pct(over.recall)).toBe(10)
+    expect(BENCHMARK.venue).toBe('IEEE TPS 2026')
   })
 })
