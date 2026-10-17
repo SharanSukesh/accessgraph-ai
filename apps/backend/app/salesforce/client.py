@@ -197,6 +197,67 @@ class SalesforceAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def approximate_record_counts(self, names: List[str]) -> Dict[str, int]:
+        """GET /limits/recordCount: Salesforce's cached, approximate record
+        count per object (cheap; used to decide when to sample). Empty on
+        failure."""
+        if not names:
+            return {}
+        url = f"{self.base_url}/limits/recordCount"
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=self._get_headers(),
+                                            params={"sObjects": ",".join(names)})
+                response.raise_for_status()
+                return {r["name"]: int(r.get("count") or 0) for r in response.json().get("sObjects", []) if r.get("name")}
+        except Exception as e:  # noqa: BLE001
+            logger.info("recordCount failed: %s", e)
+            return {}
+
+    async def count_modified_before(self, object_name: str, cutoff_iso: str) -> Optional[int]:
+        """Records last modified before the cutoff (exact COUNT()). None on failure."""
+        try:
+            resp = await self.query(f"SELECT COUNT() FROM {object_name} WHERE LastModifiedDate < {cutoff_iso}")
+            return int(resp.totalSize or 0)
+        except Exception as e:  # noqa: BLE001
+            logger.info("stale COUNT() failed for %s: %s", object_name, e)
+            return None
+
+    async def bounded_populated_counts(
+        self, object_name: str, field_names: List[str], sample_size: int, page_size: int = 2000,
+    ) -> Optional[Dict[str, int]]:
+        """Populated count per field over the first sample_size records in
+        Id order, for objects too large to count exactly.
+
+        Reads only record Ids (to find where the sample ends; kept in memory,
+        never stored), then runs one aggregate query bounded by that Id:
+            SELECT COUNT(Id) t, COUNT(f1) f_f1 ... FROM X WHERE Id <= 'last'
+        No field values are read. Returns {"__sampled__": n, field: count},
+        or None on failure."""
+        if not field_names or sample_size <= 0:
+            return None
+        seen, last_id = 0, None
+        try:
+            while seen < sample_size:
+                where = f" WHERE Id > '{last_id}'" if last_id else ""
+                limit = min(page_size, sample_size - seen)
+                rows = (await self.query(f"SELECT Id FROM {object_name}{where} ORDER BY Id LIMIT {limit}")).records or []
+                if not rows:
+                    break
+                seen += len(rows)
+                last_id = rows[-1].get("Id")
+                if len(rows) < limit or not last_id:
+                    break
+            if not seen or not last_id:
+                return None
+            aliases = ", ".join(f"COUNT({f}) f_{f}" for f in field_names)
+            row = ((await self.query(
+                f"SELECT COUNT(Id) t, {aliases} FROM {object_name} WHERE Id <= '{last_id}'")).records or [{}])[0]
+        except Exception as e:  # noqa: BLE001
+            logger.info("bounded_populated_counts failed for %s: %s", object_name, e)
+            return None
+        return {"__sampled__": int(row.get("t") or seen), **{f: int(row.get(f"f_{f}") or 0) for f in field_names}}
+
     async def list_all_sobjects(self) -> List[Dict[str, Any]]:
         """GET /services/data/vXX.0/sobjects/ — global describe.
 

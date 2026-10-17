@@ -64,3 +64,86 @@ class DemoSalesforceClient:
             logger.debug("demo client: %s has no demo data", name)
             return []
         return _no_data
+
+
+class DemoDataQualityClient:
+    """Serves Data Quality's reads for a demo org from the fixture's
+    demo_live.data_quality section: object list, describe, counts,
+    populated counts per field, last-modified ages and duplicate cluster
+    sizes. Read-only, never reaches the network, and answers only the
+    calls Data Quality makes.
+
+    Ages are stored as days before the fixture's as_of date and age with
+    the calendar, so a staleness cutoff behaves as it would on a live org.
+    """
+
+    instance_url = "https://demo.invalid"
+
+    def __init__(self, data: Dict[str, Any]):
+        from datetime import date
+        self._objects = {o["name"]: o for o in (data or {}).get("objects", [])}
+        as_of = (data or {}).get("as_of")
+        self._as_of = date.fromisoformat(as_of) if as_of else date.today()
+
+    def _obj(self, name: str) -> Dict[str, Any]:
+        return self._objects.get(name) or {}
+
+    async def list_all_sobjects(self) -> List[Dict[str, Any]]:
+        return [{"name": o["name"], "label": o.get("label") or o["name"], "custom": bool(o.get("custom")),
+                 "queryable": True} for o in self._objects.values()]
+
+    async def describe_object(self, name: str) -> Dict[str, Any]:
+        o = self._obj(name)
+        if not o:
+            raise KeyError(name)
+        base = {"calculated": False, "autoNumber": False, "encrypted": False, "createable": True,
+                "nillable": True, "custom": False, "aggregatable": True, "groupable": True}
+        fields = [{**base, **{k: v for k, v in f.items() if k != "populated"}} for f in o.get("fields", [])]
+        fields.append({**base, "name": "LastModifiedDate", "type": "datetime", "createable": False})
+        return {"name": name, "label": o.get("label"), "fields": fields}
+
+    async def approximate_record_counts(self, names: List[str]) -> Dict[str, int]:
+        return {n: int(self._obj(n).get("approx_count", self._obj(n).get("record_count", 0))) for n in names if self._obj(n)}
+
+    async def count_sobject(self, name: str) -> Optional[int]:
+        o = self._obj(name)
+        return int(o["record_count"]) if o else None
+
+    def _populated(self, name: str) -> Dict[str, int]:
+        return {f["name"]: int(f.get("populated", 0)) for f in self._obj(name).get("fields", [])}
+
+    async def aggregate_field_populated_counts(self, name: str, field_names: List[str]) -> Optional[Dict[str, int]]:
+        o = self._obj(name)
+        if not o:
+            return None
+        pop = self._populated(name)
+        return {"__total__": int(o["record_count"]), **{f: pop.get(f, 0) for f in field_names}}
+
+    async def bounded_populated_counts(self, name: str, field_names: List[str], sample_size: int,
+                                       page_size: int = 2000) -> Optional[Dict[str, int]]:
+        o = self._obj(name)
+        if not o:
+            return None
+        total = int(o["record_count"])
+        n = min(sample_size, total)
+        pop = self._populated(name)
+        return {"__sampled__": n, **{f: round(pop.get(f, 0) / total * n) if total else 0 for f in field_names}}
+
+    async def aggregate_duplicate_cluster_sizes(self, name: str, key_field: str, limit: int = 2000) -> Optional[List[int]]:
+        return sorted(self._obj(name).get("duplicate_clusters", []), reverse=True)[:limit]
+
+    async def count_modified_before(self, name: str, cutoff_iso: str) -> Optional[int]:
+        from datetime import date, datetime
+        o = self._obj(name)
+        if not o:
+            return None
+        cutoff = datetime.fromisoformat(cutoff_iso.replace("Z", "+00:00")).date()
+        elapsed = (date.today() - self._as_of).days
+        cutoff_age = (date.today() - cutoff).days
+        return sum(int(count) for age, count in o.get("age_buckets", []) if age + elapsed > cutoff_age)
+
+    async def extract_duplicate_rules(self) -> List[Dict[str, Any]]:
+        return []
+
+    async def aggregate_duplicate_record_sets_by_rule(self) -> Dict[str, int]:
+        return {}

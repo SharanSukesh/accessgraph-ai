@@ -55,6 +55,12 @@ class ObjectScoreResponse(BaseModel):
     # Only surface evidence on the detail endpoint — the list endpoint
     # trims it out to keep the payload tight.
     evidence: Optional[Dict[str, Any]] = None
+    # Critical-object flags (stale / mostly_empty / never_populated), each
+    # with a reason; plus the caveats that apply to this object's counts.
+    critical_flags: List[Dict[str, Any]] = []
+    coverage: Optional[str] = None
+    coverage_label: Optional[str] = None
+    estimate_label: Optional[str] = None
 
     @classmethod
     def from_orm(
@@ -75,6 +81,10 @@ class ObjectScoreResponse(BaseModel):
             duplicate_clusters=row.duplicate_clusters,
             stale_record_count=row.stale_record_count,
             evidence=(row.evidence or {}) if include_evidence else None,
+            critical_flags=((row.evidence or {}).get("critical") or {}).get("flags") or [],
+            coverage=(row.evidence or {}).get("coverage"),
+            coverage_label=(row.evidence or {}).get("coverage_label"),
+            estimate_label=(row.evidence or {}).get("estimate_label"),
         )
 
 
@@ -151,6 +161,42 @@ async def _scores_for_run(
 
 
 # ---------------------------------------------------------------- endpoints
+
+
+class CriticalObjectSettingsBody(BaseModel):
+    stale_days: Optional[int] = None
+    stale_share_pct: Optional[float] = None
+    min_fill_pct: Optional[float] = None
+    large_object_records: Optional[int] = None
+    sample_size: Optional[int] = None
+
+
+@router.get("/orgs/{org_id}/data-quality/settings")
+async def get_critical_object_settings(
+    org_id: str,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> Dict[str, Any]:
+    """Critical-object thresholds for this org (defaults when unset)."""
+    from app.services.critical_objects import CriticalObjectSettings, load_settings
+    return {"settings": (await load_settings(db, org_id)).to_dict(),
+            "defaults": CriticalObjectSettings().to_dict(),
+            "limits": {k: list(v) for k, v in CriticalObjectSettings.LIMITS.items()}}
+
+
+@router.put("/orgs/{org_id}/data-quality/settings")
+async def put_critical_object_settings(
+    org_id: str,
+    body: CriticalObjectSettingsBody,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> Dict[str, Any]:
+    """Save thresholds (values are clamped to their limits). They apply to
+    the next Data Quality run and are stored with it."""
+    from app.services.critical_objects import load_settings, save_settings
+    current = (await load_settings(db, org_id)).to_dict()
+    saved = await save_settings(db, org_id, {**current, **body.model_dump(exclude_none=True)})
+    return {"settings": saved.to_dict()}
 
 
 @router.post(

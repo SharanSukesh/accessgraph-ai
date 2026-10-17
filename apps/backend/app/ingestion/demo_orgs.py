@@ -94,6 +94,19 @@ async def demo_client_for(db: AsyncSession, org_id: str) -> Optional[DemoSalesfo
     return DemoSalesforceClient(load_fixture(fixture_key(org)).get("demo_live", {}))
 
 
+async def demo_data_quality_client(db: AsyncSession, org_id: str):
+    """For a demo org, a client serving the fixture's Data Quality data
+    (demo_live.data_quality); None for a real org."""
+    org = await db.get(Organization, org_id)
+    if org is None or not org.is_demo:
+        return None
+    from app.salesforce.demo_client import DemoDataQualityClient
+    live = load_fixture(fixture_key(org)).get("demo_live", {})
+    client = DemoDataQualityClient(live.get("data_quality", {}))
+    client.record_visibility = live.get("record_coverage", {"checked": False})
+    return client
+
+
 async def ensure_live_org(db: AsyncSession, org_id: str, module: str) -> None:
     """Refuse a demo org for modules that need a live Salesforce connection."""
     org = await db.get(Organization, org_id)

@@ -47,9 +47,20 @@ class FakeClient:
         self.queries.append(soql)
         return SimpleNamespace(totalSize=0, records=[])
 
+    async def count_modified_before(self, name, cutoff_iso):
+        self.queries.append(f"SELECT COUNT() FROM {name} WHERE LastModifiedDate < {cutoff_iso}")
+        return 0
+
+    async def bounded_populated_counts(self, name, field_names, sample_size, page_size=2000):
+        return {"__sampled__": min(sample_size, self.total), **{f: 0 for f in field_names}}
+
 
 def _service():
-    return DataQualityService.__new__(DataQualityService)
+    from app.services.critical_objects import CriticalObjectSettings
+
+    svc = DataQualityService.__new__(DataQualityService)
+    svc.settings = CriticalObjectSettings()
+    return svc
 
 
 @pytest.mark.asyncio

@@ -18,6 +18,7 @@ import {
   Clock,
   Info,
   ChevronRight,
+  Database,
   Rocket,
   ShieldAlert,
   Scale,
@@ -384,6 +385,11 @@ export default function RecommendationsPage() {
                                   <Badge variant="info" size="sm">
                                     <Scale className="h-3 w-3 mr-1 inline" />
                                     Equity
+                                  </Badge>
+                                ) : rec.rec_type === 'data_cleanup' ? (
+                                  <Badge variant="warning" size="sm" title="From Data Quality">
+                                    <Database className="h-3 w-3 mr-1 inline" />
+                                    Data quality
                                   </Badge>
                                 ) : rec.rec_type === 'deployment_readiness' ? (
                                   <Badge variant="warning" size="sm" title="From the Health Report">

@@ -527,8 +527,13 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
               <span className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">/ 100</span>
             </div>
             <p className="mt-2 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-              {score.record_count.toLocaleString()} records scanned (aggregate SOQL, no record content read)
+              {score.estimate_label
+                ? `${score.estimate_label}: counted with aggregate queries over the first records by Id; no record content read`
+                : `${score.record_count.toLocaleString()} records counted (aggregate SOQL, no record content read)`}
             </p>
+            {score.coverage_label && (
+              <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">{score.coverage_label}</p>
+            )}
           </div>
 
           {/* Components */}
@@ -568,6 +573,31 @@ function DataQualityCard({ score }: { score: ObjectScore }) {
             />
           </div>
         </div>
+
+        {(score.critical_flags ?? []).length > 0 && (
+          <div className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">Critical object</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm text-amber-900 dark:text-amber-200">
+              {(score.critical_flags ?? []).map((f) => (
+                <li key={f.code}>{f.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {(score.evidence?.text_fields ?? []).length > 0 && (
+          <div className="mt-4 text-xs text-grove-ink/70 dark:text-grove-ink-dk/70">
+            <p className="font-semibold text-grove-ink/85 dark:text-grove-ink-dk/85">Long and rich text fields</p>
+            <ul className="mt-1 space-y-0.5">
+              {(score.evidence?.text_fields ?? []).map((t) => (
+                <li key={t.field}>
+                  <span className="font-mono">{t.field}</span>:{' '}
+                  {t.populated_pct == null ? t.label : `${t.populated_pct}% populated (${t.label})`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Evidence — 3 columns showing top offenders per component. */}
         {(score.evidence?.gap_fields?.length ||
