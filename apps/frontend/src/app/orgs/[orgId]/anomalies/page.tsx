@@ -6,6 +6,7 @@
  */
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { AlertTriangle, Filter, Search, User, Calendar, Info, Download } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
@@ -529,10 +530,16 @@ function AnomaliesContent() {
                   <p className="font-medium mb-1">About Anomalies</p>
                   <p className="text-xs">
                     Access anomalies are the top 2% of users whose access stands out most from
-                    their peers. Rank says how unusual; base risk (the risk score calculated without
-                    the anomaly flag) says how much damage the access could do. Session anomalies come from sign-in rules and
-                    keep a severity.
+                    the rest of the org. Rank says how unusual; base risk (the risk score calculated
+                    without the anomaly flag) says how much damage the access could do. Session
+                    anomalies come from sign-in rules and keep a severity.
                   </p>
+                  <Link
+                    href={`/orgs/${orgId}/anomalies/methodology`}
+                    className="mt-2 inline-block text-xs font-semibold underline underline-offset-2"
+                  >
+                    How anomalies are detected
+                  </Link>
                 </div>
               </div>
             </CardContent>
