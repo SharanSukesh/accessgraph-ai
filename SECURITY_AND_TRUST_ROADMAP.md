@@ -213,7 +213,7 @@ pass 356 backend and 48 frontend tests):
 | 10 | #16 | `fix/info-badge-dark` | 33, plus distinct High and Medium badge colours |
 | 11 | #17 | `feat/health-score-cap` | each family of findings can lower the health score by at most 20 (decided 20 Oct) |
 | 12 | #18 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
-| 13 | this roadmap | `roadmap-v2` | this file and the onboarding-guide pointer in DEMO_NOTES.md |
+| 13 | this roadmap | `roadmap-v2` | this file only |
 
 Expected conflicts are small: `DEMO_NOTES.md` backlog lines (each branch
 removes the item it fixed), two tests appended at the same place in
