@@ -10,7 +10,7 @@ instead of silently under-reporting.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,8 +22,12 @@ PARTIAL_LABEL = "Based on records the integration user can see"
 _USER_ID = re.compile(r"005[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?")
 
 
-async def check_record_visibility(client: Any, user_id: Optional[str]) -> Dict[str, Any]:
-    """Whether the connected user can see every Account and Opportunity.
+async def check_record_visibility(
+    client: Any, user_id: Optional[str], objects: Sequence[str] = RECORD_OBJECTS,
+) -> Dict[str, Any]:
+    """Whether the connected user can see every record of each object
+    (Account and Opportunity for record access; Data Quality passes the
+    objects it scores).
 
     Reads the user's permission set assignments (the profile's own
     permission set included) for View All Data, and their object
@@ -32,7 +36,8 @@ async def check_record_visibility(client: Any, user_id: Optional[str]) -> Dict[s
     """
     if not user_id or not _USER_ID.fullmatch(user_id):
         return {"checked": False}
-    objects = ", ".join(f"'{o}'" for o in RECORD_OBJECTS)
+    objects = [o for o in objects if re.fullmatch(r"[A-Za-z0-9_]+", o or "")]
+    in_list = ", ".join(f"'{o}'" for o in objects)
     try:
         grants = (await client.query(
             "SELECT PermissionSet.PermissionsViewAllData FROM PermissionSetAssignment "
@@ -40,15 +45,25 @@ async def check_record_visibility(client: Any, user_id: Optional[str]) -> Dict[s
         )).records or []
         perms = (await client.query(
             "SELECT SobjectType, PermissionsViewAllRecords FROM ObjectPermissions "
-            f"WHERE SobjectType IN ({objects}) AND ParentId IN "
+            f"WHERE SobjectType IN ({in_list}) AND ParentId IN "
             f"(SELECT PermissionSetId FROM PermissionSetAssignment WHERE AssigneeId = '{user_id}')"
         )).records or []
     except Exception:  # noqa: BLE001 — advisory; never fail a sync on it
         return {"checked": False}
     view_all_data = any((g.get("PermissionSet") or {}).get("PermissionsViewAllData") for g in grants)
     view_all = {o: any(p.get("SobjectType") == o and p.get("PermissionsViewAllRecords") for p in perms)
-                for o in RECORD_OBJECTS}
+                for o in objects}
     return {"checked": True, "view_all_data": view_all_data, "view_all": view_all}
+
+
+def object_coverage(stored: Optional[Dict[str, Any]], obj: str) -> str:
+    """ "full", "partial" or "unknown" for one object."""
+    stored = stored or {}
+    if not stored.get("checked"):
+        return "unknown"
+    if stored.get("view_all_data") or (stored.get("view_all") or {}).get(obj):
+        return "full"
+    return "partial"
 
 
 def summarize(stored: Optional[Dict[str, Any]]) -> Dict[str, Any]:

@@ -579,6 +579,9 @@ class AnalyzerContext:
     # services/code_coverage.summarize_coverage(): org-wide %, 0% lists,
     # last test run. None when the org returned no coverage at all.
     code_coverage: Optional[Dict[str, Any]] = None
+    # Critical objects from the latest Data Quality run:
+    # [{object, label, record_count, flags, caveats}]
+    critical_objects: List[Dict[str, Any]] = field(default_factory=list)
     flows: List[Dict[str, Any]] = field(default_factory=list)
     workflow_rules: List[Dict[str, Any]] = field(default_factory=list)
     validation_rules: List[Dict[str, Any]] = field(default_factory=list)
@@ -707,6 +710,7 @@ class OrgAnalyzerService:
         ctx.group_members = await _q(GroupMemberSnapshot)
         from app.services.record_coverage import latest_record_coverage
         ctx.record_coverage = await latest_record_coverage(self.db, self.org_id)
+        ctx.critical_objects = await self._latest_critical_objects()
         ctx.account_shares = await _q(AccountShareSnapshot)
         ctx.opportunity_shares = await _q(OpportunityShareSnapshot)
         ctx.sharing_rules = await _q(SharingRuleSnapshot)
@@ -987,6 +991,7 @@ class OrgAnalyzerService:
             self._analyze_sharing,
             self._analyze_limits,
             self._analyze_data_quality,
+            self._critical_object_findings,
             self._analyze_activity,
             self._analyze_predictive,
         ]
@@ -1703,6 +1708,79 @@ class OrgAnalyzerService:
                     ),
                 },
                 sf_setup_deeplink="/lightning/setup/CompanyResourceDisk/home",
+            ))
+        return out
+
+    # ----------------------- critical objects (from Data Quality)
+
+    async def _latest_critical_objects(self) -> List[Dict[str, Any]]:
+        from app.domain.models import DataQualityRun, ObjectQualityScore
+        run = (await self.db.execute(
+            select(DataQualityRun).where(DataQualityRun.organization_id == self.org_id)
+            .order_by(DataQualityRun.snapshot_at.desc()).limit(1)
+        )).scalar_one_or_none()
+        if run is None:
+            return []
+        rows = (await self.db.execute(
+            select(ObjectQualityScore).where(ObjectQualityScore.run_id == run.id)
+        )).scalars().all()
+        out = []
+        for r in rows:
+            ev = r.evidence or {}
+            flags = (ev.get("critical") or {}).get("flags") or []
+            if flags:
+                out.append({
+                    "object": r.object_name, "label": r.object_label, "record_count": r.record_count,
+                    "flags": flags,
+                    "caveats": [c for c in (ev.get("estimate_label"), ev.get("coverage_label")) if c],
+                    "run_at": run.snapshot_at.isoformat() if run.snapshot_at else None,
+                })
+        return out
+
+    def _critical_object_findings(self, ctx: AnalyzerContext) -> List[FindingDraft]:
+        """One finding per flag type, listing the objects, from the latest
+        Data Quality run. Nothing when Data Quality hasn't run."""
+        out: List[FindingDraft] = []
+        specs = [
+            ("stale", "CRITICAL_OBJECT_STALE", FindingCategory.DATA_QUALITY, FindingSeverity.MEDIUM,
+             "Mostly stale records on {n} object{s}",
+             "Most records on these objects haven't been modified within the staleness window. Old data costs "
+             "storage, slows reports and confuses users; archiving or deleting it is billable clean-up work.",
+             "Agree a retention rule per object with the data owner, then archive or delete records outside it."),
+            ("mostly_empty", "CRITICAL_OBJECT_MOSTLY_EMPTY", FindingCategory.DATA_QUALITY, FindingSeverity.LOW,
+             "{n} mostly empty object{s}",
+             "On these objects most inspected fields hold no value, so reports and automation built on them see "
+             "little data.",
+             "Confirm which fields the business still needs; back-fill those and retire the rest."),
+            ("never_populated", "FIELDS_NEVER_POPULATED", FindingCategory.CONFIG_BLOAT, FindingSeverity.LOW,
+             "{f} never-populated field{fs} on {n} object{s}",
+             "These fields hold no value on any record. Unused fields clutter page layouts and reports and add to "
+             "every future change.",
+             "Check reports, integrations and code for references, then delete the fields."),
+        ]
+        for code, finding_code, category, severity, title, description, action in specs:
+            hits = [(o, next(f for f in o["flags"] if f["code"] == code))
+                    for o in ctx.critical_objects if any(f["code"] == code for f in o["flags"])]
+            if not hits:
+                continue
+            n = len(hits)
+            n_fields = sum(len(f.get("fields") or []) for _, f in hits)
+            caveats = sorted({c for o, _ in hits for c in o["caveats"]})
+            out.append(FindingDraft(
+                category=category,
+                code=finding_code,
+                severity=severity,
+                title=title.format(n=n, s="" if n == 1 else "s", f=n_fields, fs="" if n_fields == 1 else "s"),
+                description=description + (" Some counts are " + "; ".join(caveats).lower() + "." if caveats else ""),
+                recommended_action=action,
+                affected_count=n_fields if code == "never_populated" else n,
+                evidence={
+                    "objects": [{"object": o["object"], "label": o["label"], "record_count": o["record_count"],
+                                 "reason": f["reason"], "caveats": o["caveats"]} for o, f in hits],
+                    "source": "Data Quality run",
+                    "run_at": hits[0][0].get("run_at"),
+                },
+                sf_setup_deeplink="/lightning/setup/ObjectManager/home",
             ))
         return out
 

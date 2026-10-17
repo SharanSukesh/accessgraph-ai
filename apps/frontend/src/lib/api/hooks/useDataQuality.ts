@@ -30,6 +30,12 @@ export interface ObjectScore {
   fields_with_gaps: number
   duplicate_clusters: number
   stale_record_count: number
+  // Critical-object flags with their reasons, and the caveats on this
+  // object's counts ("estimated (sampled n of N)", partial visibility).
+  critical_flags?: CriticalFlag[]
+  coverage?: 'full' | 'partial' | 'unknown' | null
+  coverage_label?: string | null
+  estimate_label?: string | null
   evidence?: {
     // "aggregate_soql" for the current metadata-only methodology
     // (Options A + C — see future_v2_items.md). Sample-based runs
@@ -65,7 +71,30 @@ export interface ObjectScore {
     stale_record_count?: number
     staleness_cutoff?: string
     note?: string
+    never_populated?: string[]
+    not_populated_in_sample?: string[]
+    text_fields?: { field: string; populated_pct: number | null; sample_n?: number; label: string }[]
+    estimate_label?: string
+    coverage_label?: string
   }
+}
+
+export interface CriticalFlag {
+  code: 'stale' | 'mostly_empty' | 'never_populated'
+  label: string
+  reason: string
+  value?: number
+  threshold?: number
+  fields?: string[]
+  estimated?: boolean
+}
+
+export interface CriticalObjectSettings {
+  stale_days: number
+  stale_share_pct: number
+  min_fill_pct: number
+  large_object_records: number
+  sample_size: number
 }
 
 export interface DataQualitySummary {
@@ -133,6 +162,7 @@ export interface HistoryPoint {
 
 export const dataQualityKeys = {
   all: ['data-quality'] as const,
+  settings: (orgId: string) => [...dataQualityKeys.all, 'settings', orgId] as const,
   latest: (orgId: string) => [...dataQualityKeys.all, 'latest', orgId] as const,
   objects: (orgId: string) => [...dataQualityKeys.all, 'objects', orgId] as const,
   object: (orgId: string, objectName: string) =>
@@ -241,5 +271,23 @@ export function useRunDataQuality(orgId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: dataQualityKeys.all })
     },
+  })
+}
+
+
+/** Critical-object thresholds for the org (applied on the next run). */
+export function useCriticalObjectSettings(orgId: string) {
+  return useQuery<{ settings: CriticalObjectSettings; defaults: CriticalObjectSettings; limits: Record<string, [number, number]> }>({
+    queryKey: dataQualityKeys.settings(orgId),
+    queryFn: () => apiClient.get(`/orgs/${orgId}/data-quality/settings`),
+    enabled: !!orgId,
+  })
+}
+
+export function useSaveCriticalObjectSettings(orgId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<{ settings: CriticalObjectSettings }, unknown, Partial<CriticalObjectSettings>>({
+    mutationFn: (body) => apiClient.put(`/orgs/${orgId}/data-quality/settings`, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: dataQualityKeys.settings(orgId) }),
   })
 }
