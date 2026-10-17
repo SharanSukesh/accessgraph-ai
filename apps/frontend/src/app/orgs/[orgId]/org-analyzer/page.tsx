@@ -71,6 +71,7 @@ import {
 import { endpoints } from '@/lib/api/endpoints'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { CodeCoverageCard } from '@/components/healthReport/CodeCoverageCard'
+import { healthBand } from '@/lib/healthBand'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
 
@@ -498,11 +499,15 @@ function HeroHealthCard({
   const accent =
     score == null
       ? { ring: 'text-grove-ink/50 dark:text-grove-ink-dk/50', text: 'text-grove-ink/50 dark:text-grove-ink-dk/50', band: 'No data' }
-      : score >= 80
-        ? { ring: 'text-green-500', text: 'text-green-600 dark:text-green-400', band: 'Excellent' }
-        : score >= 60
-          ? { ring: 'text-amber-500', text: 'text-amber-600 dark:text-amber-400', band: 'Needs attention' }
-          : { ring: 'text-red-500', text: 'text-red-600 dark:text-red-400', band: 'Critical' }
+      : {
+          ...{
+            good: { ring: 'text-green-500', text: 'text-green-600 dark:text-green-400' },
+            warning: { ring: 'text-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+            serious: { ring: 'text-orange-500', text: 'text-orange-600 dark:text-orange-400' },
+            critical: { ring: 'text-red-500', text: 'text-red-600 dark:text-red-400' },
+          }[healthBand(score).tone],
+          band: healthBand(score).label,
+        }
   // Build the SVG ring: 0-100 → 0-360deg arc length.
   const pct = score == null ? 0 : Math.max(0, Math.min(100, score))
   const radius = 52
@@ -557,10 +562,10 @@ function HeroHealthCard({
                 .filter((f: any) => f.deduction > 0)
                 .map((f: any) => (
                   <li key={f.family} className="flex gap-2">
-                    <span className="w-36">{f.label}</span>
+                    <span className="w-32 shrink-0">{f.label}</span>
                     <span className="v2-num font-semibold">−{f.deduction}</span>
                     {f.uncapped_deduction > f.deduction && (
-                      <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">capped from −{f.uncapped_deduction}</span>
+                      <span className="whitespace-nowrap text-grove-ink/50 dark:text-grove-ink-dk/50">capped from −{f.uncapped_deduction}</span>
                     )}
                   </li>
                 ))}
