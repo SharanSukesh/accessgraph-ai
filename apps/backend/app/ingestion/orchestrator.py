@@ -101,6 +101,9 @@ class SyncOrchestrator:
                 from app.ingestion.demo_orgs import fixture_key, load_fixture
                 logger.info("Demo org: loading fixture %s", fixture_key(org))
                 data = load_fixture(fixture_key(org))
+                # Ownership is read live on a real org; the fixture carries it.
+                owners = data.get("demo_live", {}).get("owner_counts", {})
+                data["record_owner_counts"] = {obj: owners.get(obj) for obj in ("Account", "Opportunity")}
             elif settings.DEMO_MODE:
                 logger.info("Running in DEMO mode")
                 data = await self._extract_demo_data(org_id)

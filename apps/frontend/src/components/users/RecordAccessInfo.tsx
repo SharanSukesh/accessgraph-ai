@@ -68,7 +68,7 @@ interface RecordAccessData {
   sharingRules: SharingRule[]
   organizationWideDefaults: OrganizationWideDefault[]
   summary: {
-    total_owned_records: number
+    total_owned_records: number | null
     total_manual_shares: number
     total_team_memberships: number
     total_sharing_rule_grants: number
@@ -114,7 +114,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-green-700 dark:text-green-300">Owned Records</p>
-                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{summary.total_owned_records}</p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">{summary.total_owned_records ?? '—'}</p>
               </div>
               <Database className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
@@ -182,19 +182,18 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
-            Records directly owned by this user. These are records where the OwnerId field matches the user's ID.
+            Records directly owned by this user: records whose Owner field is this user, counted at the last sync.
           </p>
-          {summary.total_owned_records === 0 ? (
+          {analyzedTypes.length === 0 ? (
+            <div className="text-center py-8 text-grove-ink/55 dark:text-grove-ink-dk/55">
+              <p className="text-sm font-medium">Ownership hasn&apos;t been counted for this org yet</p>
+              <p className="text-xs mt-2">Run a sync to count owned Accounts and Opportunities.</p>
+            </div>
+          ) : summary.total_owned_records === 0 ? (
             <div className="text-center py-8 text-grove-ink/55 dark:text-grove-ink-dk/55">
               <p className="text-sm font-medium">
-                No owned {analyzedTypes.length ? analyzedTypes.join(' or ') : ''} records found
+                Owns no {analyzedTypes.join(' or ')} records
               </p>
-              <p className="text-xs mt-2">This could mean:</p>
-              <ul className="text-xs mt-1 space-y-1 text-left max-w-md mx-auto">
-                <li>• User doesn't own any records</li>
-                <li>• OWD is Public Read/Write (ownership tracking disabled)</li>
-                <li>• Share data hasn't been synced yet - try running a sync</li>
-              </ul>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -208,8 +207,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           )}
           {notAnalyzedTypes.length > 0 && (
             <p className="mt-4 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-              {notAnalyzedTypes.join(', ')}: not analyzed yet. Their sharing records aren&apos;t synced, so
-              ownership is unknown rather than zero.
+              {notAnalyzedTypes.join(', ')}: not counted, so ownership is unknown rather than zero.
             </p>
           )}
         </CardContent>

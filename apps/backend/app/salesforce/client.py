@@ -31,6 +31,10 @@ from app.salesforce.models import (
 
 logger = logging.getLogger(__name__)
 
+# Objects whose owned-record counts the sync records per user (aggregate
+# SOQL on OwnerId; see owner_counts_or_none).
+OWNED_RECORD_OBJECTS = ("Account", "Opportunity")
+
 
 class SalesforceAPIClient:
     """
@@ -1985,6 +1989,16 @@ class SalesforceAPIClient:
             logger.warning("Account COUNT failed: %s", e)
             return None
 
+    async def owner_counts_or_none(self, object_name: str) -> Optional[Dict[str, int]]:
+        """Like owner_counts_by_object, but None when the query failed, so
+        "couldn't count" is never reported as "owns nothing"."""
+        try:
+            res = await self.query(f"SELECT OwnerId, COUNT(Id) cnt FROM {object_name} GROUP BY OwnerId")
+        except Exception as e:  # noqa: BLE001
+            logger.info("owner_counts_or_none(%s) failed: %s", object_name, e)
+            return None
+        return {row["OwnerId"]: int(row.get("cnt") or 0) for row in (res.records or []) if row.get("OwnerId")}
+
     async def owner_counts_by_object(
         self, object_name: str
     ) -> Dict[str, int]:
@@ -2498,6 +2512,13 @@ class SalesforceAPIClient:
         # Extract sharing rules
         sharing_rules = await self.extract_sharing_rules()
 
+        # Owned records per user, from the owner field. The share extracts
+        # skip RowCause = 'Owner' rows, so ownership can't come from them.
+        record_owner_counts = (
+            {obj: await self.owner_counts_or_none(obj) for obj in OWNED_RECORD_OBJECTS}
+            if include_record_shares else {}
+        )
+
         # Convert Pydantic models to dicts
         data = {
             "users": [u.model_dump() for u in users],
@@ -2518,6 +2539,7 @@ class SalesforceAPIClient:
             "opportunity_team_members": [otm.model_dump() for otm in opportunity_team_members],
             "organization_wide_defaults": [owd.model_dump() for owd in organization_wide_defaults],
             "sharing_rules": [sr.model_dump() for sr in sharing_rules],
+            "record_owner_counts": record_owner_counts,
         }
 
         logger.info("Extraction complete")
