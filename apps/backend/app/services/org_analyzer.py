@@ -553,6 +553,9 @@ class AnalyzerContext:
     apex_classes: List[Dict[str, Any]] = field(default_factory=list)
     apex_triggers: List[Dict[str, Any]] = field(default_factory=list)
     apex_coverage: List[Dict[str, Any]] = field(default_factory=list)
+    # services/code_coverage.summarize_coverage(): org-wide %, 0% lists,
+    # last test run. None when the org returned no coverage at all.
+    code_coverage: Optional[Dict[str, Any]] = None
     flows: List[Dict[str, Any]] = field(default_factory=list)
     workflow_rules: List[Dict[str, Any]] = field(default_factory=list)
     validation_rules: List[Dict[str, Any]] = field(default_factory=list)
@@ -638,6 +641,9 @@ class OrgAnalyzerService:
             run_row.status = "completed"
             run_row.ended_at = datetime.now(timezone.utc)
             await self.db.commit()
+            # Health-derived Priority Actions (coverage below the deploy gate).
+            from app.services.health_actions import replace_health_actions
+            await replace_health_actions(self.db, self.org_id, ctx.code_coverage)
             return snapshot
         except Exception as e:
             logger.exception("Org analyzer run failed for org %s", self.org_id)
@@ -862,6 +868,11 @@ class OrgAnalyzerService:
             ctx.apex_coverage = await sf_client.get_apex_coverage()
         except Exception as e:
             logger.warning("get_apex_coverage failed: %s", e)
+        try:
+            from app.services.code_coverage import summarize_coverage
+            ctx.code_coverage = summarize_coverage(await sf_client.get_code_coverage())
+        except Exception as e:
+            logger.warning("get_code_coverage failed: %s", e)
 
         # LoginHistory (last 90 days)
         if ctx.allow_login_history:
@@ -1594,6 +1605,78 @@ class OrgAnalyzerService:
 
         return out
 
+    # ----------------------- code coverage (deployment readiness)
+
+    def _coverage_findings(self, ctx: AnalyzerContext) -> List[FindingDraft]:
+        cov = ctx.code_coverage
+        if not cov:
+            return []
+        from app.services.code_coverage import DEPLOY_GATE_PCT, STALE_AFTER_DAYS
+        out: List[FindingDraft] = []
+        evidence = {k: cov[k] for k in ("org_wide_pct", "org_wide_source", "gate_pct", "last_test_run",
+                                        "days_since_run", "measured")}
+        pct = cov.get("org_wide_pct")
+        if cov.get("below_gate"):
+            out.append(FindingDraft(
+                category=FindingCategory.AUTOMATION_HYGIENE,
+                code="ORG_COVERAGE_BELOW_GATE",
+                severity=FindingSeverity.HIGH,
+                title=f"Org-wide Apex coverage is {pct:g}%, below the {DEPLOY_GATE_PCT:g}% deployment gate",
+                description=(
+                    f"Salesforce blocks production deployments of Apex unless org-wide test coverage is at "
+                    f"least {DEPLOY_GATE_PCT:g}%. At {pct:g}%, any change that includes Apex will fail to "
+                    "deploy until tests are added or fixed. Budget test work before quoting Apex changes."
+                ),
+                recommended_action="Write tests for the lowest-covered classes and triggers first (see the 0% lists), then re-run all tests.",
+                affected_count=cov.get("below_gate_items") or 0,
+                evidence={**evidence, "lowest": cov.get("lowest"), "zero_classes": cov.get("zero_classes"),
+                          "zero_triggers": cov.get("zero_triggers")},
+                sf_setup_deeplink="/lightning/setup/ApexTestQueue/home",
+            ))
+        below = cov.get("below_gate_items") or 0
+        if below:
+            zeros = len(cov.get("zero_classes") or []) + len(cov.get("zero_triggers") or [])
+            out.append(FindingDraft(
+                category=FindingCategory.AUTOMATION_HYGIENE,
+                code="APEX_LOW_COVERAGE",
+                # When the org-wide gate finding is raised it carries the
+                # severity; this list is its detail, so it isn't counted twice.
+                severity=(FindingSeverity.MEDIUM if cov.get("below_gate")
+                          else _severity_for_count(below, [1, 3, 10, 25])),
+                title=f"{below} Apex classes/triggers have <{DEPLOY_GATE_PCT:g}% test coverage"
+                      + (f" ({zeros} at 0%)" if zeros else ""),
+                description=(
+                    "Classes and triggers with little or no test coverage are what pull org-wide coverage "
+                    "down, and untested triggers run on every save of their object."
+                ),
+                recommended_action="Add unit tests, starting with triggers and classes at 0%.",
+                affected_count=below,
+                evidence={**evidence, "lowest": cov.get("lowest"), "zero_classes": cov.get("zero_classes"),
+                          "zero_triggers": cov.get("zero_triggers")},
+                sf_setup_deeplink="/lightning/setup/ApexClasses/home",
+            ))
+        changed = cov.get("changed_since_run_count") or 0
+        if cov.get("stale") or changed:
+            days = cov.get("days_since_run")
+            when = f"{days} days ago" if days is not None else "at an unknown time (no test run found)"
+            out.append(FindingDraft(
+                category=FindingCategory.AUTOMATION_HYGIENE,
+                code="APEX_COVERAGE_STALE",
+                severity=FindingSeverity.MEDIUM,
+                title=(f"Coverage figures date from a test run {when}"
+                       + (f"; {changed} class{'es' if changed != 1 else ''}/trigger{'s' if changed != 1 else ''} changed since" if changed else "")),
+                description=(
+                    "Coverage is recorded when tests run, so these figures describe the code as it was then. "
+                    + (f"Tests haven't run in over {STALE_AFTER_DAYS} days. " if cov.get("stale") else "")
+                    + ("Code changed after the last run may be covered differently now." if changed else "")
+                ).strip(),
+                recommended_action="Run all tests in a sandbox refreshed from production (or in production during a quiet window) before relying on these numbers.",
+                affected_count=changed,
+                evidence={**evidence, "changed_since_run": cov.get("changed_since_run")},
+                sf_setup_deeplink="/lightning/setup/ApexTestQueue/home",
+            ))
+        return out
+
     # ----------------------- 2. configuration bloat / redundancy
 
     def _analyze_configuration(self, ctx: AnalyzerContext) -> List[FindingDraft]:
@@ -1894,7 +1977,7 @@ class OrgAnalyzerService:
     def _analyze_automation(self, ctx: AnalyzerContext) -> List[FindingDraft]:
         out: List[FindingDraft] = []
         if not (ctx.apex_triggers or ctx.flows or ctx.workflow_rules
-                or ctx.apex_coverage or ctx.validation_rules):
+                or ctx.apex_coverage or ctx.validation_rules or ctx.code_coverage):
             return out
 
         # TRIGGER_MULTI_PER_OBJECT
@@ -1995,10 +2078,17 @@ class OrgAnalyzerService:
                 sf_setup_deeplink="/lightning/setup/Flows/home",
             ))
 
-        # APEX_LOW_COVERAGE
+        out.extend(self._coverage_findings(ctx))
+
+        # APEX_LOW_COVERAGE (older path: only when the fuller coverage read
+        # above returned nothing)
         class_by_id = {c.get("Id"): c for c in ctx.apex_classes}
         low_cov = []
-        for cov in ctx.apex_coverage:
+        if ctx.code_coverage:
+            fallback_coverage = []
+        else:
+            fallback_coverage = ctx.apex_coverage
+        for cov in fallback_coverage:
             covered = cov.get("NumLinesCovered") or 0
             uncovered = cov.get("NumLinesUncovered") or 0
             total = covered + uncovered
@@ -2599,8 +2689,10 @@ class OrgAnalyzerService:
             "total_roles": len(ctx.roles),
             "total_account_shares": len(ctx.account_shares),
             "total_opportunity_shares": len(ctx.opportunity_shares),
-            "total_apex_classes": len(ctx.apex_classes),
-            "total_apex_triggers": len(ctx.apex_triggers),
+            # Fall back to the coverage read's class list when the Tooling
+            # list came back empty, so the counts never contradict it.
+            "total_apex_classes": len(ctx.apex_classes) or (ctx.code_coverage or {}).get("classes", 0),
+            "total_apex_triggers": len(ctx.apex_triggers) or (ctx.code_coverage or {}).get("triggers", 0),
             "total_flows": len(ctx.flows),
             "total_workflow_rules": len(ctx.workflow_rules),
             "total_validation_rules": len(ctx.validation_rules),
@@ -2608,6 +2700,7 @@ class OrgAnalyzerService:
             "stale_open_opportunities_count": ctx.stale_opportunities_count,
             "sobject_record_counts": ctx.sobject_record_counts,
             "license_utilization": license_utilization,
+            "code_coverage": ctx.code_coverage,
         }
 
         # Compose the executive-summary narrative + delta vs prior snapshot
