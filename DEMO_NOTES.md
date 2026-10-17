@@ -166,7 +166,10 @@ orgs.
 
 Still worth knowing live:
 - Graph: object cards appear only after ticking objects in the right panel.
-- All eight anomalies are Critical (see backlog); the rank carries the order.
+- Access anomalies have no severity: each shows rank, strongest reason and
+  base risk (the risk score without the anomaly flag; hover for the
+  tooltip). All 8 are High overall partly because being flagged adds to
+  the risk score; base risk leaves that out (roadmap item 30).
 - Mina Tanaka, Oskar Holloway and Freya Castellan (planted over-privileged /
   role mismatch) are typed Permission accumulation: their strongest signal
   in the data is 5-6 permission sets against a median of 1.
@@ -202,17 +205,21 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    runs the sync, and the sync runs anomaly detection, risk scoring and
    recommendations at its end. Wait until the sidebar spinner stops and
    the Dashboard shows "Completed" with 400 users / 40 high-risk / 8
-   critical. Never click "Analyze Access", "Reload demo data" or "Sync"
+   flagged anomalies. Never click "Analyze Access", "Reload demo data" or "Sync"
    while a sync is running (the button is now hidden and the API refuses,
    but don't rely on it).
 7. On Lumenvale, one at a time, each after the previous finishes:
    Health Report → Run analysis; License Fit → Re-analyse; Compliance →
    Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS. Do not run
    Equity on Lumenvale (greyed out; the fixture has no sharing data).
-   Expected: Dashboard 400 users, 40 high-risk, 8 critical anomalies,
-   7 recommendations; Health 35 (Critical), 12 findings, $183,180/yr;
-   License Fit $116,220/yr; anomalies #1 Jun Jovanovic (Exclusive access)
-   to #8.
+   Expected: Dashboard 400 users, 40 high-risk, 8 flagged anomalies,
+   7 recommendations (2 High, 4 Medium, 1 Low: Freya Castellan's
+   permission set review); Health 35 (Critical), 12 findings,
+   $183,180/yr; License Fit $116,220/yr; anomalies #1 Jun Jovanovic
+   (Exclusive access) to #8, with "At high or critical base risk" 4
+   (#2-#5; #1, #6, #7 and #8 are Medium base risk); SOX control
+   "Flagged access anomalies on high base-risk users are triaged" fails
+   with 4.
 8. Dev org: **Sync from Salesforce** first (needed for the group/muting
    graph) and wait for it to finish; it includes the anomaly, risk and
    recommendation analysis, so don't click "Analyze Access" afterwards.
@@ -242,12 +249,6 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
 - Equity adds Priority Actions even when disparity is 0 (it created 20 on
   the synthetic org at index 1.0). It should add nothing when there is no
   disparity to close.
-
-- Anomaly severity: every top-2% user scores 0.986 or higher on the
-  normalised scale, so all flagged users are "critical". Options:
-  rank-based bands within the flagged set, or drop severity for anomalies
-  and show rank only. Severity should stay "how unusual"; risk level
-  already covers "how much damage".
 
 - Pardot and Marketing Cloud are priced per org, not per seat. The
   catalog stores them as per-seat monthly prices ($1,250 and $400), so any

@@ -468,7 +468,8 @@ async def test_peer_deviation_uses_latest_access_anomaly(async_db_session):
     scores = await _score(db, b.org_id)
 
     peer = _factor(scores[reps[0]], "peer_deviation")
-    assert peer["score"] == pytest.approx(0.5 * 0.75 + 0.5 * 0.8)
+    # Flagged at all gives half; the anomaly score supplies the rest (severity is no longer used).
+    assert peer["score"] == pytest.approx(0.5 + 0.5 * 0.8)
     assert peer["evidence"][0]["label"] == "Edits 3x more objects than peers"
     assert _factor(scores[reps[1]], "peer_deviation")["score"] == 0
 
@@ -588,3 +589,48 @@ async def test_query_count_is_independent_of_user_count(async_db_session):
     finally:
         event.remove(engine, "before_cursor_execute", _count)
     assert counts[0] == counts[1], counts
+
+
+@pytest.mark.asyncio
+async def test_anomaly_control_counts_flagged_users_at_high_base_risk(async_db_session):
+    """The compliance control uses base risk (without the anomaly flag), so a
+    user who is high only because they were flagged doesn't count."""
+    from app.domain.models import RiskLevel, RiskScore
+    from app.services.compliance_scorecard import _eval_no_critical_anomalies_open
+
+    db = async_db_session
+    org_id = await _new_org(db)
+    now = datetime.now(timezone.utc)
+    peer = {"factor": "peer_deviation", "weight": 0.35, "score": 1.0}
+    admin = {"factor": "privileged_permissions", "weight": 0.65, "score": 1.0}
+    nothing_else = {"factor": "privileged_permissions", "weight": 0.65, "score": 0.3}
+    # 005a: privileged on its own (base 65, high). 005b: high only with the flag (base 19.5, low).
+    for uid, factors, score in (("005a", [admin, peer], 77.3), ("005b", [nothing_else, peer], 51.2)):
+        db.add(AccessAnomaly(organization_id=org_id, user_id=uid, anomaly_score=0.9,
+                             severity=AnomalySeverity.CRITICAL, reasons=["r"], detected_at=now,
+                             category="access", peer_stats={"rank": 1}))
+        db.add(RiskScore(organization_id=org_id, entity_type="user", entity_id=uid, risk_score=score,
+                         risk_level=RiskLevel.HIGH, factors=factors, reason_text="r", calculated_at=now))
+    # An older score for 005a is ignored.
+    db.add(RiskScore(organization_id=org_id, entity_type="user", entity_id="005a", risk_score=10,
+                     risk_level=RiskLevel.LOW, factors=[], reason_text="r", calculated_at=now - timedelta(days=3)))
+    await db.flush()
+
+    result = await _eval_no_critical_anomalies_open(db, org_id)
+    assert result.metric_value == 1
+    assert "base risk" in result.metric
+
+
+def test_base_risk_leaves_out_only_the_anomaly_factor():
+    from app.domain.models import RiskLevel
+    from app.services.risk_scoring import base_risk, combine_factors
+
+    factors = [
+        {"factor": "privileged_permissions", "weight": 0.65, "score": 0.5},
+        {"factor": "dormancy_exposure", "weight": 1.0, "score": 0.2},
+        {"factor": "peer_deviation", "weight": 0.35, "score": 1.0},
+    ]
+    score, level = base_risk(factors)
+    assert score == round(combine_factors([(0.65, 0.5), (1.0, 0.2)]), 1) == 46.0
+    assert level == RiskLevel.MEDIUM
+    assert base_risk([]) == (0.0, RiskLevel.LOW)

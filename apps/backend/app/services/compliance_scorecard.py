@@ -198,32 +198,41 @@ async def _eval_no_inactive_users_with_access(
 async def _eval_no_critical_anomalies_open(
     db: AsyncSession, org_id: str,
 ) -> ControlResult:
-    """Critical access anomalies should be triaged, not left open.
+    """Flagged access anomalies on high-risk users should be triaged.
 
-    Pass criterion: zero CRITICAL-severity AccessAnomaly rows for the
-    org. This catches SOD violations, sensitive-data over-reach, and
-    silent privilege escalation on the current baseline.
+    Pass criterion: no flagged access anomaly whose user is at High or
+    Critical *base* risk (risk calculated without the anomaly flag, so a
+    user never counts just for being flagged). Access anomalies carry no
+    severity of their own; base risk is the impact measure.
     """
-    row = await db.execute(
-        select(func.count(AccessAnomaly.id)).where(
+    from app.domain.models import RiskLevel
+    from app.services.risk_scoring import base_risk, latest_user_risks
+
+    flagged = set((await db.execute(
+        select(AccessAnomaly.user_id).where(
             AccessAnomaly.organization_id == org_id,
-            AccessAnomaly.severity == AnomalySeverity.CRITICAL,
+            AccessAnomaly.category == "access",
         )
+    )).scalars().all())
+    risks = await latest_user_risks(db, org_id, list(flagged))
+    # Base risk: without the anomaly flag, so no user counts just for being flagged.
+    n = sum(
+        1 for uid in flagged
+        if uid in risks and base_risk(risks[uid].factors)[1] in (RiskLevel.HIGH, RiskLevel.CRITICAL)
     )
-    n = int(row.scalar_one() or 0)
     if n == 0:
         return ControlResult(
             status=PASSED,
-            metric="0 critical access anomalies open",
+            metric="0 flagged access anomalies on users at high base risk open",
             metric_value=0,
-            deep_link=f"/orgs/{org_id}/anomalies?severity=critical",
+            deep_link=f"/orgs/{org_id}/anomalies",
         )
     return ControlResult(
         status=FAILED,
-        metric=f"{n} critical anomalies unresolved",
+        metric=f"{n} flagged access anomalies on users at high or critical base risk unresolved",
         metric_value=float(n),
-        recommendation="Review each critical anomaly and revoke or justify the access.",
-        deep_link=f"/orgs/{org_id}/anomalies?severity=critical",
+        recommendation="Review each flagged user at high or critical base risk and revoke or justify the access.",
+        deep_link=f"/orgs/{org_id}/anomalies",
     )
 
 
@@ -309,8 +318,8 @@ async def _eval_over_permissioned_capped(
 ) -> ControlResult:
     """Least-privilege: cap over-permissioned users at ≤ 5% of the base.
 
-    Uses the AccessAnomaly ML detector's output — users flagged as
-    MEDIUM+ severity are treated as over-permissioned. Threshold is
+    Uses the AccessAnomaly ML detector's output: every user flagged as an
+    access outlier (the top 2%) is treated as over-permissioned. Threshold is
     borrowed from the "prevalence range" documented in
     research/anomaly_benchmark/REPORT.md.
     """
@@ -324,9 +333,6 @@ async def _eval_over_permissioned_capped(
         select(func.count(AccessAnomaly.id)).where(
             AccessAnomaly.organization_id == org_id,
             AccessAnomaly.category == "access",
-            AccessAnomaly.severity.in_(
-                [AnomalySeverity.MEDIUM, AnomalySeverity.HIGH, AnomalySeverity.CRITICAL]
-            ),
         )
     )
     flagged = int(row.scalar_one() or 0)
@@ -553,11 +559,12 @@ def build_control_library() -> List[ComplianceControl]:
             control_id="SOX-404-ITGC-3.2",
             framework="SOX",
             section="IT General Controls — Access Management",
-            name="Critical access anomalies are triaged",
+            name="Flagged access anomalies on high base-risk users are triaged",
             description=(
-                "Detected anomalies with critical severity must be "
-                "reviewed. Open critical anomalies indicate a broken "
-                "review cadence."
+                "Users flagged as access outliers who are also at high or "
+                "critical base risk (risk without the anomaly flag) must be "
+                "reviewed. Open ones indicate a "
+                "broken review cadence."
             ),
             evaluator=_eval_no_critical_anomalies_open,
         ),

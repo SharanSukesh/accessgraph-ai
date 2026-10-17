@@ -366,16 +366,32 @@ def _risk_and_governance(ctx: ReportContext) -> str:
             f'<h3 class="block-title">Highest-risk users</h3>{table}'
         )
 
+    if ctx.flagged_access:
+        first = ctx.flagged_access[0]
+        scored = f" of {first['users_scored']:,} users" if first.get("users_scored") else ""
+        rows = "".join(
+            f"<tr><td class='num'>#{a['rank'] or '?'}</td><td>{_esc(a['name'])}</td>"
+            f"<td>{_esc(a['reason'])}</td><td>{_esc((a['base_risk_level'] or 'not scored').capitalize())}</td></tr>"
+            for a in ctx.flagged_access[:10]
+        )
+        # One block so the heading never sits alone at the foot of a page.
+        blocks.append(
+            f'<div class="keep"><h3 class="block-title">Flagged access anomalies</h3>'
+            f'<p class="caption">{len(ctx.flagged_access)} users flagged as the top 2%{scored} whose access '
+            f'stands out from their peers, in rank order. Rank says how unusual; base risk says how much damage '
+            f'the access could do. Base risk is the risk score calculated without the anomaly flag.</p>'
+            f'<table class="data"><thead><tr><th class="num">Rank</th><th>User</th><th>Strongest reason</th>'
+            f'<th>Base risk</th></tr></thead><tbody>{rows}</tbody></table></div>'
+        )
     if ctx.anomaly_counts:
         bar = charts.stacked_bar(
             [(s.capitalize(), ctx.anomaly_counts.get(s, 0), charts.SEVERITY_RAMP[s])
              for s in ["critical", "high", "medium", "low", "info"]],
             width=640,
         )
-        cat_note = ", ".join(f"{v} {k}" for k, v in sorted(ctx.anomaly_by_category.items()))
         blocks.append(
-            f'<h3 class="block-title">Access and login anomalies</h3>'
-            f'<p class="caption">Users whose access or sign-in behaviour stands out from their peers ({_esc(cat_note)}).</p>{bar}'
+            f'<h3 class="block-title">Login anomalies</h3>'
+            f'<p class="caption">Sign-in events that match a session rule, by the rule\'s severity.</p>{bar}'
         )
 
     if ctx.compliance:
@@ -538,6 +554,7 @@ STYLE = """
   .exec-summary { margin: 0.8em 0 1em; padding: 0.8em 1em; border-left: 3px solid ACCENT; background: #f9f9f7; }
   .exec-summary p { margin: 0.3em 0 0; }
   .block-title { font-size: 10.5pt; margin: 1.3em 0 0.5em; }
+  .keep { page-break-inside: avoid; }
   .caption { color: #52514e; font-size: 8.5pt; margin: 0 0 0.5em; }
   .cols { display: flex; gap: 24px; }
   .col { flex: 1; }
