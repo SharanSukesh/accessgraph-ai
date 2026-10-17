@@ -1,0 +1,30 @@
+{
+  "label": "IEEE TPS-ISA 2026 camera-ready, Fig. 4",
+  "figure": "Fig. 4: v2 per-archetype recall",
+  "citation": "S. Sukesh, \"Permission Anomaly Detection in Salesforce Access Graphs: A Synthetic Benchmark and a Per-Archetype Diagnostic,\" accepted for presentation at the IEEE International Conference on Trust, Privacy and Security in Intelligent Systems and Applications (IEEE TPS-ISA 2026), Government/Industry Track, Milpitas, CA, USA, Nov. 2026. To appear in IEEE Xplore.",
+  "doi": null,
+  "synthetic_orgs": 150,
+  "detectors": {
+    "rank_average_ensemble": {
+      "deployed": true,
+      "recall": {
+        "Over-privileged": 0.104,
+        "Dormant powerful": 0.196,
+        "Role mismatch": 0.345,
+        "Permission accumulator": 0.184,
+        "Sole access": 0.556
+      },
+      "mean": 0.277
+    },
+    "mahalanobis": {
+      "deployed": false,
+      "recall": {
+        "Over-privileged": 0.317,
+        "Dormant powerful": 0.184,
+        "Role mismatch": 0.065,
+        "Permission accumulator": 0.109,
+        "Sole access": 0.450
+      }
+    }
+  }
+}
