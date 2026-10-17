@@ -1900,6 +1900,41 @@ class SalesforceAPIClient:
             logger.warning("ApexCodeCoverageAggregate query failed: %s", e)
             return []
 
+    async def get_code_coverage(self) -> Dict[str, Any]:
+        """Org-wide and per-class/trigger coverage, plus when tests last ran.
+        Read-only; never runs tests. Each part degrades to empty on its own.
+        See app/services/code_coverage.py for how it's summarised."""
+        out: Dict[str, Any] = {"org_wide_percent": None, "items": [], "last_test_run": None}
+        try:
+            rows = await self.query_tooling("SELECT PercentCovered FROM ApexOrgWideCoverage")
+            if rows:
+                out["org_wide_percent"] = rows[0].get("PercentCovered")
+        except Exception as e:  # noqa: BLE001
+            logger.info("ApexOrgWideCoverage query failed: %s", e)
+        try:
+            agg = {r.get("ApexClassOrTriggerId"): r for r in await self.query_tooling(
+                "SELECT ApexClassOrTriggerId, NumLinesCovered, NumLinesUncovered FROM ApexCodeCoverageAggregate")}
+            for sobject, kind in (("ApexClass", "class"), ("ApexTrigger", "trigger")):
+                for r in await self.query_tooling(
+                    f"SELECT Id, Name, LastModifiedDate FROM {sobject} WHERE NamespacePrefix = NULL"
+                ):
+                    cov = agg.get(r.get("Id"))
+                    out["items"].append({
+                        "id": r.get("Id"), "name": r.get("Name"), "type": kind,
+                        "covered": cov.get("NumLinesCovered") if cov else None,
+                        "uncovered": cov.get("NumLinesUncovered") if cov else None,
+                        "last_modified": r.get("LastModifiedDate"),
+                    })
+        except Exception as e:  # noqa: BLE001
+            logger.info("per-class coverage query failed: %s", e)
+        try:
+            res = await self.query("SELECT StartTime FROM ApexTestRunResult ORDER BY StartTime DESC LIMIT 1")
+            if res.records:
+                out["last_test_run"] = res.records[0].get("StartTime")
+        except Exception as e:  # noqa: BLE001
+            logger.info("ApexTestRunResult query failed: %s", e)
+        return out
+
     async def extract_organization(self) -> Optional[Dict[str, Any]]:
         """Single-row Organization fetch with edition + sandbox flags.
 

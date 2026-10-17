@@ -70,3 +70,18 @@ def test_flagged_anomalies_show_rank_reason_and_risk_without_severity():
     assert "Login anomalies" not in html
     with_sessions = _build_html("Org", snap, [], ctx=ReportContext(anomaly_counts={"high": 2}))
     assert "Login anomalies" in with_sessions
+
+
+def test_code_coverage_block_states_the_gate_and_staleness():
+    from app.services.code_coverage import summarize_coverage
+    from app.ingestion.demo_orgs import load_fixture
+    from datetime import datetime, timezone
+
+    cov = summarize_coverage(load_fixture("synthetic_mid_market")["demo_live"]["code_coverage"],
+                             now=datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc))
+    snap = NS(snapshot_at=datetime(2026, 10, 14, tzinfo=timezone.utc), executive_summary=None,
+              metrics={"org_health_score": 70, "code_coverage": cov}, org_limits={})
+    html = _build_html("Org", snap, [], ctx=ReportContext())
+    assert "<strong>71%</strong>, below the 75% deployment gate" in html
+    assert "40 days before this analysis (out of date)" in html
+    assert "RenewalService" in html and "Newton never runs tests" in html

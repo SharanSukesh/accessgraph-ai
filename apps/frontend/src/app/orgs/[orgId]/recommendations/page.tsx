@@ -18,6 +18,7 @@ import {
   Clock,
   Info,
   ChevronRight,
+  Rocket,
   ShieldAlert,
   Scale,
 } from 'lucide-react'
@@ -383,6 +384,11 @@ export default function RecommendationsPage() {
                                   <Badge variant="info" size="sm">
                                     <Scale className="h-3 w-3 mr-1 inline" />
                                     Equity
+                                  </Badge>
+                                ) : rec.rec_type === 'deployment_readiness' ? (
+                                  <Badge variant="warning" size="sm" title="From the Health Report">
+                                    <Rocket className="h-3 w-3 mr-1 inline" />
+                                    Deployment readiness
                                   </Badge>
                                 ) : (
                                   <Badge variant="danger" size="sm">
