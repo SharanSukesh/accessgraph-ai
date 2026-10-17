@@ -74,6 +74,13 @@ class RecommendationEngine:
         await self.db.execute(
             delete(Recommendation).where(Recommendation.organization_id == org_id)
         )
+        # The health-derived actions are re-added above, so always clear
+        # them here, whatever track the delete above covers.
+        from app.services.health_actions import HEALTH_ACTION_TYPES
+        await self.db.execute(delete(Recommendation).where(
+            Recommendation.organization_id == org_id,
+            Recommendation.rec_type.in_(HEALTH_ACTION_TYPES),
+        ))
         if recommendations:
             self.db.add_all(recommendations)
         await self.db.commit()

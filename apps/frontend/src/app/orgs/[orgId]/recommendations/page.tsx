@@ -73,7 +73,7 @@ export default function RecommendationsPage() {
   // 'all' | 'security' | 'equity' — distinguishes anomaly-driven recs from
   // the new GAEA equity-driven track. Default 'all' so existing users see
   // the familiar full list, but the chip row above makes the split obvious.
-  const [trackFilter, setTrackFilter] = useState<'all' | 'security' | 'equity'>('all')
+  const [trackFilter, setTrackFilter] = useState<'all' | 'security' | 'equity' | 'deployment'>('all')
   const [selectedRec, setSelectedRec] = useState<any>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -257,6 +257,7 @@ export default function RecommendationsPage() {
           { value: 'all',      label: 'All',      icon: null },
           { value: 'security', label: 'Security', icon: ShieldAlert },
           { value: 'equity',   label: 'Equity',   icon: Scale },
+          { value: 'deployment', label: 'Deployment readiness', icon: Rocket },
         ] as const).map((chip) => {
           const active = trackFilter === chip.value
           const Icon = chip.icon
@@ -270,6 +271,8 @@ export default function RecommendationsPage() {
                     ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/25 dark:text-primary-300'
                     : chip.value === 'security'
                     ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                    : chip.value === 'deployment'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
                     : 'bg-grove-border text-grove-ink dark:bg-primary-900/20 dark:text-grove-ink-dk'
                   : 'bg-primary-50 text-grove-ink/85 dark:bg-primary-900/20 dark:text-grove-ink-dk/70 hover:bg-grove-border dark:hover:bg-primary-900/25'
               }`}
@@ -391,7 +394,7 @@ export default function RecommendationsPage() {
                                     <Database className="h-3 w-3 mr-1 inline" />
                                     Data quality
                                   </Badge>
-                                ) : rec.rec_type === 'deployment_readiness' ? (
+                                ) : rec.track === 'deployment' || rec.rec_type === 'deployment_readiness' ? (
                                   <Badge variant="warning" size="sm" title="From the Health Report">
                                     <Rocket className="h-3 w-3 mr-1 inline" />
                                     Deployment readiness
