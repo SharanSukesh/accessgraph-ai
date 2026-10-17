@@ -44,6 +44,8 @@ class DiagnosticPayload:
     # persisted on EquitySnapshot.raw_metrics['grouping_key']. None on
     # pre-fallback historical snapshots.
     grouping_key: Optional[str] = None
+    # "no_disparity" when the run found nothing to close (no grants).
+    reason: Optional[str] = None
 
 
 @dataclass
@@ -136,6 +138,7 @@ class EquityDiagnosticService:
             has_data=True,
             salesforce_instance_url=instance_url,
             grouping_key=grouping_key,
+            reason=raw.get("reason") if isinstance(raw, dict) else None,
         )
 
     async def history(self, org_id: str, limit: int = 30) -> List[HistoryPoint]:
