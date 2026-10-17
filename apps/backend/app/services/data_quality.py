@@ -845,8 +845,7 @@ class DataQualityService:
         return [{
             "field": f["name"],
             "populated_pct": None,
-            "label": ("not counted: Salesforce can't count this field type without reading record "
-                      "contents, which Newton doesn't do"),
+            "label": "not counted, to keep our promise of never reading record contents",
         } for f in text_fields]
 
     async def _analyze_sampled(

@@ -97,6 +97,8 @@ class RecommendationTrack(str, PyEnum):
     EQUITY = "equity"
     # Health Report actions about deploying change (e.g. Apex coverage).
     DEPLOYMENT = "deployment"
+    # Data Quality clean-ups (critical objects).
+    DATA_QUALITY = "data_quality"
 
 
 class RecommendationStatus(str, PyEnum):

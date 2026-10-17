@@ -26,7 +26,7 @@ from app.domain.models import (
 )
 
 # Priority Action types owned by this module (re-derived on every rebuild).
-HEALTH_ACTION_TYPES = (RecommendationType.DEPLOYMENT_READINESS,)
+HEALTH_ACTION_TYPES = (RecommendationType.DEPLOYMENT_READINESS, RecommendationType.DATA_CLEANUP)
 from app.services.replace_lock import lock_for_replace
 
 
@@ -85,6 +85,7 @@ def data_actions(org_id: str, scores: List[ObjectQualityScore]) -> List[Recommen
         out.append(Recommendation(
             organization_id=org_id,
             rec_type=RecommendationType.DATA_CLEANUP,
+            track=RecommendationTrack.DATA_QUALITY,
             status=RecommendationStatus.PENDING,
             severity=min((_FLAG_SEVERITY.get(f["code"], AnomalySeverity.LOW) for f in flags),
                          key=lambda sev: ["critical", "high", "medium", "low", "info"].index(sev.value)),

@@ -48,7 +48,8 @@ async def test_data_quality_runs_on_the_demo_org_and_flags_the_plants(async_db_s
     assert web["estimated"] and web["estimate_label"] == "estimated (sampled 10,000 of about 2,000,000)"
     # Long text can't be counted without reading record contents, so it's listed as not counted.
     notes = next(t for t in s["Account"].evidence["text_fields"] if t["field"] == "Strategy_Notes__c")
-    assert notes["populated_pct"] is None and notes["label"].startswith("not counted")
+    assert notes["populated_pct"] is None
+    assert notes["label"] == "not counted, to keep our promise of never reading record contents"
     # The integration user has no View All in the fixture: partial counts are labelled.
     assert s["Account"].evidence["coverage_label"] == "Based on records the integration user can see"
 
@@ -94,8 +95,11 @@ async def test_health_report_and_priority_actions_follow_the_run(async_db_sessio
         "Clean up Legacy Order: stale",
         "Clean up Partner Survey: mostly empty",
     ]
-    await RecommendationEngine(db).generate_recommendations(org_id)
-    assert len(await actions()) == 3  # kept across the anomaly-driven rebuild
+    for _ in range(2):
+        await RecommendationEngine(db).generate_recommendations(org_id)
+    kept = await actions()
+    assert len(kept) == 3  # kept across rebuilds, never duplicated
+    assert {r.track.value for r in kept} == {"data_quality"}
 
 
 def test_flags_never_call_a_sampled_field_never_populated():
