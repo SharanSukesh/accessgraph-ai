@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anomalyTypeLabel, rankLabel } from './anomalyTypes'
+import { anomalySummary, anomalyTypeLabel, rankLabel, riskLevelLabel } from './anomalyTypes'
 
 describe('anomaly display', () => {
   it('names each type by its strongest reason', () => {
@@ -15,5 +15,15 @@ describe('anomaly display', () => {
     expect(rankLabel(3, 1200)).toBe('#3 of 1,200')
     expect(rankLabel(2, null)).toBe('#2')
     expect(rankLabel(null, 400)).toBeNull()
+  })
+
+  it('summarises an access anomaly as rank, reason and risk level', () => {
+    expect(anomalySummary({ rank: 3, usersScored: 400, type: 'permission_accumulation', riskLevel: 'high' }))
+      .toBe('#3 of 400 · Permission accumulation · High risk')
+    // No risk score yet: rank and reason only, never an invented level.
+    expect(anomalySummary({ rank: 1, usersScored: 400, type: 'exclusive_access', riskLevel: null }))
+      .toBe('#1 of 400 · Exclusive access')
+    expect(riskLevelLabel('CRITICAL')).toBe('Critical risk')
+    expect(riskLevelLabel(undefined)).toBeNull()
   })
 })

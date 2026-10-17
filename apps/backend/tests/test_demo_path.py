@@ -87,3 +87,44 @@ async def test_demo_org_refuses_equity_and_record_access(client, lumenvale):  # 
     assert r.status_code == 409 and "Equity needs a live Salesforce connection" in r.json()["detail"]
     r = await client.get(f"/orgs/{org_id}/users/{NOOR}/record-access", cookies=cookie)
     assert r.status_code == 409 and "Record Access needs a live Salesforce connection" in r.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_access_anomalies_show_rank_reason_and_risk_not_severity(client, lumenvale):  # noqa: F811
+    org_id, cookie = lumenvale
+
+    anomalies = (await client.get(f"/orgs/{org_id}/anomalies", cookies=cookie)).json()
+    access = [a for a in anomalies if a["category"] == "access"]
+    assert access and all(a["severity"] is None for a in access)
+    assert all(a["riskLevel"] in ("low", "medium", "high", "critical") for a in access)
+    # Sorted by rank, not by score or severity.
+    assert [a["rank"] for a in access] == sorted(a["rank"] for a in access)
+
+    # Severity filters apply to session anomalies only.
+    critical = (await client.get(f"/orgs/{org_id}/anomalies", params={"severity": "critical"},
+                                 cookies=cookie)).json()
+    assert all(a["category"] == "session" for a in critical)
+
+    top = (await client.get(f"/orgs/{org_id}/anomalies/users/top", params={"limit": 3}, cookies=cookie)).json()
+    assert [t["rank"] for t in top] == [1, 2, 3]
+    assert all(t["severity"] is None and t["riskLevel"] for t in top)
+
+    one = (await client.get(f"/orgs/{org_id}/users/{JUN}/anomalies", cookies=cookie)).json()
+    assert one[0]["rank"] == 1 and one[0]["severity"] is None and one[0]["riskLevel"]
+
+
+@pytest.mark.asyncio
+async def test_report_context_lists_flagged_users_in_rank_order(async_db_session, lumenvale):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from app.services.report.context import gather_report_context
+
+    org_id, _ = lumenvale
+    ctx = await gather_report_context(async_db_session, org_id,
+                                      SimpleNamespace(snapshot_at=datetime.now(timezone.utc)))
+    assert [a["rank"] for a in ctx.flagged_access] == list(range(1, 9))
+    assert ctx.flagged_access[0]["reason"] == "Exclusive access"
+    assert all(a["risk_level"] and a["users_scored"] == 400 for a in ctx.flagged_access)
+    # No severity counts for access anomalies; the demo org has no session anomalies.
+    assert ctx.anomaly_counts == {}

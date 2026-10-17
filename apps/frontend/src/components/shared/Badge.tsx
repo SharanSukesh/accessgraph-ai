@@ -47,9 +47,11 @@ export function Badge({
 export interface RiskBadgeProps extends Omit<BadgeProps, 'variant'> {
   level: 'low' | 'medium' | 'high' | 'critical'
   showLabel?: boolean
+  /** Appended to the label, e.g. " risk" to read "High risk". */
+  suffix?: string
 }
 
-export function RiskBadge({ level, showLabel = true, ...props }: RiskBadgeProps) {
+export function RiskBadge({ level, showLabel = true, suffix = '', ...props }: RiskBadgeProps) {
   const variantMap = {
     low: 'success' as const,
     medium: 'warning' as const,
@@ -66,7 +68,7 @@ export function RiskBadge({ level, showLabel = true, ...props }: RiskBadgeProps)
 
   return (
     <Badge variant={variantMap[level]} {...props}>
-      {showLabel && labels[level]}
+      {showLabel && `${labels[level]}${suffix}`}
     </Badge>
   )
 }

@@ -141,27 +141,38 @@ export function exportStamp(date: Date = new Date()): string {
 /**
  * Export anomalies to CSV, in the order shown (rank 1 first).
  */
-export function exportAnomaliesToCSV(anomalies: any[], filename: string = 'anomalies'): void {
-  const rows = anomalies.map((a) => ({
+/** Anomaly CSV columns. Access anomalies: rank, type and the user's risk
+ * level; severity is filled for session anomalies only. */
+type AnomalyCSVRow = ReturnType<typeof anomalyCSVRows>[number]
+
+export const ANOMALY_CSV_COLUMNS: { key: keyof AnomalyCSVRow; label: string }[] = [
+  { key: 'rank', label: 'Rank' },
+  { key: 'user', label: 'User' },
+  { key: 'category', label: 'Category' },
+  { key: 'type', label: 'Type' },
+  { key: 'riskLevel', label: 'Risk level' },
+  { key: 'sessionSeverity', label: 'Session severity' },
+  { key: 'score', label: 'Anomaly score' },
+  { key: 'reasons', label: 'Reasons' },
+  { key: 'detectedAt', label: 'Detected at' },
+]
+
+export function anomalyCSVRows(anomalies: any[]) {
+  return anomalies.map((a) => ({
     rank: a.rank ?? '',
     user: a.userName ?? a.user_name ?? '',
     category: a.category ?? 'access',
     type: anomalyTypeLabel(a.type) ?? '',
-    severity: a.severity,
+    riskLevel: a.riskLevel ?? '',
+    sessionSeverity: a.category === 'session' ? a.severity ?? '' : '',
     score: typeof a.score === 'number' ? a.score.toFixed(3) : '',
     reasons: (a.reasons ?? []).join(' | '),
     detectedAt: a.detectedAt ?? a.detected_at ?? '',
   }))
-  exportToCSV(rows, filename, [
-    { key: 'rank', label: 'Rank' },
-    { key: 'user', label: 'User' },
-    { key: 'category', label: 'Category' },
-    { key: 'type', label: 'Type' },
-    { key: 'severity', label: 'Severity' },
-    { key: 'score', label: 'Anomaly score' },
-    { key: 'reasons', label: 'Reasons' },
-    { key: 'detectedAt', label: 'Detected at' },
-  ])
+}
+
+export function exportAnomaliesToCSV(anomalies: any[], filename: string = 'anomalies'): void {
+  exportToCSV(anomalyCSVRows(anomalies), filename, ANOMALY_CSV_COLUMNS)
 }
 
 /**

@@ -21,12 +21,13 @@ interface AnomalyFilters {
   offset?: number
 }
 
-interface Anomaly {
+export interface Anomaly {
   id: string
   userId: string
   userName?: string
   score: number
-  severity: string
+  /** Session anomalies only; access anomalies show rank, reason and risk level. */
+  severity?: string | null
   category?: 'access' | 'session'
   reasons: string[]
   type?: string  // Added for frontend display
@@ -40,16 +41,21 @@ interface Anomaly {
   detectedAt: string
   rank?: number | null
   usersScored?: number | null
+  /** The user's latest risk level (impact), shown beside the rank. */
+  riskLevel?: string | null
+  riskScore?: number | null
 }
 
-interface TopAnomalousUser {
+export interface TopAnomalousUser {
   userId: string
   userName: string
   userEmail: string
   anomalyScore: number
-  severity: string
+  severity?: string | null
+  category?: 'access' | 'session'
   topReasons: string[]
-  riskScore?: number
+  riskScore?: number | null
+  riskLevel?: string | null
   anomalyType?: string | null
   rank?: number | null
   usersScored?: number | null

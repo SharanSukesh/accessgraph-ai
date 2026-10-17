@@ -271,7 +271,6 @@ MIN_USERS_FOR_UNIQUE = 3
 MIN_USERS_FOR_PAIR = 10
 # (key kind) -> value when the user is the sole holder; half when one of two.
 UNIQUE_VALUES = {"perm": 0.7, "modify_all": 0.5, "delete": 0.3}
-ANOMALY_SEVERITY_VALUES = {"critical": 1.0, "high": 0.75, "medium": 0.5, "low": 0.3, "info": 0.1}
 MAX_EVIDENCE = 8
 _ADMIN_PROFILE_RE = re.compile(r"\b(system\s*admin(istrator)?|sys\.?\s*admin)\b", re.IGNORECASE)
 
@@ -947,15 +946,18 @@ class RiskScoringService:
         anomaly = ctx.anomalies.get(user.salesforce_id)
         if anomaly is None:
             return self._factor(key, 0.0, "Access pattern is in line with peers (no anomaly flagged).", [])
-        severity = anomaly.severity.value if hasattr(anomaly.severity, "value") else str(anomaly.severity)
-        sev_value = ANOMALY_SEVERITY_VALUES.get(severity, 0.3)
-        score = 0.5 * sev_value + 0.5 * min(max(anomaly.anomaly_score or 0.0, 0.0), 1.0)
+        # Being flagged (top 2%) counts in full; the anomaly score refines it.
+        # Severity isn't used: for access anomalies it carried no information.
+        score = 0.5 + 0.5 * min(max(anomaly.anomaly_score or 0.0, 0.0), 1.0)
         evidence = [{"label": reason, "kind": "anomaly"} for reason in (anomaly.reasons or [])]
+        stats = anomaly.peer_stats or {}
+        rank, scored = stats.get("rank"), stats.get("users_scored")
+        position = f"#{rank} of {scored}" if rank and scored else "in the top 2%"
         description = (
-            f"Flagged as a {severity}-severity access outlier versus peers "
+            f"Flagged as an access outlier versus peers, ranked {position} "
             f"(anomaly score {anomaly.anomaly_score:.2f})."
         )
-        headline = f"was flagged as a {severity}-severity access outlier versus peers"
+        headline = f"was flagged as an access outlier versus peers ({position})"
         return self._factor(key, score, description, evidence, headline)
 
     def _dormancy_factor(

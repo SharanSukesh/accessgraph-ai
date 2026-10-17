@@ -33,6 +33,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.services import privacy_mode
+from app.services.anomaly_detection import ANOMALY_TYPE_LABELS
 from app.services.report.context import ReportContext, _value
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,6 @@ USD = '"$"#,##0'
 USD_CENTS = '"$"#,##0.00'
 PCT = '0.0"%"'
 HEADER_FILL = PatternFill("solid", fgColor="E8F1EC")
-ANOMALY_TYPE_LABELS = {
-    "exclusive_access": "Exclusive access", "role_mismatch": "Role mismatch",
-    "permission_accumulation": "Permission accumulation", "over_privilege": "Over-privilege",
-    "dormant_access": "Dormant access", "unusual_access": "Unusual access",
-}
 PRICE_NOTE = "Savings use Salesforce's published list prices; negotiated rates replace them where entered."
 
 
@@ -186,7 +182,7 @@ async def _license_fit(ws: Worksheet, db: AsyncSession, ctx: ReportContext, user
 async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed: bool) -> None:
     columns = [
         Column("Rank", 7, "0"), Column("User", 24), Column("Category", 11), Column("Type", 24),
-        Column("Severity", 11),
+        Column("Risk level", 11), Column("Session severity", 15),
         Column("Anomaly score", 14, "0.000"), Column("Reasons", 100, wrap=True),
     ]
     if not users_allowed:
@@ -196,15 +192,32 @@ async def _anomalies(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed
         .join(UserSnapshot, (UserSnapshot.salesforce_id == AccessAnomaly.user_id)
               & (UserSnapshot.organization_id == AccessAnomaly.organization_id))
         .where(AccessAnomaly.organization_id == org_id)
-        .order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
     )).all()
+    levels = {r.entity_id: _value(r.risk_level) for r in await _latest_risks(db, org_id)}
+    # Access anomalies by rank, then session anomalies by score.
+    rows = sorted(rows, key=lambda r: (
+        r[0].category == "session", (r[0].peer_stats or {}).get("rank") or 10**9, -(r[0].anomaly_score or 0)))
     _table(ws, columns, (
         ((a.peer_stats or {}).get("rank"), name, a.category or "access",
          ANOMALY_TYPE_LABELS.get((a.peer_stats or {}).get("anomaly_type"), "") if a.category != "session" else "Session",
-         _value(a.severity),
+         (levels.get(a.user_id) or '').capitalize() or None,
+         _value(a.severity) if a.category == "session" else None,
          a.anomaly_score, "\n".join(a.reasons or []))
         for a, name in rows
     ), "No anomalies flagged.")
+
+
+async def _latest_risks(db: AsyncSession, org_id: str) -> List[RiskScore]:
+    latest = (
+        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
+        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        .group_by(RiskScore.entity_id)
+        .subquery()
+    )
+    return list((await db.execute(
+        select(RiskScore).join(latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at))
+        .where(RiskScore.organization_id == org_id)
+    )).scalars().all())
 
 
 async def _user_risk(ws: Worksheet, db: AsyncSession, org_id: str, users_allowed: bool) -> None:

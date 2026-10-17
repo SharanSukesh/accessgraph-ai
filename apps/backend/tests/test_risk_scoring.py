@@ -468,7 +468,8 @@ async def test_peer_deviation_uses_latest_access_anomaly(async_db_session):
     scores = await _score(db, b.org_id)
 
     peer = _factor(scores[reps[0]], "peer_deviation")
-    assert peer["score"] == pytest.approx(0.5 * 0.75 + 0.5 * 0.8)
+    # Flagged at all gives half; the anomaly score supplies the rest (severity is no longer used).
+    assert peer["score"] == pytest.approx(0.5 + 0.5 * 0.8)
     assert peer["evidence"][0]["label"] == "Edits 3x more objects than peers"
     assert _factor(scores[reps[1]], "peer_deviation")["score"] == 0
 
@@ -588,3 +589,28 @@ async def test_query_count_is_independent_of_user_count(async_db_session):
     finally:
         event.remove(engine, "before_cursor_execute", _count)
     assert counts[0] == counts[1], counts
+
+
+@pytest.mark.asyncio
+async def test_anomaly_control_counts_flagged_users_at_high_risk(async_db_session):
+    """The compliance control uses the flagged user's risk level, not an anomaly severity."""
+    from app.domain.models import RiskLevel, RiskScore
+    from app.services.compliance_scorecard import _eval_no_critical_anomalies_open
+
+    db = async_db_session
+    org_id = await _new_org(db)
+    now = datetime.now(timezone.utc)
+    for uid, level in (("005a", RiskLevel.HIGH), ("005b", RiskLevel.LOW)):
+        db.add(AccessAnomaly(organization_id=org_id, user_id=uid, anomaly_score=0.9,
+                             severity=AnomalySeverity.CRITICAL, reasons=["r"], detected_at=now,
+                             category="access", peer_stats={"rank": 1}))
+        db.add(RiskScore(organization_id=org_id, entity_type="user", entity_id=uid, risk_score=50,
+                         risk_level=level, reason_text="r", calculated_at=now))
+    # An older high score for 005b no longer counts.
+    db.add(RiskScore(organization_id=org_id, entity_type="user", entity_id="005b", risk_score=80,
+                     risk_level=RiskLevel.HIGH, reason_text="r", calculated_at=now - timedelta(days=3)))
+    await db.flush()
+
+    result = await _eval_no_critical_anomalies_open(db, org_id)
+    assert result.metric_value == 1
+    assert "high or critical-risk" in result.metric
