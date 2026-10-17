@@ -14,6 +14,7 @@ from app.domain.models import (
     AnomalySeverity,
     Recommendation,
     RecommendationStatus,
+    RecommendationTrack,
     RecommendationType,
     UserSnapshot,
 )
@@ -45,13 +46,6 @@ class RecommendationEngine:
         """
         logger.info(f"Generating recommendations for org: {org_id}")
 
-        # Delete old recommendations for this org to prevent duplicates
-        from sqlalchemy import delete
-        await self.db.execute(
-            delete(Recommendation).where(Recommendation.organization_id == org_id)
-        )
-        await self.db.commit()
-
         recommendations = []
 
         # Get anomalies
@@ -72,8 +66,12 @@ class RecommendationEngine:
         # Replace in one locked transaction so an overlapping run can't
         # leave two sets (see services/replace_lock.py).
         await lock_for_replace(self.db, org_id, "recommendations")
+        # Security track only: Equity's grants are replaced by its own runs.
         await self.db.execute(
-            delete(Recommendation).where(Recommendation.organization_id == org_id)
+            delete(Recommendation).where(
+                Recommendation.organization_id == org_id,
+                Recommendation.track == RecommendationTrack.SECURITY,
+            )
         )
         if recommendations:
             self.db.add_all(recommendations)

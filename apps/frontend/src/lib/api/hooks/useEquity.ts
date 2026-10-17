@@ -34,6 +34,8 @@ export interface EquityDiagnostic {
   // Null on pre-fallback historical snapshots — frontend treats null
   // as 'department' since that was the only option before the ladder.
   grouping_key?: string | null
+  // 'no_disparity': the latest run found nothing to close and added no grants.
+  reason?: string | null
 }
 
 export interface EquityHistoryPoint {
