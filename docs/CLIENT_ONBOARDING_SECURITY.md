@@ -48,9 +48,18 @@ long as it is valid.
    - View All Users
    - View All Profiles (if shown in the org)
 4. **Optional, decide with the client:**
-   - *View All Data*: needed for Data Quality and record counts to cover
-     every record. Without it, those numbers reflect only records the
-     integration user can see. Newton still only runs aggregate queries.
+   - *Read and View All on the objects Data Quality scores* (default:
+     Account, Contact, Opportunity, Lead, Case; add any custom objects the
+     client wants scored). This is the per-object "View All" permission,
+     not the org-wide *View All Data*, which Newton doesn't need. Without
+     it, Data Quality and record-access counts cover only records the
+     integration user can see, and Newton labels them "Based on records
+     the integration user can see". If the client prefers, View All Data
+     also works. Newton only runs aggregate queries (counts); for very
+     large objects it counts over the first records in Id order and
+     labels those figures as estimates. Long and rich text fields can't
+     be counted without reading their contents, so Newton lists them as
+     not counted.
    - *Login history*: Salesforce restricts LoginHistory to users with
      user-management rights in many orgs. If the integration user can't
      read it, Newton skips login-anomaly detection; everything else works.

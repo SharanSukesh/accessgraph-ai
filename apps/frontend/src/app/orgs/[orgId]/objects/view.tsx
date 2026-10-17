@@ -28,6 +28,7 @@ import {
   type DataQualityScope,
   type ObjectScore,
 } from '@/lib/api/hooks/useDataQuality'
+import { CriticalObjectsPanel } from '@/components/dataQuality/CriticalObjectsPanel'
 
 export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
   const params = useParams()
@@ -46,7 +47,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
   // Hydrates on first paint; no-op if the engine has never run.
   // Metadata-only clients may opt out of record counts and fill rates,
   // which is all Data Quality is built from.
-  const { currentOrg } = useAuth()
+  const { currentOrg, canWrite } = useAuth()
   const dqAvailable = isFeatureAvailable(currentOrg, 'data_quality')
   const dqUnavailableReason = `${unavailableMessage(privacyModeOf(currentOrg))} without aggregate record statistics`
   const { data: dqSummary } = useDataQualityLatest(orgId, { enabled: dqAvailable })
@@ -332,6 +333,15 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
           summary={dqSummary}
           scoredCount={scoredCount}
           emptyCount={emptyCount}
+        />
+      )}
+
+      {dqAvailable && (
+        <CriticalObjectsPanel
+          orgId={orgId}
+          scores={dqObjects?.objects}
+          hasRun={!!dqSummary?.has_data}
+          canEdit={canWrite}
         />
       )}
 

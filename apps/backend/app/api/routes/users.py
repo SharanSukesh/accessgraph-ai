@@ -723,6 +723,7 @@ async def get_user_record_access(
     """
     from app.ingestion.demo_orgs import refuse_demo_org
     from app.services.record_access import RecordAccessService
+    from app.services.record_coverage import latest_record_coverage
 
     await refuse_demo_org(db, org_id, "Record Access")
     # Create service instance
@@ -741,6 +742,8 @@ async def get_user_record_access(
         "teamAccess": access_info["team_access"],
         "sharingRules": access_info["sharing_rules"],
         "summary": access_info["summary"],
+        # Whether share rows cover every record; label shown when not.
+        "coverage": await latest_record_coverage(db, org_id),
     }
 
 

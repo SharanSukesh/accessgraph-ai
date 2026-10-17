@@ -1,0 +1,6 @@
+{
+ "_source": "Roadmap item 31. Hand-written, synthetic. What a live sync records about the integration user's record visibility: Lumenvale's has no View All Data and no View All on Account or Opportunity, so record-access views carry the partial label.",
+ "demo_live": {
+  "record_coverage": {"checked": true, "view_all_data": false, "view_all": {"Account": false, "Opportunity": false}}
+ }
+}

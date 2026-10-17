@@ -553,6 +553,12 @@ class AnalyzerContext:
     apex_classes: List[Dict[str, Any]] = field(default_factory=list)
     apex_triggers: List[Dict[str, Any]] = field(default_factory=list)
     apex_coverage: List[Dict[str, Any]] = field(default_factory=list)
+    # services/code_coverage.summarize_coverage(): org-wide %, 0% lists,
+    # last test run. None when the org returned no coverage at all.
+    code_coverage: Optional[Dict[str, Any]] = None
+    # Critical objects from the latest Data Quality run:
+    # [{object, label, record_count, flags, caveats}]
+    critical_objects: List[Dict[str, Any]] = field(default_factory=list)
     flows: List[Dict[str, Any]] = field(default_factory=list)
     workflow_rules: List[Dict[str, Any]] = field(default_factory=list)
     validation_rules: List[Dict[str, Any]] = field(default_factory=list)
@@ -561,6 +567,9 @@ class AnalyzerContext:
     permission_set_licenses: List[Dict[str, Any]] = field(default_factory=list)
     stale_opportunities_count: Optional[int] = None
     top_account_owners: List[Dict[str, Any]] = field(default_factory=list)
+    # services/record_coverage.summarize() of the latest sync: whether
+    # share rows and owner counts cover every record.
+    record_coverage: Dict[str, Any] = field(default_factory=dict)
     total_account_count: Optional[int] = None
 
     # Org-edition state (populated from the Organization sObject). Drives
@@ -638,6 +647,9 @@ class OrgAnalyzerService:
             run_row.status = "completed"
             run_row.ended_at = datetime.now(timezone.utc)
             await self.db.commit()
+            # Health-derived Priority Actions (coverage below the deploy gate).
+            from app.services.health_actions import replace_health_actions
+            await replace_health_actions(self.db, self.org_id, ctx.code_coverage)
             return snapshot
         except Exception as e:
             logger.exception("Org analyzer run failed for org %s", self.org_id)
@@ -673,6 +685,9 @@ class OrgAnalyzerService:
         ctx.field_perms = await _q(FieldPermissionSnapshot)
         ctx.groups = await _q(GroupSnapshot)
         ctx.group_members = await _q(GroupMemberSnapshot)
+        from app.services.record_coverage import latest_record_coverage
+        ctx.record_coverage = await latest_record_coverage(self.db, self.org_id)
+        ctx.critical_objects = await self._latest_critical_objects()
         ctx.account_shares = await _q(AccountShareSnapshot)
         ctx.opportunity_shares = await _q(OpportunityShareSnapshot)
         ctx.sharing_rules = await _q(SharingRuleSnapshot)
@@ -862,6 +877,11 @@ class OrgAnalyzerService:
             ctx.apex_coverage = await sf_client.get_apex_coverage()
         except Exception as e:
             logger.warning("get_apex_coverage failed: %s", e)
+        try:
+            from app.services.code_coverage import summarize_coverage
+            ctx.code_coverage = summarize_coverage(await sf_client.get_code_coverage())
+        except Exception as e:
+            logger.warning("get_code_coverage failed: %s", e)
 
         # LoginHistory (last 90 days)
         if ctx.allow_login_history:
@@ -945,6 +965,7 @@ class OrgAnalyzerService:
             self._analyze_sharing,
             self._analyze_limits,
             self._analyze_data_quality,
+            self._critical_object_findings,
             self._analyze_activity,
             self._analyze_predictive,
         ]
@@ -1594,6 +1615,151 @@ class OrgAnalyzerService:
 
         return out
 
+    # ----------------------- critical objects (from Data Quality)
+
+    async def _latest_critical_objects(self) -> List[Dict[str, Any]]:
+        from app.domain.models import DataQualityRun, ObjectQualityScore
+        run = (await self.db.execute(
+            select(DataQualityRun).where(DataQualityRun.organization_id == self.org_id)
+            .order_by(DataQualityRun.snapshot_at.desc()).limit(1)
+        )).scalar_one_or_none()
+        if run is None:
+            return []
+        rows = (await self.db.execute(
+            select(ObjectQualityScore).where(ObjectQualityScore.run_id == run.id)
+        )).scalars().all()
+        out = []
+        for r in rows:
+            ev = r.evidence or {}
+            flags = (ev.get("critical") or {}).get("flags") or []
+            if flags:
+                out.append({
+                    "object": r.object_name, "label": r.object_label, "record_count": r.record_count,
+                    "flags": flags,
+                    "caveats": [c for c in (ev.get("estimate_label"), ev.get("coverage_label")) if c],
+                    "run_at": run.snapshot_at.isoformat() if run.snapshot_at else None,
+                })
+        return out
+
+    def _critical_object_findings(self, ctx: AnalyzerContext) -> List[FindingDraft]:
+        """One finding per flag type, listing the objects, from the latest
+        Data Quality run. Nothing when Data Quality hasn't run."""
+        out: List[FindingDraft] = []
+        specs = [
+            ("stale", "CRITICAL_OBJECT_STALE", FindingCategory.DATA_QUALITY, FindingSeverity.MEDIUM,
+             "Mostly stale records on {n} object{s}",
+             "Most records on these objects haven't been modified within the staleness window. Old data costs "
+             "storage, slows reports and confuses users; archiving or deleting it is billable clean-up work.",
+             "Agree a retention rule per object with the data owner, then archive or delete records outside it."),
+            ("mostly_empty", "CRITICAL_OBJECT_MOSTLY_EMPTY", FindingCategory.DATA_QUALITY, FindingSeverity.LOW,
+             "{n} mostly empty object{s}",
+             "On these objects most inspected fields hold no value, so reports and automation built on them see "
+             "little data.",
+             "Confirm which fields the business still needs; back-fill those and retire the rest."),
+            ("never_populated", "FIELDS_NEVER_POPULATED", FindingCategory.CONFIG_BLOAT, FindingSeverity.LOW,
+             "{f} never-populated field{fs} on {n} object{s}",
+             "These fields hold no value on any record. Unused fields clutter page layouts and reports and add to "
+             "every future change.",
+             "Check reports, integrations and code for references, then delete the fields."),
+        ]
+        for code, finding_code, category, severity, title, description, action in specs:
+            hits = [(o, next(f for f in o["flags"] if f["code"] == code))
+                    for o in ctx.critical_objects if any(f["code"] == code for f in o["flags"])]
+            if not hits:
+                continue
+            n = len(hits)
+            n_fields = sum(len(f.get("fields") or []) for _, f in hits)
+            caveats = sorted({c for o, _ in hits for c in o["caveats"]})
+            out.append(FindingDraft(
+                category=category,
+                code=finding_code,
+                severity=severity,
+                title=title.format(n=n, s="" if n == 1 else "s", f=n_fields, fs="" if n_fields == 1 else "s"),
+                description=description + (" Some counts are " + "; ".join(caveats).lower() + "." if caveats else ""),
+                recommended_action=action,
+                affected_count=n_fields if code == "never_populated" else n,
+                evidence={
+                    "objects": [{"object": o["object"], "label": o["label"], "record_count": o["record_count"],
+                                 "reason": f["reason"], "caveats": o["caveats"]} for o, f in hits],
+                    "source": "Data Quality run",
+                    "run_at": hits[0][0].get("run_at"),
+                },
+                sf_setup_deeplink="/lightning/setup/ObjectManager/home",
+            ))
+        return out
+
+    # ----------------------- code coverage (deployment readiness)
+
+    def _coverage_findings(self, ctx: AnalyzerContext) -> List[FindingDraft]:
+        cov = ctx.code_coverage
+        if not cov:
+            return []
+        from app.services.code_coverage import DEPLOY_GATE_PCT, STALE_AFTER_DAYS
+        out: List[FindingDraft] = []
+        evidence = {k: cov[k] for k in ("org_wide_pct", "org_wide_source", "gate_pct", "last_test_run",
+                                        "days_since_run", "measured")}
+        pct = cov.get("org_wide_pct")
+        if cov.get("below_gate"):
+            out.append(FindingDraft(
+                category=FindingCategory.AUTOMATION_HYGIENE,
+                code="ORG_COVERAGE_BELOW_GATE",
+                severity=FindingSeverity.HIGH,
+                title=f"Org-wide Apex coverage is {pct:g}%, below the {DEPLOY_GATE_PCT:g}% deployment gate",
+                description=(
+                    f"Salesforce blocks production deployments of Apex unless org-wide test coverage is at "
+                    f"least {DEPLOY_GATE_PCT:g}%. At {pct:g}%, any change that includes Apex will fail to "
+                    "deploy until tests are added or fixed. Budget test work before quoting Apex changes."
+                ),
+                recommended_action="Write tests for the lowest-covered classes and triggers first (see the 0% lists), then re-run all tests.",
+                affected_count=cov.get("below_gate_items") or 0,
+                evidence={**evidence, "lowest": cov.get("lowest"), "zero_classes": cov.get("zero_classes"),
+                          "zero_triggers": cov.get("zero_triggers")},
+                sf_setup_deeplink="/lightning/setup/ApexTestQueue/home",
+            ))
+        below = cov.get("below_gate_items") or 0
+        if below:
+            zeros = len(cov.get("zero_classes") or []) + len(cov.get("zero_triggers") or [])
+            out.append(FindingDraft(
+                category=FindingCategory.AUTOMATION_HYGIENE,
+                code="APEX_LOW_COVERAGE",
+                # When the org-wide gate finding is raised it carries the
+                # severity; this list is its detail, so it isn't counted twice.
+                severity=(FindingSeverity.MEDIUM if cov.get("below_gate")
+                          else _severity_for_count(below, [1, 3, 10, 25])),
+                title=f"{below} Apex classes/triggers have <{DEPLOY_GATE_PCT:g}% test coverage"
+                      + (f" ({zeros} at 0%)" if zeros else ""),
+                description=(
+                    "Classes and triggers with little or no test coverage are what pull org-wide coverage "
+                    "down, and untested triggers run on every save of their object."
+                ),
+                recommended_action="Add unit tests, starting with triggers and classes at 0%.",
+                affected_count=below,
+                evidence={**evidence, "lowest": cov.get("lowest"), "zero_classes": cov.get("zero_classes"),
+                          "zero_triggers": cov.get("zero_triggers")},
+                sf_setup_deeplink="/lightning/setup/ApexClasses/home",
+            ))
+        changed = cov.get("changed_since_run_count") or 0
+        if cov.get("stale") or changed:
+            days = cov.get("days_since_run")
+            when = f"{days} days ago" if days is not None else "at an unknown time (no test run found)"
+            out.append(FindingDraft(
+                category=FindingCategory.AUTOMATION_HYGIENE,
+                code="APEX_COVERAGE_STALE",
+                severity=FindingSeverity.MEDIUM,
+                title=(f"Coverage figures date from a test run {when}"
+                       + (f"; {changed} class{'es' if changed != 1 else ''}/trigger{'s' if changed != 1 else ''} changed since" if changed else "")),
+                description=(
+                    "Coverage is recorded when tests run, so these figures describe the code as it was then. "
+                    + (f"Tests haven't run in over {STALE_AFTER_DAYS} days. " if cov.get("stale") else "")
+                    + ("Code changed after the last run may be covered differently now." if changed else "")
+                ).strip(),
+                recommended_action="Run all tests in a sandbox refreshed from production (or in production during a quiet window) before relying on these numbers.",
+                affected_count=changed,
+                evidence={**evidence, "changed_since_run": cov.get("changed_since_run")},
+                sf_setup_deeplink="/lightning/setup/ApexTestQueue/home",
+            ))
+        return out
+
     # ----------------------- 2. configuration bloat / redundancy
 
     def _analyze_configuration(self, ctx: AnalyzerContext) -> List[FindingDraft]:
@@ -1894,7 +2060,7 @@ class OrgAnalyzerService:
     def _analyze_automation(self, ctx: AnalyzerContext) -> List[FindingDraft]:
         out: List[FindingDraft] = []
         if not (ctx.apex_triggers or ctx.flows or ctx.workflow_rules
-                or ctx.apex_coverage or ctx.validation_rules):
+                or ctx.apex_coverage or ctx.validation_rules or ctx.code_coverage):
             return out
 
         # TRIGGER_MULTI_PER_OBJECT
@@ -1995,10 +2161,17 @@ class OrgAnalyzerService:
                 sf_setup_deeplink="/lightning/setup/Flows/home",
             ))
 
-        # APEX_LOW_COVERAGE
+        out.extend(self._coverage_findings(ctx))
+
+        # APEX_LOW_COVERAGE (older path: only when the fuller coverage read
+        # above returned nothing)
         class_by_id = {c.get("Id"): c for c in ctx.apex_classes}
         low_cov = []
-        for cov in ctx.apex_coverage:
+        if ctx.code_coverage:
+            fallback_coverage = []
+        else:
+            fallback_coverage = ctx.apex_coverage
+        for cov in fallback_coverage:
             covered = cov.get("NumLinesCovered") or 0
             uncovered = cov.get("NumLinesUncovered") or 0
             total = covered + uncovered
@@ -2136,10 +2309,11 @@ class OrgAnalyzerService:
                     "sharing model that's compensating for missing "
                     "hierarchy or sharing-rule design. Manual shares are "
                     "fragile and expensive to maintain."
+                    + _coverage_sentence(ctx, "Account")
                 ),
                 recommended_action="Audit how these manual shares accumulate. Consider broader sharing rules, role-hierarchy adjustments, or account teams.",
                 affected_count=len(ctx.account_shares),
-                evidence={"count": len(ctx.account_shares)},
+                evidence={"count": len(ctx.account_shares), **_coverage_evidence(ctx, "Account")},
             ))
         if len(ctx.opportunity_shares) > 10000:
             out.append(FindingDraft(
@@ -2150,10 +2324,11 @@ class OrgAnalyzerService:
                 description=(
                     "Same pattern as Account shares — manual shares at "
                     "this scale indicate a structural sharing-model gap."
+                    + _coverage_sentence(ctx, "Opportunity")
                 ),
                 recommended_action="Audit and consolidate via sharing rules or opportunity teams.",
                 affected_count=len(ctx.opportunity_shares),
-                evidence={"count": len(ctx.opportunity_shares)},
+                evidence={"count": len(ctx.opportunity_shares), **_coverage_evidence(ctx, "Opportunity")},
             ))
 
         # SHARING_RULE_BLOAT
@@ -2462,6 +2637,7 @@ class OrgAnalyzerService:
                         "skews reporting toward a small handful of reps. "
                         "Rebalancing improves coverage + retention "
                         "telemetry."
+                        + _coverage_sentence(ctx, "Account")
                     ),
                     recommended_action="Run a coverage analysis with sales-ops and reassign accounts to underloaded reps.",
                     affected_count=top5_total,
@@ -2469,6 +2645,7 @@ class OrgAnalyzerService:
                         "top_owners": evidence_top,
                         "total_accounts_in_org": ctx.total_account_count,
                         "top5_share_pct": round(pct * 100, 1),
+                        **_coverage_evidence(ctx, "Account"),
                     },
                     sf_setup_deeplink="/lightning/o/Account/list",
                 ))
@@ -2599,8 +2776,10 @@ class OrgAnalyzerService:
             "total_roles": len(ctx.roles),
             "total_account_shares": len(ctx.account_shares),
             "total_opportunity_shares": len(ctx.opportunity_shares),
-            "total_apex_classes": len(ctx.apex_classes),
-            "total_apex_triggers": len(ctx.apex_triggers),
+            # Fall back to the coverage read's class list when the Tooling
+            # list came back empty, so the counts never contradict it.
+            "total_apex_classes": len(ctx.apex_classes) or (ctx.code_coverage or {}).get("classes", 0),
+            "total_apex_triggers": len(ctx.apex_triggers) or (ctx.code_coverage or {}).get("triggers", 0),
             "total_flows": len(ctx.flows),
             "total_workflow_rules": len(ctx.workflow_rules),
             "total_validation_rules": len(ctx.validation_rules),
@@ -2608,6 +2787,7 @@ class OrgAnalyzerService:
             "stale_open_opportunities_count": ctx.stale_opportunities_count,
             "sobject_record_counts": ctx.sobject_record_counts,
             "license_utilization": license_utilization,
+            "code_coverage": ctx.code_coverage,
         }
 
         # Compose the executive-summary narrative + delta vs prior snapshot
@@ -2685,6 +2865,21 @@ def _ensure_aware(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _coverage_sentence(ctx: AnalyzerContext, obj: str) -> str:
+    ev = _coverage_evidence(ctx, obj)
+    return f" {ev['coverage']}." if ev else ""
+
+
+def _coverage_evidence(ctx: AnalyzerContext, obj: str) -> Dict[str, Any]:
+    """Evidence note for findings built from records the integration user
+    can see: empty when it can see every record of obj."""
+    status = (ctx.record_coverage.get("objects") or {}).get(obj, "unknown")
+    if status == "full":
+        return {}
+    from app.services.record_coverage import PARTIAL_LABEL
+    return {"coverage": PARTIAL_LABEL, "coverage_status": status}
 
 
 def _cost_calc(

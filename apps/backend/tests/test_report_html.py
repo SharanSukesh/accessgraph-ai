@@ -52,3 +52,18 @@ def test_compliance_section_is_framed_as_indicators():
     html = _build_html("Org", snap, [], ctx=ctx)
     assert "Compliance Control Indicators" in html
     assert "Not an audit opinion, attestation, or certification." in html
+
+
+def test_code_coverage_block_states_the_gate_and_staleness():
+    from app.services.code_coverage import summarize_coverage
+    from app.ingestion.demo_orgs import load_fixture
+    from datetime import datetime, timezone
+
+    cov = summarize_coverage(load_fixture("synthetic_mid_market")["demo_live"]["code_coverage"],
+                             now=datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc))
+    snap = NS(snapshot_at=datetime(2026, 10, 14, tzinfo=timezone.utc), executive_summary=None,
+              metrics={"org_health_score": 70, "code_coverage": cov}, org_limits={})
+    html = _build_html("Org", snap, [], ctx=ReportContext())
+    assert "<strong>71%</strong>, below the 75% deployment gate" in html
+    assert "40 days before this analysis (out of date)" in html
+    assert "RenewalService" in html and "Newton never runs tests" in html
