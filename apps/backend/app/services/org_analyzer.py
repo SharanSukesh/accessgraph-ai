@@ -584,6 +584,9 @@ class AnalyzerContext:
     permission_set_licenses: List[Dict[str, Any]] = field(default_factory=list)
     stale_opportunities_count: Optional[int] = None
     top_account_owners: List[Dict[str, Any]] = field(default_factory=list)
+    # services/record_coverage.summarize() of the latest sync: whether
+    # share rows and owner counts cover every record.
+    record_coverage: Dict[str, Any] = field(default_factory=dict)
     total_account_count: Optional[int] = None
 
     # Org-edition state (populated from the Organization sObject). Drives
@@ -696,6 +699,8 @@ class OrgAnalyzerService:
         ctx.field_perms = await _q(FieldPermissionSnapshot)
         ctx.groups = await _q(GroupSnapshot)
         ctx.group_members = await _q(GroupMemberSnapshot)
+        from app.services.record_coverage import latest_record_coverage
+        ctx.record_coverage = await latest_record_coverage(self.db, self.org_id)
         ctx.account_shares = await _q(AccountShareSnapshot)
         ctx.opportunity_shares = await _q(OpportunityShareSnapshot)
         ctx.sharing_rules = await _q(SharingRuleSnapshot)
@@ -2232,10 +2237,11 @@ class OrgAnalyzerService:
                     "sharing model that's compensating for missing "
                     "hierarchy or sharing-rule design. Manual shares are "
                     "fragile and expensive to maintain."
+                    + _coverage_sentence(ctx, "Account")
                 ),
                 recommended_action="Audit how these manual shares accumulate. Consider broader sharing rules, role-hierarchy adjustments, or account teams.",
                 affected_count=len(ctx.account_shares),
-                evidence={"count": len(ctx.account_shares)},
+                evidence={"count": len(ctx.account_shares), **_coverage_evidence(ctx, "Account")},
             ))
         if len(ctx.opportunity_shares) > 10000:
             out.append(FindingDraft(
@@ -2246,10 +2252,11 @@ class OrgAnalyzerService:
                 description=(
                     "Same pattern as Account shares — manual shares at "
                     "this scale indicate a structural sharing-model gap."
+                    + _coverage_sentence(ctx, "Opportunity")
                 ),
                 recommended_action="Audit and consolidate via sharing rules or opportunity teams.",
                 affected_count=len(ctx.opportunity_shares),
-                evidence={"count": len(ctx.opportunity_shares)},
+                evidence={"count": len(ctx.opportunity_shares), **_coverage_evidence(ctx, "Opportunity")},
             ))
 
         # SHARING_RULE_BLOAT
@@ -2558,6 +2565,7 @@ class OrgAnalyzerService:
                         "skews reporting toward a small handful of reps. "
                         "Rebalancing improves coverage + retention "
                         "telemetry."
+                        + _coverage_sentence(ctx, "Account")
                     ),
                     recommended_action="Run a coverage analysis with sales-ops and reassign accounts to underloaded reps.",
                     affected_count=top5_total,
@@ -2565,6 +2573,7 @@ class OrgAnalyzerService:
                         "top_owners": evidence_top,
                         "total_accounts_in_org": ctx.total_account_count,
                         "top5_share_pct": round(pct * 100, 1),
+                        **_coverage_evidence(ctx, "Account"),
                     },
                     sf_setup_deeplink="/lightning/o/Account/list",
                 ))
@@ -2781,6 +2790,21 @@ def _ensure_aware(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _coverage_sentence(ctx: AnalyzerContext, obj: str) -> str:
+    ev = _coverage_evidence(ctx, obj)
+    return f" {ev['coverage']}." if ev else ""
+
+
+def _coverage_evidence(ctx: AnalyzerContext, obj: str) -> Dict[str, Any]:
+    """Evidence note for findings built from records the integration user
+    can see: empty when it can see every record of obj."""
+    status = (ctx.record_coverage.get("objects") or {}).get(obj, "unknown")
+    if status == "full":
+        return {}
+    from app.services.record_coverage import PARTIAL_LABEL
+    return {"coverage": PARTIAL_LABEL, "coverage_status": status}
 
 
 def _cost_calc(
