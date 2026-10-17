@@ -166,7 +166,10 @@ orgs.
 
 Still worth knowing live:
 - Graph: object cards appear only after ticking objects in the right panel.
-- All eight anomalies are Critical (see backlog); the rank carries the order.
+- Access anomalies have no severity: each shows rank, strongest reason and
+  base risk (the risk score without the anomaly flag; hover for the
+  tooltip). All 8 are High overall partly because being flagged adds to
+  the risk score; base risk leaves that out (roadmap item 30).
 - Mina Tanaka, Oskar Holloway and Freya Castellan (planted over-privileged /
   role mismatch) are typed Permission accumulation: their strongest signal
   in the data is 5-6 permission sets against a median of 1.
@@ -202,17 +205,32 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    runs the sync, and the sync runs anomaly detection, risk scoring and
    recommendations at its end. Wait until the sidebar spinner stops and
    the Dashboard shows "Completed" with 400 users / 40 high-risk / 8
-   critical. Never click "Analyze Access", "Reload demo data" or "Sync"
+   flagged anomalies. Never click "Analyze Access", "Reload demo data" or "Sync"
    while a sync is running (the button is now hidden and the API refuses,
    but don't rely on it).
 7. On Lumenvale, one at a time, each after the previous finishes:
-   Health Report → Run analysis; License Fit → Re-analyse; Compliance →
-   Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS. Do not run
-   Equity on Lumenvale (greyed out; the fixture has no sharing data).
-   Expected: Dashboard 400 users, 40 high-risk, 8 critical anomalies,
-   7 recommendations; Health 35 (Critical), 12 findings, $183,180/yr;
-   License Fit $116,220/yr; anomalies #1 Jun Jovanovic (Exclusive access)
-   to #8.
+   Schema → Objects → **Run Data Quality** (it now runs on demo orgs, from
+   the fixture; run it before the Health Report so critical objects reach
+   the report); Health Report → Run analysis; License Fit → Re-analyse;
+   Compliance → Run indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS.
+   Do not run Equity on Lumenvale (greyed out; the fixture has no sharing
+   data).
+   Expected after the sync: Dashboard 400 users, 40 high-risk, 8 flagged
+   anomalies, 7 Priority Actions (2 High, 4 Medium, 1 Low: Freya
+   Castellan's permission set review); anomalies #1 Jun Jovanovic
+   (Exclusive access) to #8, "At high or critical base risk" 4 (#2-#5;
+   #1, #6, #7 and #8 are Medium base risk).
+   Expected after Data Quality and the Health Report: Health 41
+   (Concerning), 18 findings, $183,180/yr (savings unchanged; the new
+   findings are code coverage and critical objects). The score card
+   lists each family's deduction: Licensing -20 (capped; -45 before the
+   cap), Code coverage -14, Access and sharing -8, Platform limits -8,
+   Data quality -5, Configuration -4; License Fit
+   $116,220/yr; 11 Priority Actions (3 High, 6 Medium, 2 Low), adding
+   "Raise Apex test coverage from 71% to at least 75%" and three data
+   clean-ups (Legacy Order stale, Partner Survey mostly empty, Account
+   fields never populated); SOX control "Flagged access anomalies on high
+   base-risk users are triaged" fails with 4.
 8. Dev org: **Sync from Salesforce** first (needed for the group/muting
    graph) and wait for it to finish; it includes the anomaly, risk and
    recommendation analysis, so don't click "Analyze Access" afterwards.
@@ -224,8 +242,11 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
     PDF has the Demo data banner and DEMO DATA in each footer.
 11. Walk the demo path: Anomalies (Jun Jovanovic first, Fatima Abernathy sixth: the
     two sole-access users), Noor Whitlock → Graph (tick Opportunity and Account), Object
-    Access → Why? on Opportunity (Delete muted), Health Report, License Fit,
-    Download PDF / Excel.
+    Access → Why? on Opportunity (Delete muted), Health Report (Code
+    coverage card: 71%, below the gate), Schema → Critical objects, License
+    Fit, Anomalies → How anomalies are detected (benchmark table),
+   Priority Actions filters (Deployment readiness, Data quality),
+   Download PDF / Excel.
 
 **Rollback**
 - Fast: Railway → each service → Deployments → the deployment noted in
@@ -239,17 +260,5 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
 
 ## Backlog (not before Friday)
 
-- Equity adds Priority Actions even when disparity is 0 (it created 20 on
-  the synthetic org at index 1.0). It should add nothing when there is no
-  disparity to close.
-
-- Anomaly severity: every top-2% user scores 0.986 or higher on the
-  normalised scale, so all flagged users are "critical". Options:
-  rank-based bands within the flagged set, or drop severity for anomalies
-  and show rank only. Severity should stay "how unusual"; risk level
-  already covers "how much damage".
-
-- Pardot and Marketing Cloud are priced per org, not per seat. The
-  catalog stores them as per-seat monthly prices ($1,250 and $400), so any
-  per-seat savings line on them overstates savings. Treat them as org-level
-  SKUs (no per-user math) or exclude them from seat findings.
+Nothing open: the earlier items were fixed in phase A. The product backlog is in
+SECURITY_AND_TRUST_ROADMAP.md.
