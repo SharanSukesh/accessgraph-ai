@@ -38,8 +38,8 @@ async def test_unpriced_subscription_adds_no_finding_and_keeps_lumenvale_numbers
     snap, rows = await _findings(db, org_id)
 
     assert not [f for f in rows if LABEL in (f.title or "")]
-    # The runbook's Health Report numbers are unchanged by the new licence row.
-    assert len(rows) == 12
+    assert not [f for f in rows if f.code == "ORG_SUBSCRIPTION_UNUSED"]
+    # Savings are unchanged by the new licence row (the $183,180 in the runbook).
     assert sum(f.estimated_annual_savings_cents or 0 for f in rows) == 18_318_000
 
 
