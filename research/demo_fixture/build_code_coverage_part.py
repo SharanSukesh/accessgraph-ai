@@ -1,8 +1,9 @@
 """Writes the Lumenvale fixture part for roadmap item 4 (org code coverage).
 
 Synthetic: 60 classes and 12 triggers with a realistic spread, 4 classes
-and 2 triggers at 0%, org-wide 71% (below the 75% gate), test classes with
-no coverage rows of their own, one class whose coverage was never recorded,
+and 2 triggers at 0%, org-wide 71% (below the 75% gate), 19 @isTest classes
+with no coverage rows of their own (one without "Test" in its name), two
+classes whose coverage was never recorded (one with "test" in its name),
 a last test run 40 days before the fixture date, and one class changed
 after it. Deterministic (seeded).
 
@@ -69,12 +70,19 @@ def main() -> None:
         if it["name"] == "RenewalService":
             modified = LAST_RUN + timedelta(days=16)  # changed after the last test run
         out.append({"id": it["id"], "name": it["name"], "type": it["type"], "covered": it["covered"],
-                    "uncovered": it["lines"] - it["covered"], "last_modified": iso(modified)})
-    for i, name in enumerate([f"{n}Test" for n in names[:18]]):
+                    "uncovered": it["lines"] - it["covered"], "last_modified": iso(modified), "is_test": False})
+    # Test classes carry @isTest and have no coverage rows of their own. One
+    # has no "Test" in its name, so only the annotation identifies it.
+    test_names = [f"{n}Test" for n in names[:18]] + ["CommissionCalculationSpec"]
+    for i, name in enumerate(test_names):
         out.append({"id": f"01p0000001{i:04d}DMO", "name": name, "type": "class", "covered": None,
-                    "uncovered": None, "last_modified": iso(LAST_RUN - timedelta(days=rng.randint(5, 400)))})
+                    "uncovered": None, "last_modified": iso(LAST_RUN - timedelta(days=rng.randint(5, 400))),
+                    "is_test": True})
+    # Not a test class despite "test" in its name; never covered.
     out.append({"id": "01p0000002000DMO", "name": "LegacyBatchExporter", "type": "class", "covered": None,
-                "uncovered": None, "last_modified": iso(LAST_RUN - timedelta(days=700))})
+                "uncovered": None, "last_modified": iso(LAST_RUN - timedelta(days=700)), "is_test": False})
+    out.append({"id": "01p0000002001DMO", "name": "ContestEntryHandler", "type": "class", "covered": None,
+                "uncovered": None, "last_modified": iso(LAST_RUN - timedelta(days=500)), "is_test": False})
 
     covered = sum(i["covered"] or 0 for i in out)
     lines = sum((i["covered"] or 0) + (i["uncovered"] or 0) for i in out)

@@ -33,12 +33,6 @@ def _parse(ts: Optional[str]) -> Optional[datetime]:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _looks_like_test(name: str) -> bool:
-    # Test classes have no coverable lines of their own; without reading
-    # each class body, the name is the only cheap signal.
-    return "test" in (name or "").lower()
-
-
 def summarize_coverage(raw: Optional[Dict[str, Any]], now: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
     """JSON-ready summary of get_code_coverage() output, or None when the
     org returned no coverage data at all (not measured, not "0%")."""
@@ -51,6 +45,7 @@ def summarize_coverage(raw: Optional[Dict[str, Any]], now: Optional[datetime] = 
         lines = (covered or 0) + (uncovered or 0) if covered is not None else None
         pct = round(covered / lines * 100, 1) if lines else None
         items.append({
+            "is_test": bool(it.get("is_test")),
             "name": it.get("name") or it.get("id"),
             "type": it.get("type") or "class",
             "pct": pct,
@@ -74,7 +69,8 @@ def summarize_coverage(raw: Optional[Dict[str, Any]], now: Optional[datetime] = 
         (i for i in items if last_run and (_parse(i["last_modified"]) or last_run) > last_run),
         key=lambda i: i["last_modified"], reverse=True,
     )
-    no_data = [i for i in items if i["pct"] is None and not _looks_like_test(i["name"])]
+    # Test classes (@isTest) have no coverable lines of their own.
+    no_data = [i for i in items if i["pct"] is None and not i["is_test"]]
 
     def names(rows): return [{"name": r["name"], "type": r["type"], "pct": r["pct"]} for r in rows[:LIST_CAP]]
 
@@ -86,6 +82,7 @@ def summarize_coverage(raw: Optional[Dict[str, Any]], now: Optional[datetime] = 
         "gate_pct": DEPLOY_GATE_PCT,
         "below_gate": org_wide is not None and org_wide < DEPLOY_GATE_PCT,
         "classes": sum(1 for i in items if i["type"] == "class"),
+        "test_classes": sum(1 for i in items if i["is_test"]),
         "triggers": sum(1 for i in items if i["type"] == "trigger"),
         "measured": len(measured),
         "below_gate_items": len(below),
