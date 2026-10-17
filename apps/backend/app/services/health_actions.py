@@ -18,8 +18,12 @@ from app.domain.models import (
     OrgAnalysisSnapshot,
     Recommendation,
     RecommendationStatus,
+    RecommendationTrack,
     RecommendationType,
 )
+
+# Priority Action types owned by this module (re-derived on every rebuild).
+HEALTH_ACTION_TYPES = (RecommendationType.DEPLOYMENT_READINESS,)
 from app.services.replace_lock import lock_for_replace
 
 
@@ -31,6 +35,7 @@ def coverage_action(org_id: str, cov: Optional[Dict[str, Any]]) -> Optional[Reco
     return Recommendation(
         organization_id=org_id,
         rec_type=RecommendationType.DEPLOYMENT_READINESS,
+        track=RecommendationTrack.DEPLOYMENT,
         status=RecommendationStatus.PENDING,
         severity=AnomalySeverity.HIGH,
         target_entity_type="org",

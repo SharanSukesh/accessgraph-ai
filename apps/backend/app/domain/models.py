@@ -93,6 +93,8 @@ class RecommendationTrack(str, PyEnum):
     """
     SECURITY = "security"
     EQUITY = "equity"
+    # Health Report actions about deploying change (e.g. Apex coverage).
+    DEPLOYMENT = "deployment"
 
 
 class RecommendationStatus(str, PyEnum):

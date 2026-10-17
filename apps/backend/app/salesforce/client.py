@@ -1915,12 +1915,17 @@ class SalesforceAPIClient:
             agg = {r.get("ApexClassOrTriggerId"): r for r in await self.query_tooling(
                 "SELECT ApexClassOrTriggerId, NumLinesCovered, NumLinesUncovered FROM ApexCodeCoverageAggregate")}
             for sobject, kind in (("ApexClass", "class"), ("ApexTrigger", "trigger")):
+                # Body is Apex source (metadata, not business data): read only
+                # to spot the @isTest annotation, never stored.
+                body = ", Body" if kind == "class" else ""
                 for r in await self.query_tooling(
-                    f"SELECT Id, Name, LastModifiedDate FROM {sobject} WHERE NamespacePrefix = NULL"
+                    f"SELECT Id, Name, LastModifiedDate{body} FROM {sobject} WHERE NamespacePrefix = NULL"
                 ):
                     cov = agg.get(r.get("Id"))
+                    src = r.get("Body")
                     out["items"].append({
                         "id": r.get("Id"), "name": r.get("Name"), "type": kind,
+                        "is_test": ("@istest" in src.lower()) if isinstance(src, str) else None,
                         "covered": cov.get("NumLinesCovered") if cov else None,
                         "uncovered": cov.get("NumLinesUncovered") if cov else None,
                         "last_modified": r.get("LastModifiedDate"),
