@@ -31,6 +31,10 @@ from app.domain.models import (
 
 logger = logging.getLogger(__name__)
 
+# Key in UserSnapshot.raw_data holding {object: owned record count or None},
+# written at sync from aggregate counts on the owner field.
+OWNED_RECORDS_KEY = "NewtonOwnedRecords"
+
 
 def _parse_sf_datetime(value: Optional[str]) -> Optional[datetime]:
     """Parse a Salesforce SOQL datetime string ("2026-04-12T15:23:01.000+0000")
@@ -859,7 +863,19 @@ class SnapshotPersister:
         """
         counts = {}
 
-        counts["users"] = await self.persist_users(org_id, data.get("users", []), sync_job_id)
+        users = data.get("users", [])
+        owner_counts = data.get("record_owner_counts")
+        if owner_counts:
+            # Owned records per user, stored with the user (raw_data). None
+            # for an object whose count query failed: unknown, not zero.
+            users = [
+                {**u, OWNED_RECORDS_KEY: {
+                    obj: (by_owner.get(u.get("Id"), 0) if by_owner is not None else None)
+                    for obj, by_owner in owner_counts.items()
+                }}
+                for u in users
+            ]
+        counts["users"] = await self.persist_users(org_id, users, sync_job_id)
         counts["roles"] = await self.persist_roles(org_id, data.get("roles", []), sync_job_id)
         counts["profiles"] = await self.persist_profiles(org_id, data.get("profiles", []), sync_job_id)
         counts["permission_sets"] = await self.persist_permission_sets(

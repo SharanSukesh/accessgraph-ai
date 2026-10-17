@@ -17,6 +17,7 @@ from app.domain.models import (
     RoleSnapshot,
     UserSnapshot,
 )
+from app.ingestion.snapshot import OWNED_RECORDS_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ class RecordAccessService:
             }
 
         # 1. Owned Records - calculated from OwnerId field
-        owned_records = await self._get_owned_records(org_id, user_sf_id)
+        owned_records = await self._get_owned_records(org_id, user_sf_id, user)
 
         # 2. Role Hierarchy Access - access to subordinates' records
         role_hierarchy = await self._get_role_hierarchy_access(org_id, user)
@@ -86,7 +87,11 @@ class RecordAccessService:
 
         # Calculate summary
         summary = {
-            "total_owned_records": sum(c for c in owned_records.values() if c is not None),
+            # None when no object was counted: unknown, not zero.
+            "total_owned_records": (
+                sum(c for c in owned_records.values() if c is not None)
+                if any(c is not None for c in owned_records.values()) else None
+            ),
             "total_manual_shares": len(manual_shares),
             "total_team_memberships": len(team_access),
             "total_sharing_rule_grants": len(sharing_rules),
@@ -109,56 +114,43 @@ class RecordAccessService:
         self,
         org_id: str,
         user_sf_id: str,
+        user: Optional[UserSnapshot] = None,
     ) -> Dict[str, Optional[int]]:
         """
-        Get count of records owned by this user. None means not analysed:
-        Case, Contact and Lead share records aren't synced, so their
-        ownership is unknown rather than zero.
+        Records this user owns, per object. None means not known.
 
-        Uses a lightweight approach:
-        1. Count share records where RowCause='Owner' (no record storage needed!)
-        2. This works because Salesforce creates Owner share records when OWD is not Public Read/Write
-
-        Note: If OWD = Public Read/Write, owner shares may not exist.
-        In that case, counts will be 0 (but user still owns records via permissions).
+        Live syncs store aggregate counts on the owner field
+        (SELECT OwnerId, COUNT(Id) ... GROUP BY OwnerId) with the user. The
+        share extracts skip RowCause = 'Owner' rows, so ownership must never
+        come from share rows on those orgs (it read 0 for every user).
+        Snapshots synced before that fall back to Owner share rows when
+        some exist, otherwise ownership is unknown until the next sync.
+        Case, Contact and Lead aren't counted yet: unknown, not zero.
         """
-        counts = {}
+        counts: Dict[str, Optional[int]] = {"Case": None, "Contact": None, "Lead": None}
+        stored = ((user.raw_data or {}) if user else {}).get(OWNED_RECORDS_KEY)
+        if isinstance(stored, dict):
+            for obj in ("Account", "Opportunity"):
+                counts[obj] = stored.get(obj)
+            return counts
 
-        # Count Account ownership from AccountShare
-        account_count_query = select(func.count(AccountShareSnapshot.id)).where(
-            AccountShareSnapshot.organization_id == org_id,
-            AccountShareSnapshot.user_or_group_id == user_sf_id,
-            AccountShareSnapshot.row_cause == 'Owner'
-        )
-        account_count_result = await self.db.execute(account_count_query)
-        counts['Account'] = account_count_result.scalar() or 0
-
-        # Count Opportunity ownership from OpportunityShare
-        opp_count_query = select(func.count(OpportunityShareSnapshot.id)).where(
-            OpportunityShareSnapshot.organization_id == org_id,
-            OpportunityShareSnapshot.user_or_group_id == user_sf_id,
-            OpportunityShareSnapshot.row_cause == 'Owner'
-        )
-        opp_count_result = await self.db.execute(opp_count_query)
-        counts['Opportunity'] = opp_count_result.scalar() or 0
-
-        # Not synced yet: unknown, not zero.
-        counts['Case'] = None
-        counts['Contact'] = None
-        counts['Lead'] = None
-
-        # Enhanced logging for debugging
-        total_shares = counts['Account'] + counts['Opportunity']
-        if total_shares == 0:
-            logger.warning(
-                f"No owned record shares found for user {user_sf_id}. "
-                f"This could mean: (1) User doesn't own any records, "
-                f"(2) OWD is Public Read/Write (shares pruned), or "
-                f"(3) Share data hasn't been synced yet."
-            )
-        else:
-            logger.info(f"Owned records for user {user_sf_id}: {counts}")
-
+        for obj, model, cause in (
+            ("Account", AccountShareSnapshot, AccountShareSnapshot.row_cause),
+            ("Opportunity", OpportunityShareSnapshot, OpportunityShareSnapshot.row_cause),
+        ):
+            has_owner_rows = (await self.db.execute(
+                select(func.count(model.id)).where(model.organization_id == org_id, cause == "Owner")
+            )).scalar() or 0
+            if not has_owner_rows:
+                counts[obj] = None
+                continue
+            counts[obj] = (await self.db.execute(
+                select(func.count(model.id)).where(
+                    model.organization_id == org_id,
+                    model.user_or_group_id == user_sf_id,
+                    cause == "Owner",
+                )
+            )).scalar() or 0
         return counts
 
     async def _get_role_hierarchy_access(

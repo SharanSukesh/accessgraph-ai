@@ -39,6 +39,11 @@ class DemoSalesforceClient:
     async def owner_counts_by_object(self, object_name: str) -> Dict[str, int]:
         return dict(self._live.get("owner_counts", {}).get(object_name, {}))
 
+    async def owner_counts_for(self, object_name: str, owner_ids: List[str]) -> Optional[Dict[str, int]]:
+        counts = self._live.get("owner_counts", {}).get(object_name, {})
+        wanted = set(owner_ids)
+        return {k: v for k, v in counts.items() if k in wanted}
+
     async def count_sobject(self, object_name: str) -> Optional[int]:
         return None
 
