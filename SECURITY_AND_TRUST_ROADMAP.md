@@ -205,8 +205,8 @@ section has the detail.
   applies the privacy level to demo syncs. #31 names the sharing rules that
   reach a changed role (stacked on #26). #28 gained profile API-name
   matching, the most-specific-first page order (UNVERIFIED) and the profile
-  and permission set views. #32 (draft) proposes pinning the backend's
-  Railway builder to its Dockerfile.
+  and permission set views. #32 (Railway builder proposal) was closed:
+  Sharan sets the builders in Railway's service settings (Owner: Sharan).
 - **Merge order:** #29, #27, #30, #23, #24, #25, #26, #31, #28. Simulated
   clean; the combined tree passes all tests with one alembic head.
 - **Next:** item 7 with 35c, then phase C. Item 1 phase 2 stays a plan.
