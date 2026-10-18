@@ -132,6 +132,9 @@ export interface PriceBookRow {
   // they're omitted in the request body.
   is_override?: boolean
   in_org?: boolean
+  // 'org': an org-level subscription (Marketing Cloud, Account Engagement),
+  // priced per org per month, never per seat. Default 'seat'.
+  pricing_unit?: 'seat' | 'org'
   // Auto-detection reason for the current is_billed default. Surfaced
   // in a tooltip in the Price-book editor.
   billed_reason?: string | null

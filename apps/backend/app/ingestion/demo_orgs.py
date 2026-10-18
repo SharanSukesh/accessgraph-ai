@@ -82,7 +82,9 @@ def load_fixture(key: str) -> Dict[str, Any]:
         data = json.load(f)
     for path in fixture_part_files(key):
         with open(path) as f:
-            merge_fixture_part(data, json.load(f))
+            part = json.load(f)
+        part.pop("_source", None)  # provenance note, not data
+        merge_fixture_part(data, part)
     return data
 
 

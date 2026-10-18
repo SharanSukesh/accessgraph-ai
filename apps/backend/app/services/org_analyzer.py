@@ -103,11 +103,10 @@ DEFAULT_PRICE_CATALOG: List[tuple] = [
     ("salesforce cpq", 7500),
     ("revenue cloud", 7500),
 
-    # --- Marketing / Analytics ---
-    ("marketing cloud account engagement", 125000),
-    ("pardot growth", 125000),
-    ("pardot", 125000),
-    ("marketing cloud", 40000),
+    # --- Analytics ---
+    # Marketing Cloud and Account Engagement (Pardot) are org-level
+    # subscriptions, not per-seat licences: see ORG_LEVEL_SKU_PATTERNS.
+    # They have no default here; the consultant enters the contract price.
     # CRM Analytics Plus $165, Growth $140: https://www.salesforce.com/analytics/crm/pricing/
     ("tableau crm plus", 16500),
     ("tableau crm growth", 14000),
@@ -158,6 +157,25 @@ DEFAULT_PRICE_CATALOG: List[tuple] = [
 _SALESFORCE_FULL_PRICE_CENTS = 19500
 
 
+# Products sold as an org-level subscription (one price for the org,
+# whatever the number of users), not per seat. Seat-based findings skip
+# them; an unused one becomes ORG_SUBSCRIPTION_UNUSED, priced only from a
+# Price Book entry the consultant filled in. Matched as a case-insensitive
+# substring of the licence label or developer name.
+ORG_LEVEL_SKU_PATTERNS: tuple = (
+    "account engagement",   # Marketing Cloud Account Engagement (formerly Pardot)
+    "pardot",
+    "marketing cloud",
+)
+
+
+def _is_org_level_sku(label: Optional[str]) -> bool:
+    if not label:
+        return False
+    needle = label.strip().lower()
+    return any(p in needle for p in ORG_LEVEL_SKU_PATTERNS)
+
+
 def _lookup_default_price(sku_name: Optional[str]) -> Optional[int]:
     """Catalog lookup. Returns monthly cents, or None when nothing matches.
 
@@ -168,7 +186,7 @@ def _lookup_default_price(sku_name: Optional[str]) -> Optional[int]:
     if not sku_name:
         return None
     needle = sku_name.strip().lower()
-    if not needle:
+    if not needle or _is_org_level_sku(needle):
         return None
     for pattern, cents in DEFAULT_PRICE_CATALOG:
         if pattern in needle:
@@ -194,8 +212,10 @@ DEFAULT_PRICE_BOOK_CENTS: Dict[str, int] = {
     "Customer Community": 500,
     "Customer Community Plus": 1500,
     "Partner Community": 2500,
-    "Marketing Cloud": 40000,
-    "Pardot": 125000,
+    # Org-level subscriptions: no default; price per org per month, entered
+    # by the consultant (see ORG_LEVEL_SKU_PATTERNS).
+    "Marketing Cloud": 0,
+    "Pardot": 0,
     "Chatter Free": 0,
     "Chatter External": 0,
     "Identity": 0,
@@ -545,6 +565,9 @@ class AnalyzerContext:
 
     # Per-license monthly cost in cents (already merged with defaults).
     price_book: Dict[str, int] = field(default_factory=dict)
+    # Org-level subscription prices (per org per month) the consultant
+    # entered in the Price Book and marked billed. Never defaults.
+    org_subscription_prices: Dict[str, int] = field(default_factory=dict)
 
     # SF live data (only fetched if a working sf_client is available)
     org_limits: Dict[str, Any] = field(default_factory=dict)
@@ -683,6 +706,8 @@ class OrgAnalyzerService:
         # already loaded — saves a second DB round-trip.
         for r in getattr(self, "_price_book_rows", []) or []:
             ctx.price_book_is_billed[r.license_name] = bool(r.is_billed)
+            if _is_org_level_sku(r.license_name) and r.is_billed and r.monthly_cost_cents:
+                ctx.org_subscription_prices[r.license_name.strip().lower()] = int(r.monthly_cost_cents)
         return ctx
 
     async def _load_price_book(self) -> Dict[str, int]:
@@ -770,7 +795,8 @@ class OrgAnalyzerService:
           2. Substring catalog lookup (handles SKUs we haven't named yet).
           3. 0 fallback (caller decides whether that means "free" or "unknown").
         """
-        if not label:
+        if not label or _is_org_level_sku(label):
+            # Org-level subscriptions never enter per-seat maths.
             return 0
         if label in price_book:
             return int(price_book[label])
@@ -1364,6 +1390,8 @@ class OrgAnalyzerService:
                 continue
             sku = ul.get("Name") or ul.get("MasterLabel") or "Unknown"
             label = ul.get("MasterLabel") or sku
+            if _is_org_level_sku(label) or _is_org_level_sku(sku):
+                continue  # org-level subscription: see _org_subscription_findings
             # Auto-detection ladder: admin override → org non-paying →
             # known free SKU → billed. Returns (is_billed, reason).
             is_billed, non_billable_reason = _is_billed_for_org(label, ctx)
@@ -1505,6 +1533,8 @@ class OrgAnalyzerService:
             if surplus < 5:
                 continue
             label = psl.get("MasterLabel") or psl.get("DeveloperName") or "PSL"
+            if _is_org_level_sku(label) or _is_org_level_sku(psl.get("DeveloperName")):
+                continue  # org-level subscription: see _org_subscription_findings
             # Apply the auto-detection ladder before pricing. Non-paying
             # orgs + admin Bundled overrides + pattern-list matches all
             # short-circuit to a $0 INFO finding so the consultant still
@@ -1592,6 +1622,72 @@ class OrgAnalyzerService:
                 evidence=evidence,
             ))
 
+        out.extend(self._org_subscription_findings(ctx))
+        return out
+
+    def _org_subscription_findings(self, ctx: AnalyzerContext) -> List[FindingDraft]:
+        """Org-level subscriptions (Marketing Cloud, Account Engagement) that
+        nobody is assigned to. Priced once per org, never per seat, and only
+        from a price the consultant entered: there is no default."""
+        out: List[FindingDraft] = []
+        rows = [(r, "licence") for r in ctx.user_licenses] + [(r, "permission set licence") for r in ctx.permission_set_licenses]
+        for row, kind in rows:
+            if (row.get("Status") or "").lower() not in ("", "active"):
+                continue
+            label = row.get("MasterLabel") or row.get("DeveloperName") or row.get("Name") or ""
+            keys = [k for k in (label, row.get("DeveloperName"), row.get("Name")) if k]
+            if not any(_is_org_level_sku(k) for k in keys):
+                continue
+            total = int(row.get("TotalLicenses") or 0)
+            used = int(row.get("UsedLicenses") or 0)
+            if total <= 0 or used > 0:
+                continue  # in use: the subscription isn't wasted
+            is_billed, _reason = _is_billed_for_org(label, ctx)
+            monthly = next((ctx.org_subscription_prices[k.strip().lower()] for k in keys
+                            if k.strip().lower() in ctx.org_subscription_prices), None)
+            if not is_billed or not monthly:
+                continue
+            annual = monthly * 12
+            annual_dollars = annual / 100
+            sev = (
+                FindingSeverity.CRITICAL if annual_dollars >= 50_000
+                else FindingSeverity.HIGH if annual_dollars >= 10_000
+                else FindingSeverity.MEDIUM if annual_dollars >= 1_000
+                else FindingSeverity.LOW
+            )
+            out.append(FindingDraft(
+                category=FindingCategory.LICENSE_WASTE,
+                code="ORG_SUBSCRIPTION_UNUSED",
+                severity=sev,
+                title=f"{label} subscription has no assigned users",
+                description=(
+                    f"{label} is an org-level subscription: one price for the org, "
+                    f"whatever the number of users. None of its {total} {kind}s are "
+                    "assigned, so nobody in this org is using it."
+                ),
+                recommended_action=(
+                    "Confirm with the customer whether the subscription is still needed "
+                    "(it may be used outside Salesforce users, e.g. by a marketing team "
+                    "working in its own app). If not, cancel it at renewal."
+                ),
+                affected_count=0,
+                estimated_annual_savings_cents=annual,
+                evidence={
+                    "license_name": label,
+                    "pricing": "per org",
+                    "total_purchased": total,
+                    "used": used,
+                    "price_source": "Price Book (entered by consultant)",
+                    "cost_calculation": _cost_calc(
+                        formula=f"{label} at ${monthly/100:,.2f}/org/month × 12 months",
+                        per_unit_monthly_cents=monthly,
+                        unit_count=1,
+                        total_annual_cents=annual,
+                        license_name=label,
+                    ),
+                },
+                sf_setup_deeplink="/lightning/setup/CompanyResourceDisk/home",
+            ))
         return out
 
     # ----------------------- 2. configuration bloat / redundancy

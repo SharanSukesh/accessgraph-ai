@@ -1856,6 +1856,13 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                           >
                             Custom
                           </span>
+                        ) : r.pricing_unit === 'org' ? (
+                          <span
+                            className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                            title="Org-level subscription with no catalog price: enter the contract price per org per month"
+                          >
+                            Not set
+                          </span>
                         ) : (
                           <span
                             className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary-50 text-grove-ink/85 dark:bg-primary-900/20 dark:text-grove-ink-dk/70"
@@ -1898,10 +1905,20 @@ function PriceBookTab({ orgId }: { orgId: string }) {
                       />
                     </td>
                     <td className="py-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 font-mono">
-                      {billed
-                        ? `$${(r.monthly_cost_cents / 100).toFixed(2)}`
-                        : <span className="italic">bundled — $0</span>
+                      {!billed
+                        ? <span className="italic">bundled — $0</span>
+                        : r.pricing_unit === 'org' && !r.monthly_cost_cents
+                          ? <span className="italic">not set</span>
+                          : `$${(r.monthly_cost_cents / 100).toFixed(2)}`
                       }
+                      {r.pricing_unit === 'org' && (
+                        <div
+                          className="font-sans not-italic text-[11px] text-grove-ink/65 dark:text-grove-ink-dk/65"
+                          title="Org-level subscription: one price for the org, whatever the number of users. Never used in per-seat savings; an unused one is reported only when you enter its price here."
+                        >
+                          per org / month, not per seat
+                        </div>
+                      )}
                     </td>
                     <td className="py-1 text-right">
                       <button

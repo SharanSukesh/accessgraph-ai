@@ -246,7 +246,5 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
 
 ## Backlog (not before Friday)
 
-- Pardot and Marketing Cloud are priced per org, not per seat. The
-  catalog stores them as per-seat monthly prices ($1,250 and $400), so any
-  per-seat savings line on them overstates savings. Treat them as org-level
-  SKUs (no per-user math) or exclude them from seat findings.
+Nothing open: the earlier items were fixed in phase A. The product backlog is in
+SECURITY_AND_TRUST_ROADMAP.md.
