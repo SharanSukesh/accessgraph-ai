@@ -57,8 +57,18 @@ def fixture_key(org: Organization) -> str:
 
 def merge_fixture_part(base: Dict[str, Any], part: Dict[str, Any]) -> Dict[str, Any]:
     """Deep-merge a fixture part into the base, in place: dicts merge key by
-    key, lists are appended to, anything else is replaced."""
+    key, lists are appended to, anything else is replaced. A "_patch" key
+    updates existing list rows by Id: {"users": [{"Id": ..., "UserRoleId": ...}]}
+    sets those fields on the matching row (an unknown Id is an error)."""
+    for list_name, rows in (part.get("_patch") or {}).items():
+        by_id = {row.get("Id"): row for row in base.get(list_name, [])}
+        for change in rows:
+            if change["Id"] not in by_id:
+                raise KeyError(f"fixture patch: no {list_name} row with Id {change['Id']}")
+            by_id[change["Id"]].update({k: v for k, v in change.items() if k != "Id"})
     for key, value in part.items():
+        if key == "_patch":
+            continue
         current = base.get(key)
         if isinstance(current, dict) and isinstance(value, dict):
             merge_fixture_part(current, value)
