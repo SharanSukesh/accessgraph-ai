@@ -515,6 +515,7 @@ STYLE = """
   .stat-value { font-size: 15pt; font-weight: 600; }
   table.data { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
   table.data th { text-align: left; color: #52514e; font-weight: 600; border-bottom: 1px solid #c3c2b7; padding: 4px 6px; }
+  table.data.compact td, table.data.compact th { padding: 2px 6px; }
   table.data td { border-bottom: 1px solid #e1e0d9; padding: 4px 6px; vertical-align: middle; }
   table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   table.data .reason { color: #52514e; font-size: 7.5pt; }
@@ -533,7 +534,6 @@ STYLE = """
   ol.top, ul.list { margin: 3px 0 0; padding: 0; list-style: none; font-size: 7.5pt; line-height: 1.3; }
   ol.top li, ul.list li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   ol.top span { color: #52514e; }
-  table.data.compact td, table.data.compact th { padding: 2px 6px; }
 """
 
 
