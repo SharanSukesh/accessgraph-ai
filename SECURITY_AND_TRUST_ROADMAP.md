@@ -229,8 +229,23 @@ section has the detail.
   and mypy fails CI only on errors that aren't in mypy-baseline.txt (208
   errors). Before it, main had Ruff 134 issues, mypy 209 errors in 44
   files, frontend lint 6 warnings.
-- **Next:** Sharan re-syncs Lumenvale on production and tests. Then item 7
-  with 35c, then phase C. Item 1 phase 2 stays a plan.
+- **18 Oct, review round (not merged; one PR per item, each from main):**
+  #43 image pack (no logos or demo label on images; Summary slide); #44
+  API usage card and page; #45 Pages & automation tab; #46 graph picker
+  tabs for layouts, record pages, Apex classes and flows; #47 People view
+  at 500 to 600 users (collapsed tree, focus, filters, tree table, flags;
+  tested on a synthetic 600-user org, tests/people_scale.py); #48 role
+  design Graph mode. Every one keeps Lumenvale at Health 41, 18 findings,
+  $183,180 and License Fit $116,220. Found while building: Lumenvale has 4
+  manager loops (11 people), now flagged "Manager loop" in #47; the
+  requested "Apex and flows don't count against the API limit" line isn't
+  supported by Salesforce's docs, so #44 doesn't show it.
+- **Merge notes:** all seven open PRs (#42-#48) merge together and pass
+  (backend 443 passed, frontend 83 tests, lint with no warnings, Ruff
+  clean, no new mypy errors). The one conflict: #47 with #42 in the People
+  page; take #47's version (it no longer has the code #42 changed).
+- **Next:** Sharan reviews #42-#48. Then item 7 with 35c, then phase C.
+  Item 1 phase 2 stays a plan.
 
 ## Build order
 
@@ -397,7 +412,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
 ## Phase B: client-facing
 
 ### 5. API usage breakdown
-**Status: built (branch feat/api-usage), not merged.** A Health Report card and PDF section; no new findings, so Lumenvale's Health Report is unchanged (41, 18 findings, $183,180). Checked against the Object Reference and REST API guide (v68) while building:
+**Status: merged 18 Oct (#23). Redesign built in #44 (not merged):** the Health Report card becomes a compact summary (headline, four figures, the daily chart against the limit, the top 3 sources, "View full breakdown"), and an API Usage page (Overview, Callers, What's called, Daily) holds everything else; the image pack draws the card. #44 also counts the log's API_RESOURCE and ENTITY_NAME per day (resources without query strings, record ids or values; an Apex REST request only as the `@RestResource` mapping and class it resolves to, by the Apex guide's rules) and reads Apex class bodies for the mappings, keeping only name and mapping (UNVERIFIED: readable with the current permissions). UNVERIFIED in the docs: API_RESOURCE's form for Apex REST and how ENTITY_NAME lists several objects. "Apex and flows inside Salesforce don't count against the daily limit" isn't shown: the Apex guide says most ConnectApi calls from Apex count, and the log's API_CLIENT_CATEGORY lists internal callers; the page says only what the limits quick reference and the Apex guide state. Originally: a Health Report card and PDF section; no new findings, so Lumenvale's Health Report is unchanged (41, 18 findings, $183,180). Checked against the Object Reference and REST API guide (v68) while building:
 - `USER_ID` in the log is the 15-character id, so users are matched on the first 15 characters. `USER_NAME` is in the log too; Newton never reads it.
 - API_FAMILY values are REST, SOAP, Bulk, ApexREST, DirectApexREST and DirectAura (mixed case) ✓. A composite request is logged once (its parent) ✓.
 - A later daily file can replace the earlier one for the same date with the full set ✓, so only the newest file per date is read.
@@ -429,7 +444,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Depends on:** Proposal P3 for the trend (v1 works without it, as "yesterday only"). **Effort: M.**
 
 ### 3. Image pack and per-visual downloads
-**Status: built (branch feat/image-pack, on top of item 5), not merged.**
+**Status: merged 18 Oct (#24). Changed in #43 (not merged):** images carry no logos and no "Demo data" label (the consultant's own branded slides; demo files keep the demo- prefix and DEMO-DATA.txt, and the app its badge), the logo options are gone, and a **Summary** slide puts the key figures on one 16:9 slide (its own download and an option in the dialog). The bullets below describe the first version.
 - Slides are laid out at 800×450 and rendered at 3840×2160. Tight crops are laid out 680 wide, rendered at the same scale and cropped to their content.
 - The PowerPoint file always uses the slide layout (one 16:9 slide per visual, title in the slide notes).
 - The ZIP lists skipped visuals in skipped.txt and, on demo orgs, carries DEMO-DATA.txt.
@@ -444,9 +459,9 @@ The compare page's search results were clipped by their card. The fix is pushed 
   - **Image pack dialog:** tick the visuals to include, then download a ZIP, a `.pptx`, or both.
   - **Format:** PNG or JPEG. PNG has a **transparent background** option so the image sits on the client's own template. JPEG is always opaque.
   - **Two layouts per visual:** a **16:9 slide** (3840x2160 at 2x) with a title and a short caption, and a **tight crop** with no slide frame, for pasting into existing slides.
-  - **Logos:** optional toggles for our logo and the client's.
-  - **Labels:** masked orgs stay masked; demo orgs always carry the "Demo data" label, on every image, whatever the toggles say. User-level visuals are left out at Metadata only, and a visual whose module hasn't run is skipped with a note.
-  - **Tests:** every format (PNG, transparent PNG, JPEG, ZIP, PPTX) and both layouts: size, transparency, demo label present, masked names absent.
+  - **Logos:** optional toggles for our logo and the client's. (Removed in #43: no logos on images.)
+  - **Labels:** masked orgs stay masked; demo orgs always carry the "Demo data" label, on every image, whatever the toggles say. (Changed in #43: no label on images.) User-level visuals are left out at Metadata only, and a visual whose module hasn't run is skipped with a note.
+  - **Tests:** every format (PNG, transparent PNG, JPEG, ZIP, PPTX) and both layouts: size, transparency, demo label present, masked names absent. (#43: no logo or label on any image, and the Summary's figures.)
 - **Dependencies (approved 17 Oct):** `pypdfium2` (Apache-2.0 or BSD-3-Clause, plus PDFium's third-party notices; a self-contained wheel, no system packages) and `python-pptx` (MIT; its dependencies lxml, XlsxWriter and Pillow are BSD or MIT). Both must be confirmed in the Docker build, and the PDFium notices added to our licence notices.
 - **Salesforce sources:** none new (reads Newton's stored results).
 - **New permissions:** none.
@@ -476,7 +491,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - Lumenvale's Account owner counts come with 35b's demo data (#26); on this branch alone Account shows "Unknown".
 
 ### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
-Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
+**Status: merged 18 Oct (#26, #31). #48 (not merged) adds a Graph mode beside the Tree: both edit the same draft; draw a role to its parent (one parent, replacing asks first, loops refused), drop users onto roles, auto-layout, zoom, fit, search.** Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
 - **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.
 - **Approach:**
   - **Drafts, stored in Newton, never sent to Salesforce:** drag a role onto another to reparent it, drag users between roles, create, rename and delete roles. Cycles are blocked (a role can't move under its own descendant). Undo and redo, named drafts.
@@ -632,7 +647,7 @@ Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C 
 ### 1. Page layouts and Lightning pages, plus access through Apex and Flows
 
 **Phase 1: assignments and "who can run".**
-**Status: built (branch feat/ui-access), not merged.** Checked against the v68 (Winter '27) guides while building:
+**Status: merged 18 Oct (#28, #41). Follow-ups (not merged):** #45 makes every section of the Pages & automation tab a searchable card with one table style, object groups and "granted through" chips in the graph's node colours; #46 replaces the graph's checkbox with picker tabs (Page layouts, Record pages, Apex classes, Flows), drawing each picked item with the edges that reach it (no cap of 12) in distinct shapes. Checked against the v68 (Winter '27) guides while building:
 - Record type visibility per profile is read from Tooling Profile.Metadata (one profile per query, capped at 150). Record types granted by permission sets have no queryable source we found, so they aren't read; the screen says so.
 - The org default record page comes from the object's describe (actionOverrides with a pageId). That field isn't described in the guides we could reach: UNVERIFIED.
 - Precedence used, most specific first (Sharan's expectation, 18 Oct): app + record type + profile, then app + record type, then app + profile, then app default, then org default. Only "a profile assignment beats the app default" is documented (Metadata API, CustomApplication); the full order stays UNVERIFIED until tested in Sharan's developer org. Where app + profile (no record type) ranks against app + record type is a guess.
