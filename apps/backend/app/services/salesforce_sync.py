@@ -303,6 +303,7 @@ class SalesforceSyncService:
                 salesforce_id=sf_role.Id,
                 name=sf_role.Name,
                 parent_role_id=sf_role.ParentRoleId,
+                raw_data=sf_role.model_dump(),
             )
             self.db.add(role)
 

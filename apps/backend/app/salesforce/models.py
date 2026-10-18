@@ -48,10 +48,20 @@ class SalesforceUser(BaseModel):
 
 
 class SalesforceUserRole(BaseModel):
-    """Salesforce UserRole object"""
+    """Salesforce UserRole object. The fields after ParentRoleId feed the
+    role hierarchy view (roadmap 35a); they stay None when the org didn't
+    return them (see extract_user_roles)."""
     Id: str
     Name: str
     ParentRoleId: Optional[str] = None
+    DeveloperName: Optional[str] = None
+    RollupDescription: Optional[str] = None
+    PortalType: Optional[str] = None
+    PortalRole: Optional[str] = None
+    PortalAccountId: Optional[str] = None
+    OpportunityAccessForAccountOwner: Optional[str] = None
+    CaseAccessForAccountOwner: Optional[str] = None
+    ContactAccessForAccountOwner: Optional[str] = None
 
 
 class SalesforceProfile(BaseModel):
