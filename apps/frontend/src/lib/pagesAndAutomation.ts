@@ -112,4 +112,6 @@ export interface SetAutomation {
   flows?: (Omit<FlowRow, 'can_run' | 'why'> & { via: string[][] })[]
   run_flows?: boolean | null
   notes?: string[]
+  /** On a permission set group with a muting set. */
+  muting_note?: string | null
 }
