@@ -195,3 +195,64 @@ export function personRecords(p: { records: number; at_least: boolean }): string
   if (p.at_least && p.records === 0) return 'records not counted'
   return `${p.at_least ? 'at least ' : ''}${p.records.toLocaleString('en-GB')} ${p.records === 1 ? 'record' : 'records'}`
 }
+
+/** What drawing a parent edge (child -> parent) in the graph would do. */
+export type ReparentPlan =
+  | { kind: 'none' }
+  | { kind: 'apply'; op: Operation }
+  | { kind: 'confirm'; op: Operation; message: string }
+  | { kind: 'blocked'; message: string }
+
+/**
+ * A role has one parent: drawing a new one replaces the old after a
+ * confirmation; a role can't go under itself or one of the roles below it.
+ */
+export function planReparent(state: DesignState, child: string, parent: string): ReparentPlan {
+  const c = state.roles[child]
+  const p = state.roles[parent]
+  if (!c || !p || child === parent) return { kind: 'none' }
+  if (c.parent_id === parent) return { kind: 'none' }
+  if (!canDrop(state, child, parent)) {
+    return { kind: 'blocked', message: `${c.name} can't report to ${p.name}: ${p.name} is below ${c.name}, which would make a loop.` }
+  }
+  const op: Operation = { op: 'move_role', role_id: child, parent_id: parent }
+  if (c.parent_id && state.roles[c.parent_id]) {
+    return { kind: 'confirm', op, message: `Move ${c.name} under ${p.name}? It reports to ${state.roles[c.parent_id].name} now; a role has one parent.` }
+  }
+  return { kind: 'apply', op }
+}
+
+const GRAPH_NODE_W = 176
+const GRAPH_GAP_X = 20
+const GRAPH_LEVEL_H = 104
+
+/** Top-down positions: each role centred over its children, top-level roles side by side. */
+export function roleLayout(state: DesignState): Record<string, { x: number; y: number }> {
+  const { roots, children } = treeOf(state)
+  const width: Record<string, number> = {}
+  const measure = (id: string): number => {
+    const kids = children[id] ?? []
+    const w = Math.max(GRAPH_NODE_W, kids.reduce((s, k) => s + measure(k), 0) + GRAPH_GAP_X * Math.max(0, kids.length - 1))
+    width[id] = w
+    return w
+  }
+  const pos: Record<string, { x: number; y: number }> = {}
+  const place = (id: string, left: number, depth: number) => {
+    const w = width[id]
+    pos[id] = { x: left + w / 2, y: depth * GRAPH_LEVEL_H }
+    const kids = children[id] ?? []
+    const used = kids.reduce((s, k) => s + width[k], 0) + GRAPH_GAP_X * Math.max(0, kids.length - 1)
+    let x = left + (w - used) / 2
+    for (const k of kids) {
+      place(k, x, depth + 1)
+      x += width[k] + GRAPH_GAP_X
+    }
+  }
+  let x = 0
+  for (const r of roots) {
+    measure(r)
+    place(r, x, 0)
+    x += width[r] + GRAPH_GAP_X * 3
+  }
+  return pos
+}

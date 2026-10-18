@@ -1,8 +1,10 @@
 'use client'
 
 /**
- * Role design mode (roadmap 35b): edit a draft of the role hierarchy.
- * Drag a role onto another to move it under it (or onto "Top level"),
+ * Role design mode (roadmap 35b): edit a draft of the role hierarchy, as a
+ * Tree or a Graph (RoleGraph.tsx); both edit the same draft, so switching
+ * keeps every change. Tree: drag a role onto another to move it under it
+ * (or onto "Top level"). Graph: draw from a role to its new parent. Both:
  * drag users between roles, create, rename and delete roles, undo and
  * redo. Every edit is checked as it happens (no cycles, no deleting a role
  * that still has users or roles below it). Used for an org's drafts and,
@@ -11,9 +13,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, CornerUpLeft, CornerUpRight, GripVertical, Plus, Trash2, Users } from 'lucide-react'
+import { ChevronDown, ChevronRight, CornerUpLeft, CornerUpRight, GripVertical, ListTree, Network, Plus, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/Card'
+import { RoleGraph } from './RoleGraph'
 import {
   type DesignBase,
   type DesignState,
@@ -64,6 +67,7 @@ function newId() {
 export function RoleDesigner({ base, operations, position, users, usersNote, onChange, status }: DesignerProps) {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [mode, setMode] = useState<'tree' | 'graph'>('tree')
   const [open, setOpen] = useState<Set<string> | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null | undefined>(undefined)
   // The role being dragged (drag data can't be read until the drop).
@@ -225,6 +229,15 @@ export function RoleDesigner({ base, operations, position, users, usersNote, onC
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grove-border bg-primary-50/40 p-2 dark:border-grove-border-dk dark:bg-primary-900/10">
+        <div role="tablist" aria-label="Design view" className="flex items-center gap-1 rounded-md border border-grove-border bg-grove-surface p-0.5 dark:border-grove-border-dk dark:bg-grove-surface-dk">
+          {(['graph', 'tree'] as const).map((m) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => setMode(m)}
+              className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium ${mode === m ? 'bg-primary-700 text-grove-canvas shadow' : 'text-grove-ink/65 hover:bg-primary-50 dark:text-grove-ink-dk/65 dark:hover:bg-primary-900/20'}`}>
+              {m === 'graph' ? <Network className="h-3 w-3" /> : <ListTree className="h-3 w-3" />}
+              {m === 'graph' ? 'Graph' : 'Tree'}
+            </button>
+          ))}
+        </div>
         <Button variant="secondary" size="sm" onClick={undo} disabled={position === 0} title="Undo (Ctrl/Cmd+Z)">
           <CornerUpLeft className="mr-1.5 h-4 w-4" /> Undo
         </Button>
@@ -246,6 +259,18 @@ export function RoleDesigner({ base, operations, position, users, usersNote, onC
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {mode === 'graph' ? (
+          <RoleGraph
+            state={state}
+            changes={changes}
+            usersIn={usersIn}
+            showUsers={users.length > 0}
+            selected={selected}
+            onSelect={setSelected}
+            apply={apply}
+            onError={setError}
+          />
+        ) : (
         <Card variant="bordered">
           <CardContent className="pt-4">
             <div
@@ -273,7 +298,8 @@ export function RoleDesigner({ base, operations, position, users, usersNote, onC
               Keyboard: select a role and use &ldquo;Move under&rdquo;.
             </p>
           </CardContent>
-        </Card>
+          </Card>
+        )}
 
         <div className="space-y-4">
           <Card variant="bordered">
@@ -282,7 +308,7 @@ export function RoleDesigner({ base, operations, position, users, usersNote, onC
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               {!sel ? (
-                <p className={MUTED}>Select a role in the tree to rename, move or delete it, or to move its users.</p>
+                <p className={MUTED}>Select a role in the {mode === 'graph' ? 'graph' : 'tree'} to rename, move or delete it, or to move its users{mode === 'graph' ? ' (drag them onto a role in the graph)' : ''}.</p>
               ) : (
                 <>
                   <label className="block text-xs font-semibold">
