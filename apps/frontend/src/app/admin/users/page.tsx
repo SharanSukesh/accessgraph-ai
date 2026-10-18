@@ -731,6 +731,7 @@ function FirmBrandCard() {
           <span className="v2-micro text-grove-ink/60 dark:text-grove-ink-dk/60">Logo (PNG / JPEG, 256KB max)</span>
           <div className="mt-1 flex items-center gap-3">
             {brand.data?.has_logo && (
+              // eslint-disable-next-line @next/next/no-img-element -- next/image can't fetch session-authenticated API images
               <img
                 src={`${apiBase}${endpoints.firmBrandLogo}?t=${Date.now()}`}
                 alt="Firm logo"
