@@ -61,15 +61,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Ruff and mypy don't stop the job, so the tests always run; the last
+      # step fails the job if either of them failed.
       - name: Lint with Ruff
+        id: ruff
         working-directory: apps/backend
         run: ruff check .
+        continue-on-error: true
 
       # Fails only on mypy errors that aren't in mypy-baseline.txt (the errors
       # on 18 Oct 2026); after fixing some, re-save it with --update.
       - name: Type check with mypy (new errors only)
+        id: mypy
         working-directory: apps/backend
         run: python scripts/mypy_baseline.py
+        continue-on-error: true
 
       - name: Run tests
         working-directory: apps/backend
@@ -81,6 +87,12 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
         run: |
           pytest tests/ --cov=app --cov-report=xml --cov-report=term
+
+      - name: Fail if Ruff or mypy failed
+        if: always() && (steps.ruff.outcome == 'failure' || steps.mypy.outcome == 'failure')
+        run: |
+          echo "Ruff: ${{ steps.ruff.outcome }}, mypy: ${{ steps.mypy.outcome }}"
+          exit 1
 
   # Frontend Tests & Checks
   frontend:
@@ -104,9 +116,13 @@ jobs:
         working-directory: apps/frontend
         run: npm run type-check
 
+      # As in the backend job: lint doesn't stop the unit tests or the build;
+      # the last step fails the job if it failed.
       - name: Lint
+        id: lint
         working-directory: apps/frontend
         run: npm run lint -- --max-warnings 0
+        continue-on-error: true
 
       - name: Unit tests
         working-directory: apps/frontend
@@ -117,6 +133,12 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
         run: npm run build
+
+      - name: Fail if lint failed
+        if: always() && steps.lint.outcome == 'failure'
+        run: |
+          echo "Lint: ${{ steps.lint.outcome }}"
+          exit 1
 
   # Shared Packages
   packages:
