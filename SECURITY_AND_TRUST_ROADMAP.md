@@ -438,7 +438,10 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
 - The draft is validated on every save.
 - An existing role's API name can't change in a draft: the export identifies roles by API name, so a changed name would deploy as a new role.
 - Deleting a role needs it to have no users and no roles below it. Deletions go in the readme as manual steps; no destructive metadata is exported.
-- Sharing rules: the sync stores each rule's target type but not which role it targets (SharedToId is always None). So the preview lists the Account and Opportunity rules shared to roles and says it can't tell whether they use the moved roles. UNVERIFIED until the sync reads the target.
+- Sharing rules (follow-up PR, checked against the v68 Object Reference):
+  - Group.RelatedId is "the ID of the associated UserRole" for groups of type Role (confirmed). For the subordinate types (RoleAndSubordinates, RoleAndSubordinatesInternal) it's assumed the same: UNVERIFIED.
+  - A share row with RowCause Rule means "access via a sharing rule", and its UserOrGroupId is the group shared to. So rule-based share rows can be tied to roles through their role group, but they don't say which rule made them; the preview counts them per object.
+  - Rules are named from AccountOwnerSharingRule / OpportunityOwnerSharingRule (UserOrGroupId = target group, GroupId = source group), when readable: the Object Reference says Salesforce Support enables access to these objects. Criteria-based rules have no queryable target object we found, so they stay "target not read".
 - Public groups are matched through the role groups (Group.RelatedId) they contain.
 - A count the sync didn't take is shown as unknown ("records not counted", "at least N"), never as zero.
 - The export's `.role` element names and order, and the access-level values, follow the Role metadata fields checked earlier; whether a deploy accepts them is part of Sharan's developer-org test, along with the deploy order.

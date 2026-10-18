@@ -2567,6 +2567,30 @@ class SalesforceAPIClient:
                 # Some objects may not be available or have no sharing rules
                 logger.warning(f"Could not extract {rule_object_name}: {e}")
 
+        # Owner-based rules with their target and source groups (Object
+        # Reference: AccountOwnerSharingRule / OpportunityOwnerSharingRule,
+        # UserOrGroupId = the group shared to, GroupId = the source group).
+        # Salesforce Support enables access to these objects, so this is
+        # best effort; a role group's RelatedId then gives the UserRole.
+        known = {r.Id for r in all_rules}
+        for obj, access in (("Account", "AccountAccessLevel"), ("Opportunity", "OpportunityAccessLevel")):
+            try:
+                rows = await self.query_all(
+                    f"SELECT Id, Name, DeveloperName, GroupId, UserOrGroupId, {access} FROM {obj}OwnerSharingRule")
+            except Exception as e:  # noqa: BLE001
+                logger.info("%sOwnerSharingRule not readable: %s", obj, e)
+                continue
+            for rec in rows:
+                rule = SalesforceSharingRule(
+                    Id=rec["Id"], Name=rec.get("Name") or rec.get("DeveloperName") or rec["Id"], SobjectType=obj,
+                    RuleType="OwnerBased", AccessLevel=rec.get(access) or "Read", SharedToType="Group",
+                    SharedToId=rec.get("UserOrGroupId"), Criteria={"source_group_id": rec.get("GroupId")},
+                )
+                if rule.Id in known:
+                    all_rules = [rule if r.Id == rule.Id else r for r in all_rules]
+                else:
+                    all_rules.append(rule)
+
         logger.info(f"Extracted total of {len(all_rules)} sharing rules")
         return all_rules
 

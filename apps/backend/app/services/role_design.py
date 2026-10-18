@@ -57,10 +57,6 @@ RECALC_WARNING = (
     "Applying a hierarchy change makes Salesforce recalculate sharing automatically. Large changes can hit "
     "\"could not acquire lock\" errors: apply them leaf roles first, one at a time, off-peak, and in a sandbox first."
 )
-SHARING_RULES_UNVERIFIED = (
-    "Newton's sync records each sharing rule's target type but not which role it targets, so it can't tell "
-    "whether these rules use the moved roles. Check them in Setup before applying."
-)
 
 
 class DesignError(ValueError):
@@ -363,10 +359,22 @@ def impact(base: Dict[str, Any], state: Dict[str, Any], users: Iterable[Any],
     }
 
 
+RULES_NOT_READ_NOTE = (
+    "Some sharing rules' targets weren't read (owner-based rules need the AccountOwnerSharingRule and "
+    "OpportunityOwnerSharingRule objects, which Salesforce Support enables; criteria-based rules have no queryable "
+    "target), so Newton can't tell whether these use the moved roles. Check them in Setup before applying."
+)
+RULE_SHARES_NOTE = (
+    "Share rows created by sharing rules name the group they share to, not the rule. A role group's RelatedId is the "
+    "role, so these counts are records reaching the changed roles through sharing rules, whichever rule made them."
+)
+
+
 def references(changed_roles: Set[str], rules: Iterable[Any], groups: Iterable[Any],
-               members: Iterable[Any]) -> Dict[str, Any]:
-    """Public groups that include a changed role (through its role group),
-    and Account / Opportunity sharing rules that share to roles."""
+               members: Iterable[Any], rule_shares: Optional[Dict[str, Dict[str, int]]] = None) -> Dict[str, Any]:
+    """Public groups that include a changed role, sharing rules that share to
+    or from one (through its role group; Group.RelatedId is the UserRole),
+    and how many rule-based share rows reach the changed roles."""
     groups = list(groups)
     role_groups = {g.salesforce_id: g for g in groups
                    if (g.group_type or "").startswith("Role") and g.related_id in changed_roles}
@@ -374,14 +382,31 @@ def references(changed_roles: Set[str], rules: Iterable[Any], groups: Iterable[A
     public = sorted({by_id[m.group_id].name for m in members
                      if m.user_or_group_id in role_groups and m.group_id in by_id
                      and by_id[m.group_id].group_type in ("Regular", "Queue")})
-    role_rules = sorted(
-        {f"{r.rule_name} ({r.sobject_type})" for r in rules
-         if r.sobject_type in OWNED_OBJECTS and "role" in (r.shared_to_type or "").lower()}
-    )
+    named, unread = [], []
+    for r in rules:
+        if r.sobject_type not in OWNED_OBJECTS:
+            continue
+        criteria = getattr(r, "criteria", None)
+        source = criteria.get("source_group_id") if isinstance(criteria, dict) else None
+        hits = []
+        target = getattr(r, "shared_to_id", None)
+        if target in role_groups:
+            hits.append("shares to a changed role")
+        if source in role_groups:
+            hits.append("shares records owned in a changed role")
+        if hits:
+            named.append(f"{r.rule_name} ({r.sobject_type}): " + " and ".join(hits))
+        elif not target and "role" in (r.shared_to_type or "").lower():
+            unread.append(f"{r.rule_name} ({r.sobject_type})")
+    shares = {obj: sum(n for gid, n in (rule_shares or {}).get(obj, {}).items() if gid in role_groups)
+              for obj in OWNED_OBJECTS}
     return {
         "public_groups": public,
-        "role_sharing_rules": role_rules,
-        "sharing_rules_note": SHARING_RULES_UNVERIFIED if role_rules else None,
+        "named_rules": sorted(named),
+        "role_sharing_rules": sorted(unread),
+        "sharing_rules_note": RULES_NOT_READ_NOTE if unread else None,
+        "rule_shares": shares,
+        "rule_shares_note": RULE_SHARES_NOTE if any(shares.values()) else None,
     }
 
 
