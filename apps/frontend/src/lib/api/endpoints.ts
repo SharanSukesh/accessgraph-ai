@@ -50,6 +50,7 @@ export const endpoints = {
   profiles: (orgId: string) => `/orgs/${orgId}/profiles`,
   profilePagesAndAutomation: (orgId: string, profileId: string) => `/orgs/${orgId}/profiles/${profileId}/pages-and-automation`,
   setAutomation: (orgId: string, psId: string) => `/orgs/${orgId}/permission-sets/${psId}/automation`,
+  permissionSetGroup: (orgId: string, groupId: string) => `/orgs/${orgId}/permission-set-groups/${groupId}`,
 
   // Recommendations
   recommendations: (orgId: string) => `/orgs/${orgId}/recommendations`,

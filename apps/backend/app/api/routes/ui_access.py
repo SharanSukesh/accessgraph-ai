@@ -146,3 +146,53 @@ async def set_automation(org_id: str, ps_id: str, db: AsyncSession = Depends(get
     if ps_id not in ps_rows and ps_id not in groups:
         raise HTTPException(status_code=404, detail="Permission set not found")
     return ui_access.for_set(await latest_ui_access(db, org_id), ps_id, ps_rows, components, groups)
+
+
+MUTING_NOTE = (
+    "Apex class and flow access is listed from the group's permission sets. Whether a muting set can remove Apex "
+    "class or flow access isn't covered (UNVERIFIED); the muting set's own permissions are shown on its page."
+)
+
+
+@router.get("/orgs/{org_id}/permission-set-groups/{group_id}")
+async def permission_set_group(org_id: str, group_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+    """A permission set group: its permission sets, its muting set, how many
+    users hold it (when user records are kept), and the Apex classes and
+    flows it grants through its sets. Configuration only."""
+    group = (await db.execute(select(PermissionSetGroupSnapshot).where(
+        PermissionSetGroupSnapshot.organization_id == org_id,
+        PermissionSetGroupSnapshot.salesforce_id == group_id))).scalar_one_or_none()
+    if group is None:
+        raise HTTPException(status_code=404, detail="Permission set group not found")
+    ps_rows, components, groups = await _ps_context(db, org_id)
+    sets, muting = [], []
+    for c in components:
+        if c.permission_set_group_id != group_id:
+            continue
+        ps = ps_rows.get(c.permission_set_id)
+        is_muting = (ps is not None and (ps.ps_type or "") == "Muting") or c.permission_set_id.startswith("0QM")
+        row = {"id": c.permission_set_id,
+               "label": (ps.label or ps.name) if ps is not None else None,
+               "name": ps.name if ps is not None else None}
+        (muting if is_muting else sets).append(row)
+    org = await privacy_mode.load_org(db, org_id)
+    users = None
+    if privacy_mode.allows(org, privacy_mode.USER_RECORDS):
+        # Salesforce assigns the group's aggregate set (PermissionSetGroupId on
+        # the assignment); the demo fixtures assign the group id itself.
+        aggregate = {p.salesforce_id for p in ps_rows.values()
+                     if (p.ps_type or "") == "Group" and (p.raw_data or {}).get("PermissionSetGroupId") == group_id}
+        rows = (await db.execute(select(PermissionSetAssignmentSnapshot).where(
+            PermissionSetAssignmentSnapshot.organization_id == org_id,
+            PermissionSetAssignmentSnapshot.permission_set_id.in_({group_id} | aggregate)))).scalars().all()
+        users = len({a.assignee_id for a in rows})
+    automation = ui_access.for_set(await latest_ui_access(db, org_id), group_id, ps_rows, components, groups)
+    return {
+        "id": group.salesforce_id,
+        "label": group.master_label or group.developer_name,
+        "developer_name": group.developer_name,
+        "permission_sets": sorted(sets, key=lambda r: (r["label"] or r["id"]).lower()),
+        "muting_sets": muting,
+        "users": users,
+        "automation": {**automation, "muting_note": MUTING_NOTE if muting else None},
+    }

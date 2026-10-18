@@ -330,3 +330,25 @@ async def test_profile_and_set_views_work_at_metadata_only(client, async_db_sess
     qm = (await client.get(f"/orgs/{org_id}/permission-sets/0PS000000000013DMO/automation", cookies=cookie)).json()
     assert {a["name"] for a in qm["apex"]} == {"QuoteService", "QuoteSelector", "QuoteHandler", "QuoteController"}
     assert (await client.get(f"/orgs/{org_id}/permission-sets/nope/automation", cookies=cookie)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_permission_set_group_page(client, async_db_session, lumenvale):  # noqa: F811
+    org_id, cookie = lumenvale
+    g = (await client.get(f"/orgs/{org_id}/permission-set-groups/0PG000000000001DMO", cookies=cookie)).json()
+    assert g["label"] == "Sales Manager Bundle"
+    assert [s["label"] for s in g["permission_sets"]] == [
+        "Account Team Lead", "Discount Approvals", "Opportunity Approvals", "Quote Manager"]
+    assert [m["label"] for m in g["muting_sets"]] == ["Sales Manager Bundle Muting"]
+    assert g["users"] == 103  # assigned to the group directly in the fixture
+    flows = {f["api_name"]: f["via"] for f in g["automation"]["flows"]}
+    assert flows == {"Discount_Approval_Request": [["Permission set: Discount Approvals"]],
+                     "Quote_Builder": [["Permission set: Quote Manager"]]}
+    assert {a["name"] for a in g["automation"]["apex"]} >= {"QuoteService"} and g["automation"]["muting_note"]
+    assert (await client.get(f"/orgs/{org_id}/permission-set-groups/0PGnope", cookies=cookie)).status_code == 404
+
+    org = await async_db_session.get(Organization, org_id)
+    privacy_mode.set_privacy(org, privacy_mode.METADATA_ONLY, False, "test")
+    await async_db_session.commit()
+    g = (await client.get(f"/orgs/{org_id}/permission-set-groups/0PG000000000001DMO", cookies=cookie)).json()
+    assert g["users"] is None and len(g["permission_sets"]) == 4
