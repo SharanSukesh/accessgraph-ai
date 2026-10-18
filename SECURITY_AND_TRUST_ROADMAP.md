@@ -199,6 +199,15 @@ section has the detail.
   stores its data with the sync job, so there's only one new alembic head.
 - **18 Oct:** every phase B PR keeps Lumenvale at Health 41, 18 findings,
   $183,180 and License Fit $116,220 (tested in #26 and #28).
+- **18 Oct, follow-ups (not merged):** #29 makes failing tests fail CI
+  (backend was continue-on-error; frontend unit tests weren't run). #30
+  applies the privacy level to demo syncs. #31 names the sharing rules that
+  reach a changed role (stacked on #26). #28 gained profile API-name
+  matching, the most-specific-first page order (UNVERIFIED) and the profile
+  and permission set views. #32 (draft) proposes pinning the backend's
+  Railway builder to its Dockerfile.
+- **Merge order:** #29, #27, #30, #23, #24, #25, #26, #31, #28. Simulated
+  clean; the combined tree passes all tests with one alembic head.
 - **Next:** item 7 with 35c, then phase C. Item 1 phase 2 stays a plan.
 
 ## Build order
