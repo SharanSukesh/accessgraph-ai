@@ -64,6 +64,9 @@ interface RecordAccessData {
   ownedRecords: Record<string, number | null>
   roleHierarchy: RoleHierarchy
   manualShares: ManualShare[]
+  /** Shares with an Apex sharing reason (granted by Apex managed sharing). */
+  apexShares?: (ManualShare & { source?: string; sharing_reason?: string | null })[]
+  shareNotes?: { manual?: string; apex?: string }
   teamAccess: TeamAccess[]
   sharingRules: SharingRule[]
   organizationWideDefaults: OrganizationWideDefault[]
@@ -285,9 +288,12 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-4">
+          <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65 mb-2">
             Records explicitly shared with this user or groups they belong to.
           </p>
+          {data.shareNotes?.manual && (
+            <p className="mb-4 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">{data.shareNotes.manual}</p>
+          )}
           {manualShares.length === 0 ? (
             <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-8">No manual shares found</p>
           ) : (
@@ -312,6 +318,49 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                         </Badge>
                       </td>
                       <td className="px-4 py-2 font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">{share.shared_to}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Granted by Apex (roadmap item 1) */}
+      <Card variant="bordered">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Share2 className="h-5 w-5 text-primary-700" />
+            Granted by Apex
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.shareNotes?.apex && (
+            <p className="mb-3 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">{data.shareNotes.apex}</p>
+          )}
+          {!(data.apexShares ?? []).length ? (
+            <p className="py-4 text-center text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
+              No shares with an Apex sharing reason found
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-primary-50/40 dark:bg-primary-900/10">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Record Type</th>
+                    <th className="px-4 py-2 text-left">Record ID</th>
+                    <th className="px-4 py-2 text-left">Access Level</th>
+                    <th className="px-4 py-2 text-left">Sharing reason</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
+                  {(data.apexShares ?? []).map((share, idx) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-2">{share.record_type}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{share.record_id}</td>
+                      <td className="px-4 py-2"><Badge variant={share.access_level === 'Edit' ? 'success' : 'info'}>{share.access_level}</Badge></td>
+                      <td className="px-4 py-2">{share.sharing_reason ?? share.row_cause}</td>
                     </tr>
                   ))}
                 </tbody>

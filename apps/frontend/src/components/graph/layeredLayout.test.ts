@@ -61,4 +61,14 @@ describe('layered layout', () => {
     // Account comes from the group, Contact from the profile; they keep that order.
     expect(Math.sign(p.object_Account.y - p.object_Contact.y)).toBe(Math.sign(p.grp.y - p.prof.y))
   })
+
+  it('puts layouts, record pages, Apex and flows between their grants and the objects', () => {
+    const extra = [...nodes, chip('apex', 'apex_class'), chip('lay', 'layout')]
+    const extraEdges = [...edges,
+      { source: 'prof', target: 'apex', type: 'GRANTS_APEX_CLASS' },
+      { source: 'prof', target: 'lay', type: 'USES_LAYOUT' },
+      { source: 'lay', target: 'object_Account', type: 'LAYOUT_FOR' }]
+    const col = assignColumns(extra, extraEdges, 'u')
+    expect(col).toMatchObject({ apex: 2, lay: 2, object_Account: 3, prof: 1 })
+  })
 })

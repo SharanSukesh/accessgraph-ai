@@ -163,7 +163,7 @@ from app.api.routes import (
     auth, accounts, orgs, users, privacy, package, deeplink,
     equity, reporting_graph, org_analyzer, data_quality,
     change_risk_radar, package_sprawl, restructure, report_sprawl,
-    automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs, roles, role_design,
+    automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs, roles, role_design, ui_access,
 )
 
 app.include_router(health.router, tags=["health"])
@@ -194,6 +194,7 @@ app.include_router(compliance.router, tags=["compliance"], dependencies=_org_gua
 app.include_router(roles.router, tags=["roles"], dependencies=_org_guard)
 app.include_router(role_design.router, tags=["role-design"], dependencies=_org_guard)
 app.include_router(role_design.public_router, tags=["role-design"])
+app.include_router(ui_access.router, tags=["ui-access"], dependencies=_org_guard)
 
 
 # Global exception handler

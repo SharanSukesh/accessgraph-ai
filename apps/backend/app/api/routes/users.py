@@ -774,6 +774,9 @@ async def get_user_record_access(
         "ownedRecords": access_info["owned_records"],
         "roleHierarchy": access_info["role_hierarchy"],
         "manualShares": access_info["manual_shares"],
+        # Shares with an Apex sharing reason (roadmap item 1), and what can't be told apart.
+        "apexShares": access_info.get("apex_shares", []),
+        "shareNotes": access_info.get("share_notes", {}),
         "teamAccess": access_info["team_access"],
         "sharingRules": access_info["sharing_rules"],
         "summary": access_info["summary"],
@@ -1565,6 +1568,7 @@ GRAPH_MAX_ASSIGNMENTS = 50
 async def get_user_graph(
     org_id: str,
     user_sf_id: str,
+    include: Optional[str] = Query(None, description="'pages_and_automation' adds layouts, record pages, Apex and flows"),
     db: AsyncSession = Depends(get_database),
 ):
     """Get graph data for a user showing their access relationships"""
@@ -2096,6 +2100,21 @@ async def get_user_graph(
                 canRead=a["read"], canCreate=a["create"], canEdit=a["edit"], canDelete=a["delete"],
             )
 
+    # Optional layer (roadmap item 1): layouts, record pages, Apex and flows.
+    extras_meta = None
+    if include == "pages_and_automation":
+        from app.api.routes.ui_access import latest_ui_access, user_context
+        from app.services.ui_access import VISIBILITY_NOTE, graph_extras
+        _, profiles, all_ps, assignments, components, group_names = await user_context(db, org_id, user_sf_id)
+        extra = graph_extras(
+            await latest_ui_access(db, org_id), user, profiles, all_ps, assignments, components, group_names,
+            [n["label"] for n in nodes if n["type"] == "object"],
+        )
+        ids = {n["id"] for n in nodes} | {n["id"] for n in extra["nodes"]}
+        nodes.extend(extra["nodes"])
+        edges.extend(e for e in extra["edges"] if e["source"] in ids and e["target"] in ids)
+        extras_meta = {"available": extra["available"], "hidden": extra["hidden"], "note": VISIBILITY_NOTE}
+
     return {
         "nodes": nodes,
         "edges": edges,
@@ -2105,6 +2124,7 @@ async def get_user_graph(
             "centerNodeId": user_sf_id,
             "assignmentsShown": len(ps_assignments) - len(profile_owned),
             "assignmentsHidden": hidden_assignments,
+            "pagesAndAutomation": extras_meta,
             "generatedAt": datetime.utcnow().isoformat()
         }
     }

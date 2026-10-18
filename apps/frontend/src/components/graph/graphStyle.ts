@@ -13,6 +13,10 @@ export type GraphNodeType =
   | 'permission_set_group'
   | 'muting_permission_set'
   | 'object'
+  | 'layout'
+  | 'lightning_page'
+  | 'apex_class'
+  | 'flow'
 
 export interface NodeTypeStyle {
   label: string
@@ -36,6 +40,13 @@ export const NODE_TYPE_STYLES: Record<GraphNodeType, NodeTypeStyle> = {
     label: 'Muting Set', caption: 'MUTING SET', color: '#E66767', dashed: true, outline: true,
   },
   object: { label: 'Object', caption: 'OBJECT', color: '#146B4A' },
+  // Pages and automation (roadmap item 1): one muted hue, outlined, told
+  // apart by icon and caption. The graph already has more types than a
+  // categorical palette can separate, so no new hues.
+  layout: { label: 'Page Layout', caption: 'PAGE LAYOUT', color: '#64748B', outline: true },
+  lightning_page: { label: 'Record Page', caption: 'RECORD PAGE', color: '#64748B', outline: true },
+  apex_class: { label: 'Apex Class', caption: 'APEX CLASS', color: '#64748B', outline: true },
+  flow: { label: 'Flow', caption: 'FLOW', color: '#64748B', outline: true },
 }
 
 export function nodeTypeStyle(type: string): NodeTypeStyle {
@@ -153,6 +164,7 @@ export const LEGEND_GROUPS: { title: string; types: GraphNodeType[] }[] = [
   { title: 'Grants', types: ['permission_set', 'permission_set_group'] },
   { title: 'Removes', types: ['muting_permission_set'] },
   { title: 'What', types: ['object'] },
+  { title: 'Pages and automation', types: ['layout', 'lightning_page', 'apex_class', 'flow'] },
 ]
 
 /** Legend groups holding only the node types (and includes/mutes edges) present in this graph. */
