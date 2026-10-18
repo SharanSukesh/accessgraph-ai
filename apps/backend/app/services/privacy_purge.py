@@ -304,15 +304,6 @@ class _Purge:
             await self._delete(DataQualityRun)
             await self._strip_aggregates()
 
-    async def _strip_draft_users(self) -> None:
-        """Role design drafts keep user ids (who sits where, who moves):
-        dropped without user records; the role changes stay."""
-        for d in await self._rows(RoleDesignDraft):
-            ops = list(d.operations or [])
-            kept = [op for op in ops if op.get("op") != "move_user"]
-            position = sum(1 for op in ops[: d.position] if op.get("op") != "move_user")
-            self._set(d, base={**(d.base or {}), "users": {}}, operations=kept, position=position)
-
     async def _strip_aggregates(self) -> None:
         snapshots = {s.id: s for s in await self._rows(OrgAnalysisSnapshot)}
         for snap in snapshots.values():
@@ -441,6 +432,15 @@ class _Purge:
             posture["name"] = self._alias(posture.get("user_id"))
             posture["username"] = None
             self._set(conn, connected_as=posture)
+
+    async def _strip_draft_users(self) -> None:
+        """Role design drafts keep user ids (who sits where, who moves):
+        dropped without user records; the role changes stay."""
+        for d in await self._rows(RoleDesignDraft):
+            ops = list(d.operations or [])
+            kept = [op for op in ops if op.get("op") != "move_user"]
+            position = sum(1 for op in ops[: d.position] if op.get("op") != "move_user")
+            self._set(d, base={**(d.base or {}), "users": {}}, operations=kept, position=position)
 
     async def _scrub_findings(self) -> None:
         for f in await self._rows(OrgFinding):
