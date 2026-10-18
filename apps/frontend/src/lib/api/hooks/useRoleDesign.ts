@@ -56,7 +56,17 @@ export interface Impact {
   recalculation_warning: string
   users_allowed: boolean
   users_hidden_reason?: string
-  references: { public_groups: string[]; role_sharing_rules: string[]; sharing_rules_note: string | null }
+  references: {
+    public_groups: string[]
+    /** Rules whose target or source group is a changed role's group. */
+    named_rules: string[]
+    /** Rules shared to roles whose target wasn't read. */
+    role_sharing_rules: string[]
+    sharing_rules_note: string | null
+    /** Rule-based share rows reaching the changed roles, per object. */
+    rule_shares: Record<string, number>
+    rule_shares_note: string | null
+  }
   changes: number
 }
 

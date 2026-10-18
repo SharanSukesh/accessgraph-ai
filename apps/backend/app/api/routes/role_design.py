@@ -188,6 +188,19 @@ async def _share_counts(db: AsyncSession, org_id: str) -> Dict[str, Dict[str, in
     return out
 
 
+async def _rule_share_counts(db: AsyncSession, org_id: str) -> Dict[str, Dict[str, int]]:
+    """Rule-based share rows per object and target group."""
+    out: Dict[str, Dict[str, int]] = {}
+    for obj, model in (("Account", AccountShareSnapshot), ("Opportunity", OpportunityShareSnapshot)):
+        rows = (await db.execute(
+            select(model.user_or_group_id, func.count(model.id))
+            .where(model.organization_id == org_id, model.row_cause == "Rule")
+            .group_by(model.user_or_group_id)
+        )).all()
+        out[obj] = {gid: n for gid, n in rows}
+    return out
+
+
 @router.get("/orgs/{org_id}/role-designs/{draft_id}/impact")
 async def draft_impact(org_id: str, draft_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
     d = await _draft(db, org_id, draft_id)
@@ -212,6 +225,7 @@ async def draft_impact(org_id: str, draft_id: str, db: AsyncSession = Depends(ge
         (await db.execute(select(SharingRuleSnapshot).where(SharingRuleSnapshot.organization_id == org_id))).scalars().all(),
         (await db.execute(select(GroupSnapshot).where(GroupSnapshot.organization_id == org_id))).scalars().all(),
         (await db.execute(select(GroupMemberSnapshot).where(GroupMemberSnapshot.organization_id == org_id))).scalars().all(),
+        await _rule_share_counts(db, org_id),
     )
     out["changes"] = changes["count"]
     return out

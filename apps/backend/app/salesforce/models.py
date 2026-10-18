@@ -2,7 +2,7 @@
 Salesforce API Response Models
 Pydantic models for Salesforce REST API responses
 """
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -153,6 +153,8 @@ class SalesforceSharingRule(BaseModel):
     AccessLevel: str
     SharedToType: str  # Group, Role, RoleAndSubordinates, etc.
     SharedToId: Optional[str] = None
+    # Owner-based rules: the source group whose members' records are shared.
+    Criteria: Optional[Dict[str, Any]] = None
 
 
 class SalesforceAccountShare(BaseModel):

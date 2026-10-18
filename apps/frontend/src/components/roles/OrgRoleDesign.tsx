@@ -140,8 +140,22 @@ function ImpactPanel({ impact, loading, pending }: { impact?: Impact; loading: b
               {impact.upper_bound_note}
               {impact.coverage_label && ` ${impact.coverage_label}.`}
             </p>
-            {(impact.references.public_groups.length > 0 || impact.references.role_sharing_rules.length > 0) && (
+            {(impact.references.public_groups.length > 0 || impact.references.role_sharing_rules.length > 0
+              || impact.references.named_rules.length > 0 || impact.references.rule_shares_note) && (
               <div className="space-y-1.5">
+                {impact.references.named_rules.length > 0 && (
+                  <div className="text-xs">
+                    <strong>Sharing rules that reach a changed role:</strong>
+                    <ul className="ml-4 list-disc">{impact.references.named_rules.map((r) => <li key={r}>{r}</li>)}</ul>
+                  </div>
+                )}
+                {impact.references.rule_shares_note && (
+                  <p className="text-xs">
+                    <strong>Records reaching the changed roles through sharing rules:</strong>{' '}
+                    {Object.entries(impact.references.rule_shares).map(([o, n]) => `${o} ${n.toLocaleString('en-GB')}`).join(', ')}.{' '}
+                    <span className={MUTED}>{impact.references.rule_shares_note}</span>
+                  </p>
+                )}
                 {impact.references.public_groups.length > 0 && (
                   <p className="text-xs">
                     <strong>Public groups that include a changed role:</strong> {impact.references.public_groups.join(', ')}
@@ -149,7 +163,7 @@ function ImpactPanel({ impact, loading, pending }: { impact?: Impact; loading: b
                 )}
                 {impact.references.role_sharing_rules.length > 0 && (
                   <p className="text-xs">
-                    <strong>Sharing rules shared to roles:</strong> {impact.references.role_sharing_rules.join(', ')}.{' '}
+                    <strong>Sharing rules shared to roles, target not read:</strong> {impact.references.role_sharing_rules.join(', ')}.{' '}
                     <span className={MUTED}>{impact.references.sharing_rules_note}</span>
                   </p>
                 )}
