@@ -85,3 +85,27 @@ def test_code_coverage_block_states_the_gate_and_staleness():
     assert "<strong>71%</strong>, below the 75% deployment gate" in html
     assert "40 days before this analysis (out of date)" in html
     assert "RenewalService" in html and "Newton never runs tests" in html
+
+
+def test_api_usage_block_names_the_top_app_and_the_peak():
+    from app.services import api_usage
+    from app.ingestion.demo_orgs import load_fixture
+    from datetime import datetime, timezone
+
+    live = load_fixture("synthetic_mid_market")["demo_live"]
+    u = api_usage.summarize({"status": "ok", "days": live["api_usage"]["days"]}, [], live["org_limits"],
+                            lambda uid: "User 1A2B3C", True)
+    snap = NS(snapshot_at=datetime(2026, 10, 14, tzinfo=timezone.utc), executive_summary=None,
+              metrics={"org_health_score": 70, "api_usage": u}, org_limits={})
+    html = _build_html("Org", snap, [], ctx=ReportContext())
+    assert "API usage by source" in html and "Warehouse Nightly ETL" in html
+    assert "2026-09-14 to 2026-10-13 (30 days)" in html
+    assert "2026-09-29: 976,430 counted, 96.2% of the daily limit" in html
+    hidden = api_usage.summarize({"status": "ok", "days": live["api_usage"]["days"]}, [], {}, str, False)
+    html = _build_html("Org", NS(**{**snap.__dict__, "metrics": {"org_health_score": 70, "api_usage": hidden}}), [],
+                       ctx=ReportContext())
+    assert "005000000000150DMO" not in html and "privacy level excludes user records" in html
+    single = api_usage.summarize({"status": "unavailable", "days": []}, [], {}, str, True)
+    html = _build_html("Org", NS(**{**snap.__dict__, "metrics": {"org_health_score": 70, "api_usage": single}}), [],
+                       ctx=ReportContext())
+    assert "View Event Log Files" in html

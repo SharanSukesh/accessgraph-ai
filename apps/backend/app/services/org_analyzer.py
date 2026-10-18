@@ -650,6 +650,9 @@ class AnalyzerContext:
     # services/code_coverage.summarize_coverage(): org-wide %, 0% lists,
     # last test run. None when the org returned no coverage at all.
     code_coverage: Optional[Dict[str, Any]] = None
+    # client.get_api_total_usage(): this run's read of the API Total Usage
+    # log, counted per day (services/api_usage.py). None when not read.
+    api_usage_read: Optional[Dict[str, Any]] = None
     # Critical objects from the latest Data Quality run:
     # [{object, label, record_count, flags, caveats}]
     critical_objects: List[Dict[str, Any]] = field(default_factory=list)
@@ -682,6 +685,7 @@ class AnalyzerContext:
     allow_login_history: bool = True
     allow_record_aggregates: bool = True
     keep_user_identity: bool = True
+    allow_user_records: bool = True
 
 
 @dataclass
@@ -761,6 +765,7 @@ class OrgAnalyzerService:
         ctx.allow_login_history = privacy_mode.allows(org, privacy_mode.LOGIN_HISTORY)
         ctx.allow_record_aggregates = privacy_mode.allows(org, privacy_mode.RECORD_AGGREGATES)
         ctx.keep_user_identity = privacy_mode.allows(org, privacy_mode.USER_IDENTITY)
+        ctx.allow_user_records = privacy_mode.allows(org, privacy_mode.USER_RECORDS)
 
         async def _q(model):
             r = await self.db.execute(
@@ -836,6 +841,39 @@ class OrgAnalyzerService:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def _api_usage_section(self, ctx: AnalyzerContext, prior_snapshot: Any) -> Dict[str, Any]:
+        """API usage by source: this run's read of the API Total Usage log
+        plus the days earlier runs kept (services/api_usage.py)."""
+        from app.services.api_usage import summarize, user_namer
+        prior = ((getattr(prior_snapshot, "metrics", None) or {}).get("api_usage") or {}).get("days") or []
+        read = ctx.api_usage_read
+        apps: List[Dict[str, Any]] = []
+        if not (read and read.get("days")) and not prior:
+            apps = await self._connected_apps_last_used()
+        namer = user_namer(ctx.users, ctx.keep_user_identity,
+                           lambda uid: privacy_mode.user_alias(self.org_id, uid))
+        return summarize(read, prior, ctx.org_limits, namer, ctx.allow_user_records, apps)
+
+    async def _connected_apps_last_used(self) -> List[Dict[str, Any]]:
+        """Connected apps and when they were last used, from the latest
+        Integration Sprawl run: the fallback when the log can't be read."""
+        from sqlalchemy import desc
+        from app.domain.models import IntegrationInventoryItem, IntegrationSprawlRun
+        run = (await self.db.execute(
+            select(IntegrationSprawlRun).where(IntegrationSprawlRun.organization_id == self.org_id)
+            .order_by(desc(IntegrationSprawlRun.snapshot_at)).limit(1)
+        )).scalar_one_or_none()
+        if run is None:
+            return []
+        items = (await self.db.execute(
+            select(IntegrationInventoryItem).where(
+                IntegrationInventoryItem.run_id == run.id,
+                IntegrationInventoryItem.integration_type == "connected_app",
+            )
+        )).scalars().all()
+        rows = [{"name": i.name, "last_used_at": i.last_used_at.isoformat() if i.last_used_at else None} for i in items]
+        return sorted(rows, key=lambda r: (r["last_used_at"] is None, r["last_used_at"] or ""), reverse=False)
 
     @staticmethod
     def _compute_delta(
@@ -979,6 +1017,12 @@ class OrgAnalyzerService:
             ctx.code_coverage = summarize_coverage(await sf_client.get_code_coverage())
         except Exception as e:
             logger.warning("get_code_coverage failed: %s", e)
+
+        # API Total Usage event log (needs View Event Log Files).
+        try:
+            ctx.api_usage_read = await sf_client.get_api_total_usage()
+        except Exception as e:
+            logger.warning("get_api_total_usage failed: %s", e)
 
         # LoginHistory (last 90 days)
         if ctx.allow_login_history:
@@ -2971,6 +3015,7 @@ class OrgAnalyzerService:
         prior_snapshot = await self._previous_snapshot()
         delta = self._compute_delta(by_sev, prior_snapshot)
         metrics["delta_vs_prior"] = delta
+        metrics["api_usage"] = await self._api_usage_section(ctx, prior_snapshot)
         exec_summary = _compose_executive_summary(
             ctx=ctx,
             drafts=drafts,

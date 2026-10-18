@@ -2001,6 +2001,44 @@ class SalesforceAPIClient:
             logger.info("ApexTestRunResult query failed: %s", e)
         return out
 
+    async def get_api_total_usage(self) -> Dict[str, Any]:
+        """The API Total Usage event log, counted per day, connected app,
+        user, API type and limit flag as it streams in; the rows themselves
+        are never kept. Read-only. status is "unavailable" when the log
+        can't be queried (usually no View Event Log Files permission).
+        See app/services/api_usage.py."""
+        from app.services.api_usage import EVENT_TYPE, LogCounter
+        try:
+            files = await self.query_all(
+                "SELECT Id, LogDate, CreatedDate FROM EventLogFile "
+                f"WHERE EventType = '{EVENT_TYPE}' AND Interval = 'Daily' ORDER BY LogDate, CreatedDate"
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.info("EventLogFile query failed: %s", e)
+            return {"status": "unavailable", "days": []}
+        # A later daily file replaces the earlier one for the same date with
+        # the full set of logs, so only the newest file per date is read.
+        latest: Dict[str, Dict[str, Any]] = {}
+        for f in files:
+            day = (f.get("LogDate") or "")[:10]
+            if day and f.get("Id"):
+                latest[day] = f
+        by_date: Dict[str, List[Dict[str, Any]]] = {}
+        for day, f in sorted(latest.items()):
+            url = f"{self.base_url}/sobjects/EventLogFile/{f['Id']}/LogFile"
+            counter = LogCounter()
+            try:
+                async with httpx.AsyncClient(timeout=300.0) as client:
+                    async with client.stream("GET", url, headers=self._get_headers()) as response:
+                        response.raise_for_status()
+                        async for line in response.aiter_lines():
+                            counter.feed(line)
+            except Exception as e:  # noqa: BLE001
+                logger.info("EventLogFile %s download failed: %s", f["Id"], e)
+                continue
+            by_date[day] = counter.rows()
+        return {"status": "ok", "days": [{"date": d, "rows": rows} for d, rows in sorted(by_date.items())]}
+
     async def extract_organization(self) -> Optional[Dict[str, Any]]:
         """Single-row Organization fetch with edition + sandbox flags.
 
