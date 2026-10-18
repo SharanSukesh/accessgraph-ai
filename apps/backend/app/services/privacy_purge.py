@@ -43,6 +43,7 @@ from app.domain.models import (
     RestructurePreservationConstraint,
     RestructureRun,
     RiskScore,
+    RoleDesignDraft,
     SalesforceConnection,
     UserSnapshot,
     VIPDesignation,
@@ -80,7 +81,7 @@ HANDLED_TABLES = {
     "restructure_preservation_constraints", "data_quality_runs",
     "object_quality_scores", "org_analysis_snapshots", "org_findings",
     "installed_packages", "report_inventory_items", "automation_inventory_items",
-    "compliance_scorecard_runs", "salesforce_connections",
+    "compliance_scorecard_runs", "salesforce_connections", "role_design_drafts",
 }
 UNAFFECTED_TABLES = {
     "audit_logs", "org_users", "org_access_grants", "sync_jobs", "brand_settings",
@@ -283,6 +284,9 @@ class _Purge:
             ):
                 await self._delete(model)
 
+        if not self.allows(privacy.USER_RECORDS):
+            await self._strip_draft_users()
+
         if not self.allows(privacy.AUDIT_TRAIL):
             await self._delete(ChangeAuditEvent)
             await self._delete(ChangeAuditRun)
@@ -326,6 +330,14 @@ class _Purge:
                     usage["users_hidden_reason"] = USERS_HIDDEN_REASON
                 usage["days"] = [{**d, "rows": _strip_users(d.get("rows") or [])} for d in usage.get("days") or []]
             self._set(snap, metrics={**snap.metrics, "api_usage": usage})
+    async def _strip_draft_users(self) -> None:
+        """Role design drafts keep user ids (who sits where, who moves):
+        dropped without user records; the role changes stay."""
+        for d in await self._rows(RoleDesignDraft):
+            ops = list(d.operations or [])
+            kept = [op for op in ops if op.get("op") != "move_user"]
+            position = sum(1 for op in ops[: d.position] if op.get("op") != "move_user")
+            self._set(d, base={**(d.base or {}), "users": {}}, operations=kept, position=position)
 
     async def _strip_aggregates(self) -> None:
         snapshots = {s.id: s for s in await self._rows(OrgAnalysisSnapshot)}
