@@ -5,7 +5,7 @@ Coordinates data extraction, normalization, and persistence
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +106,9 @@ class SyncOrchestrator:
                 data["record_owner_counts"] = {obj: owners.get(obj) for obj in ("Account", "Opportunity")}
                 # What the integration user could see, as a live sync records it.
                 data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
+                # The org's privacy level applies to demo data exactly as to a
+                # live pull, so Masked and Metadata only can be shown on it.
+                data = apply_privacy_to_demo_data(org, data)
             elif settings.DEMO_MODE:
                 logger.info("Running in DEMO mode")
                 data = await self._extract_demo_data(org_id)
@@ -306,3 +309,22 @@ class SyncOrchestrator:
         except Exception as e:
             logger.error(f"AI analysis failed unexpectedly: {e}", exc_info=True)
             # Don't raise - we don't want to fail the sync if AI analysis fails
+
+
+def apply_privacy_to_demo_data(org: Any, data: Dict) -> Dict:
+    """What a live sync at this privacy level would have pulled and kept:
+    no users without user records, no share or team rows (or owner counts)
+    without record shares, and aliases instead of names when names aren't
+    kept. See _extract_live_data and services/privacy_mode.py."""
+    from app.services import privacy_mode as privacy
+
+    data = dict(data)
+    if not privacy.allows(org, privacy.USER_RECORDS):
+        data["users"] = []
+    if not privacy.allows(org, privacy.RECORD_SHARES):
+        for key in ("account_shares", "opportunity_shares", "account_team_members", "opportunity_team_members"):
+            data[key] = []
+        data["record_owner_counts"] = {}
+    if not privacy.allows(org, privacy.USER_IDENTITY):
+        data["users"] = privacy.mask_users(org.id, data.get("users", []))
+    return data
