@@ -23,6 +23,7 @@ import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Reveal } from '@/components/v2/motion'
 import { usePermissionSetDetail } from '@/lib/api/hooks/usePermissionSets'
+import { useSetAutomation } from '@/lib/api/hooks/usePagesAndAutomation'
 
 export default function PermissionSetDetailPage() {
   const params = useParams()
@@ -505,6 +506,62 @@ export default function PermissionSetDetailPage() {
         </CardContent>
       </Card>
       </Reveal>
+      <SetAutomationCard orgId={orgId} psId={psId} />
     </div>
+  )
+}
+
+/** Apex classes and flows this set (or group, through its sets) grants (roadmap item 1). */
+function SetAutomationCard({ orgId, psId }: { orgId: string; psId: string }) {
+  const { data, isLoading } = useSetAutomation(orgId, psId)
+  const muted = 'text-grove-ink/60 dark:text-grove-ink-dk/60'
+  return (
+    <Card variant="bordered">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Settings className="h-5 w-5 text-primary-700" /> Apex classes and flows
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        {isLoading ? (
+          <p className={muted}>Loading…</p>
+        ) : !data?.available ? (
+          <p className={muted}>{data?.reason ?? 'Not read yet.'}</p>
+        ) : (
+          <>
+            <div>
+              <p className="mb-1 text-xs font-semibold">Apex classes ({data.apex?.length ?? 0})</p>
+              {data.apex?.length ? (
+                <ul className="grid gap-x-6 gap-y-0.5 font-mono text-xs sm:grid-cols-2">
+                  {data.apex.map((c) => (
+                    <li key={c.id}>{c.namespace ? `${c.namespace}.` : ''}{c.name}
+                      {c.via.length > 0 && c.via[0].length > 0 && psId.startsWith('0PG') && (
+                        <span className={`ml-1 font-sans ${muted}`}>({c.via.map((p) => p.join(' → ')).join('; ')})</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className={muted}>None.</p>}
+            </div>
+            <div>
+              <p className="mb-1 text-xs font-semibold">Flows ({data.flows?.length ?? 0})</p>
+              {data.flows?.length ? (
+                <ul className="space-y-0.5 text-xs">
+                  {data.flows.map((f) => (
+                    <li key={f.id}>
+                      {f.label}
+                      {f.restricted && <Badge variant="warning" size="sm" className="ml-1.5">Explicit access</Badge>}
+                      {psId.startsWith('0PG') && <span className={`ml-1 ${muted}`}>({f.via.map((p) => p.join(' → ')).join('; ')})</span>}
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className={muted}>None.</p>}
+            </div>
+            <p className="text-xs">Run Flows permission: <strong>{data.run_flows == null ? 'not read' : data.run_flows ? 'yes' : 'no'}</strong></p>
+            {data.apex_note && <p className={`text-xs ${muted}`}>{data.apex_note}</p>}
+          </>
+        )}
+      </CardContent>
+    </Card>
   )
 }

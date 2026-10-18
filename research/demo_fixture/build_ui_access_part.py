@@ -6,9 +6,11 @@ Synthetic, to the roadmap's spec:
   - record types: 3 on Opportunity, 2 on Case;
   - page layouts per profile and record type (Account, Opportunity, Case),
     and the record types each profile can use;
-  - 4 Lightning record pages: Opportunity and Case org defaults, a
-    "Lumenvale Sales" app default for Opportunity, and an app + record type
-    (Renewal) + profile (Sales Manager) override;
+  - 6 Lightning record pages: Opportunity and Case org defaults, a
+    "Lumenvale Sales" app default for Opportunity, an app + record type
+    (Partner Deal) assignment, and app + record type + profile assignments
+    for Sales Manager (Renewal) and System Administrator (Partner Deal, named
+    by its API name, Admin), with each profile's API name;
   - 20 Apex classes (names from the code coverage part) and 15 flows of
     several types, granted through profiles, permission sets and groups;
   - two flows that require explicit access: one granted only through the
@@ -98,7 +100,13 @@ def main() -> None:
         {"id": sfid("0M0", 2), "developer_name": "Opportunity_Sales_Record_Page", "label": "Opportunity (Sales app)", "object": "Opportunity"},
         {"id": sfid("0M0", 3), "developer_name": "Opportunity_Renewal_Sales_Manager", "label": "Renewal, Sales Manager", "object": "Opportunity"},
         {"id": sfid("0M0", 4), "developer_name": "Case_Record_Page", "label": "Case Record Page", "object": "Case"},
+        {"id": sfid("0M0", 5), "developer_name": "Opportunity_Partner_Deal", "label": "Partner Deal", "object": "Opportunity"},
+        {"id": sfid("0M0", 6), "developer_name": "Opportunity_Partner_Admin", "label": "Partner Deal, Admin", "object": "Opportunity"},
     ]
+    # App assignments name profiles by API name: standard profiles differ from
+    # their labels (System Administrator is Admin, Standard User is Standard).
+    api_names = {pid: {"System Administrator": "Admin", "Standard User": "Standard"}.get(name, name.replace(" ", "_"))
+                 for name, pid in P.items()}
     org_defaults = {"Opportunity": {"Large": "Opportunity_Record_Page", "Small": "Opportunity_Record_Page"},
                     "Case": {"Large": "Case_Record_Page", "Small": "Case_Record_Page"}}
     apps = [
@@ -106,7 +114,11 @@ def main() -> None:
             {"object": "Opportunity", "form_factor": "Large", "page": "Opportunity_Sales_Record_Page",
              "record_type": None, "profile": None},
             {"object": "Opportunity", "form_factor": "Large", "page": "Opportunity_Renewal_Sales_Manager",
-             "record_type": "Opportunity.Renewal", "profile": "Sales Manager"},
+             "record_type": "Opportunity.Renewal", "profile": "Sales_Manager"},
+            {"object": "Opportunity", "form_factor": "Large", "page": "Opportunity_Partner_Deal",
+             "record_type": "Opportunity.Partner_Deal", "profile": None},
+            {"object": "Opportunity", "form_factor": "Large", "page": "Opportunity_Partner_Admin",
+             "record_type": "Opportunity.Partner_Deal", "profile": "Admin"},
         ]},
         {"id": sfid("02u", 2), "developer_name": "Lumenvale_Service", "label": "Lumenvale Service", "overrides": []},
     ]
@@ -181,6 +193,7 @@ def main() -> None:
             "record_type_visibility": visibility,
             "record_type_visibility_note": "Record types available to the profile, from its metadata. Record types granted by permission sets aren't read.",
             "flexipages": pages,
+            "profile_api_names": api_names,
             "org_default_pages": org_defaults,
             "apps": apps,
             "apex_classes": classes,

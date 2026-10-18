@@ -25,6 +25,7 @@ import {
   Wrench,
   DollarSign,
   Layers,
+  UserCircle,
   Boxes,
   Shield,
   ShieldCheck,
@@ -92,6 +93,7 @@ export const navigationSections: {
       { name: 'Overview', path: 'dashboard', icon: LayoutDashboard },
       { name: 'Users', path: 'users', icon: Users, privacyFeature: 'users' },
       { name: 'Schema', path: 'schema', icon: Layers },
+      { name: 'Profiles', path: 'profiles', icon: UserCircle },
       // Permission Sets list page — deferred. Only the detail route
       // (`permission-sets/[psId]`) exists today; the list surface
       // needs a new backend endpoint + hook + page, which is bigger

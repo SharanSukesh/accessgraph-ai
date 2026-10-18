@@ -14,7 +14,7 @@ import { Badge } from '@/components/shared/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/Card'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
-import { usePagesAndAutomation } from '@/lib/api/hooks/usePagesAndAutomation'
+import { usePagesAndAutomation, useProfilePagesAndAutomation } from '@/lib/api/hooks/usePagesAndAutomation'
 import { type FlowRow, groupPages, pathLabel, runLabel } from '@/lib/pagesAndAutomation'
 
 const MUTED = 'text-grove-ink/60 dark:text-grove-ink-dk/60'
@@ -54,8 +54,11 @@ function flowType(f: FlowRow): string {
   return f.process_type ?? 'Flow'
 }
 
-export function PagesAndAutomationPanel({ orgId, userId }: { orgId: string; userId: string }) {
-  const { data, isLoading, error, refetch } = usePagesAndAutomation(orgId, userId)
+/** A user's view (default), or a profile's on its own (profileId). */
+export function PagesAndAutomationPanel({ orgId, userId, profileId }: { orgId: string; userId?: string; profileId?: string }) {
+  const forUser = usePagesAndAutomation(orgId, userId ?? '', !!userId)
+  const forProfile = useProfilePagesAndAutomation(orgId, profileId ?? '')
+  const { data, isLoading, error, refetch } = profileId ? forProfile : forUser
   const [phone, setPhone] = useState(false)
   if (isLoading) return <TableSkeleton rows={6} />
   if (error) return <ErrorState message={(error as Error).message || 'Failed to load.'} onRetry={() => refetch()} />
@@ -160,8 +163,10 @@ export function PagesAndAutomationPanel({ orgId, userId }: { orgId: string; user
 
       <Card variant="bordered">
         <CardHeader>
-          <CardTitle>Apex classes this user can run ({data.apex?.length ?? 0} of {data.apex_total ?? 0})</CardTitle>
-          <p className={`mt-1 text-xs ${MUTED}`}>Apex class access granted through the profile, permission sets and permission set groups.</p>
+          <CardTitle>Apex classes {profileId ? 'this profile grants' : 'this user can run'} ({data.apex?.length ?? 0} of {data.apex_total ?? 0})</CardTitle>
+          <p className={`mt-1 text-xs ${MUTED}`}>
+            {profileId ? 'Apex class access the profile grants on its own.' : 'Apex class access granted through the profile, permission sets and permission set groups.'}
+          </p>
         </CardHeader>
         <CardContent>
           {!data.apex?.length ? (
@@ -197,7 +202,7 @@ export function PagesAndAutomationPanel({ orgId, userId }: { orgId: string; user
         <CardContent className="space-y-2">
           <div className="max-h-[28rem] overflow-auto">
             <table className="w-full text-sm">
-              <thead><tr><th className={TH}>Flow</th><th className={TH}>Type</th><th className={TH}>This user</th><th className={TH}>Why</th><th className={TH}>Granted by</th></tr></thead>
+              <thead><tr><th className={TH}>Flow</th><th className={TH}>Type</th><th className={TH}>{profileId ? 'With this profile alone' : 'This user'}</th><th className={TH}>Why</th><th className={TH}>Granted by</th></tr></thead>
               <tbody>
                 {flows.map((f) => (
                   <tr key={f.id} className="border-t border-grove-border dark:border-grove-border-dk">

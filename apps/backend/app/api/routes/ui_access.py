@@ -97,3 +97,52 @@ async def apex_sharing(db: AsyncSession, org_id: str, user_sf_id: str, labels: D
         "Newton reads Account and Opportunity share rows today; shares on other objects, custom objects included, "
         "come with record-level access (roadmap item 7).",
     ]}
+
+
+
+async def _ps_context(db: AsyncSession, org_id: str):
+    ps_rows = {p.salesforce_id: p for p in (await db.execute(
+        select(PermissionSetSnapshot).where(PermissionSetSnapshot.organization_id == org_id))).scalars().all()}
+    components = (await db.execute(select(PermissionSetGroupComponentSnapshot).where(
+        PermissionSetGroupComponentSnapshot.organization_id == org_id))).scalars().all()
+    groups = {g.salesforce_id: (g.master_label or g.developer_name or g.salesforce_id) for g in (await db.execute(
+        select(PermissionSetGroupSnapshot).where(PermissionSetGroupSnapshot.organization_id == org_id))).scalars().all()}
+    return ps_rows, components, groups
+
+
+@router.get("/orgs/{org_id}/profiles")
+async def list_profiles(org_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+    """Profiles with their user counts when user records are allowed."""
+    from collections import Counter
+    org = await privacy_mode.load_org(db, org_id)
+    users_allowed = privacy_mode.allows(org, privacy_mode.USER_RECORDS)
+    counts: Counter = Counter()
+    if users_allowed:
+        for (pid,) in (await db.execute(select(UserSnapshot.profile_id).where(
+                UserSnapshot.organization_id == org_id, UserSnapshot.is_active.is_(True)))).all():
+            counts[pid] += 1
+    rows = (await db.execute(select(ProfileSnapshot).where(ProfileSnapshot.organization_id == org_id))).scalars().all()
+    ui = await latest_ui_access(db, org_id)
+    api = (ui or {}).get("profile_api_names") or {}
+    return {"users_allowed": users_allowed, "profiles": sorted(
+        ({"id": p.salesforce_id, "name": p.name, "api_name": api.get(p.salesforce_id),
+          "active_users": counts.get(p.salesforce_id, 0) if users_allowed else None} for p in rows),
+        key=lambda r: r["name"].lower())}
+
+
+@router.get("/orgs/{org_id}/profiles/{profile_id}/pages-and-automation")
+async def profile_pages_and_automation(org_id: str, profile_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+    profile = (await db.execute(select(ProfileSnapshot).where(
+        ProfileSnapshot.organization_id == org_id, ProfileSnapshot.salesforce_id == profile_id))).scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    ps_rows, _, _ = await _ps_context(db, org_id)
+    return ui_access.for_profile(await latest_ui_access(db, org_id), profile_id, profile.name, ps_rows)
+
+
+@router.get("/orgs/{org_id}/permission-sets/{ps_id}/automation")
+async def set_automation(org_id: str, ps_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+    ps_rows, components, groups = await _ps_context(db, org_id)
+    if ps_id not in ps_rows and ps_id not in groups:
+        raise HTTPException(status_code=404, detail="Permission set not found")
+    return ui_access.for_set(await latest_ui_access(db, org_id), ps_id, ps_rows, components, groups)

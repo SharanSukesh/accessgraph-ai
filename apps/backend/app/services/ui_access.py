@@ -35,13 +35,17 @@ VISIBILITY_NOTE = (
     "this shows which page is assigned, not what each component displays."
 )
 PRECEDENCE_NOTE = (
-    "Order used: app, record type and profile assignment, then the app default, then the org default. Salesforce "
-    "documents that an app, record type and profile assignment beats the app's default; that the app default beats "
-    "the org default isn't stated in the documentation we checked (UNVERIFIED)."
+    "Order used, most specific first: app + record type + profile, then app + record type, then app + profile, then "
+    "the app default, then the org default. Salesforce documents that a profile assignment beats the app's default; "
+    "the full order is UNVERIFIED until tested in a developer org."
 )
 PROFILE_NAME_NOTE = (
-    "App assignments name a profile by its metadata name, which for some standard profiles may differ from the "
-    "label shown here (UNVERIFIED); such an assignment wouldn't match."
+    "App assignments name profiles by their API name (for example Admin for System Administrator, as in Salesforce's "
+    "CustomApplication example), so Newton matches on the API name read from each profile, not the label."
+)
+PROFILE_NAME_UNREAD_NOTE = (
+    "This profile's API name wasn't read, so assignments are matched on its label; for standard profiles, whose API "
+    "names differ from their labels, an assignment may not match."
 )
 APEX_NOTE = (
     "Class access controls who can run a class's entry points (top-level classes). A class the user can't run "
@@ -133,10 +137,37 @@ def resolve_layouts(ui: Dict[str, Any], profile_id: str, profile_name: str) -> L
     return sorted(rows, key=lambda r: (r["object"], r["record_type"]))
 
 
+def _same(a: Optional[str], b: Optional[str]) -> bool:
+    return bool(a) and bool(b) and a.lower() == b.lower()
+
+
+# Most specific first (UNVERIFIED as Salesforce's exact order; see PRECEDENCE_NOTE).
+RULES = (
+    ("App, record type and profile assignment",
+     lambda o, rt, prof: bool(o.get("profile")) and bool(o.get("record_type")) and o["record_type"] == rt
+     and any(_same(o["profile"], p) for p in prof)),
+    ("App and record type assignment",
+     lambda o, rt, prof: not o.get("profile") and bool(o.get("record_type")) and o["record_type"] == rt),
+    ("App and profile assignment",
+     lambda o, rt, prof: bool(o.get("profile")) and not o.get("record_type") and any(_same(o["profile"], p) for p in prof)),
+    ("App default", lambda o, rt, prof: not o.get("profile") and not o.get("record_type")),
+)
+
+
+def profile_match_keys(ui: Dict[str, Any], profile_id: Optional[str], profile_name: str) -> Tuple[List[str], bool]:
+    """Names an app assignment may use for this profile: its API name when
+    read; otherwise the label (flagged, since standard profiles differ)."""
+    api = (ui.get("profile_api_names") or {}).get(profile_id or "")
+    return ([api], True) if api else ([profile_name], False)
+
+
 def resolve_pages(ui: Dict[str, Any], profile_name: str, profile_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """For each object with a record page assigned anywhere: per app (and
     "any other app"), per record type and form factor, the page that wins and
-    the rule that decided it."""
+    the rule that decided it. App assignments are matched on the profile's
+    API name (standard profiles: Admin, Standard, ...), never its label,
+    when that name was read."""
+    profile_keys, _ = profile_match_keys(ui, profile_id, profile_name)
     pages = {p["developer_name"]: p for p in ui.get("flexipages", [])}
     label = lambda dev: (pages.get(dev) or {}).get("label") or dev  # noqa: E731
     objects = sorted({p["object"] for p in pages.values()} | set(ui.get("org_default_pages", {})))
@@ -158,17 +189,13 @@ def resolve_pages(ui: Dict[str, Any], profile_name: str, profile_id: Optional[st
                     considered = []
                     winner, rule = None, None
                     if app is not None:
-                        for o in app["overrides"]:
-                            if (o["object"] == obj and o["form_factor"] == ff and o.get("profile") == profile_name
-                                    and o.get("record_type") and o["record_type"] == rt["key"]):
-                                winner, rule = o["page"], "App, record type and profile assignment"
-                        considered.append("App, record type and profile assignment: " + (label(winner) if winner else "none for this profile and record type"))
-                        if winner is None:
-                            d = next((o["page"] for o in app["overrides"] if o["object"] == obj and o["form_factor"] == ff
-                                      and not o.get("profile") and not o.get("record_type")), None)
-                            considered.append("App default: " + (label(d) if d else "none"))
-                            if d:
-                                winner, rule = d, "App default"
+                        mine = [o for o in app["overrides"] if o["object"] == obj and o["form_factor"] == ff]
+                        for rule_name, test in RULES:
+                            hit = next((o["page"] for o in mine if test(o, rt["key"], profile_keys)), None)
+                            considered.append(f"{rule_name}: " + (label(hit) if hit else "none"))
+                            if hit:
+                                winner, rule = hit, rule_name
+                                break
                     if winner is None:
                         if org.get(ff):
                             winner, rule = org[ff], "Org default"
@@ -241,7 +268,9 @@ def for_user(ui: Optional[Dict[str, Any]], user: Any, profile_names: Dict[str, s
         "record_type_visibility_note": ui.get("record_type_visibility_note") or (
             "Which record types this profile can use wasn't read, so every active record type is listed."),
         "pages": resolve_pages(ui, profile_name, user.profile_id),
-        "page_notes": [VISIBILITY_NOTE, PRECEDENCE_NOTE, PROFILE_NAME_NOTE] + list(ui.get("page_caveats", [])),
+        "page_notes": [VISIBILITY_NOTE, PRECEDENCE_NOTE,
+                       PROFILE_NAME_NOTE if profile_match_keys(ui, user.profile_id, profile_name)[1] else PROFILE_NAME_UNREAD_NOTE]
+                      + list(ui.get("page_caveats", [])),
         "apex": resolve_apex(ui, sources),
         "apex_note": APEX_NOTE,
         "apex_total": len(ui.get("apex_classes", [])),
@@ -365,9 +394,14 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
     # Record type visibility per profile: Profile.Metadata, one profile per query.
     profiles = await part("profiles", lambda: soql("SELECT Id, Name FROM Profile"), "Profiles couldn't be listed.") or []
     vis: Dict[str, Dict[str, Any]] = {}
+    api_names: Dict[str, str] = {}  # profile id -> API name (FullName), e.g. Admin
     for p in profiles[:MAX_PROFILE_METADATA]:
-        rows = await part("profile metadata", lambda pid=p["Id"]: tooling(f"SELECT Metadata FROM Profile WHERE Id = '{pid}'"), "")
-        md = ((rows or [{}])[0] or {}).get("Metadata") or {}
+        rows = await part("profile metadata", lambda pid=p["Id"]: tooling(
+            f"SELECT FullName, Metadata FROM Profile WHERE Id = '{pid}'"), "")
+        row = (rows or [{}])[0] or {}
+        if row.get("FullName"):
+            api_names[p["Id"]] = row["FullName"]
+        md = row.get("Metadata") or {}
         for v in md.get("recordTypeVisibilities") or []:
             obj = (v.get("recordType") or "").split(".")[0]
             slot = vis.setdefault(p["Id"], {}).setdefault(obj, {"available": [], "default": None})
@@ -376,6 +410,7 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
             if v.get("default"):
                 slot["default"] = v.get("recordType")
     out["notes"] = [n for n in out["notes"] if n]
+    out["profile_api_names"] = api_names
     if vis:
         out["record_type_visibility"] = vis
         out["record_type_visibility_note"] = (
@@ -472,3 +507,85 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
     out["share_reasons"] = reasons
     out["notes"] = [n for n in out["notes"] if n]
     return out
+
+
+
+# ---------------------------------------------------------------- per profile / set
+# Configuration only, so these work at every privacy level (Metadata only too).
+
+
+def profile_sources(profile_id: str, profile_name: str, ps_rows: Dict[str, Any]) -> Dict[str, List[Source]]:
+    """The profile's own permission set, as the only grant source."""
+    return {ps.salesforce_id: [((f"Profile: {profile_name}",), profile_id)]
+            for ps in ps_rows.values() if ps.is_owned_by_profile and ps.profile_id == profile_id}
+
+
+def set_sources(ps_id: str, ps_rows: Dict[str, Any], components: Iterable[Any],
+                group_names: Dict[str, str]) -> Dict[str, List[Source]]:
+    """A permission set, or a permission set group through its component
+    sets (muting sets left out)."""
+    if ps_id in group_names:
+        out: Dict[str, List[Source]] = defaultdict(list)
+        for c in components:
+            if c.permission_set_group_id != ps_id:
+                continue
+            comp = ps_rows.get(c.permission_set_id)
+            if comp is not None and (comp.ps_type or "") == "Muting":
+                continue
+            label = (comp.label or comp.name) if comp is not None else c.permission_set_id
+            out[c.permission_set_id].append(((f"Permission set: {label}",), c.permission_set_id))
+        return out
+    ps = ps_rows.get(ps_id)
+    return {ps_id: [((f"Permission set: {(ps.label or ps.name) if ps else ps_id}",), ps_id)]}
+
+
+def for_profile(ui: Optional[Dict[str, Any]], profile_id: str, profile_name: str, ps_rows: Dict[str, Any]) -> Dict[str, Any]:
+    """Layouts, record pages, Apex and flows that come with a profile alone
+    (a user may get more through permission sets)."""
+    if not ui:
+        return {"available": False, "reason": "Not read yet: sync the org to read page layouts, record pages, Apex and flows."}
+    sources = profile_sources(profile_id, profile_name, ps_rows)
+    flows = resolve_flows(ui, sources)
+    return {
+        "available": True,
+        "collected_at": ui.get("collected_at"),
+        "profile": profile_name,
+        "profile_api_name": (ui.get("profile_api_names") or {}).get(profile_id),
+        "layouts": resolve_layouts(ui, profile_id, profile_name),
+        "layout_note": LAYOUT_NOTE,
+        "record_type_visibility_note": ui.get("record_type_visibility_note") or (
+            "Which record types this profile can use wasn't read, so every active record type is listed."),
+        "pages": resolve_pages(ui, profile_name, profile_id),
+        "page_notes": [VISIBILITY_NOTE, PRECEDENCE_NOTE,
+                       PROFILE_NAME_NOTE if profile_match_keys(ui, profile_id, profile_name)[1] else PROFILE_NAME_UNREAD_NOTE]
+                      + list(ui.get("page_caveats", [])),
+        "apex": resolve_apex(ui, sources),
+        "apex_total": len(ui.get("apex_classes", [])),
+        "apex_note": APEX_NOTE,
+        **flows,
+        "flows_total": len(ui.get("flows", [])),
+        "notes": list(ui.get("notes", [])) + [
+            "This is what the profile grants on its own. Users with this profile may get more Apex and flow access "
+            "through permission sets, and may be Flow Users."],
+    }
+
+
+def for_set(ui: Optional[Dict[str, Any]], ps_id: str, ps_rows: Dict[str, Any], components: Iterable[Any],
+            group_names: Dict[str, str]) -> Dict[str, Any]:
+    """Apex classes and flows a permission set (or group) grants."""
+    if not ui:
+        return {"available": False, "reason": "Not read yet: sync the org to read Apex classes and flows."}
+    sources = set_sources(ps_id, ps_rows, components, group_names)
+    granted_flows = _granted(ui, sources, "FlowDefinition")
+    flows = {f["id"]: f for f in ui.get("flows", [])}
+    run_flows = ui.get("run_flows") or {}
+    return {
+        "available": True,
+        "collected_at": ui.get("collected_at"),
+        "apex": resolve_apex(ui, sources),
+        "apex_note": APEX_NOTE,
+        "flows": sorted(({**flows.get(fid, {"id": fid, "api_name": fid, "label": fid}), "via": via}
+                         for fid, via in granted_flows.items()), key=lambda f: (f.get("label") or f["api_name"]).lower()),
+        "run_flows": (any(run_flows.get(p) for p in sources) if run_flows else None),
+        "notes": list(ui.get("notes", [])),
+    }

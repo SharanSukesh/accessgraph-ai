@@ -51,6 +51,7 @@ export interface ApexSharing {
 
 export interface PagesAndAutomation {
   available: boolean
+  profile_api_name?: string | null
   reason?: string
   collected_at?: string | null
   profile?: string
@@ -96,4 +97,19 @@ export function runLabel(f: FlowRow): string {
 
 export function pathLabel(path: string[]): string {
   return path.join(' → ')
+}
+
+export interface ProfileListing {
+  users_allowed: boolean
+  profiles: { id: string; name: string; api_name: string | null; active_users: number | null }[]
+}
+
+export interface SetAutomation {
+  available: boolean
+  reason?: string
+  apex?: ApexRow[]
+  apex_note?: string
+  flows?: (Omit<FlowRow, 'can_run' | 'why'> & { via: string[][] })[]
+  run_flows?: boolean | null
+  notes?: string[]
 }

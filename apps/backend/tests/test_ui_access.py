@@ -30,7 +30,8 @@ UI = {
     "org_default_pages": {"Opportunity": {"Large": "Org_Page"}},
     "apps": [{"id": "A1", "developer_name": "Sales", "label": "Sales", "overrides": [
         {"object": "Opportunity", "form_factor": "Large", "page": "App_Page", "record_type": None, "profile": None},
-        {"object": "Opportunity", "form_factor": "Large", "page": "Override", "record_type": "Opportunity.Renewal", "profile": "Rep"}]}],
+        {"object": "Opportunity", "form_factor": "Large", "page": "Override", "record_type": "Opportunity.Renewal", "profile": "Rep_API"}]}],
+    "profile_api_names": {"P1": "Rep_API", "P2": "Other_API"},
     "apex_classes": [{"id": "C1", "name": "QuoteService", "namespace": None}, {"id": "C2", "name": "Admin", "namespace": None}],
     "flows": [
         {"id": "FL1", "api_name": "Restricted", "label": "Restricted", "process_type": "Flow", "trigger_type": None, "active": True, "restricted": True},
@@ -114,6 +115,8 @@ async def test_lumenvale(client, async_db_session, lumenvale):  # noqa: F811
     assert layouts[("Case", "Billing Inquiry")] == "Case Layout"
     page = next(p for p in d["pages"] if p["app"] == "Lumenvale Sales" and p["record_type"] == "Renewal" and p["form_factor"] == "Desktop")
     assert (page["page"], page["rule"]) == ("Renewal, Sales Manager", "App, record type and profile assignment")
+    partner = next(p for p in d["pages"] if p["app"] == "Lumenvale Sales" and p["record_type"] == "Partner Deal" and p["form_factor"] == "Desktop")
+    assert (partner["page"], partner["rule"]) == ("Partner Deal", "App and record type assignment")
     flows = {f["api_name"]: f for f in d["flows"]}
     assert flows["Discount_Approval_Request"]["via"] == [["Permission set group: Sales Manager Bundle", "Permission set: Discount Approvals"]]
     assert flows["Refund_Exception"]["can_run"] is False
@@ -244,3 +247,86 @@ async def test_lumenvale_runbook_numbers_hold_with_the_item_1_part(async_db_sess
     assert (snap.metrics["org_health_score"], len(rows)) == (41, 18)
     assert sum(f.estimated_annual_savings_cents or 0 for f in rows) == 18_318_000
     assert (await LicenseFitService(db, org_id).run(actor_email="test")).total_annual_savings_cents == 11_622_000
+
+
+def test_standard_profiles_match_on_their_api_name_not_the_label():
+    """Metadata names standard profiles by API name (Admin for System
+    Administrator, Standard for Standard User); matching uses that."""
+    ui = {**UI, "profile_api_names": {"PA": "Admin", "PS": "Standard"}, "apps": [{"id": "A1", "label": "Sales", "overrides": [
+        {"object": "Opportunity", "form_factor": "Large", "page": "Override", "record_type": "Opportunity.Renewal", "profile": "Admin"},
+        {"object": "Opportunity", "form_factor": "Large", "page": "App_Page", "record_type": "Opportunity.Renewal",
+         "profile": "System Administrator"},
+    ]}]}
+    names = {"PA": "System Administrator", "PS": "Standard User"}
+
+    def page_for(pid):
+        out = ua.for_user(ui, NS(salesforce_id="005X", profile_id=pid), names, PS_ROWS, [], [], {})
+        row = next(p for p in out["pages"] if p["app"] == "Sales" and p["record_type"] == "Renewal" and p["form_factor"] == "Desktop")
+        return row, out["page_notes"]
+
+    row, notes = page_for("PA")
+    assert (row["page"], row["rule"]) == ("Override", "App, record type and profile assignment")
+    assert ua.PROFILE_NAME_NOTE in notes
+    # Standard User (API name Standard) gets neither: the label "System Administrator" never matches.
+    assert page_for("PS")[0]["rule"] == "Org default"
+    # Matching is case-insensitive.
+    ui["apps"][0]["overrides"][0]["profile"] = "admin"
+    assert page_for("PA")[0]["page"] == "Override"
+    # Without the API name, the label is used and the screen says why it may not match.
+    no_names = {**ui, "profile_api_names": {}}
+    out = ua.for_user(no_names, NS(salesforce_id="005X", profile_id="PA"), names, PS_ROWS, [], [], {})
+    assert ua.PROFILE_NAME_UNREAD_NOTE in out["page_notes"]
+
+
+def test_most_specific_assignment_wins():
+    overrides = [
+        {"object": "Opportunity", "form_factor": "Large", "page": "AppDefault", "record_type": None, "profile": None},
+        {"object": "Opportunity", "form_factor": "Large", "page": "AppProfile", "record_type": None, "profile": "Rep_API"},
+        {"object": "Opportunity", "form_factor": "Large", "page": "AppRT", "record_type": "Opportunity.Renewal", "profile": None},
+        {"object": "Opportunity", "form_factor": "Large", "page": "AppRTProfile", "record_type": "Opportunity.Renewal", "profile": "Rep_API"},
+    ]
+    def winner(ovs, rt="Renewal"):
+        ui = {**UI, "flexipages": [], "apps": [{"id": "A1", "label": "Sales", "overrides": ovs}]}
+        return next(p for p in _for([], ui=ui)["pages"] if p["app"] == "Sales" and p["record_type"] == rt
+                    and p["form_factor"] == "Desktop")
+    assert winner(overrides)["page"] == "AppRTProfile"
+    assert winner(overrides[:3])["page"] == "AppRT"
+    assert winner(overrides[:2])["page"] == "AppProfile"
+    assert winner(overrides[:1])["page"] == "AppDefault"
+    # An app with no assignment for the object is covered by "any other app": the org default.
+    any_other = next(p for p in _for([], ui={**UI, "apps": []})["pages"]
+                     if p["app"] is None and p["record_type"] == "Renewal" and p["form_factor"] == "Desktop")
+    assert any_other["rule"] == "Org default"
+    assert winner(overrides, rt="Master (no record type)")["page"] == "AppProfile"
+    assert winner(overrides[:3])["considered"] == ["App, record type and profile assignment: none",
+                                                   "App and record type assignment: AppRT"]
+    assert "UNVERIFIED" in ua.PRECEDENCE_NOTE
+
+
+@pytest.mark.asyncio
+async def test_profile_and_set_views_work_at_metadata_only(client, async_db_session, lumenvale):  # noqa: F811
+    """Configuration only: the profile and permission set views stay available
+    when the org keeps no user records."""
+    org_id, cookie = lumenvale
+    org = await async_db_session.get(Organization, org_id)
+    privacy_mode.set_privacy(org, privacy_mode.METADATA_ONLY, False, "test")
+    await async_db_session.commit()
+    listing = (await client.get(f"/orgs/{org_id}/profiles", cookies=cookie)).json()
+    assert listing["users_allowed"] is False
+    admin = next(p for p in listing["profiles"] if p["name"] == "System Administrator")
+    assert admin["api_name"] == "Admin" and admin["active_users"] is None
+    prof = (await client.get(f"/orgs/{org_id}/profiles/{admin['id']}/pages-and-automation", cookies=cookie)).json()
+    partner = next(p for p in prof["pages"] if p["app"] == "Lumenvale Sales" and p["record_type"] == "Partner Deal"
+                   and p["form_factor"] == "Desktop")
+    # The Admin assignment matches System Administrator by its API name.
+    assert (partner["page"], partner["rule"]) == ("Partner Deal, Admin", "App, record type and profile assignment")
+    assert len(prof["apex"]) == 20 and prof["profile_api_name"] == "Admin"
+    sm = next(p for p in listing["profiles"] if p["name"] == "Sales Manager")
+    sm_view = (await client.get(f"/orgs/{org_id}/profiles/{sm['id']}/pages-and-automation", cookies=cookie)).json()
+    assert {f["api_name"]: f for f in sm_view["flows"]}["Discount_Approval_Request"]["can_run"] is False  # only via the bundle
+    bundle = (await client.get(f"/orgs/{org_id}/permission-sets/0PG000000000001DMO/automation", cookies=cookie)).json()
+    assert [f["api_name"] for f in bundle["flows"]] == ["Discount_Approval_Request", "Quote_Builder"]
+    assert bundle["flows"][0]["via"] == [["Permission set: Discount Approvals"]]
+    qm = (await client.get(f"/orgs/{org_id}/permission-sets/0PS000000000013DMO/automation", cookies=cookie)).json()
+    assert {a["name"] for a in qm["apex"]} == {"QuoteService", "QuoteSelector", "QuoteHandler", "QuoteController"}
+    assert (await client.get(f"/orgs/{org_id}/permission-sets/nope/automation", cookies=cookie)).status_code == 404
