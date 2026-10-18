@@ -259,3 +259,18 @@ async def test_routes(client, async_db_session, lumenvale):  # noqa: F811
     assert zipfile.ZipFile(io.BytesIO(r.content)).namelist()[0] == "demo-health-score-slide.png"
     # No access without a session.
     assert (await client.get(f"/orgs/{org_id}/image-pack")).status_code in (401, 403)
+
+
+@needs_render
+@pytest.mark.asyncio
+async def test_api_usage_image_is_the_card(async_db_session, lumenvale):  # noqa: F811
+    """The image draws the Health Report's API usage card: the headline,
+    the four figures, the daily chart and the top 3 sources."""
+    src = await _analysed(async_db_session, lumenvale[0])
+    text = _pdf_text(ip.page_html("api_usage", src, None, ip.ImageOptions()))
+    u = src.metrics["api_usage"]
+    for expected in ("Warehouse Nightly ETL made 58% of requests", "30-day total", "Daily average", "Today so far",
+                     "Peak day", f"{u['peak']['pct_of_limit']:g}%", "Daily limit 1.02M", "Top sources"):
+        assert expected in text, expected
+    for a in [a for a in u["by_app"] if not a.get("other")][:3]:
+        assert a["name"] in text

@@ -199,6 +199,48 @@ def line_chart(
     return f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
 
 
+def daily_bars(
+    values: Sequence[Tuple[str, float]],
+    *,
+    limit: Optional[float] = None,
+    width: int = 720,
+    height: int = 150,
+    near_at: Optional[float] = None,
+    value_label=lambda v: f"{v:,.0f}",
+) -> str:
+    """One bar per day with the limit as a dashed reference line; a day at
+    or above near_at (a fraction of the limit) is drawn in WARNING. The
+    peak is labelled, and the first and last days on the axis."""
+    if not values:
+        return ""
+    left, right, top, bottom = 8, 8, 16, 18
+    pw, ph = width - left - right, height - top - bottom
+    y_max = max([limit or 0] + [v for _, v in values]) * 1.08 or 1
+    slot = pw / len(values)
+    bar_w = max(2.0, slot - 2)
+    base = top + ph
+    parts = [f'<line x1="{left}" y1="{base}" x2="{left + pw}" y2="{base}" stroke="{BASELINE}" stroke-width="1"/>']
+    peak = max(range(len(values)), key=lambda i: values[i][1])
+    for i, (_, v) in enumerate(values):
+        h = max(1.0, ph * v / y_max)
+        x = left + i * slot + (slot - bar_w) / 2
+        near = limit and near_at is not None and v >= limit * near_at
+        parts.append(f'<rect x="{x:.1f}" y="{base - h:.1f}" width="{bar_w:.1f}" height="{h:.1f}" rx="{min(2, bar_w / 2):.1f}" '
+                     f'fill="{WARNING if near else SERIES}"/>')
+    if limit:
+        ly = base - ph * limit / y_max
+        parts.append(f'<line x1="{left}" y1="{ly:.1f}" x2="{left + pw}" y2="{ly:.1f}" stroke="{INK_2}" stroke-width="1.2" stroke-dasharray="4 3"/>')
+        parts.append(_text(left + pw, ly - 4, f"Daily limit {value_label(limit)}", anchor="end", color=INK_2, size=8))
+    if len(values) > 1:
+        px = left + peak * slot + slot / 2
+        py = base - ph * values[peak][1] / y_max
+        parts.append(_text(px + slot / 2 + 3, py + 9, value_label(values[peak][1]), color=INK, weight="600", size=8))
+    for i in sorted({0, len(values) - 1}):
+        parts.append(_text(left + i * slot + slot / 2, height - 5, values[i][0], anchor="start" if i == 0 else "end",
+                           color=MUTED, size=8))
+    return f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">{"".join(parts)}</svg>'
+
+
 def meter(fraction: float, *, width: int = 220, height: int = 8,
           warn_at: Optional[float] = None, critical_at: Optional[float] = None) -> str:
     """Ratio against a limit: same-ramp track, fill carries severity."""

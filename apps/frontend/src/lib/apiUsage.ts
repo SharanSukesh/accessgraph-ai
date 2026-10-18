@@ -1,6 +1,7 @@
 /**
- * Display helpers for the Health Report's API usage card. The data is the
- * snapshot's metrics.api_usage (backend services/api_usage.py).
+ * Display helpers for the Health Report's API usage card and the API Usage
+ * page. The data is the snapshot's metrics.api_usage (backend
+ * services/api_usage.py).
  */
 
 export interface UsageShare {
@@ -9,6 +10,32 @@ export interface UsageShare {
   requests: number
   share_pct: number
   other?: boolean
+}
+
+/** A caller or API family with its count on each day of the trend. */
+export interface UsageSource extends UsageShare {
+  series: number[]
+}
+
+export interface ResourceRow {
+  api_family: string | null
+  resource: string
+  requests: number
+  share_pct: number
+}
+
+export interface ObjectRow {
+  name: string
+  requests: number
+  share_pct: number
+}
+
+export interface ApexEndpoint {
+  url_mapping: string | null
+  apex_class: string | null
+  namespace: string | null
+  requests: number
+  share_pct: number
 }
 
 export interface UsageDay {
@@ -37,6 +64,89 @@ export interface ApiUsage {
   by_user?: UsageShare[] | null
   users_hidden_reason?: string | null
   connected_apps?: { name: string; last_used_at: string | null }[]
+  // The API Usage page (absent on Health Reports run before it existed).
+  apps?: UsageSource[]
+  users?: UsageSource[] | null
+  families?: UsageSource[]
+  detail_days?: number
+  detail_first_day?: string | null
+  by_resource?: ResourceRow[]
+  by_object?: ObjectRow[]
+  objects_note?: string
+  apex_rest?: ApexEndpoint[]
+  apex_rest_read?: boolean
+}
+
+/** What Salesforce's documents say counts against the daily limit (checked 18 Oct 2026). */
+export const WHAT_COUNTS = [
+  'The daily limit is an allocation of inbound API requests: REST, SOAP, Bulk, Bulk 2.0 and most Connect REST APIs. Calls from some Salesforce connected apps, such as the mobile app, don’t count (Salesforce Developer Limits and Allocations Quick Reference).',
+  'Apex can spend it too: most ConnectApi calls made from Apex count toward the allocation (Apex Developer Guide).',
+]
+
+/** Unconfirmed in Salesforce's documentation, so shown with the data it affects. */
+export const DETAIL_UNVERIFIED =
+  'Not confirmed in Salesforce’s documentation: how the log writes an Apex REST request’s resource (Newton looks for the /services/apexrest/ path) and how it lists several objects in one request.'
+
+export const APEX_REST_NOTE =
+  'An Apex REST request is shown as the @RestResource URL mapping it reaches and the class behind it, never its full path. Newton reads each class’s mapping and keeps only that, never the code.'
+
+export interface Tile {
+  label: string
+  value: string
+  note?: string
+  warn?: boolean
+}
+
+/** The four headline figures: total, daily average, today against the limit, the peak day.
+ *  Values are compact; each note carries the exact count the card always showed. */
+export function usageTiles(u: ApiUsage): Tile[] {
+  const n = (v: number) => v.toLocaleString('en-GB')
+  const days = u.days_collected
+  const tiles: Tile[] = [
+    {
+      label: days > 1 ? `${days}-day total` : 'Requests',
+      value: compact(u.total_requests ?? 0),
+      note: `${n(u.total_requests ?? 0)} · ${periodLabel(u)}`,
+    },
+    { label: 'Daily average', value: compact(u.daily_average ?? 0), note: `${n(u.daily_average ?? 0)} requests a day` },
+  ]
+  if (u.limit) {
+    const pct = Math.round((u.limit.used / u.limit.max) * 100)
+    tiles.push({
+      label: 'Today so far',
+      value: `${compact(u.limit.used)} of ${compact(u.limit.max)}`,
+      note: `${n(u.limit.used)} of ${n(u.limit.max)} · ${pct}% of the daily limit`,
+      warn: pct >= NEAR_LIMIT_PCT,
+    })
+  } else {
+    tiles.push({ label: 'Today so far', value: '—', note: 'Limit not read' })
+  }
+  const p = u.peak
+  if (p) {
+    tiles.push({
+      label: 'Peak day',
+      value: p.pct_of_limit != null ? `${p.pct_of_limit}% of limit` : compact(p.counting),
+      note: `${dayLabel(p.date, true)} · ${n(p.counting)} counted`,
+      warn: isNearLimit(p),
+    })
+  }
+  return tiles
+}
+
+/** Connected apps, largest first, without the "Other" bucket. */
+export function topSources(u: ApiUsage, n = 3): UsageShare[] {
+  return (u.apps ?? u.by_app ?? []).filter((a) => !a.other).slice(0, n)
+}
+
+/** Days at or above NEAR_LIMIT_PCT of the limit. */
+export function nearLimitDays(u: ApiUsage): UsageDay[] {
+  return (u.trend ?? []).filter(isNearLimit)
+}
+
+/** "/supportchat/v1/*" -> "/services/apexrest/supportchat/v1/*" (namespace first when there is one). */
+export function apexEndpoint(e: ApexEndpoint): string {
+  if (!e.url_mapping || !e.url_mapping.startsWith('/')) return e.url_mapping ?? ''
+  return `/services/apexrest${e.namespace ? `/${e.namespace}` : ''}${e.url_mapping}`
 }
 
 /** A day at or above this share of the daily limit is marked "near the limit". */

@@ -2001,13 +2001,34 @@ class SalesforceAPIClient:
             logger.info("ApexTestRunResult query failed: %s", e)
         return out
 
-    async def get_api_total_usage(self) -> Dict[str, Any]:
+    async def get_apex_rest_resources(self) -> Optional[List[Dict[str, Any]]]:
+        """Apex classes exposed with @RestResource: [{name, namespace,
+        url_mapping}], so the API Usage page can name the class behind each
+        Apex REST endpoint. Each class body is scanned for the annotation as
+        it's read and never kept; a managed class's body is hidden, so it
+        isn't found. None when ApexClass can't be read. Read-only."""
+        from app.services.api_usage import parse_rest_resource
+        try:
+            rows = await self.query_all("SELECT Id, Name, NamespacePrefix, Body FROM ApexClass")
+        except Exception as e:  # noqa: BLE001
+            logger.info("ApexClass body query failed: %s", e)
+            return None
+        out = []
+        for r in rows:
+            mapping = parse_rest_resource(r.get("Body"))
+            if mapping:
+                out.append({"name": r.get("Name"), "namespace": r.get("NamespacePrefix") or None, "url_mapping": mapping})
+        return out
+
+    async def get_api_total_usage(self, apex_rest: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """The API Total Usage event log, counted per day, connected app,
-        user, API type and limit flag as it streams in; the rows themselves
-        are never kept. Read-only. status is "unavailable" when the log
-        can't be queried (usually no View Event Log Files permission).
-        See app/services/api_usage.py."""
-        from app.services.api_usage import EVENT_TYPE, LogCounter
+        user, API type and limit flag as it streams in, plus the resources
+        and objects requested (an Apex REST request as its @RestResource
+        class); the rows themselves are never kept. Read-only. status is
+        "unavailable" when the log can't be queried (usually no View Event
+        Log Files permission). See app/services/api_usage.py."""
+        from app.services.api_usage import EVENT_TYPE, ApexRestMatcher, LogCounter
+        matcher = ApexRestMatcher(apex_rest or [])
         try:
             files = await self.query_all(
                 "SELECT Id, LogDate, CreatedDate FROM EventLogFile "
@@ -2023,10 +2044,10 @@ class SalesforceAPIClient:
             day = (f.get("LogDate") or "")[:10]
             if day and f.get("Id"):
                 latest[day] = f
-        by_date: Dict[str, List[Dict[str, Any]]] = {}
+        by_date: Dict[str, Dict[str, Any]] = {}
         for day, f in sorted(latest.items()):
             url = f"{self.base_url}/sobjects/EventLogFile/{f['Id']}/LogFile"
-            counter = LogCounter()
+            counter = LogCounter(matcher)
             try:
                 async with httpx.AsyncClient(timeout=300.0) as client:
                     async with client.stream("GET", url, headers=self._get_headers()) as response:
@@ -2036,8 +2057,8 @@ class SalesforceAPIClient:
             except Exception as e:  # noqa: BLE001
                 logger.info("EventLogFile %s download failed: %s", f["Id"], e)
                 continue
-            by_date[day] = counter.rows()
-        return {"status": "ok", "days": [{"date": d, "rows": rows} for d, rows in sorted(by_date.items())]}
+            by_date[day] = {"rows": counter.rows(), **counter.detail()}
+        return {"status": "ok", "days": [{"date": d, **v} for d, v in sorted(by_date.items())]}
 
     async def extract_organization(self) -> Optional[Dict[str, Any]]:
         """Single-row Organization fetch with edition + sandbox flags.
