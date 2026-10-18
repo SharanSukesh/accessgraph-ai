@@ -178,10 +178,12 @@ async def test_lumenvale_draft_routes(client, async_db_session, lumenvale):  # n
                                                           UserSnapshot.name == "Tobias Lindqvist"))).scalar_one()
     assert opp["owners_affected"] == 1 and opp["records_owned"] == tobias.raw_data["NewtonOwnedRecords"]["Opportunity"]
     assert opp["users_gaining"] == 1 and opp["users_losing"] == 1
-    # Lumenvale has no Account owner counts yet, and no org-wide defaults synced.
+    # The 35b fixture part: Account owner counts and Private org-wide defaults.
     acc = impact["objects"]["Account"]
-    assert acc["some_counts_unknown"] and acc["records_owned"] is None and acc["users_gaining"] == 1
-    assert "not synced" in opp["explanation"]
+    assert not acc["some_counts_unknown"] and acc["records_owned"] == tobias.raw_data["NewtonOwnedRecords"]["Account"]
+    assert acc["users_gaining"] == 1 and acc["effect"] == opp["effect"] == "view_and_edit"
+    assert opp["org_wide_default"] == "Private" and opp["explanation"].startswith("Private:")
+    assert impact["references"]["role_sharing_rules"] == ["EMEA opportunities to Sales Operations (Opportunity)"]
     assert impact["coverage_label"] and impact["recalculation_warning"]
 
     r = await client.post(f"/orgs/{org_id}/role-designs/{did}/export", json={}, cookies=cookie)
@@ -235,3 +237,22 @@ async def test_metadata_only_strips_users_from_drafts(async_db_session, lumenval
     d = await db.get(RoleDesignDraft, d.id)
     assert d.base["users"] == {} and d.operations == [{"op": "move_role", "role_id": "R3", "parent_id": "R4"}]
     assert d.position == 1
+
+
+@pytest.mark.asyncio
+async def test_lumenvale_runbook_numbers_hold_with_the_35b_part(async_db_session, lumenvale):  # noqa: F811
+    """Health 41, 18 findings, $183,180; License Fit $116,220."""
+    from app.domain.models import OrgFinding
+    from app.services.data_quality import DataQualityService
+    from app.services.license_fit import LicenseFitService
+    from app.services.org_analyzer import OrgAnalyzerService
+
+    db = async_db_session
+    org_id, _ = lumenvale
+    await DataQualityService(db, org_id).run(actor_email="test")
+    snap = await OrgAnalyzerService(db, org_id).run(actor_email="test")
+    rows = (await db.execute(select(OrgFinding).where(OrgFinding.snapshot_id == snap.id))).scalars().all()
+    assert (snap.metrics["org_health_score"], len(rows)) == (41, 18)
+    assert sum(f.estimated_annual_savings_cents or 0 for f in rows) == 18_318_000
+    lf = await LicenseFitService(db, org_id).run(actor_email="test")
+    assert lf.total_annual_savings_cents == 11_622_000
