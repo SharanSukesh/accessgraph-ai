@@ -421,8 +421,8 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
 - **Fixture (measured 21 Oct in a scratch prototype on top of PR #20; not yet added):**
   - **Account owner counts:** total 5,200 (the Account count Data Quality reports), given only to users who already own Opportunities, Leads, Cases or Contacts. License Fit only looks at Account ownership when a user owns nothing at all, so no License Fit result can change. Measured: Health Report 41, 18 findings, $183,180; License Fit $116,220; risk, anomalies and Priority Actions all unchanged.
   - **Org-wide defaults, all Private** (Contact Controlled by Parent): measured, nothing changes.
-  - **A role-based sharing rule and a public group:** blocked for now. The Health Report's empty-group rule counts every group with no member rows, including role groups, so adding them raised "5 Public Groups / Queues have zero members" (measured 40, 19 findings). Prerequisite: the rule counts only public groups and queues (see Known technical debt).
-  - **Opportunity Public Read Only, to demo the edit-only case:** this is a genuine High finding ("sensitive objects have Public OWD"). Measured 32 and 20 findings, together with the empty-group issue. Sharan to decide: keep Opportunity Private (the preview's edit-only case then isn't demoed on Lumenvale) or accept the finding and update the runbook.
+  - **A role-based sharing rule and a public group:** blocked until PR #22 merges. The Health Report's empty-group rule counted every group with no member rows, including role groups, so adding them raised "5 Public Groups / Queues have zero members" (measured 40, 19 findings). PR #22 makes it check only public groups and queues.
+  - **Edit-only case (decided 21 Oct): not demoed on Lumenvale; every org-wide default stays Private.** Opportunity Public Read Only adds a genuine High finding ("sensitive objects have Public OWD"; measured 32, 20 findings with the empty-group issue). The common setup, Account Public Read Only with Opportunity Private, is flagged the same way (measured 33, 19 findings; License Fit and savings unchanged).
   - Nothing goes into the fixture or the runbook until Sharan approves any change to these numbers.
 - **Depends on:** 35a, 3 (ZIP export). Not on phase C. **Effort: L.**
 
@@ -920,4 +920,4 @@ Checked in October 2026 against current documentation: API v62 to v68 developer 
 - The Health Report's "predictive" findings function is a stub.
 - Data Quality is refused on demo orgs (fixed by item 2's fixture path).
 - Field type and encryption are shown as unknown until item 8.
-- The empty-group rule (GROUP_EMPTY) counts every group the sync reads, including role groups, which likely have no GroupMember rows (UNVERIFIED; a read-only query in a developer org would confirm it). On live orgs that would flag every role group as empty. Count only public groups (Type Regular) and queues. Prerequisite for 35b's demo data.
+- The empty-group rule (GROUP_EMPTY) counted every group the sync reads, including role groups, which get their members implicitly. On live orgs that would flag every role group as empty. Fixed in PR #22 (checks only public groups and queues); to merge before phase B.
