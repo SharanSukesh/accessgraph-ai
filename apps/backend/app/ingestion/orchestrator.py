@@ -104,6 +104,8 @@ class SyncOrchestrator:
                 # Ownership is read live on a real org; the fixture carries it.
                 owners = data.get("demo_live", {}).get("owner_counts", {})
                 data["record_owner_counts"] = {obj: owners.get(obj) for obj in ("Account", "Opportunity")}
+                # What the integration user could see, as a live sync records it.
+                data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
             elif settings.DEMO_MODE:
                 logger.info("Running in DEMO mode")
                 data = await self._extract_demo_data(org_id)
@@ -121,6 +123,9 @@ class SyncOrchestrator:
 
             # Merge counts into existing metadata
             sync_job.sync_metadata["counts"] = counts
+            # Whether share rows cover every record (see services/record_coverage.py).
+            if "record_coverage" in data:
+                sync_job.sync_metadata["record_coverage"] = data["record_coverage"]
 
             # Mark as modified so SQLAlchemy knows to update the JSON column
             from sqlalchemy.orm import attributes
@@ -215,6 +220,10 @@ class SyncOrchestrator:
             include_users=privacy.allows(org, privacy.USER_RECORDS),
             include_record_shares=privacy.allows(org, privacy.RECORD_SHARES),
         )
+        if privacy.allows(org, privacy.RECORD_SHARES):
+            from app.services.record_coverage import check_record_visibility
+            data["record_coverage"] = await check_record_visibility(
+                client, (conn.connected_as or {}).get("user_id"))
         if not privacy.allows(org, privacy.USER_IDENTITY):
             data["users"] = privacy.mask_users(org.id, data.get("users", []))
         return data
