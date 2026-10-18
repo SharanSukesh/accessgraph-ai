@@ -178,25 +178,45 @@ Each item lists:
 Item numbers match the lead's list (A1-A5) and the agreed backlog
 (B6 onwards). Merged items say so.
 
+## Progress log
+
+Newest last. For picking up where a session left off; each item's own
+section has the detail.
+
+- **17 Oct:** phase A merged to main (PRs #6-#19, fe5d81f). Sharan checked
+  Lumenvale on production: Health 41 Concerning, 18 findings, $183,180.
+- **17 Oct:** #20 (Lumenvale role hierarchy), #21 (roadmap item 35) and #22
+  (empty-group fix) merged to main (c0ebf96). Main's CI passed (Backend,
+  Frontend, Shared Packages) and both Railway deployments succeeded
+  (api.accessgraphai.com and app.accessgraphai.com).
+- **17 Oct:** dates in this roadmap corrected to their commit dates (all 17
+  Oct); Sharan's developer-org check dated 17 Oct.
+- **17-18 Oct, phase B (not merged; Sharan merges):** item 5 API usage
+  (#23); item 3 image pack (#24, stacked on #23); 35a role view (#25);
+  35b role design (#26, stacked on #25); item 1 phase 1 (see the item).
+- **Next:** item 7 with 35c, then phase C.
+
 ## Build order
 
-Revised 17 October 2026 after review. Decisions taken are recorded in the
-items below.
+Revised 17 October 2026 after review, and again on 17 October to put the
+Salesforce lead's requests first. Decisions taken are recorded in the items
+below; progress is in the [Progress log](#progress-log).
 
 | Phase | Items | Notes |
 |-------|-------|-------|
-| **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | **Merged to main 20 Oct** (PRs #6-#19; see below). 26 and 27 are done (PRs #4, #5). |
-| **B. Client-facing** | 5, then 3, then 35a, 35b | The image pack needs the critical objects, coverage and API usage visuals, so it comes last. 35a (read-only role view) and 35b (role design mode v1: drafts, Account and Opportunity impact, ZIP export) need no foundations, so they ship with the client-facing work; 35b reuses 3's ZIP export (added 20 Oct; 35b moved up from D on 21 Oct). |
+| **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | **Merged to main 17 Oct** (PRs #6-#19; see below). 26 and 27 are done (PRs #4, #5). |
+| **B. The Salesforce lead's requests** | 5, then 3, then 35a, 35b, then 1 (phase 1) | Built ahead of phase C at Sharan's request (17 Oct). The image pack needs the critical objects, coverage and API usage visuals, so it follows 5. 35a and 35b need no foundations; 35b reuses 3's ZIP approach. 1 (phase 1) reads record types itself, so it doesn't wait for 8 (see the item). |
+| **B2. Record access and the full role impact** | 7, with 35c | 7 is opt-in per org with per-object View All on Account, Opportunity, Case, Contact and Lead (no View All Data); its opt-in screen also holds Data Quality's object choice (2). 35c (Case, Contact, Lead and account-owner settings in the role impact preview) needs 7's per-object record data and coverage labels, so they ship together. |
 | **C. Foundations** | 8, 21, 20 + 10, 30 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
 | **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
-| **D. Access depth** | 1 (phase 1), 7, 35c, 6 | 7 is opt-in per org with per-object View All on Account, Opportunity, Case, Contact and Lead (no View All Data). Its opt-in screen also holds Data Quality's object choice (2). 6 is the first user of the comparison engine. 35c (the full role impact preview: Case, Contact, Lead and account-owner settings) follows 7 because it needs 7's per-object record data and coverage labels. |
+| **D. Access depth** | 6 | 6 is the first user of the comparison engine. 1 (phase 1), 7 and 35c moved up to B and B2 on 17 Oct. |
 | **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Order of 11, 12 and 13 held until Mike confirms which Config Workbook features he uses. |
 | **F. Differentiators** | 15, 16, 17, 18 | |
 | **G. Depth and scale** | 1 (phase 2), 19 (v1: downloadable ZIP), 22, 9 (v2), 28, 29 | The GitHub piece of 19 moved to the later backlog. |
 
 ## Phase A: quick wins
 
-**Status (20 Oct): merged to main** in this order (PRs #6-#19), each
+**Status (17 Oct): merged to main** in this order (PRs #6-#19), each
 rebased onto main with CI passing before it merged. The order (later branches build on earlier ones; all merged together
 pass 356 backend and 48 frontend tests):
 
@@ -212,7 +232,7 @@ pass 356 backend and 48 frontend tests):
 | 8 | #14 | `feat/code-coverage` | 4 |
 | 9 | #15 | `feat/critical-objects` | 2 (contains #13 and #14) |
 | 10 | #16 | `fix/info-badge-dark` | 33, plus distinct High and Medium badge colours |
-| 11 | #17 | `feat/health-score-cap` | each family of findings can lower the health score by at most 20 (decided 20 Oct) |
+| 11 | #17 | `feat/health-score-cap` | each family of findings can lower the health score by at most 20 (decided 17 Oct) |
 | 12 | #18 | `docs/phase-a-runbook` | runbook numbers for all of phase A; on conflict take this version |
 | 13 | this roadmap | `roadmap-v2` | this file only |
 
@@ -221,7 +241,7 @@ removes the item it fixed), two tests appended at the same place in
 `test_report_html.py`, two adjacent demo lines in `orchestrator.py`, and
 two adjacent imports on the Health Report page (keep both sides in each).
 
-**Health score (decided 20 Oct):** findings are grouped into families
+**Health score (decided 17 Oct):** findings are grouped into families
 (licensing, configuration, automation, code coverage, access and sharing,
 platform limits, data quality, predictive), and no family can lower the
 score by more than 20 points. Lumenvale: 35 to 60 on main alone; 41
@@ -237,8 +257,8 @@ cap with item 30.
 - **New permissions:** none.
 - **Privacy and demo:** unchanged; risk level is shown wherever the user is shown.
 - **Fixture:** none.
-- **Follow-up decision (18 Oct): base risk.** Being flagged feeds the risk score (the peer-deviation factor), so the risk level shown next to a rank partly repeated the flag. On Lumenvale all 8 flagged users showed High; without the flag 4 are High and 4 Medium. Wherever a risk level sits next to an anomaly rank, Newton now shows **"Base risk"**: the same noisy-OR score without the peer-deviation factor, i.e. the score the user would have if not flagged (tooltip: "Risk score calculated without the anomaly flag"). Base risk is also used by the "On high or critical-risk users" card and the compliance control, so neither counts a user just for being flagged. The risk formula itself is unchanged (see 30).
-- **Priority Actions (18 Oct):** the two anomaly-driven rules (permission set consolidation, broad edit access) no longer read the detector's stored band. Each rule takes its higher severity when the user's base risk is High or Critical, or Medium with a rank in the top half of the flagged users; otherwise its lower severity.
+- **Follow-up decision (17 Oct): base risk.** Being flagged feeds the risk score (the peer-deviation factor), so the risk level shown next to a rank partly repeated the flag. On Lumenvale all 8 flagged users showed High; without the flag 4 are High and 4 Medium. Wherever a risk level sits next to an anomaly rank, Newton now shows **"Base risk"**: the same noisy-OR score without the peer-deviation factor, i.e. the score the user would have if not flagged (tooltip: "Risk score calculated without the anomaly flag"). Base risk is also used by the "On high or critical-risk users" card and the compliance control, so neither counts a user just for being flagged. The risk formula itself is unchanged (see 30).
+- **Priority Actions (17 Oct):** the two anomaly-driven rules (permission set consolidation, broad edit access) no longer read the detector's stored band. Each rule takes its higher severity when the user's base risk is High or Critical, or Medium with a rank in the top half of the flagged users; otherwise its lower severity.
 - **Depends on:** nothing. **Effort: S-M** (touches several screens and exports).
 
 ### 24. Equity adds Priority Actions when there's no disparity
@@ -290,7 +310,7 @@ cap with item 30.
     - fields never populated: 0 populated in the counted set.
   - **Thresholds:** adjustable per org, stored with the run so results can be reproduced.
   - **Large objects:** sized with the cached approximate record count. Above a size limit we count over the first n records by Id: Ids are read (keyset paging) only to find where the sample ends, then one aggregate query bounded by that Id. Results are labelled **"estimated (sampled n of N)"**. No record contents are read.
-  - **Fields SOQL can't aggregate** (long text, rich text, multi-select): counting them would mean reading record contents, which the DPA, privacy, terms and security pages say Newton never does. **Decided (20 Oct):** they stay "not counted, to keep our promise of never reading record contents"; the legal pages don't change. Opt-in content checks are in the later backlog (H).
+  - **Fields SOQL can't aggregate** (long text, rich text, multi-select): counting them would mean reading record contents, which the DPA, privacy, terms and security pages say Newton never does. **Decided (17 Oct):** they stay "not counted, to keep our promise of never reading record contents"; the legal pages don't change. Opt-in content checks are in the later backlog (H).
   - **Outputs:** a "Critical objects" panel in Schema, Health Report findings, and Priority Actions.
 - **Salesforce sources:**
   - Describe `filterable` / type ✓
@@ -298,7 +318,7 @@ cap with item 30.
   - REST `/limits/recordCount` (approximate, cached) ✓
   - LastModifiedDate ✓
   - The WHERE limits for long text, encrypted and base64 fields ✓
-- **New permissions (decided 18 Oct):** View All Data is no longer a requirement for Data Quality. The client chooses **per-object View All** for the objects being scored (default set: Account, Contact, Opportunity, Lead, Case), or View All Data if they prefer. When an object's counts are partial, the screen and exports label them "Based on records the integration user can see". The choice lives on the same opt-in screen as record access (7), and the onboarding guide lists permissions only for the features turned on. In phase A, item 2 adds the partial-count labels and drops View All Data from the guide's requirements; the opt-in screen itself arrives with 7.
+- **New permissions (decided 17 Oct):** View All Data is no longer a requirement for Data Quality. The client chooses **per-object View All** for the objects being scored (default set: Account, Contact, Opportunity, Lead, Case), or View All Data if they prefer. When an object's counts are partial, the screen and exports label them "Based on records the integration user can see". The choice lives on the same opt-in screen as record access (7), and the onboarding guide lists permissions only for the features turned on. In phase A, item 2 adds the partial-count labels and drops View All Data from the guide's requirements; the opt-in screen itself arrives with 7.
 - **Privacy and demo:**
   - Needs aggregate record statistics: on at Full and Masked, opt-in at Metadata only (existing capability). Values are never stored, only counts.
   - Today Data Quality is refused on demo orgs. This item adds a fixture-backed path, so Lumenvale can demo Data Quality and critical objects without calling Salesforce.
@@ -312,7 +332,7 @@ cap with item 30.
 ### 31. Record access says when it's partial
 - **Problem:** without View All on Account and Opportunity, the sync sees only the share rows of records the integration user can see, and the Record Access tab under-reports without saying so (see 7).
 - **Approach:** at sync, record whether the integration user holds View All on each analysed object (or View All Data). When it doesn't, every record-access view (user tab, PDF, workbook) says **"Based on records the integration user can see"**. Full opt-in and per-object View All follow in 7.
-- **Salesforce sources:** the connected user's permission set assignments (View All Data) and ObjectPermissions (`PermissionsViewAllRecords`) ✓. The connection posture doesn't record these (corrected 18 Oct), so each sync checks them, read-only.
+- **Salesforce sources:** the connected user's permission set assignments (View All Data) and ObjectPermissions (`PermissionsViewAllRecords`) ✓. The connection posture doesn't record these (corrected 17 Oct), so each sync checks them, read-only.
 - **New permissions:** none.
 - **Privacy and demo:** unchanged. Demo orgs read the flag from the fixture.
 - **Fixture:** Lumenvale's integration user has no View All, so the label shows.
@@ -380,7 +400,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Depends on:** 2, 4 and 5 for their visuals. **Effort: L** (was M; per-visual downloads, the dialog and the two layouts add work).
 
 ### 35a. Role hierarchy view (read-only)
-Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode v1: drafts, Account and Opportunity impact, ZIP export, phase B), 35c (full impact preview, phase D after 7) and 35d (write-back, plan only, phase H). Mike's core ask, editing the hierarchy, lands in phase B.
+Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode v1: drafts, Account and Opportunity impact, ZIP export, phase B), 35c (full impact preview, phase D after 7) and 35d (write-back, plan only, phase H). Mike's core ask, editing the hierarchy, lands in phase B.
 
 - **Problem:** consultants redesign role hierarchies on almost every engagement, but the org chart tab shows only users and managers. Roles, who sits in them and what each role rolls up to aren't visible anywhere in Newton.
 - **Approach:**
@@ -395,7 +415,7 @@ Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hi
 - **Depends on:** nothing new (uses 31 and 32). **Effort: M.**
 
 ### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
-Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
+Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
 - **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.
 - **Approach:**
   - **Drafts, stored in Newton, never sent to Salesforce:** drag a role onto another to reparent it, drag users between roles, create, rename and delete roles. Cycles are blocked (a role can't move under its own descendant). Undo and redo, named drafts.
@@ -404,7 +424,7 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
     - which users gain and which lose visibility through the hierarchy, and how many in total: the ancestors of each moved role before and after the change, and the records owned by users in the moved branch (owner counts from the sync, 32);
     - for each object it says **what** changes, not just how many: users above a role can view and edit what's owned by or shared with users below them ✓, so with a **Private** org-wide default a move changes both who can see and who can edit; with **Public Read Only** everyone can already see the records, so only edit access changes; with **Public Read/Write** nothing changes;
     - records shared to users in the moved branch (manual, team and rule shares, from the Account and Opportunity share rows the sync already reads) are counted separately;
-    - the figures are an upper bound: some ancestors may still see the same records through other sharing, and counts carry the "Based on records the integration user can see" label without View All (31). Account and Opportunity both use hierarchies: confirmed in Sharan's developer org, where Sharing Settings shows Grant Access Using Hierarchies checked and greyed out (not changeable) for both;
+    - the figures are an upper bound: some ancestors may still see the same records through other sharing, and counts carry the "Based on records the integration user can see" label without View All (31). Account and Opportunity both use hierarchies: confirmed 17 Oct in Sharan's developer org, where Sharing Settings shows Grant Access Using Hierarchies checked and greyed out (not changeable) for both;
     - sharing rules (SharedTo role, roleAndSubordinatesInternal, roleAndSubordinates, portal role types ✓) and public groups that reference the moved roles, by name;
     - a warning that applying the change recalculates sharing automatically ✓, that large changes can hit "could not acquire lock" errors and should be applied leaf-first, serially and off-peak ✓, and should go to a sandbox first.
     - Case, Contact, Lead, custom objects and the account-owner settings follow in 35c.
@@ -418,11 +438,11 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
 - **Salesforce sources:** as 35a, plus Role metadata type ✓; Group Type values for roles and Group.RelatedId ✓; sharing recalculation on hierarchy changes ✓; org-wide defaults and Account/Opportunity share rows (already synced).
 - **New permissions:** none (read only; nothing is written to Salesforce).
 - **Privacy and demo:** drafts are Newton data, follow the org's privacy level and are erased with the org. On demo orgs drafts work normally and exports are marked demo.
-- **Fixture (measured 21 Oct in a scratch prototype on top of PR #20; not yet added):**
+- **Fixture (measured 17 Oct in a scratch prototype on top of PR #20; not yet added):**
   - **Account owner counts:** total 5,200 (the Account count Data Quality reports), given only to users who already own Opportunities, Leads, Cases or Contacts. License Fit only looks at Account ownership when a user owns nothing at all, so no License Fit result can change. Measured: Health Report 41, 18 findings, $183,180; License Fit $116,220; risk, anomalies and Priority Actions all unchanged.
   - **Org-wide defaults, all Private** (Contact Controlled by Parent): measured, nothing changes.
   - **A role-based sharing rule and a public group:** blocked until PR #22 merges. The Health Report's empty-group rule counted every group with no member rows, including role groups (in the fixture they have none), so adding them raised "5 Public Groups / Queues have zero members" (measured 40, 19 findings). PR #22 makes it check only public groups and queues.
-  - **Edit-only case (decided 21 Oct): not demoed on Lumenvale; every org-wide default stays Private.** Opportunity Public Read Only adds a genuine High finding ("sensitive objects have Public OWD"; measured 32, 20 findings with the empty-group issue). The common setup, Account Public Read Only with Opportunity Private, is flagged the same way (measured 33, 19 findings; License Fit and savings unchanged).
+  - **Edit-only case (decided 17 Oct): not demoed on Lumenvale; every org-wide default stays Private.** Opportunity Public Read Only adds a genuine High finding ("sensitive objects have Public OWD"; measured 32, 20 findings with the empty-group issue). The common setup, Account Public Read Only with Opportunity Private, is flagged the same way (measured 33, 19 findings; License Fit and savings unchanged).
   - Nothing goes into the fixture or the runbook until Sharan approves any change to these numbers.
 - **Depends on:** 35a, 3 (ZIP export). Not on phase C. **Effort: L.**
 
@@ -572,7 +592,7 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
 - **Problem:** record access covers Accounts and Opportunities only. It also depends on access we don't ask for. Today the sync queries `AccountShare`, `OpportunityShare` and the team tables with whatever records the integration user can see. View All Data is only "optional" in the onboarding guide, which ties it to Data Quality. So in a private-sharing org the Record Access tab under-reports **without saying so**. Separately, the sync skips `RowCause = 'Owner'` share rows while the owned-records count looks for exactly those rows, so live orgs always show 0 owned Accounts and Opportunities (bug).
 - **Decision (17 Oct):** View All Data is **not** requested: too broad for a third-party integration user, and contrary to our least-privilege position. Instead:
   - **Opt-in per org.** Record-access analysis is off by default. An admin turns it on per org on the Privacy & Data page, recording that the client agreed. The extra permissions are listed **only** when it's on.
-  - **Per-object "View All"** (the object permission, not View All Data) on exactly the objects being analysed: **Account, Opportunity, Case, Contact and Lead** (Account and Opportunity confirmed 18 Oct). When it isn't granted, every record-access view says "Based on records the integration user can see"; that labelling ships early, in phase A (31).
+  - **Per-object "View All"** (the object permission, not View All Data) on exactly the objects being analysed: **Account, Opportunity, Case, Contact and Lead** (Account and Opportunity confirmed 17 Oct). When it isn't granted, every record-access view says "Based on records the integration user can see"; that labelling ships early, in phase A (31).
   - **Contact controlled by parent:** when Contact's org-wide default is "Controlled by Parent", Contact access follows the parent Account. Newton reads it from the Account side (`AccountShare.ContactAccessLevel` and Account visibility), not `ContactShare`, which may be unavailable (**UNVERIFIED**; handled defensively). View All on Account is then what's needed, not on Contact.
 - **Approach:** sync `CaseShare`, `ContactShare` and `LeadShare` the same way as Account and Opportunity, with each object's org-wide default. The owner-row bug is fixed in phase A (32). The screen states what share tables **can't show** ✓ (sharing sets, `ImplicitChild` with faster recalculation, rows Salesforce stops storing). The claim is "explicit and stored shares", never "everyone with access".
 - **Salesforce sources:** `CaseShare` / `ContactShare` / `LeadShare` (UserOrGroupId, *AccessLevel, RowCause) ✓; reading them needs read access to the parent ✓. Whether per-object View All is assignable under the *Salesforce Integration* user licence for each object: **UNVERIFIED**, test in a sandbox.
@@ -581,7 +601,7 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
 - **Privacy and demo:** needs the Record shares capability (off at Metadata only). Opt-in sits on top of the privacy level. Record IDs are stored only as keyed hashes. Demo orgs read from the fixture, with the opt-in shown as on.
 - **Fixture:** share rows for Cases, Contacts and Leads (team, rule, manual), one user who reaches 3,000 Cases through a criteria-based sharing rule, and Contact set to "Controlled by Parent" so that path is demoed.
 - **Depends on:** nothing. **Effort: M-L** (opt-in setting, guide changes and the owner-count fix add to it).
-- **Related (decided 18 Oct):** Data Quality uses the same per-object, opt-in pattern instead of View All Data (see 2).
+- **Related (decided 17 Oct):** Data Quality uses the same per-object, opt-in pattern instead of View All Data (see 2).
 
 ### 35c. Role impact preview: all objects
 - **Problem:** 35b's impact preview covers Account and Opportunity only. Clients also need the effect on Cases, Contacts and Leads, and on the access account owners get to related records.
@@ -829,7 +849,7 @@ Extends 9 using 1 and 11's metadata. **Effort: L.**
 |------|----------|--------|
 | Engagement workspace | Comments on findings, evidence requests to the client, sign-off, and versioned deliverables, on top of 20. | L |
 | Finding-to-scope builder | **Promoted to Proposal P1** (now phase C2). | — |
-| Opt-in content checks | Per-engagement opt-in, recorded like write-back, letting Data Quality read long and rich text fields in transit to count which are populated (values never stored). Needs counsel to update the DPA, privacy, terms and security pages first; until then these fields stay "not counted" (decided 20 Oct). | M |
+| Opt-in content checks | Per-engagement opt-in, recorded like write-back, letting Data Quality read long and rich text fields in transit to count which are populated (values never stored). Needs counsel to update the DPA, privacy, terms and security pages first; until then these fields stay "not counted" (decided 17 Oct). | M |
 | 35d. Role hierarchy write-back (plan only) | A separate, opt-in, write-enabled connection per org (never the read-only integration user), needing Manage Roles and Manage Internal Users ✓. An admin approves each apply, recorded in the audit log with the draft's diff. Before applying, Newton snapshots the current hierarchy for rollback (rollback belongs here, not in 35b; it uses 21's snapshots). Sandbox first, then production. Applied leaf-first and serially, off-peak ✓. Portal roles are excluded (not updatable through the API ✓). Nothing is built until this plan is approved. | L |
 | GitHub App for remediation bundles | Opt-in per client, scoped to **one repository**; opens **draft pull requests only**, never pushes to the default branch; short-lived installation tokens, never stored in plain text; listed in the security review pack (28) as a future, optional integration. | M |
 | Configurable policy packs | Org-specific rules (e.g. "no Modify All Data outside IT") evaluated on each snapshot, versioned per engagement. | M |
@@ -886,7 +906,7 @@ Checked in October 2026 against current documentation: API v62 to v68 developer 
 | UserRole object | Confirmed | Fields and create/update properties per the Object Reference (v68). Read needs View Roles and Role Hierarchy; edit needs Manage Roles. Portal roles can't be updated. The doc's properties for ContactAccessForAccountOwner and PortalAccountId are internally inconsistent. Picklist values for the access-for-account-owner fields not listed (UNVERIFIED). |
 | User.UserRoleId | Confirmed | Create and update; needs Manage Internal Users (portal users: Manage Customer or External Users). |
 | Role metadata type | Partly | `.role`, `roles/`, wildcard; fullName, parentRole, name, description, three access levels, mayForecastManagerShare; no users or portal fields. parentRole's format, in-deploy ordering and description mapping UNVERIFIED. |
-| Grant Access Using Hierarchies | Confirmed (not exposed) | Custom objects only; not in CustomObject metadata, the Object Reference or the Tooling API. Group DoesIncludeBosses is a different, group-level setting. Account and Opportunity: checked and greyed out in Sharing Settings (Sharan's developer org). Which other standard objects don't use hierarchies is still UNVERIFIED. |
+| Grant Access Using Hierarchies | Confirmed (not exposed) | Custom objects only; not in CustomObject metadata, the Object Reference or the Tooling API. Group DoesIncludeBosses is a different, group-level setting. Account and Opportunity: checked and greyed out in Sharing Settings (Sharan's developer org, 17 Oct). Which other standard objects don't use hierarchies is still UNVERIFIED. |
 | Role limits and recalculation | Confirmed | 5,000 roles (orgs from Spring '21), 500 before; sharing recalculates on hierarchy changes; deferral optional and Support-enabled; large changes: leaf-first, serial, off-peak. |
 | API Total Usage event log free tier | Confirmed | Free in supported editions; daily files; 1-day retention; no count field (one row per request); covers REST, SOAP and Bulk. Needs View Event Log Files. |
 | OauthToken | Partly | UseCount, LastUsedDate, AppName, UserId documented; Id always null; all tokens visible only with Customize Application; CreatedDate not documented. |
