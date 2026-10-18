@@ -380,12 +380,6 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Depends on:** 2, 4 and 5 for their visuals. **Effort: L** (was M; per-visual downloads, the dialog and the two layouts add work).
 
 ### 35a. Role hierarchy view (read-only)
-**Status: built (branch feat/role-hierarchy-view), not merged.**
-- Default thresholds: deep = more than 5 levels, wide = more than 6 roles directly below. They're adjustable on screen and labelled as defaults, to be revisited with real-org data.
-- No migration: the extra UserRole fields go into the role snapshot's existing raw_data. If the org rejects the extended query, the sync falls back to Id, Name and ParentRoleId.
-- The tab opens on Roles; People (the editable manager view) is one click away and keeps its privacy gate.
-- At Metadata only, roles are shown without user or record counts: with no user records there's nothing to count them from.
-- Lumenvale has Opportunity owner counts but no Account owner counts yet (35b fixture, awaiting approval), so Account shows "Unknown".
 Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode v1: drafts, Account and Opportunity impact, ZIP export, phase B), 35c (full impact preview, phase D after 7) and 35d (write-back, plan only, phase H). Mike's core ask, editing the hierarchy, lands in phase B.
 
 - **Problem:** consultants redesign role hierarchies on almost every engagement, but the org chart tab shows only users and managers. Roles, who sits in them and what each role rolls up to aren't visible anywhere in Newton.
@@ -399,6 +393,13 @@ Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hi
 - **Privacy and demo:** users in a role follow the org's privacy level (aliases when masked; no user list at Metadata only, roles and counts still shown). Demo orgs read roles from the fixture.
 - **Fixture:** done in PR #20: Lumenvale has 33 roles (regional sales, department heads, single-user and empty roles, depth 5, a partner portal branch) with no change to its Health Report.
 - **Depends on:** nothing new (uses 31 and 32). **Effort: M.**
+
+**35a status: built (branch feat/role-hierarchy-view), not merged.**
+- Default thresholds: deep = more than 5 levels, wide = more than 6 roles directly below. They're adjustable on screen and labelled as defaults, to be revisited with real-org data.
+- No migration: the extra UserRole fields go into the role snapshot's existing raw_data. If the org rejects the extended query, the sync falls back to Id, Name and ParentRoleId.
+- The tab opens on Roles; People (the editable manager view) is one click away and keeps its privacy gate.
+- At Metadata only, roles are shown without user or record counts: with no user records there's nothing to count them from.
+- Lumenvale's Account owner counts come with 35b's demo data (#26); on this branch alone Account shows "Unknown".
 
 ### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
 Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
