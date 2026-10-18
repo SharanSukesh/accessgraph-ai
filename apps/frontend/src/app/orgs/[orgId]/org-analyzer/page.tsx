@@ -71,6 +71,7 @@ import {
 import { endpoints } from '@/lib/api/endpoints'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { CodeCoverageCard } from '@/components/healthReport/CodeCoverageCard'
+import { ApiUsageCard } from '@/components/healthReport/ApiUsageCard'
 import { healthBand } from '@/lib/healthBand'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -438,6 +439,8 @@ function OverviewTab({
       <QuickWinsPanel orgId={orgId} />
 
       <CodeCoverageCard coverage={summary.metrics?.code_coverage} />
+
+      <ApiUsageCard usage={summary.metrics?.api_usage} />
 
 
       <Reveal>

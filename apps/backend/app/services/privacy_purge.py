@@ -135,6 +135,7 @@ class _Purge:
             await self._collect_names()
 
         await self._delete_disallowed()
+        await self._scrub_api_usage()
 
         if not keep_identity:
             await self._mask_users()
@@ -299,6 +300,32 @@ class _Purge:
             await self._delete(ObjectQualityScore)
             await self._delete(DataQualityRun)
             await self._strip_aggregates()
+
+    async def _scrub_api_usage(self) -> None:
+        """The Health Report's API usage section (services/api_usage.py)
+        names integration users: aliases when names aren't kept, and no
+        users at all, in the summary or the stored days, without user
+        records."""
+        from app.services.api_usage import USERS_HIDDEN_REASON, _strip_users
+
+        keep_records = self.allows(privacy.USER_RECORDS)
+        if keep_records and self.allows(privacy.USER_IDENTITY):
+            return
+        for snap in await self._rows(OrgAnalysisSnapshot):
+            usage = (snap.metrics or {}).get("api_usage")
+            if not usage:
+                continue
+            usage = copy.deepcopy(usage)
+            if keep_records:
+                for u in usage.get("by_user") or []:
+                    if u.get("id"):
+                        u["name"] = self._alias(u["id"])
+            else:
+                if usage.get("by_user") is not None:
+                    usage["by_user"] = None
+                    usage["users_hidden_reason"] = USERS_HIDDEN_REASON
+                usage["days"] = [{**d, "rows": _strip_users(d.get("rows") or [])} for d in usage.get("days") or []]
+            self._set(snap, metrics={**snap.metrics, "api_usage": usage})
 
     async def _strip_aggregates(self) -> None:
         snapshots = {s.id: s for s in await self._rows(OrgAnalysisSnapshot)}

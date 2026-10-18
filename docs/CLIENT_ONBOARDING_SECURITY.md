@@ -60,6 +60,16 @@ long as it is valid.
      labels those figures as estimates. Long and rich text fields can't
      be counted without reading their contents, so Newton lists them as
      not counted.
+   - *View Event Log Files* (for the Health Report's "API usage by
+     source"): lets Newton read the free API Total Usage event log, which
+     Salesforce keeps for one day. Newton counts its rows per day,
+     connected app, user and API type and keeps only those counts, never
+     the rows or the user names in them. Without it, the card says why and
+     shows the org's daily total from the limits API and connected apps
+     with their last-used dates. Salesforce documents the permission as
+     View Event Log Files plus API Enabled. UNVERIFIED: whether it can be
+     granted to a user on the Salesforce Integration licence; check in a
+     developer org before recommending it.
    - *Login history*: Salesforce restricts LoginHistory to users with
      user-management rights in many orgs. If the integration user can't
      read it, Newton skips login-anomaly detection; everything else works.
