@@ -321,12 +321,13 @@ class _Purge:
                 continue
             usage = copy.deepcopy(usage)
             if keep_records:
-                for u in usage.get("by_user") or []:
+                for u in (usage.get("by_user") or []) + (usage.get("users") or []):
                     if u.get("id"):
                         u["name"] = self._alias(u["id"])
             else:
-                if usage.get("by_user") is not None:
+                if usage.get("by_user") is not None or usage.get("users") is not None:
                     usage["by_user"] = None
+                    usage["users"] = None
                     usage["users_hidden_reason"] = USERS_HIDDEN_REASON
                 usage["days"] = [{**d, "rows": _strip_users(d.get("rows") or [])} for d in usage.get("days") or []]
             self._set(snap, metrics={**snap.metrics, "api_usage": usage})

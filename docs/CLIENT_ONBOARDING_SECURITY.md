@@ -75,7 +75,15 @@ long as it is valid.
      source"): lets Newton read the free API Total Usage event log, which
      Salesforce keeps for one day. Newton counts its rows per day,
      connected app, user and API type and keeps only those counts, never
-     the rows or the user names in them. Without it, the card says why and
+     the rows or the user names in them. For the API Usage page it also
+     counts the resource and object each request names, without query
+     strings, record ids or values; an Apex REST request is kept only as
+     the `@RestResource` class it reaches. To find those classes Newton
+     reads Apex class bodies (the same ApexClass object it already counts)
+     and keeps only each class's name and URL mapping, never the code.
+     UNVERIFIED: whether the bodies are readable with the permissions
+     above; if not, the endpoints are shown without their classes.
+     Without the permission, the card says why and
      shows the org's daily total from the limits API and connected apps
      with their last-used dates. Salesforce documents the permission as
      View Event Log Files plus API Enabled. UNVERIFIED: whether it can be

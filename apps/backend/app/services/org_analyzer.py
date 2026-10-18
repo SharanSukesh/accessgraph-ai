@@ -653,6 +653,8 @@ class AnalyzerContext:
     # client.get_api_total_usage(): this run's read of the API Total Usage
     # log, counted per day (services/api_usage.py). None when not read.
     api_usage_read: Optional[Dict[str, Any]] = None
+    # @RestResource classes [{name, namespace, url_mapping}]; None when not read.
+    apex_rest: Optional[List[Dict[str, Any]]] = None
     # Critical objects from the latest Data Quality run:
     # [{object, label, record_count, flags, caveats}]
     critical_objects: List[Dict[str, Any]] = field(default_factory=list)
@@ -853,7 +855,7 @@ class OrgAnalyzerService:
             apps = await self._connected_apps_last_used()
         namer = user_namer(ctx.users, ctx.keep_user_identity,
                            lambda uid: privacy_mode.user_alias(self.org_id, uid))
-        return summarize(read, prior, ctx.org_limits, namer, ctx.allow_user_records, apps)
+        return summarize(read, prior, ctx.org_limits, namer, ctx.allow_user_records, apps, ctx.apex_rest)
 
     async def _connected_apps_last_used(self) -> List[Dict[str, Any]]:
         """Connected apps and when they were last used, from the latest
@@ -1018,9 +1020,14 @@ class OrgAnalyzerService:
         except Exception as e:
             logger.warning("get_code_coverage failed: %s", e)
 
-        # API Total Usage event log (needs View Event Log Files).
+        # API Total Usage event log (needs View Event Log Files), with the
+        # @RestResource classes read first so Apex REST requests name theirs.
         try:
-            ctx.api_usage_read = await sf_client.get_api_total_usage()
+            ctx.apex_rest = await sf_client.get_apex_rest_resources()
+        except Exception as e:
+            logger.warning("get_apex_rest_resources failed: %s", e)
+        try:
+            ctx.api_usage_read = await sf_client.get_api_total_usage(ctx.apex_rest)
         except Exception as e:
             logger.warning("get_api_total_usage failed: %s", e)
 

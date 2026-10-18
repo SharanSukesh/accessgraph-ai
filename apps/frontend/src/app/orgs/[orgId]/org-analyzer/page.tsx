@@ -457,6 +457,7 @@ function OverviewTab({
       />
 
       <ApiUsageCard
+        orgId={orgId}
         usage={summary.metrics?.api_usage}
         action={<VisualDownloadButton orgId={orgId} visual="api_usage" />}
       />

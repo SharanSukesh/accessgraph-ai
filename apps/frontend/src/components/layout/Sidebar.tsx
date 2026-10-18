@@ -21,6 +21,7 @@ import {
   Link2,
   Scale,
   Stethoscope,
+  Activity,
   Radar,
   Wrench,
   DollarSign,
@@ -114,6 +115,7 @@ export const navigationSections: {
     label: 'OPTIMIZE',
     items: [
       { name: 'Health Report', path: 'org-analyzer', icon: Stethoscope },
+      { name: 'API Usage', path: 'api-usage', icon: Activity },
       { name: 'Equity', path: 'equity', icon: Scale, privacyFeature: 'equity' },
       { name: 'Restructure Studio', path: 'restructure', icon: Wrench, privacyFeature: 'restructure' },
       { name: 'Sprawl', path: 'sprawl', icon: Boxes },

@@ -62,7 +62,7 @@ VISUALS: List[Visual] = [
     Visual("compliance", "Compliance control indicators"),
     Visual("critical_objects", "Critical objects"),
     Visual("code_coverage", "Code coverage"),
-    Visual("api_usage", "API usage by source"),
+    Visual("api_usage", "API usage"),
 ]
 VISUAL_BY_KEY = {v.key: v for v in VISUALS}
 
@@ -411,27 +411,49 @@ def _code_coverage(src: PackSource):
 
 
 def _api_usage(src: PackSource):
+    """The Health Report's API usage card: headline, four figures, the daily
+    chart against the limit and the top 3 sources."""
     u = src.metrics.get("api_usage")
     if not u or u.get("status") != "ok":
         return (u or {}).get("reason") or "No API usage in the latest Health Report."
-    apps = [(a["name"], a["requests"]) for a in u.get("by_app") or []]
-    bars = charts.horizontal_bars(apps, width=380, label_width=180, value_label=lambda v: f"{_compact(v)}")
-    trend = ""
-    if (u.get("limit") or {}).get("max") and len(u.get("trend") or []) > 1:
-        trend = charts.line_chart([(t["date"][5:], t["pct_of_limit"] or 0) for t in u["trend"]],
-                                  width=300, height=150, y_max=100, y_ticks=(0, 50, 100),
-                                  value_label=lambda v: f"{v:.0f}%")
-    top = next((a for a in u.get("by_app") or [] if not a.get("other")), None)
-    peak = u.get("peak") or {}
     days = u.get("days_collected") or 0
+    limit = u.get("limit") or {}
+    peak = u.get("peak") or {}
+    top = [a for a in u.get("by_app") or [] if not a.get("other")][:3]
     period = f"{u['first_day']} to {u['last_day']}" if days > 1 else f"{u['last_day']} only"
-    head = f"{_esc(top['name'])} made {top['share_pct']:g}% of requests" if top else ""
-    peak_note = (f'<p class="note">Busiest day {peak["date"]}: {peak["pct_of_limit"]:g}% of the daily limit</p>'
-                 if peak.get("pct_of_limit") is not None and days > 1 else "")
-    body = (f'<p class="lead">{head}</p><div class="row"><div class="grow"><p class="label">Requests by connected app</p>{bars}</div>'
-            + (f'<div><p class="label">Each day, % of the daily limit</p>{trend}{peak_note}</div>' if trend else "")
-            + "</div>")
-    return f"{period}, {u['total_requests']:,} requests. {u.get('coverage_note') or ''}", body
+    head = f"{top[0]['name']} made {top[0]['share_pct']:g}% of requests." if top else ""
+
+    def big(n: float) -> str:  # as the card: 1,015,000 -> 1.02M
+        return f"{round(n / 10_000) / 100:g}M" if n >= 1e6 else _compact(n)
+
+    def stat(label: str, value: str, note: str = "") -> str:
+        return (f'<div class="stat"><div class="stat-label">{_esc(label)}</div><div class="stat-value">{value}</div>'
+                + (f'<div class="stat-label">{_esc(note)}</div>' if note else "") + "</div>")
+    today = (stat("Today so far", f'{big(limit["used"])}<span class="of"> of {big(limit["max"])}</span>',
+                  f'{limit["used"] / limit["max"] * 100:.0f}% of the daily limit') if limit.get("max") else
+             stat("Today so far", "—", "Limit not read"))
+    peak_tile = (stat("Peak day", f'{peak["pct_of_limit"]:g}%<span class="of"> of limit</span>', peak["date"])
+                 if peak.get("pct_of_limit") is not None else stat("Peak day", _compact(peak.get("counting") or 0), peak.get("date") or ""))
+    tiles = "".join([
+        stat(f"{days}-day total" if days > 1 else "Requests", big(u["total_requests"]), period),
+        stat("Daily average", big(u.get("daily_average") or 0)),
+        today,
+        peak_tile,
+    ])
+    trend = u.get("trend") or []
+    chart = charts.daily_bars([(t["date"][5:], t["counting"]) for t in trend], limit=limit.get("max"), width=720,
+                              height=96, near_at=0.9, value_label=big) if len(trend) > 1 else ""
+    sources = "".join(
+        f"<tr><td>{_esc(a['name'])}</td><td>{charts.meter(a['share_pct'] / 100, width=160)}</td>"
+        f"<td class='num'>{a['share_pct']:g}%</td><td class='num'>{big(a['requests'])}</td></tr>"
+        for a in top
+    )
+    body = (f'<div class="tiles">{tiles}</div>'
+            + (f'<p class="label">Requests counted against the limit, per day</p>{chart}' if chart else "")
+            + (f'<table class="data compact"><thead><tr><th>Top sources</th><th></th><th class="num">Share</th>'
+               f'<th class="num">Requests</th></tr></thead><tbody>{sources}</tbody></table>' if sources else "")
+            + f'<p class="note">{_esc(u.get("coverage_note") or "")}</p>')
+    return head or f"{period}, {u['total_requests']:,} requests.", body
 
 
 BUILDERS: Dict[str, Callable[[PackSource], Any]] = {
@@ -493,6 +515,7 @@ STYLE = """
   .stat-value { font-size: 15pt; font-weight: 600; }
   table.data { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
   table.data th { text-align: left; color: #52514e; font-weight: 600; border-bottom: 1px solid #c3c2b7; padding: 4px 6px; }
+  table.data.compact td, table.data.compact th { padding: 2px 6px; }
   table.data td { border-bottom: 1px solid #e1e0d9; padding: 4px 6px; vertical-align: middle; }
   table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   table.data .reason { color: #52514e; font-size: 7.5pt; }

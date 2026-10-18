@@ -36,7 +36,10 @@ class DemoSalesforceClient:
     async def get_code_coverage(self) -> Dict[str, Any]:
         return dict(self._live.get("code_coverage") or {})
 
-    async def get_api_total_usage(self) -> Dict[str, Any]:
+    async def get_apex_rest_resources(self) -> Optional[List[Dict[str, Any]]]:
+        return [dict(c) for c in (self._live.get("api_usage") or {}).get("apex_rest", [])]
+
+    async def get_api_total_usage(self, apex_rest: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         usage = self._live.get("api_usage")
         if not usage:
             return {"status": "ok", "days": []}
