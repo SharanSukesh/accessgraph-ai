@@ -48,6 +48,13 @@ jobs:
           cache: 'pip'
           cache-dependency-path: apps/backend/requirements.txt
 
+      # WeasyPrint's system libraries (as in apps/backend/Dockerfile), so the PDF and
+      # image-pack rendering tests run instead of skipping.
+      - name: Install PDF rendering libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b fonts-dejavu-core
+
       - name: Install dependencies
         working-directory: apps/backend
         run: |
@@ -72,9 +79,9 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test
           REDIS_URL: redis://localhost:6379/0
+        # Blocking: a failing test fails the check (ruff and mypy above stay advisory).
         run: |
           pytest tests/ --cov=app --cov-report=xml --cov-report=term
-        continue-on-error: true
 
   # Frontend Tests & Checks
   frontend:
@@ -102,6 +109,10 @@ jobs:
         working-directory: apps/frontend
         run: npm run lint
         continue-on-error: true
+
+      - name: Unit tests
+        working-directory: apps/frontend
+        run: npx vitest run
 
       - name: Build
         working-directory: apps/frontend
