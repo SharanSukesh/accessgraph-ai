@@ -11,7 +11,7 @@ prior_value + new_value in context_data.
 from __future__ import annotations
 
 import logging
-from typing import List, Literal, Optional
+from typing import Iterable, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -103,7 +103,7 @@ class ApplyResponse(BaseModel):
 # ----- Helpers -----
 
 
-def _manager_loops(users: List[UserSnapshot]) -> set:
+def _manager_loops(users: Iterable[UserSnapshot]) -> set:
     """Users whose chain of managers comes back to them."""
     manager = {u.salesforce_id: u.manager_id for u in users if u.manager_id}
     in_loop: set = set()
@@ -116,7 +116,7 @@ def _manager_loops(users: List[UserSnapshot]) -> set:
             path.append(cur)
             on_path.add(cur)
             cur = manager.get(cur)
-        if cur in on_path:
+        if cur is not None and cur in on_path:
             in_loop.update(path[path.index(cur):])
         done.update(path)
     return in_loop
