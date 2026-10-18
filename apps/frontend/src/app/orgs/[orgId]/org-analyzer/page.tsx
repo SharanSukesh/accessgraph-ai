@@ -29,6 +29,7 @@ import {
   Download,
   EyeOff,
   FileText,
+  ImageDown,
   Info,
   PlayCircle,
   RefreshCw,
@@ -72,6 +73,8 @@ import { endpoints } from '@/lib/api/endpoints'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { CodeCoverageCard } from '@/components/healthReport/CodeCoverageCard'
 import { ApiUsageCard } from '@/components/healthReport/ApiUsageCard'
+import { ImagePackDialog } from '@/components/imagePack/ImagePackDialog'
+import { VisualDownloadButton } from '@/components/imagePack/VisualDownloadButton'
 import { healthBand } from '@/lib/healthBand'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -126,6 +129,7 @@ export default function OrgAnalyzerPage() {
   const orgId = params.orgId as string
   const [tab, setTab] = useState<Tab>('overview')
   const [brandOpen, setBrandOpen] = useState(false)
+  const [packOpen, setPackOpen] = useState(false)
 
   const latest = useOrgAnalyzerLatest(orgId)
   const history = useOrgAnalyzerHistory(orgId)
@@ -189,6 +193,12 @@ export default function OrgAnalyzerPage() {
               </a>
             )}
             {hasRun && (
+              <Button variant="secondary" size="md" onClick={() => setPackOpen(true)}>
+                <ImageDown className="h-4 w-4 mr-2" />
+                Image pack
+              </Button>
+            )}
+            {hasRun && (
               <a
                 href={`${API_BASE}${endpoints.orgAnalyzerReportXlsx(orgId)}`}
                 className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-grove-border dark:border-grove-border-dk rounded-md hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
@@ -217,6 +227,7 @@ export default function OrgAnalyzerPage() {
         }
       />
       {brandOpen && <BrandSettingsModal orgId={orgId} onClose={() => setBrandOpen(false)} />}
+      {packOpen && <ImagePackDialog orgId={orgId} onClose={() => setPackOpen(false)} />}
       </Reveal>
 
       {/* Toast */}
@@ -372,6 +383,7 @@ function OverviewTab({
         <HeroHealthCard
           score={healthScore ?? null}
           rubric={summary.metrics?.org_health_rubric}
+          action={<VisualDownloadButton orgId={orgId} visual="health_score" />}
         />
         </Reveal>
         <Stagger className="lg:col-span-2 grid grid-cols-2 gap-4">
@@ -438,9 +450,15 @@ function OverviewTab({
           knows where to focus. Reuses the existing findings query. */}
       <QuickWinsPanel orgId={orgId} />
 
-      <CodeCoverageCard coverage={summary.metrics?.code_coverage} />
+      <CodeCoverageCard
+        coverage={summary.metrics?.code_coverage}
+        action={<VisualDownloadButton orgId={orgId} visual="code_coverage" />}
+      />
 
-      <ApiUsageCard usage={summary.metrics?.api_usage} />
+      <ApiUsageCard
+        usage={summary.metrics?.api_usage}
+        action={<VisualDownloadButton orgId={orgId} visual="api_usage" />}
+      />
 
 
       <Reveal>
@@ -495,9 +513,11 @@ function OverviewTab({
 function HeroHealthCard({
   score,
   rubric,
+  action,
 }: {
   score: number | null
   rubric?: Record<string, any>
+  action?: React.ReactNode
 }) {
   const accent =
     score == null
@@ -517,7 +537,8 @@ function HeroHealthCard({
   const circ = 2 * Math.PI * radius
   const dash = (pct / 100) * circ
   return (
-    <Card variant="bordered" className="overflow-hidden h-full">
+    <Card variant="bordered" className="relative overflow-visible h-full">
+      {action && <div className="absolute right-3 top-3">{action}</div>}
       <CardContent className="p-6 flex items-center gap-6">
         <div className="relative flex-shrink-0">
           <svg className="w-28 h-28 -rotate-90" viewBox="0 0 120 120" aria-hidden>
@@ -1438,11 +1459,14 @@ function SavingsTab({ orgId }: { orgId: string }) {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Estimated annual savings — broken down by finding</span>
-          {grandTotal > 0 && (
-            <span className="v2-num text-base font-semibold text-green-700 dark:text-green-400">
-              {formatMoneyCents(grandTotal)}
-            </span>
-          )}
+          <span className="flex items-center gap-3">
+            {grandTotal > 0 && (
+              <span className="v2-num text-base font-semibold text-green-700 dark:text-green-400">
+                {formatMoneyCents(grandTotal)}
+              </span>
+            )}
+            <VisualDownloadButton orgId={orgId} visual="savings" />
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent>

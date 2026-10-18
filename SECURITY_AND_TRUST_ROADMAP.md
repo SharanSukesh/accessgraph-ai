@@ -373,6 +373,14 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Depends on:** Proposal P3 for the trend (v1 works without it, as "yesterday only"). **Effort: M.**
 
 ### 3. Image pack and per-visual downloads
+**Status: built (branch feat/image-pack, on top of item 5), not merged.**
+- Slides are laid out at 800×450 and rendered at 3840×2160. Tight crops are laid out 680 wide, rendered at the same scale and cropped to their content.
+- The PowerPoint file always uses the slide layout (one 16:9 slide per visual, title in the slide notes).
+- The ZIP lists skipped visuals in skipped.txt and, on demo orgs, carries DEMO-DATA.txt.
+- "Savings breakdown" is drawn as the findings behind the estimate (largest first), with the total.
+- Both dependencies are pinned (pypdfium2 4.30.0, python-pptx 1.0.2), installed and rendered in a local build of `apps/backend/Dockerfile`. Licences are in `apps/backend/THIRD_PARTY_NOTICES.md`, with PDFium's third-party texts in `apps/backend/licenses/`.
+- UNVERIFIED: which builder the Railway backend service uses (Dockerfile or Nixpacks).
+
 - **Problem:** consultants rebuild charts by hand in PowerPoint. They need ready-to-drop visuals in the client's and firm's branding, one at a time or as a set.
 - **Approach:** one HTML page per visual at 2x resolution, rendered by the existing WeasyPrint pipeline, then rasterised with `pypdfium2`. A `.pptx` is built with `python-pptx`, one image per slide.
   - **Visuals:** health score, savings breakdown, risk distribution, top anomalies (ranked), license fit, compliance summary, critical objects, code coverage, API usage.

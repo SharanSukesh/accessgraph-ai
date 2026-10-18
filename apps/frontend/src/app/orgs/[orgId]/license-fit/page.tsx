@@ -43,6 +43,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { VisualDownloadButton } from '@/components/imagePack/VisualDownloadButton'
 import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
@@ -131,6 +132,8 @@ function LicenseFitContent() {
             : 'Right-sizing recommendations based on actual usage vs assigned SKU'
         }
         actions={
+          <>
+          <VisualDownloadButton orgId={orgId} visual="license_fit" />
           <Button
             variant="secondary"
             size="sm"
@@ -148,6 +151,7 @@ function LicenseFitContent() {
               ? 'Re-analyse'
               : 'Analyse licenses'}
           </Button>
+          </>
         }
       />
       </Reveal>
