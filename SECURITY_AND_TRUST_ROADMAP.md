@@ -38,6 +38,7 @@ that consulting workflow: assess → prioritise and price → deliver → prove.
 | Make the repository private | |
 | Rotate the encryption key if needed | See P0 item 7. |
 | Product name | |
+| Role export deploy-order test (35b) | In Sharan's developer org, before 35b's readme states a deploy order: can a parent and child role go in one deploy, and does parentRole take the parent's API name? This is a write to a Salesforce org, so Newton and Claude never run it. |
 
 ## Done (October 2026)
 
@@ -185,10 +186,10 @@ items below.
 | Phase | Items | Notes |
 |-------|-------|-------|
 | **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | **Merged to main 20 Oct** (PRs #6-#19; see below). 26 and 27 are done (PRs #4, #5). |
-| **B. Client-facing** | 5, then 3, then 35a | The image pack needs the critical objects, coverage and API usage visuals, so it comes last. 35a (read-only role view) needs no foundations, so it ships with the client-facing work (added 20 Oct). |
+| **B. Client-facing** | 5, then 3, then 35a, 35b | The image pack needs the critical objects, coverage and API usage visuals, so it comes last. 35a (read-only role view) and 35b (role design mode v1: drafts, Account and Opportunity impact, ZIP export) need no foundations, so they ship with the client-facing work; 35b reuses 3's ZIP export (added 20 Oct; 35b moved up from D on 21 Oct). |
 | **C. Foundations** | 8, 21, 20 + 10, 30 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
 | **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
-| **D. Access depth** | 1 (phase 1), 7, 35b, 6 | 7 is opt-in per org with per-object View All on Account, Opportunity, Case, Contact and Lead (no View All Data). Its opt-in screen also holds Data Quality's object choice (2). 6 is the first user of the comparison engine. 35b (role design mode, impact preview, export) follows 7 because its impact counts need 7's per-object record data and coverage labels, and it needs 21's snapshots from phase C (added 20 Oct). |
+| **D. Access depth** | 1 (phase 1), 7, 35c, 6 | 7 is opt-in per org with per-object View All on Account, Opportunity, Case, Contact and Lead (no View All Data). Its opt-in screen also holds Data Quality's object choice (2). 6 is the first user of the comparison engine. 35c (the full role impact preview: Case, Contact, Lead and account-owner settings) follows 7 because it needs 7's per-object record data and coverage labels. |
 | **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Order of 11, 12 and 13 held until Mike confirms which Config Workbook features he uses. |
 | **F. Differentiators** | 15, 16, 17, 18 | |
 | **G. Depth and scale** | 1 (phase 2), 19 (v1: downloadable ZIP), 22, 9 (v2), 28, 29 | The GitHub piece of 19 moved to the later backlog. |
@@ -379,7 +380,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Depends on:** 2, 4 and 5 for their visuals. **Effort: L** (was M; per-visual downloads, the dialog and the two layouts add work).
 
 ### 35a. Role hierarchy view (read-only)
-Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode, impact preview and export, phase D) and 35c (write-back, plan only, phase H).
+Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode v1: drafts, Account and Opportunity impact, ZIP export, phase B), 35c (full impact preview, phase D after 7) and 35d (write-back, plan only, phase H). Mike's core ask, editing the hierarchy, lands in phase B.
 
 - **Problem:** consultants redesign role hierarchies on almost every engagement, but the org chart tab shows only users and managers. Roles, who sits in them and what each role rolls up to aren't visible anywhere in Newton.
 - **Approach:**
@@ -392,6 +393,33 @@ Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hi
 - **Privacy and demo:** users in a role follow the org's privacy level (aliases when masked; no user list at Metadata only, roles and counts still shown). Demo orgs read roles from the fixture.
 - **Fixture:** done in PR #20: Lumenvale has 33 roles (regional sales, department heads, single-user and empty roles, depth 5, a partner portal branch) with no change to its Health Report.
 - **Depends on:** nothing new (uses 31 and 32). **Effort: M.**
+
+### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
+Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
+- **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.
+- **Approach:**
+  - **Drafts, stored in Newton, never sent to Salesforce:** drag a role onto another to reparent it, drag users between roles, create, rename and delete roles. Cycles are blocked (a role can't move under its own descendant). Undo and redo, named drafts.
+  - **Each draft saves its starting hierarchy** (roles, parents, user assignments) when it's created, and the diff compares the draft with that, so no phase C snapshot is needed. When the org has been synced since, Newton compares the saved start with the current hierarchy and warns that the draft is stale, listing what changed in Salesforce, before it can be exported.
+  - **Impact preview, Account and Opportunity only, counts only, never record contents:**
+    - which users gain and which lose visibility through the hierarchy, and how many in total: the ancestors of each moved role before and after the change, and the records owned by users in the moved branch (owner counts from the sync, 32);
+    - when an object's org-wide default is Public Read/Write, the preview says the move changes nothing on it, since everyone can already see those records;
+    - records shared to users in the moved branch (manual, team and rule shares, from the Account and Opportunity share rows the sync already reads) are counted separately;
+    - the figures are an upper bound: some ancestors may still see the same records through other sharing, and counts carry the "Based on records the integration user can see" label without View All (31). Whether Account and Opportunity both use hierarchies is UNVERIFIED (Help says "most" standard objects do) and must be confirmed before the preview claims it;
+    - sharing rules (SharedTo role, roleAndSubordinatesInternal, roleAndSubordinates, portal role types ✓) and public groups that reference the moved roles, by name;
+    - a warning that applying the change recalculates sharing automatically ✓, that large changes can hit "could not acquire lock" errors and should be applied leaf-first, serially and off-peak ✓, and should go to a sandbox first.
+    - Case, Contact, Lead, custom objects and the account-owner settings follow in 35c.
+  - **Export (v1), the same ZIP approach as 3:**
+    - Role metadata (`.role` files in `roles/`, type Role, wildcard supported ✓) with package.xml: name, API name (fullName), parentRole, description and the three access levels ✓;
+    - a Data Loader CSV of user-to-role assignments (User Id, UserRoleId; setting it needs Manage Internal Users ✓);
+    - the draft's starting hierarchy in the same two forms, so the client can put it back by hand if needed (a manual way back, not Newton rollback, which belongs to 35d);
+    - a readme with prerequisites and deploy steps. The deploy order (whether a parent and child role can go in one deploy, and whether parentRole takes the parent's API name) is UNVERIFIED and is tested by Sharan in his developer org before the readme states it; Newton never deploys anything.
+    - Portal roles are left out: the Role type has no portal fields and portal roles can't be updated through the API ✓.
+  - **Implementation Advisor:** the same design mode starting from an empty hierarchy, so a new client's roles can be designed from scratch and exported (no impact preview there; there is no org yet).
+- **Salesforce sources:** as 35a, plus Role metadata type ✓; Group Type values for roles and Group.RelatedId ✓; sharing recalculation on hierarchy changes ✓; org-wide defaults and Account/Opportunity share rows (already synced).
+- **New permissions:** none (read only; nothing is written to Salesforce).
+- **Privacy and demo:** drafts are Newton data, follow the org's privacy level and are erased with the org. On demo orgs drafts work normally and exports are marked demo.
+- **Fixture:** Lumenvale needs Account owner counts (it has Opportunity, Case, Lead and Contact, not Account), org-wide defaults, and a sharing rule and public group that reference its roles, so the preview has something to show. License Fit reads Account owner counts, so this must be measured before it's added: it may change License Fit's $116,220. Check the Health Report the same way as PR #20.
+- **Depends on:** 35a, 3 (ZIP export). Not on phase C. **Effort: L.**
 
 ## Phase C: foundations
 
@@ -550,27 +578,14 @@ Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hi
 - **Depends on:** nothing. **Effort: M-L** (opt-in setting, guide changes and the owner-count fix add to it).
 - **Related (decided 18 Oct):** Data Quality uses the same per-object, opt-in pattern instead of View All Data (see 2).
 
-### 35b. Role design mode, impact preview and export
-- **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.
-- **Approach:**
-  - **Drafts, stored in Newton, never sent to Salesforce:** drag a role onto another to reparent it, drag users between roles, create, rename and delete roles. Cycles are blocked (a role can't move under its own descendant). Undo and redo, named drafts, and a diff of the draft against the current hierarchy (the snapshot from 21).
-  - **Impact preview before a draft is saved**, counts only, never record contents:
-    - users who gain and who lose visibility through the hierarchy, per object, and how many users are affected in total, from per-user owner counts (32, and 7 for Case, Contact and Lead);
-    - which sharing rules (SharedTo role, roleAndSubordinatesInternal, roleAndSubordinates, portal role types ✓) and public groups reference the moved roles;
-    - the account-owner settings the moved roles carry (opportunity, case and contact access for account owners ✓).
-  - **Grant Access Using Hierarchies:** it can be turned off for custom objects only ✓, but the per-object setting isn't exposed in any documented API ✓. The preview therefore asks the consultant to confirm it for each custom object and labels the result "assumes Grant Access Using Hierarchies is on" until they do. Most, but not all, standard objects use hierarchies ✓; the exceptions must be listed (UNVERIFIED which ones).
-  - **Warnings:** applying a hierarchy change recalculates sharing automatically ✓. Large changes can hit "could not acquire lock" errors and should be done leaf-first, serially, off-peak ✓, and tried in a sandbox first.
-  - **Export (v1), the same ZIP approach as the other exports (3, 19):**
-    - Role metadata (`.role` files in `roles/`, type Role, wildcard supported ✓) with package.xml: name, API name (fullName), parentRole, description and the three access levels ✓.
-    - A Data Loader CSV of user-to-role assignments (User Id, UserRoleId; setting it needs Manage Internal Users ✓).
-    - A readme: deploy parent roles before children, then user assignments; prerequisites; rollback (the exported current hierarchy).
-    - Portal roles are left out: the Role type has no portal fields and portal roles can't be updated through the API ✓.
-  - **Implementation Advisor:** the same design mode starting from an empty hierarchy, so a new client's roles can be designed from scratch and exported.
-- **Salesforce sources:** as 35a, plus Role metadata type ✓; Group Type values for roles and Group.RelatedId ✓; sharing recalculation on hierarchy changes ✓. **UNVERIFIED:** whether parentRole takes the parent's API name, whether one deploy can create a parent and its child together, and how `description` maps to RollupDescription. Test all three in a sandbox before the readme states a deploy order.
-- **New permissions:** none (read only; nothing is written to Salesforce).
-- **Privacy and demo:** drafts are Newton data, follow the org's privacy level and are erased with the org. On demo orgs drafts work normally and exports are marked demo.
-- **Fixture:** sharing rules and a public group that reference Lumenvale roles ("Roles and Internal Subordinates"), so the preview has something to show. Must be checked against the Health Report the same way as PR #20.
-- **Depends on:** 21 (snapshot of the current hierarchy as the draft's baseline and rollback), 7 (per-object owner data and coverage for Case, Contact and Lead), 3 (ZIP export). **Effort: L.**
+### 35c. Role impact preview: all objects
+- **Problem:** 35b's impact preview covers Account and Opportunity only. Clients also need the effect on Cases, Contacts and Leads, and on the access account owners get to related records.
+- **Approach:** extend 35b's preview to Case, Contact and Lead using 7's per-object share and owner data and coverage labels. Add the account-owner settings the moved roles carry (opportunity, case and contact access for account owners ✓). Add custom objects, where Grant Access Using Hierarchies can be off: the per-object setting isn't exposed in any documented API ✓, so the consultant confirms it per object and the result says "assumes Grant Access Using Hierarchies is on" until they do.
+- **Salesforce sources:** as 35b, plus 7's sources.
+- **New permissions:** none beyond 7's opt-in per-object View All.
+- **Privacy and demo:** as 35b.
+- **Fixture:** 7's Case, Contact and Lead share data on Lumenvale.
+- **Depends on:** 7. **Effort: M.**
 
 ### 6. Profile and permission set comparison (first user of the comparison engine)
 - **Problem:** "What's different between these two profiles or sets, and who would gain or lose access if we merged them?" This underpins most cleanup quotes.
@@ -810,7 +825,7 @@ Extends 9 using 1 and 11's metadata. **Effort: L.**
 | Engagement workspace | Comments on findings, evidence requests to the client, sign-off, and versioned deliverables, on top of 20. | L |
 | Finding-to-scope builder | **Promoted to Proposal P1** (now phase C2). | — |
 | Opt-in content checks | Per-engagement opt-in, recorded like write-back, letting Data Quality read long and rich text fields in transit to count which are populated (values never stored). Needs counsel to update the DPA, privacy, terms and security pages first; until then these fields stay "not counted" (decided 20 Oct). | M |
-| 35c. Role hierarchy write-back (plan only) | A separate, opt-in, write-enabled connection per org (never the read-only integration user), needing Manage Roles and Manage Internal Users ✓. An admin approves each apply, recorded in the audit log with the draft's diff. Before applying, Newton snapshots the current hierarchy for rollback. Sandbox first, then production. Applied leaf-first and serially, off-peak ✓. Portal roles are excluded (not updatable through the API ✓). Nothing is built until this plan is approved. | L |
+| 35d. Role hierarchy write-back (plan only) | A separate, opt-in, write-enabled connection per org (never the read-only integration user), needing Manage Roles and Manage Internal Users ✓. An admin approves each apply, recorded in the audit log with the draft's diff. Before applying, Newton snapshots the current hierarchy for rollback (rollback belongs here, not in 35b; it uses 21's snapshots). Sandbox first, then production. Applied leaf-first and serially, off-peak ✓. Portal roles are excluded (not updatable through the API ✓). Nothing is built until this plan is approved. | L |
 | GitHub App for remediation bundles | Opt-in per client, scoped to **one repository**; opens **draft pull requests only**, never pushes to the default branch; short-lived installation tokens, never stored in plain text; listed in the security review pack (28) as a future, optional integration. | M |
 | Configurable policy packs | Org-specific rules (e.g. "no Modify All Data outside IT") evaluated on each snapshot, versioned per engagement. | M |
 | Access review campaigns | Managers attest to their team's access in Newton. Evidence exports for auditors (old roadmap item 4). | L |
