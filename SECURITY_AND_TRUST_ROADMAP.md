@@ -39,6 +39,7 @@ that consulting workflow: assess → prioritise and price → deliver → prove.
 | Rotate the encryption key if needed | See P0 item 7. |
 | Product name | |
 | Role export deploy-order test (35b) | In Sharan's developer org, before 35b's readme states a deploy order: can a parent and child role go in one deploy, and does parentRole take the parent's API name? This is a write to a Salesforce org, so Newton and Claude never run it. |
+| Move Railway build settings out of railway.json into service settings before 1 Dec 2026 | Railway's docs call config-as-code files deprecated and say existing files work for legacy services until 2026-12-01. The root railway.json still names NIXPACKS, which Railway no longer lists as a builder. Proposal PR #32 was closed in favour of this. |
 
 ## Done (October 2026)
 
@@ -221,7 +222,7 @@ below; progress is in the [Progress log](#progress-log).
 | **A. Quick wins** | 23 (with base risk), 24, 25, 4, 2, 31, 32, 33, 34, and a PR for `fix-compare-search` | **Merged to main 17 Oct** (PRs #6-#19; see below). 26 and 27 are done (PRs #4, #5). |
 | **B. The Salesforce lead's requests** | 5, then 3, then 35a, 35b, then 1 (phase 1) | Built ahead of phase C at Sharan's request (17 Oct). The image pack needs the critical objects, coverage and API usage visuals, so it follows 5. 35a and 35b need no foundations; 35b reuses 3's ZIP approach. 1 (phase 1) reads record types itself, so it doesn't wait for 8 (see the item). |
 | **B2. Record access and the full role impact** | 7, with 35c | 7 is opt-in per org with per-object View All on Account, Opportunity, Case, Contact and Lead (no View All Data); its opt-in screen also holds Data Quality's object choice (2). 35c (Case, Contact, Lead and account-owner settings in the role impact preview) needs 7's per-object record data and coverage labels, so they ship together. |
-| **C. Foundations** | 8, 21, 20 + 10, 30 | 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
+| **C. Foundations** | API v68 (first), 8, 21, 20 + 10, 30 | The move from API v62 to v68 comes first: later items read through it. 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
 | **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
 | **D. Access depth** | 6 | 6 is the first user of the comparison engine. 1 (phase 1), 7 and 35c moved up to B and B2 on 17 Oct. |
 | **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Order of 11, 12 and 13 held until Mike confirms which Config Workbook features he uses. |
@@ -461,6 +462,16 @@ Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C 
 - **Depends on:** 35a, 3 (ZIP export). Not on phase C. **Effort: L.**
 
 ## Phase C: foundations
+
+### Salesforce API v68 (first in phase C)
+- **Problem:** Newton pins API v62 (Winter '25): the REST and Tooling client and the Metadata (SOAP) client default to `v62.0`, and the 35b export writes `62.0` into package.xml. The current version is v68 (Winter '27). Apex sharing reasons on standard objects exist only from v68, so at v62 Newton may not see or label those share rows correctly (UNVERIFIED how v62 queries return them).
+- **Approach:**
+  1. One version setting instead of three (client, metadata client, export package.xml).
+  2. Use the lower of v68 and each org's highest supported version, read from `GET /services/data/` at connect or sync. During Salesforce's release weekends an org still on the previous release would reject a v68 call.
+  3. Compare a full read-only sync at v62 and at v68 in Sharan's developer org, object by object, before switching.
+  4. Read the API change notes for v63 to v68 (Spring '25 to Winter '27) for every object and field Newton queries.
+- **What could break (all UNVERIFIED until step 3):** renamed or removed fields in the queries Newton runs (permission flags, FlowDefinitionView, coverage objects); the API Total Usage log's columns (Salesforce says to check LogFileFieldNames before relying on them); describe output #28 depends on (actionOverrides, share RowCause values).
+- **New permissions:** none. **Depends on:** Sharan's developer-org comparison. **Effort: M.**
 
 ### 8. Field metadata sync
 - **Problem:** several features need to know what a field is: its type, encryption, and whether it is a lookup or master-detail (ERD, documentation export, comparison, impact analysis, sensitive-data maps). Today the app shows field type and encryption as unknown.
