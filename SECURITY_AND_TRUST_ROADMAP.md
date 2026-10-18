@@ -403,7 +403,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
   - `/limits` ✓
   - `ConnectedApplication` (already synced by Integration Sprawl).
   - The "API Usage Last 7 Days" admin report can't be confirmed as readable through the Reports API, so treat it as **UNVERIFIED and not used**.
-- **New permissions:** **View Event Log Files** ✓ (plus API Enabled, already held). Optional; the feature degrades without it.
+- **New permissions:** **View Event Log Files** ✓ (plus API Enabled, already held). Optional; the feature degrades without it. Listed as optional in docs/CLIENT_ONBOARDING_SECURITY.md; whether the Salesforce Integration licence allows it is UNVERIFIED.
 - **Privacy and demo:**
   - Full: user names shown. Masked: integration users shown as aliases.
   - Metadata only: per-user rows dropped, with per-app and per-API-type rows kept, because user records are off.
