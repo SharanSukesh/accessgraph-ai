@@ -22,7 +22,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -300,6 +300,74 @@ _HEALTH_BAND = (
     (40, "concerning"),
     (0,  "critical"),
 )
+
+
+# ---------------------------------------------------------------------------
+# Org Health Score
+# ---------------------------------------------------------------------------
+
+HEALTH_SEVERITY_WEIGHTS: Dict[str, int] = {"critical": 15, "high": 8, "medium": 3, "low": 1, "info": 0}
+# No single family of findings can take more than this many points, so one
+# problem area (say, many unused licences) can't sink the score on its own.
+HEALTH_FAMILY_CAP = 20
+
+HEALTH_FAMILY_LABELS: Dict[str, str] = {
+    "licensing": "Licensing",
+    "configuration": "Configuration",
+    "automation": "Automation",
+    "code_coverage": "Code coverage",
+    "access": "Access and sharing",
+    "platform_limits": "Platform limits",
+    "data_quality": "Data quality",
+    "predictive": "Predictive",
+}
+_CATEGORY_FAMILY: Dict[str, str] = {
+    "license_waste": "licensing",
+    "config_bloat": "configuration",
+    "automation_hygiene": "automation",
+    "sharing_posture": "access",
+    "user_activity": "access",
+    "storage_limit": "platform_limits",
+    "data_quality": "data_quality",
+    "predictive": "predictive",
+}
+# Findings whose family differs from their category.
+_CODE_FAMILY: Dict[str, str] = {
+    "ORG_COVERAGE_BELOW_GATE": "code_coverage",
+    "APEX_LOW_COVERAGE": "code_coverage",
+    "APEX_COVERAGE_STALE": "code_coverage",
+    "FIELDS_NEVER_POPULATED": "data_quality",
+}
+
+
+def health_family(category: str, code: str) -> str:
+    return _CODE_FAMILY.get(code) or _CATEGORY_FAMILY.get(category, category)
+
+
+def health_score_breakdown(drafts: Iterable[Any]) -> Dict[str, Any]:
+    """100 minus severity-weighted deductions (Critical 15, High 8, Medium 3,
+    Low 1, Info 0), with each family's deduction capped at
+    HEALTH_FAMILY_CAP. Floored at 0."""
+    raw: Dict[str, int] = defaultdict(int)
+    counts: Dict[str, int] = defaultdict(int)
+    for d in drafts:
+        category = getattr(d.category, "value", d.category)
+        severity = getattr(d.severity, "value", d.severity)
+        family = health_family(category, d.code)
+        raw[family] += HEALTH_SEVERITY_WEIGHTS.get(severity, 0)
+        counts[family] += 1
+    families = [
+        {"family": f, "label": HEALTH_FAMILY_LABELS.get(f, f), "findings": counts[f],
+         "deduction": min(raw[f], HEALTH_FAMILY_CAP), "uncapped_deduction": raw[f]}
+        for f in sorted(raw, key=lambda f: -raw[f])
+    ]
+    deduction = sum(f["deduction"] for f in families)
+    return {
+        "score": max(0, 100 - deduction),
+        "deduction": deduction,
+        "uncapped_deduction": sum(raw.values()),
+        "families": families,
+    }
 
 
 def _health_band(score: int) -> str:
@@ -2813,13 +2881,14 @@ class OrgAnalyzerService:
             by_cat[d.category.value] += 1
             total_savings += d.estimated_annual_savings_cents or 0
 
-        # Org Health Score: 100 minus weighted severity counts, floored at 0.
-        # Critical hits 5x harder than Medium, High 3x, Low 1x; Info ignored.
-        # The 'rubric' field is persisted so the dashboard can explain the
-        # number without having to re-derive it client-side.
-        weights = {"critical": 15, "high": 8, "medium": 3, "low": 1, "info": 0}
-        deduction = sum(weights[s] * c for s, c in by_sev.items() if s in weights)
-        health_score = max(0, 100 - deduction)
+        # Org Health Score: 100 minus severity-weighted deductions, capped
+        # per family (see health_score_breakdown). The 'rubric' field is
+        # persisted so the dashboard can explain the number without having
+        # to re-derive it client-side.
+        breakdown = health_score_breakdown(drafts)
+        weights = HEALTH_SEVERITY_WEIGHTS
+        deduction = breakdown["deduction"]
+        health_score = breakdown["score"]
 
         # License utilization (purchased vs assigned) — one of the most
         # talkable numbers for a consultant. Computed from the actual
@@ -2864,6 +2933,9 @@ class OrgAnalyzerService:
                 "starting_score": 100,
                 "weights": weights,
                 "deduction": deduction,
+                "family_cap": HEALTH_FAMILY_CAP,
+                "uncapped_deduction": breakdown["uncapped_deduction"],
+                "families": breakdown["families"],
             },
             "total_active_users": sum(1 for u in ctx.users if u.is_active),
             "total_profiles": len(ctx.profiles),
