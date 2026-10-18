@@ -104,12 +104,12 @@ class SyncOrchestrator:
                 # Ownership is read live on a real org; the fixture carries it.
                 owners = data.get("demo_live", {}).get("owner_counts", {})
                 data["record_owner_counts"] = {obj: owners.get(obj) for obj in ("Account", "Opportunity")}
-                # What the integration user could see, as a live sync records it.
-                data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
                 # Layouts, record pages, Apex and flows (services/ui_access.py).
                 ui = data.get("demo_live", {}).get("ui_access")
                 if ui:
                     data["ui_access"] = {**ui, "collected_at": datetime.now(timezone.utc).isoformat()}
+                # What the integration user could see, as a live sync records it.
+                data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
             elif settings.DEMO_MODE:
                 logger.info("Running in DEMO mode")
                 data = await self._extract_demo_data(org_id)
