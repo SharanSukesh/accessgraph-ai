@@ -64,12 +64,12 @@ jobs:
       - name: Lint with Ruff
         working-directory: apps/backend
         run: ruff check .
-        continue-on-error: true
 
-      - name: Type check with mypy
+      # Fails only on mypy errors that aren't in mypy-baseline.txt (the errors
+      # on 18 Oct 2026); after fixing some, re-save it with --update.
+      - name: Type check with mypy (new errors only)
         working-directory: apps/backend
-        run: mypy app --ignore-missing-imports
-        continue-on-error: true
+        run: python scripts/mypy_baseline.py
 
       - name: Run tests
         working-directory: apps/backend
@@ -79,7 +79,6 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test
           REDIS_URL: redis://localhost:6379/0
-        # Blocking: a failing test fails the check (ruff and mypy above stay advisory).
         run: |
           pytest tests/ --cov=app --cov-report=xml --cov-report=term
 
@@ -107,8 +106,7 @@ jobs:
 
       - name: Lint
         working-directory: apps/frontend
-        run: npm run lint
-        continue-on-error: true
+        run: npm run lint -- --max-warnings 0
 
       - name: Unit tests
         working-directory: apps/frontend
