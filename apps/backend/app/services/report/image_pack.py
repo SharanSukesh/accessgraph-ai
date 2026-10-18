@@ -134,6 +134,129 @@ def _value(e: Any) -> str:
 Body = Tuple[str, str]
 
 
+def _tile(label: str, value: str, note: str = "", wide: bool = False) -> str:
+    return (f'<div class="tile{" wide" if wide else ""}"><div class="tile-label">{_esc(label)}</div>'
+            f'{value}{note}</div>')
+
+
+def _tile_missing(label: str, text: str) -> str:
+    return _tile(label, f'<p class="tile-missing">{_esc(text)}</p>')
+
+
+def _severity_strip(counts: Dict[str, int]) -> str:
+    total = sum(counts.values())
+    segs = "".join(
+        f'<span style="width:{counts[s] / total * 100:.2f}%;background:{charts.SEVERITY_RAMP[s]}"></span>'
+        for s in SEVERITIES if counts.get(s)
+    )
+    keys = "".join(
+        f'<span class="key"><i style="background:{charts.SEVERITY_RAMP[s]}"></i>{counts[s]} {s.capitalize()}</span>'
+        for s in SEVERITIES if counts.get(s)
+    )
+    return f'<div class="strip">{segs}</div><div class="keys">{keys}</div>'
+
+
+def _summary(src: PackSource):
+    """The key figures on one slide: one tile per module, and a module that
+    hasn't run (or that the privacy level hides) says so in its tile."""
+    m = src.metrics
+    if src.snapshot is None or m.get("org_health_score") is None:
+        return "Run the Health Report first."
+    tiles: List[str] = []
+
+    score = float(m["org_health_score"])
+    color = charts.SERIES if score >= 75 else (charts.WARNING if score >= 60 else charts.CRITICAL)
+    bar = (f'<svg width="200" height="7" viewBox="0 0 200 7"><rect width="200" height="7" rx="3.5" fill="{charts.TRACK}"/>'
+           f'<rect width="{max(200 * score / 100, 7):.1f}" height="7" rx="3.5" fill="{color}"/></svg>')
+    tiles.append(_tile("Health score", f'<div class="tile-value">{score:.0f}<span class="of">/100</span></div>',
+                       f'<p class="tile-note">{_esc(_band(score))}</p>{bar}'))
+
+    sev = Counter(_value(f.severity) for f in src.findings)
+    tiles.append(_tile("Findings", f'<div class="tile-value">{len(src.findings)}</div>',
+                       _severity_strip(sev) if src.findings else '<p class="tile-note">None open</p>'))
+
+    savings = sum(f.estimated_annual_savings_cents or 0 for f in src.findings)
+    lf = src.ctx.license_fit
+    if not src.allow_users:
+        lf_note = "License Fit left out (privacy level)"
+    elif lf is None or not lf.users_assessed:
+        lf_note = "License Fit not run yet"
+    else:
+        lf_note = f"License Fit: {_money(lf.total_annual_savings_cents or 0)} a year from right-sizing"
+    tiles.append(_tile("Estimated savings", f'<div class="tile-value">{_money(savings)}<span class="unit"> a year</span></div>',
+                       f'<p class="tile-note">{_esc(lf_note)}</p>'))
+
+    if not src.allow_users:
+        tiles.append(_tile_missing("High-risk users", USERS_HIDDEN))
+        tiles.append(_tile_missing("Flagged anomalies", USERS_HIDDEN))
+    else:
+        counts = src.ctx.risk_counts
+        if counts:
+            high = counts.get("critical", 0) + counts.get("high", 0)
+            tiles.append(_tile("High-risk users", f'<div class="tile-value">{high:,}</div>',
+                               f'<p class="tile-note">{counts.get("critical", 0):,} critical · {counts.get("high", 0):,} high, '
+                               f'of {sum(counts.values()):,} scored</p>'))
+        else:
+            tiles.append(_tile_missing("High-risk users", "No risk scores yet: sync the org."))
+        cats = src.ctx.anomaly_by_category
+        flagged = sum(cats.values())
+        if flagged:
+            top = "".join(f'<li><b>#{a["rank"] or "?"}</b> {_esc(a["name"])} <span>{_esc(a["reason"])}</span></li>'
+                          for a in src.ctx.flagged_access[:3])
+            split = f'{cats.get("access", 0):,} access · {cats.get("session", 0):,} session'
+            tiles.append(_tile("Flagged anomalies", f'<div class="tile-value">{flagged:,}<span class="unit"> {split}</span></div>',
+                               f'<ol class="top">{top}</ol>' if top else ""))
+        else:
+            tiles.append(_tile_missing("Flagged anomalies", "None flagged: sync the org to run the analysis."))
+
+    rows = src.ctx.compliance
+    if rows:
+        lines = "".join(
+            f'<li>{_esc(c["framework"])} <b>{c["passed"]} of {c["passed"] + c["failed"]}</b></li>' for c in rows[:4]
+        )
+        passed = sum(c["passed"] for c in rows)
+        judged = sum(c["passed"] + c["failed"] for c in rows)
+        tiles.append(_tile("Compliance controls passing",
+                           f'<div class="tile-value">{passed}<span class="of"> of {judged}</span></div>',
+                           f'<ul class="list">{lines}</ul>'))
+    else:
+        tiles.append(_tile_missing("Compliance controls passing", "No compliance scorecard run yet."))
+
+    cov = m.get("code_coverage") or {}
+    if cov.get("org_wide_pct") is not None:
+        gate = float(cov["gate_pct"])
+        verdict = f"Below the {gate:g}% deployment gate" if cov.get("below_gate") else f"Meets the {gate:g}% deployment gate"
+        tiles.append(_tile("Code coverage", f'<div class="tile-value">{float(cov["org_wide_pct"]):g}%</div>',
+                           f'<p class="tile-note">{_esc(verdict)}</p>'))
+    else:
+        tiles.append(_tile_missing("Code coverage", "No coverage data in the latest Health Report."))
+
+    u = m.get("api_usage") or {}
+    peak, limit = u.get("peak") or {}, (u.get("limit") or {}).get("max")
+    if u.get("status") == "ok" and peak and limit:
+        days = u.get("days_collected") or 0
+        span = f"busiest of {days} days" if days > 1 else "the only day collected"
+        tiles.append(_tile("API peak day",
+                           f'<div class="tile-value">{peak["pct_of_limit"]:g}%<span class="unit"> of the daily limit</span></div>',
+                           f'<p class="tile-note">{_esc(peak["date"])}, {span}: {peak["counting"]:,} of {limit:,} requests</p>'))
+    else:
+        tiles.append(_tile_missing("API peak day", u.get("reason") or "No API usage in the latest Health Report."))
+
+    if not src.data_quality_run:
+        tiles.append(_tile_missing("Critical objects", "Data Quality not run yet."))
+    else:
+        objs = src.critical_objects
+        order = {"stale": 0, "mostly_empty": 1, "never_populated": 2}
+        objs = sorted(objs, key=lambda o: (min(order.get(f["code"], 9) for f in o["flags"]), -(o["record_count"] or 0)))
+        names = ", ".join(o["label"] or o["object"] for o in objs[:3]) + (f" and {len(objs) - 3} more" if len(objs) > 3 else "")
+        tiles.append(_tile("Critical objects", f'<div class="tile-value">{len(objs)}</div>',
+                           f'<p class="tile-note">{_esc(names) if objs else "None in the latest Data Quality run"}</p>'))
+
+    return ("The latest Health Report and each module's latest run, on one slide.",
+            f'<div class="grid">{"".join(tiles)}</div>')
+
+
+
 def _health_score(src: PackSource):
     m = src.metrics
     if src.snapshot is None or m.get("org_health_score") is None:
@@ -306,128 +429,6 @@ def _api_usage(src: PackSource):
             + (f'<div><p class="label">Each day, % of the daily limit</p>{trend}{peak_note}</div>' if trend else "")
             + "</div>")
     return f"{period}, {u['total_requests']:,} requests. {u.get('coverage_note') or ''}", body
-
-
-def _tile(label: str, value: str, note: str = "", wide: bool = False) -> str:
-    return (f'<div class="tile{" wide" if wide else ""}"><div class="tile-label">{_esc(label)}</div>'
-            f'{value}{note}</div>')
-
-
-def _tile_missing(label: str, text: str) -> str:
-    return _tile(label, f'<p class="tile-missing">{_esc(text)}</p>')
-
-
-def _severity_strip(counts: Dict[str, int]) -> str:
-    total = sum(counts.values())
-    segs = "".join(
-        f'<span style="width:{counts[s] / total * 100:.2f}%;background:{charts.SEVERITY_RAMP[s]}"></span>'
-        for s in SEVERITIES if counts.get(s)
-    )
-    keys = "".join(
-        f'<span class="key"><i style="background:{charts.SEVERITY_RAMP[s]}"></i>{counts[s]} {s.capitalize()}</span>'
-        for s in SEVERITIES if counts.get(s)
-    )
-    return f'<div class="strip">{segs}</div><div class="keys">{keys}</div>'
-
-
-def _summary(src: PackSource):
-    """The key figures on one slide: one tile per module, and a module that
-    hasn't run (or that the privacy level hides) says so in its tile."""
-    m = src.metrics
-    if src.snapshot is None or m.get("org_health_score") is None:
-        return "Run the Health Report first."
-    tiles: List[str] = []
-
-    score = float(m["org_health_score"])
-    color = charts.SERIES if score >= 75 else (charts.WARNING if score >= 60 else charts.CRITICAL)
-    bar = (f'<svg width="200" height="7" viewBox="0 0 200 7"><rect width="200" height="7" rx="3.5" fill="{charts.TRACK}"/>'
-           f'<rect width="{max(200 * score / 100, 7):.1f}" height="7" rx="3.5" fill="{color}"/></svg>')
-    tiles.append(_tile("Health score", f'<div class="tile-value">{score:.0f}<span class="of">/100</span></div>',
-                       f'<p class="tile-note">{_esc(_band(score))}</p>{bar}'))
-
-    sev = Counter(_value(f.severity) for f in src.findings)
-    tiles.append(_tile("Findings", f'<div class="tile-value">{len(src.findings)}</div>',
-                       _severity_strip(sev) if src.findings else '<p class="tile-note">None open</p>'))
-
-    savings = sum(f.estimated_annual_savings_cents or 0 for f in src.findings)
-    lf = src.ctx.license_fit
-    if not src.allow_users:
-        lf_note = "License Fit left out (privacy level)"
-    elif lf is None or not lf.users_assessed:
-        lf_note = "License Fit not run yet"
-    else:
-        lf_note = f"License Fit: {_money(lf.total_annual_savings_cents or 0)} a year from right-sizing"
-    tiles.append(_tile("Estimated savings", f'<div class="tile-value">{_money(savings)}<span class="unit"> a year</span></div>',
-                       f'<p class="tile-note">{_esc(lf_note)}</p>'))
-
-    if not src.allow_users:
-        tiles.append(_tile_missing("High-risk users", USERS_HIDDEN))
-        tiles.append(_tile_missing("Flagged anomalies", USERS_HIDDEN))
-    else:
-        counts = src.ctx.risk_counts
-        if counts:
-            high = counts.get("critical", 0) + counts.get("high", 0)
-            tiles.append(_tile("High-risk users", f'<div class="tile-value">{high:,}</div>',
-                               f'<p class="tile-note">{counts.get("critical", 0):,} critical · {counts.get("high", 0):,} high, '
-                               f'of {sum(counts.values()):,} scored</p>'))
-        else:
-            tiles.append(_tile_missing("High-risk users", "No risk scores yet: sync the org."))
-        cats = src.ctx.anomaly_by_category
-        flagged = sum(cats.values())
-        if flagged:
-            top = "".join(f'<li><b>#{a["rank"] or "?"}</b> {_esc(a["name"])} <span>{_esc(a["reason"])}</span></li>'
-                          for a in src.ctx.flagged_access[:3])
-            split = f'{cats.get("access", 0):,} access · {cats.get("session", 0):,} session'
-            tiles.append(_tile("Flagged anomalies", f'<div class="tile-value">{flagged:,}<span class="unit"> {split}</span></div>',
-                               f'<ol class="top">{top}</ol>' if top else ""))
-        else:
-            tiles.append(_tile_missing("Flagged anomalies", "None flagged: sync the org to run the analysis."))
-
-    rows = src.ctx.compliance
-    if rows:
-        lines = "".join(
-            f'<li>{_esc(c["framework"])} <b>{c["passed"]} of {c["passed"] + c["failed"]}</b></li>' for c in rows[:4]
-        )
-        passed = sum(c["passed"] for c in rows)
-        judged = sum(c["passed"] + c["failed"] for c in rows)
-        tiles.append(_tile("Compliance controls passing",
-                           f'<div class="tile-value">{passed}<span class="of"> of {judged}</span></div>',
-                           f'<ul class="list">{lines}</ul>'))
-    else:
-        tiles.append(_tile_missing("Compliance controls passing", "No compliance scorecard run yet."))
-
-    cov = m.get("code_coverage") or {}
-    if cov.get("org_wide_pct") is not None:
-        gate = float(cov["gate_pct"])
-        verdict = f"Below the {gate:g}% deployment gate" if cov.get("below_gate") else f"Meets the {gate:g}% deployment gate"
-        tiles.append(_tile("Code coverage", f'<div class="tile-value">{float(cov["org_wide_pct"]):g}%</div>',
-                           f'<p class="tile-note">{_esc(verdict)}</p>'))
-    else:
-        tiles.append(_tile_missing("Code coverage", "No coverage data in the latest Health Report."))
-
-    u = m.get("api_usage") or {}
-    peak, limit = u.get("peak") or {}, (u.get("limit") or {}).get("max")
-    if u.get("status") == "ok" and peak and limit:
-        days = u.get("days_collected") or 0
-        span = f"busiest of {days} days" if days > 1 else "the only day collected"
-        tiles.append(_tile("API peak day",
-                           f'<div class="tile-value">{peak["pct_of_limit"]:g}%<span class="unit"> of the daily limit</span></div>',
-                           f'<p class="tile-note">{_esc(peak["date"])}, {span}: {peak["counting"]:,} of {limit:,} requests</p>'))
-    else:
-        tiles.append(_tile_missing("API peak day", u.get("reason") or "No API usage in the latest Health Report."))
-
-    if not src.data_quality_run:
-        tiles.append(_tile_missing("Critical objects", "Data Quality not run yet."))
-    else:
-        objs = src.critical_objects
-        order = {"stale": 0, "mostly_empty": 1, "never_populated": 2}
-        objs = sorted(objs, key=lambda o: (min(order.get(f["code"], 9) for f in o["flags"]), -(o["record_count"] or 0)))
-        names = ", ".join(o["label"] or o["object"] for o in objs[:3]) + (f" and {len(objs) - 3} more" if len(objs) > 3 else "")
-        tiles.append(_tile("Critical objects", f'<div class="tile-value">{len(objs)}</div>',
-                           f'<p class="tile-note">{_esc(names) if objs else "None in the latest Data Quality run"}</p>'))
-
-    return ("The latest Health Report and each module's latest run, on one slide.",
-            f'<div class="grid">{"".join(tiles)}</div>')
 
 
 BUILDERS: Dict[str, Callable[[PackSource], Any]] = {
