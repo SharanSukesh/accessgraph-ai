@@ -144,8 +144,9 @@ async def test_demo_orgs_get_the_fixture_client_or_a_clear_refusal(async_db_sess
     assert await sync_client.get_user_licenses()
     assert isinstance(await LicenseFitService(async_db_session, org.id)._client(), DemoSalesforceClient)
 
-    with pytest.raises(DemoOrgUnsupported, match="Data Quality needs a live Salesforce connection"):
-        await DataQualityService(async_db_session, org.id)._client()
+    # Data Quality runs on demo orgs from the fixture (roadmap item 2).
+    from app.salesforce.demo_client import DemoDataQualityClient
+    assert isinstance(await DataQualityService(async_db_session, org.id)._client(), DemoDataQualityClient)
     with pytest.raises(DemoOrgUnsupported):
         await sync_client.update_user_with_retry("005x", {"ManagerId": "005y"})
 

@@ -79,6 +79,8 @@ class RecommendationType(str, PyEnum):
     GRANT_FOR_EQUITY = "grant_for_equity"
     # Org-level, from the Health Report (e.g. coverage below the deploy gate).
     DEPLOYMENT_READINESS = "deployment_readiness"
+    # Object-level, from Data Quality's critical-object flags.
+    DATA_CLEANUP = "data_cleanup"
 
 
 class RecommendationTrack(str, PyEnum):
@@ -95,6 +97,8 @@ class RecommendationTrack(str, PyEnum):
     EQUITY = "equity"
     # Health Report actions about deploying change (e.g. Apex coverage).
     DEPLOYMENT = "deployment"
+    # Data Quality clean-ups (critical objects).
+    DATA_QUALITY = "data_quality"
 
 
 class RecommendationStatus(str, PyEnum):

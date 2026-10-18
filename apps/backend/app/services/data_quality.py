@@ -60,7 +60,8 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
-from app.ingestion.demo_orgs import ensure_live_org
+from app.services.critical_objects import CriticalObjectSettings, critical_flags, load_settings
+from app.services.record_coverage import PARTIAL_LABEL, check_record_visibility, object_coverage
 
 
 logger = logging.getLogger(__name__)
@@ -252,11 +253,13 @@ class DataQualityService:
         db: AsyncSession,
         org_id: str,
         *,
-        staleness_days: int = DEFAULT_STALENESS_DAYS,
+        staleness_days: Optional[int] = None,
     ) -> None:
         self.db = db
         self.org_id = org_id
+        # None: the org's critical-object setting (default 180 days).
         self.staleness_days = staleness_days
+        self.settings = CriticalObjectSettings()
 
     # ------------------------------------------------------------------
     # Public entrypoint
@@ -295,6 +298,11 @@ class DataQualityService:
 
         started = time.monotonic()
         await privacy_mode.require_feature(self.db, self.org_id, "data_quality")
+        self.settings = await load_settings(self.db, self.org_id)
+        if self.staleness_days is None:
+            self.staleness_days = self.settings.stale_days
+        else:
+            self.settings.stale_days = self.staleness_days
         # Explicit try/except at each stage so we can tell exactly WHERE
         # the run is failing when a 500 leaves the frontend.
         try:
@@ -358,6 +366,13 @@ class DataQualityService:
             await self._fetch_sf_duplicate_rules(client)
         )
 
+        # Approximate sizes (cheap, cached by Salesforce) decide which
+        # objects are too large to count exactly and get sampled instead.
+        approx_counts = await client.approximate_record_counts([t["name"] for t in analysis_targets])
+        # Whether the integration user can see every record of each object;
+        # where it can't, counts are labelled as partial.
+        record_visibility = await self._record_visibility(client, [t["name"] for t in analysis_targets])
+
         results: List[ObjectQualityResult] = []
         # skip_reasons: category → count. Categories match _SkipReason
         # enum below; the frontend surfaces them in a "N objects skipped"
@@ -377,6 +392,8 @@ class DataQualityService:
                     client, obj["name"], obj["label"], obj["custom"], threshold,
                     sf_dup_rules_by_object=sf_dup_rules_by_object,
                     sf_dup_rule_counts=sf_dup_rule_counts,
+                    approx_count=approx_counts.get(obj["name"]),
+                    coverage=object_coverage(record_visibility, obj["name"]),
                 )
                 per_obj_ms = int((time.monotonic() - per_obj_started) * 1000)
                 if per_obj_ms > 5000:
@@ -413,6 +430,10 @@ class DataQualityService:
         error_payload = {
             "skip_reasons": skip_reasons,
             "coverage": coverage,
+            # Thresholds and visibility in force for this run, so its
+            # critical-object flags can be reproduced.
+            "settings": self.settings.to_dict(),
+            "record_visibility": record_visibility,
         }
         skip_error_json = _json.dumps(error_payload)
 
@@ -472,6 +493,9 @@ class DataQualityService:
 
             await self.db.commit()
             await self.db.refresh(run)
+            # Priority Actions for critical objects follow the latest run.
+            from app.services.health_actions import replace_data_actions
+            await replace_data_actions(self.db, self.org_id, run.id)
         except Exception as exc:
             # If persist blows up, rollback and re-raise with context so
             # the router surfaces a useful message on the 500 detail.
@@ -516,6 +540,8 @@ class DataQualityService:
         *,
         sf_dup_rules_by_object: Optional[Dict[str, List[Dict[str, Any]]]] = None,
         sf_dup_rule_counts: Optional[Dict[str, int]] = None,
+        approx_count: Optional[int] = None,
+        coverage: str = "unknown",
     ) -> Tuple[Optional[ObjectQualityResult], Optional[str]]:
         """Analyse a single object. Returns (result, skip_reason).
 
@@ -565,6 +591,20 @@ class DataQualityService:
             for f in required
         }
 
+        # Long and rich text fields can't be aggregated, and counting them
+        # would mean reading record contents, which Newton never does:
+        # they're listed as not counted.
+        text_fields = self._pick_text_fields(fields)
+        large = bool(approx_count and approx_count > self.settings.large_object_records)
+        coverage_note = {"coverage": coverage, **({"coverage_label": PARTIAL_LABEL} if coverage != "full" else {})}
+
+        if large:
+            return await self._analyze_sampled(
+                client, object_name, object_label, is_custom, staleness_threshold,
+                required_names=required_names, text_fields=text_fields, approx_count=int(approx_count),
+                coverage_note=coverage_note,
+            )
+
         try:
             record_count = await client.count_sobject(object_name)
         except Exception as exc:  # noqa: BLE001
@@ -603,6 +643,7 @@ class DataQualityService:
                 evidence={
                     "status": "empty",
                     "note": "Object has no records — nothing to score.",
+                    **coverage_note,
                 },
             ), None
 
@@ -694,15 +735,8 @@ class DataQualityService:
 
         # ---- Staleness ----------------------------------------------
         threshold_iso = staleness_threshold.strftime("%Y-%m-%dT%H:%M:%SZ")
-        stale_soql = (
-            f"SELECT COUNT() FROM {object_name} "
-            f"WHERE LastModifiedDate < {threshold_iso}"
-        )
-        try:
-            stale_resp = await client.query(stale_soql)
-            stale_count = int(stale_resp.totalSize or 0)
-        except Exception:  # noqa: BLE001
-            stale_count = 0
+        stale_checked = await client.count_modified_before(object_name, threshold_iso)
+        stale_count = stale_checked or 0
         staleness_pct = (
             (stale_count / record_count) * 100.0 if record_count else 0.0
         )
@@ -733,6 +767,27 @@ class DataQualityService:
             )
             evidence = {"note": "Evidence build failed — see server log."}
 
+        never_populated = [f for f in required_names if int(populated_counts.get(f, 0)) == 0]
+        text_counts = self._uncounted_text_fields(text_fields)
+        evidence.update(coverage_note)
+        evidence["staleness_checked"] = stale_checked is not None
+        evidence["never_populated"] = never_populated
+        if text_counts:
+            evidence["text_fields"] = text_counts
+        evidence["critical"] = {
+            "flags": critical_flags(
+                record_count=int(record_count),
+                staleness_pct=staleness_pct if stale_checked is not None else None,
+                stale_count=stale_count,
+                completeness_pct=completeness_pct,
+                fields_inspected=len(required_names),
+                never_populated=never_populated,
+                estimated=False,
+                settings=self.settings,
+            ),
+            "thresholds": self.settings.to_dict(),
+        }
+
         # `sampled_count` is kept on the dataclass for backwards
         # compat with existing schema; under the new aggregate
         # methodology the entire object IS the inspected set, so
@@ -756,6 +811,113 @@ class DataQualityService:
                 max(0, sf_native_cluster_count - len(cluster_sizes))
                 if sf_rules_for_obj else 0
             ),
+            stale_record_count=stale_count,
+            evidence=evidence,
+        ), None
+
+    async def _record_visibility(self, client: Any, objects: List[str]) -> Dict[str, Any]:
+        """Whether the integration user can see every record of each
+        object (View All Data, or View All on the object). Demo orgs read
+        it from the fixture."""
+        recorded = getattr(client, "record_visibility", None)
+        if recorded is not None:
+            return recorded
+        conn = (await self.db.execute(
+            select(SalesforceConnection).where(SalesforceConnection.organization_id == self.org_id)
+            .order_by(desc(SalesforceConnection.created_at)).limit(1)
+        )).scalar_one_or_none()
+        user_id = ((conn.connected_as or {}) if conn else {}).get("user_id")
+        return await check_record_visibility(client, user_id, objects)
+
+    @staticmethod
+    def _pick_text_fields(fields: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Long and rich text fields (and multi-select picklists): SOQL
+        can't aggregate them. Binary and compound fields are left out."""
+        return [
+            f for f in fields
+            if f.get("aggregatable") is False and f.get("createable") and not f.get("calculated")
+            and (f.get("type") or "").lower() in ("textarea", "multipicklist", "encryptedstring")
+        ][:5]
+
+    @staticmethod
+    def _uncounted_text_fields(text_fields: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Listed so a consultant knows they weren't scored, and why."""
+        return [{
+            "field": f["name"],
+            "populated_pct": None,
+            "label": "not counted, to keep our promise of never reading record contents",
+        } for f in text_fields]
+
+    async def _analyze_sampled(
+        self, client: Any, object_name: str, object_label: str, is_custom: bool,
+        staleness_threshold: datetime, *, required_names: List[str], text_fields: List[Dict[str, Any]],
+        approx_count: int, coverage_note: Dict[str, Any],
+    ) -> Tuple[Optional[ObjectQualityResult], Optional[str]]:
+        """Objects above the large-object limit: completeness counted over
+        the first n records in Id order (aggregate, bounded by Id; no
+        contents read), staleness from an exact count. Labelled
+        "estimated (sampled n of N)"."""
+        counts = await client.bounded_populated_counts(object_name, required_names, self.settings.sample_size)
+        if not counts or not counts.get("__sampled__"):
+            return None, SKIP_SAMPLE_FAILED
+        n = counts["__sampled__"]
+        label = f"estimated (sampled {n:,} of about {approx_count:,})"
+        fill = [counts.get(f, 0) / n * 100.0 for f in required_names]
+        completeness_pct = sum(fill) / len(fill) if fill else 100.0
+        threshold_iso = staleness_threshold.strftime("%Y-%m-%dT%H:%M:%SZ")
+        stale_checked = await client.count_modified_before(object_name, threshold_iso)
+        stale_count = stale_checked or 0
+        staleness_pct = stale_count / approx_count * 100.0 if approx_count else 0.0
+        gap_rows = sorted((
+            {"field": f, "missing_pct": round(100.0 - counts.get(f, 0) / n * 100.0, 1),
+             "is_custom": f.endswith("__c"), "is_required": False}
+            for f in required_names), key=lambda r: -r["missing_pct"])[:5]
+        not_in_sample = [f for f in required_names if counts.get(f, 0) == 0]
+        evidence = {
+            "methodology": "sample",
+            "estimated": True,
+            "estimate_label": label,
+            "sample": {"n": n, "of": approx_count, "order": "first records by Id",
+                       "method": "aggregate counts bounded by Id; no record contents read"},
+            "gap_fields": gap_rows,
+            "duplicates_checked": False,
+            "duplicate_note": "Not checked on sampled objects.",
+            "stale_record_count": stale_count,
+            "staleness_cutoff": staleness_threshold.isoformat(),
+            "staleness_checked": stale_checked is not None,
+            # Empty in the sample doesn't prove a field is never used.
+            "not_populated_in_sample": not_in_sample,
+            "never_populated": [],
+            **coverage_note,
+        }
+        text_counts = self._uncounted_text_fields(text_fields)
+        if text_counts:
+            evidence["text_fields"] = text_counts
+        evidence["critical"] = {
+            "flags": critical_flags(
+                record_count=approx_count,
+                staleness_pct=staleness_pct if stale_checked is not None else None,
+                stale_count=stale_count,
+                completeness_pct=completeness_pct,
+                fields_inspected=len(required_names),
+                never_populated=[],
+                estimated=True,
+                settings=self.settings,
+            ),
+            "thresholds": self.settings.to_dict(),
+        }
+        return ObjectQualityResult(
+            object_name=object_name,
+            object_label=object_label,
+            is_custom=is_custom,
+            record_count=approx_count,
+            sampled_count=n,
+            completeness_pct=completeness_pct,
+            duplicate_pct=0.0,
+            staleness_pct=staleness_pct,
+            fields_inspected=len(required_names),
+            fields_with_gaps=sum(1 for f in required_names if counts.get(f, 0) < n / 2),
+            duplicate_clusters=0,
             stale_record_count=stale_count,
             evidence=evidence,
         ), None
@@ -883,8 +1045,12 @@ class DataQualityService:
         return text_first[:25]
 
     async def _client(self) -> SalesforceAPIClient:
-        """Build a live Salesforce client bound to this org's connection."""
-        await ensure_live_org(self.db, self.org_id, "Data Quality")
+        """Build a live Salesforce client bound to this org's connection,
+        or, for a demo org, a client that serves the fixture's data."""
+        from app.ingestion.demo_orgs import demo_data_quality_client
+        demo = await demo_data_quality_client(self.db, self.org_id)
+        if demo is not None:
+            return demo
         row = await self.db.execute(
             select(SalesforceConnection)
             .where(SalesforceConnection.organization_id == self.org_id)
@@ -907,7 +1073,6 @@ class DataQualityService:
         path so we hit the same test.salesforce.com fallback for
         sandboxes / scratch orgs.
         """
-        await ensure_live_org(self.db, self.org_id, "Data Quality")
         from app.salesforce.oauth import SalesforceOAuthClient
 
         row = await self.db.execute(
