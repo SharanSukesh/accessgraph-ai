@@ -28,3 +28,14 @@ def test_parts_are_applied_in_name_order(tmp_path, monkeypatch):
 def test_lumenvale_loads_without_parts_changing_the_base():
     data = load_fixture("synthetic_mid_market")
     assert len(data["users"]) == 400
+
+
+def test_patch_updates_existing_rows_by_id_and_rejects_unknown_ids():
+    import pytest
+
+    base = {"users": [{"Id": "005A", "UserRoleId": "00E1"}, {"Id": "005B", "UserRoleId": "00E1"}]}
+    merge_fixture_part(base, {"_patch": {"users": [{"Id": "005B", "UserRoleId": "00E2"}]}})
+    assert base["users"] == [{"Id": "005A", "UserRoleId": "00E1"}, {"Id": "005B", "UserRoleId": "00E2"}]
+    assert "_patch" not in base
+    with pytest.raises(KeyError):
+        merge_fixture_part(base, {"_patch": {"users": [{"Id": "005Z", "UserRoleId": "00E2"}]}})
