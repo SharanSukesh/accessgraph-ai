@@ -7,7 +7,7 @@
 
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Ban, Database, KeyRound, Layers, Shield, User, UserCircle, Users, type LucideIcon } from 'lucide-react'
+import { Ban, Database, FileCode2, KeyRound, LayoutTemplate, Layers, PanelsTopLeft, Shield, User, UserCircle, Users, Workflow, type LucideIcon } from 'lucide-react'
 import {
   CHIP,
   GRAPH_PALETTE,
@@ -30,6 +30,10 @@ export const NODE_TYPE_ICONS: Record<GraphNodeType, LucideIcon> = {
   permission_set_group: Layers,
   muting_permission_set: Ban,
   object: Database,
+  layout: LayoutTemplate,
+  lightning_page: PanelsTopLeft,
+  apex_class: FileCode2,
+  flow: Workflow,
 }
 
 const FONT_FAMILY = 'system-ui, -apple-system, &quot;Segoe UI&quot;, Helvetica, Arial, sans-serif'

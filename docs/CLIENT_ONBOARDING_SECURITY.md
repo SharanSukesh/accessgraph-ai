@@ -12,6 +12,17 @@ and 30 days of Setup Audit Trail. For data-quality scoring it runs
 **aggregate** queries only (counts, fill rates, duplicate cluster sizes);
 the contents of business records are never returned to Newton.
 
+It also reads how pages and automation are assigned (no new permission):
+page layout and record type assignments per profile, Lightning record page
+assignments (org default, app default, app + record type + profile), Apex
+classes and flows with the profiles and permission sets that grant them,
+the Run Flows permission and the Flow User setting, and the labels of the
+Account and Opportunity sharing reasons. Profile, flow and app details are
+read one record per query, so Newton caps them (150 profiles, 150 flows, 60
+apps) and says on screen when it stopped. UNVERIFIED: whether View Setup and
+Configuration alone is enough for those per-record metadata reads; if one is
+refused, that part is skipped and the screen says what wasn't read.
+
 Newton changes nothing in Salesforce unless an engagement admin explicitly
 turns on **write-back** for that org (see section 6).
 

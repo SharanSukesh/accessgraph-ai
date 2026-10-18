@@ -4,7 +4,9 @@ Analyzes how users can access records in Salesforce
 """
 import logging
 from typing import Any, Dict, List, Optional
-from sqlalchemy import select, func
+
+from app.services.share_sources import APEX_NOTE, MANUAL_NOTE, describe
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
@@ -73,8 +75,11 @@ class RecordAccessService:
         # 2. Role Hierarchy Access - access to subordinates' records
         role_hierarchy = await self._get_role_hierarchy_access(org_id, user)
 
-        # 3. Manual Shares - explicit record shares
-        manual_shares = await self._get_manual_shares(org_id, user_sf_id)
+        # 3. Manual shares, and shares granted by Apex (an Apex sharing reason)
+        self._reason_labels = await _share_reason_labels(self.db, org_id)
+        explicit = await self._get_manual_shares(org_id, user_sf_id)
+        manual_shares = [s for s in explicit if s["source_kind"] != "apex"]
+        apex_shares = [s for s in explicit if s["source_kind"] == "apex"]
 
         # 4. Team Access - account/opportunity teams
         team_access = await self._get_team_access(org_id, user_sf_id)
@@ -93,6 +98,7 @@ class RecordAccessService:
                 if any(c is not None for c in owned_records.values()) else None
             ),
             "total_manual_shares": len(manual_shares),
+            "total_apex_shares": len(apex_shares),
             "total_team_memberships": len(team_access),
             "total_sharing_rule_grants": len(sharing_rules),
             "has_role_hierarchy_access": bool(role_hierarchy.get("subordinate_count", 0) > 0),
@@ -104,6 +110,8 @@ class RecordAccessService:
             "owned_records": owned_records,
             "role_hierarchy": role_hierarchy,
             "manual_shares": manual_shares,
+            "apex_shares": apex_shares,
+            "share_notes": {"manual": MANUAL_NOTE, "apex": APEX_NOTE},
             "team_access": team_access,
             "sharing_rules": sharing_rules,
             "organization_wide_defaults": organization_wide_defaults,
@@ -255,7 +263,8 @@ class RecordAccessService:
         account_share_query = select(AccountShareSnapshot).where(
             AccountShareSnapshot.organization_id == org_id,
             AccountShareSnapshot.user_or_group_id.in_(user_and_group_ids),
-            AccountShareSnapshot.row_cause == "Manual",
+            or_(AccountShareSnapshot.row_cause == "Manual",
+                AccountShareSnapshot.row_cause.endswith("__c", autoescape=True)),
         )
         account_share_result = await self.db.execute(account_share_query)
         account_shares = account_share_result.scalars().all()
@@ -267,13 +276,16 @@ class RecordAccessService:
                 "access_level": share.account_access_level,
                 "row_cause": share.row_cause,
                 "shared_to": share.user_or_group_id,
+                **_source(share.row_cause, "Account" if hasattr(share, "account_id") else "Opportunity",
+                          getattr(self, "_reason_labels", {})),
             })
 
         # Get Opportunity shares
         opp_share_query = select(OpportunityShareSnapshot).where(
             OpportunityShareSnapshot.organization_id == org_id,
             OpportunityShareSnapshot.user_or_group_id.in_(user_and_group_ids),
-            OpportunityShareSnapshot.row_cause == "Manual",
+            or_(OpportunityShareSnapshot.row_cause == "Manual",
+                OpportunityShareSnapshot.row_cause.endswith("__c", autoescape=True)),
         )
         opp_share_result = await self.db.execute(opp_share_query)
         opp_shares = opp_share_result.scalars().all()
@@ -285,6 +297,8 @@ class RecordAccessService:
                 "access_level": share.opportunity_access_level,
                 "row_cause": share.row_cause,
                 "shared_to": share.user_or_group_id,
+                **_source(share.row_cause, "Account" if hasattr(share, "account_id") else "Opportunity",
+                          getattr(self, "_reason_labels", {})),
             })
 
         return shares
@@ -473,3 +487,17 @@ class RecordAccessService:
 
         logger.info(f"Retrieved {len(owds)} OWD settings for org {org_id}")
         return owds
+
+
+
+
+def _source(row_cause: Optional[str], obj: str, labels: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
+    """What granted a share row, in words (services/share_sources.py)."""
+    d = describe(row_cause, labels.get(obj))
+    return {"source_kind": d["kind"], "source": d["label"], "sharing_reason": d["reason"]}
+
+
+async def _share_reason_labels(db: AsyncSession, org_id: str) -> Dict[str, Dict[str, str]]:
+    """RowCause labels per share object, read at the last sync (roadmap item 1)."""
+    from app.api.routes.ui_access import latest_ui_access
+    return ((await latest_ui_access(db, org_id)) or {}).get("share_reasons") or {}

@@ -2001,6 +2001,13 @@ class SalesforceAPIClient:
             logger.info("ApexTestRunResult query failed: %s", e)
         return out
 
+    async def get_ui_access(self, include_users: bool = True) -> Dict[str, Any]:
+        """Page layouts, Lightning record pages, Apex classes and flows, and
+        who is granted them (roadmap item 1). Read-only; every part degrades
+        on its own and says so in "notes". See app/services/ui_access.py."""
+        from app.services.ui_access import collect_live
+        return await collect_live(self, include_users)
+
     async def extract_organization(self) -> Optional[Dict[str, Any]]:
         """Single-row Organization fetch with edition + sandbox flags.
 

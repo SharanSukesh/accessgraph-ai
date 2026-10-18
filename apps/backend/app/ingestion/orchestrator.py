@@ -106,6 +106,10 @@ class SyncOrchestrator:
                 data["record_owner_counts"] = {obj: owners.get(obj) for obj in ("Account", "Opportunity")}
                 # What the integration user could see, as a live sync records it.
                 data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
+                # Layouts, record pages, Apex and flows (services/ui_access.py).
+                ui = data.get("demo_live", {}).get("ui_access")
+                if ui:
+                    data["ui_access"] = {**ui, "collected_at": datetime.now(timezone.utc).isoformat()}
             elif settings.DEMO_MODE:
                 logger.info("Running in DEMO mode")
                 data = await self._extract_demo_data(org_id)
@@ -126,6 +130,9 @@ class SyncOrchestrator:
             # Whether share rows cover every record (see services/record_coverage.py).
             if "record_coverage" in data:
                 sync_job.sync_metadata["record_coverage"] = data["record_coverage"]
+            # Layouts, record pages, Apex and flows: configuration only.
+            if data.get("ui_access"):
+                sync_job.sync_metadata["ui_access"] = data["ui_access"]
 
             # Mark as modified so SQLAlchemy knows to update the JSON column
             from sqlalchemy.orm import attributes
@@ -226,6 +233,15 @@ class SyncOrchestrator:
                 client, (conn.connected_as or {}).get("user_id"))
         if not privacy.allows(org, privacy.USER_IDENTITY):
             data["users"] = privacy.mask_users(org.id, data.get("users", []))
+        # Layouts, record pages, Apex and flows (roadmap item 1): configuration,
+        # read-only; a failure here never fails the sync.
+        try:
+            data["ui_access"] = {
+                **await client.get_ui_access(include_users=privacy.allows(org, privacy.USER_RECORDS)),
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Layouts, pages, Apex and flows couldn't be read: %s", e)
         return data
 
     async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:
