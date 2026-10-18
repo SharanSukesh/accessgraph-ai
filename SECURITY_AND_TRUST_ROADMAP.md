@@ -341,6 +341,16 @@ The compare page's search results were clipped by their card. The fix is pushed 
 ## Phase B: client-facing
 
 ### 5. API usage breakdown
+**Status: built (branch feat/api-usage), not merged.** A Health Report card and PDF section; no new findings, so Lumenvale's Health Report is unchanged (41, 18 findings, $183,180). Checked against the Object Reference and REST API guide (v68) while building:
+- `USER_ID` in the log is the 15-character id, so users are matched on the first 15 characters. `USER_NAME` is in the log too; Newton never reads it.
+- API_FAMILY values are REST, SOAP, Bulk, ApexREST, DirectApexREST and DirectAura (mixed case) ✓. A composite request is logged once (its parent) ✓.
+- A later daily file can replace the earlier one for the same date with the full set ✓, so only the newest file per date is read.
+- Retention (24 hours, daily files) is stated on Trailhead, not in the reference guides.
+- There is no count column ✓, but "one row = one request" isn't stated in the docs; the screen says counts are log rows. Salesforce notes latent files can contain duplicate rows; Newton doesn't de-duplicate (REQUEST_ID can repeat within a transaction). UNVERIFIED how often this happens.
+- COUNTS_AGAINST_API_LIMIT is a Boolean ✓; its literal CSV form (true/false or 1/0) isn't documented, so both are accepted.
+- Each Health Report run adds the days it finds to the days earlier runs kept (last 30, in the snapshot); until P3, a single run shows yesterday only and says so.
+- Fixture: the limit is the fixture's existing 1,015,000 (not 1,000,000), so the Health Report's limits stay as they were.
+
 - **Problem:** clients hit their daily API limit, or pay for more, without knowing which integration is responsible. Consultants need calls per connected app, integration user and API type, the top consumers and a daily trend.
 - **Approach:**
   1. Read the **API Total Usage event log**. It is available **without the Event Monitoring add-on**: free, daily files, **1-day retention** ✓. Each row is one request, so Newton aggregates on ingest and stores only counts per app, user, API type and day, never the raw rows.
@@ -348,7 +358,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
   3. Show org totals against the limit from `/limits` (`DailyApiRequests`) ✓ alongside.
   4. **Fallback** when the user lacks "View Event Log Files": the screen says why, and shows the org total plus connected apps with last-used dates where readable.
   - We do **not** propose `OauthToken.UseCount`. Seeing all tokens requires **Customize Application** ✓, an elevated permission our own posture check flags. The count is cumulative per token, and Salesforce documents its Id as always null, so it can't drive a daily breakdown.
-  - Coverage gap, stated on screen: the log covers **REST, SOAP and Bulk** only ✓. It omits other surfaces.
+  - Coverage, stated on screen: the log covers the API families above (REST, SOAP, Bulk, Apex REST and Aura) ✓.
 - **Salesforce sources:**
   - `EventLogFile` with `EventType='ApiTotalUsage'` ✓. Fields include CONNECTED_APP_ID, CONNECTED_APP_NAME, USER_ID, API_FAMILY, COUNTS_AGAINST_API_LIMIT and TIMESTAMP. There is no count field; each row is a request.
   - `/limits` ✓

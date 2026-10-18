@@ -331,7 +331,8 @@ def _profile(snapshot: OrgAnalysisSnapshot) -> str:
         if limit_rows else ""
     )
     coverage_html = _coverage_block(m.get("code_coverage"))
-    if not (tiles or license_html or limits_html or coverage_html):
+    api_html = _api_usage_block(m.get("api_usage"))
+    if not (tiles or license_html or limits_html or coverage_html or api_html):
         return ""
     return f"""
     <section class="page">
@@ -340,6 +341,7 @@ def _profile(snapshot: OrgAnalysisSnapshot) -> str:
       {license_html}
       {limits_html}
       {coverage_html}
+      {api_html}
     </section>"""
 
 
@@ -373,6 +375,46 @@ def _coverage_block(cov: Optional[Dict[str, Any]]) -> str:
         '<p class="caption">Read from Salesforce\'s stored test results; Newton never runs tests. '
         'Production deployments that include Apex need at least 75% org-wide coverage.</p>'
         f'<table class="data"><tbody>{body}</tbody></table>'
+    )
+
+
+def _api_usage_block(u: Optional[Dict[str, Any]]) -> str:
+    """API usage by source (roadmap item 5): top connected apps, the daily
+    trend against the limit, and the coverage of the log."""
+    if not u:
+        return ""
+    if u.get("status") != "ok":
+        return (
+            '<h3 class="block-title">API usage by source</h3>'
+            f'<p class="caption">{_esc(u.get("reason") or "Not measured.")}</p>'
+        )
+    days = u.get("days_collected") or 0
+    span = (f"{_esc(u['first_day'])} to {_esc(u['last_day'])} ({days} days)" if days > 1
+            else f"{_esc(u['last_day'])} only: Salesforce keeps this log for one day, so a trend builds up from later runs")
+    apps = [(a["name"], a["requests"]) for a in u.get("by_app") or []]
+    bars = charts.horizontal_bars(apps, value_label=lambda v: f"{_compact(v)}", label_width=200)
+    trend = ""
+    if (u.get("limit") or {}).get("max") and len(u.get("trend") or []) > 1:
+        trend = charts.line_chart(
+            [(t["date"][5:], t["pct_of_limit"] or 0) for t in u["trend"]],
+            y_max=100, y_ticks=(0, 50, 100), value_label=lambda v: f"{v:.0f}%",
+        )
+    peak = u.get("peak") or {}
+    rows = [("Period", span), ("Requests", f"{u['total_requests']:,} ({u['daily_average']:,} a day on average)")]
+    if peak.get("pct_of_limit") is not None:
+        rows.append(("Busiest day", f"{_esc(peak['date'])}: {peak['counting']:,} counted, {peak['pct_of_limit']:g}% of the daily limit"))
+    rows.append(("By API family", ", ".join(f"{_esc(f['name'])} {f['share_pct']:g}%" for f in u.get("by_family") or [])))
+    if u.get("by_user") is not None:
+        rows.append(("Top integration users", ", ".join(f"{_esc(x['name'])} {x['share_pct']:g}%" for x in u["by_user"][:4])))
+    else:
+        rows.append(("Integration users", _esc(u.get("users_hidden_reason") or "")))
+    body = "".join(f"<tr><td>{label}</td><td>{value}</td></tr>" for label, value in rows)
+    return (
+        '<h3 class="block-title">API usage by source</h3>'
+        f'<p class="caption">Requests per connected app. {_esc(u.get("coverage_note") or "")}</p>'
+        f'{bars}'
+        + (f'<p class="caption">Requests counted against the limit each day, as a % of today\'s daily limit.</p>{trend}' if trend else "")
+        + f'<table class="data"><tbody>{body}</tbody></table>'
     )
 
 
