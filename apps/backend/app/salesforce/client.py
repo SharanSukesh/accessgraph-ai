@@ -2059,6 +2059,13 @@ class SalesforceAPIClient:
             logger.warning("extract_organization failed: %s", e)
             return None
 
+    async def get_ui_access(self, include_users: bool = True) -> Dict[str, Any]:
+        """Page layouts, Lightning record pages, Apex classes and flows, and
+        who is granted them (roadmap item 1). Read-only; every part degrades
+        on its own and says so in "notes". See app/services/ui_access.py."""
+        from app.services.ui_access import collect_live
+        return await collect_live(self, include_users)
+
     async def get_user_licenses(self) -> List[Dict[str, Any]]:
         """UserLicense — the actual license SKUs in this org.
 

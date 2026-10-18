@@ -21,6 +21,7 @@ import {
   FileCheck,
   Calendar,
   HelpCircle,
+  LayoutTemplate,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -55,6 +56,7 @@ import {
   useUserRecommendations,
 } from '@/lib/api/hooks/useUsers'
 import { useUserGraph } from '@/lib/api/hooks/useGraph'
+import { PagesAndAutomationPanel } from '@/components/users/PagesAndAutomationPanel'
 
 export default function UserDetailPage() {
   return (
@@ -88,7 +90,9 @@ function UserDetailContent() {
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
   const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
   const { data: recommendations, isLoading: recommendationsLoading } = useUserRecommendations(orgId, userId)
-  const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId)
+  // Layouts, record pages, Apex and flows are an optional graph layer (off by default).
+  const [showPagesAutomation, setShowPagesAutomation] = useState(false)
+  const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId, showPagesAutomation ? 'pages_and_automation' : undefined)
 
   // The risk endpoint has shipped both camelCase and snake_case shapes.
   const riskScore = risk?.score ?? risk?.risk_score
@@ -180,7 +184,11 @@ function UserDetailContent() {
                   Profile
                 </div>
                 <div className="text-sm text-grove-ink dark:text-grove-ink-dk mt-1">
-                  {user.profile || '-'}
+                  {(user as { profileId?: string }).profileId && user.profile ? (
+                    <Link className="underline-offset-2 hover:underline" href={`/orgs/${orgId}/profiles/${(user as { profileId?: string }).profileId}`}>
+                      {user.profile}
+                    </Link>
+                  ) : (user.profile || '-')}
                 </div>
               </div>
             </div>
@@ -234,6 +242,10 @@ function UserDetailContent() {
               Record Access
             </TabsTrigger>
           </span>
+          <TabsTrigger value="pages">
+            <LayoutTemplate className="h-4 w-4 mr-2" />
+            Pages &amp; automation
+          </TabsTrigger>
           <TabsTrigger value="graph">
             <Network className="h-4 w-4 mr-2" />
             Graph
@@ -565,9 +577,30 @@ function UserDetailContent() {
           </Reveal>
         </TabsContent>
 
+        {/* Pages & automation Tab (roadmap item 1) */}
+        <TabsContent value="pages">
+          <Reveal>
+            <PagesAndAutomationPanel orgId={orgId} userId={userId} />
+          </Reveal>
+        </TabsContent>
+
         {/* Graph Tab */}
         <TabsContent value="graph">
           <Reveal>
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className="accent-primary-700" checked={showPagesAutomation}
+                onChange={(e) => setShowPagesAutomation(e.target.checked)} />
+              Show page layouts, record pages, Apex and flows
+            </label>
+            {showPagesAutomation && graph?.metadata?.pagesAndAutomation && (
+              <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
+                {graph.metadata.pagesAndAutomation.available
+                  ? `Up to 12 Apex classes and 12 flows are drawn; the Pages & automation tab lists them all. ${graph.metadata.pagesAndAutomation.note}`
+                  : 'Not read yet: sync the org.'}
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Main Graph Area */}
             <div className="lg:col-span-8">

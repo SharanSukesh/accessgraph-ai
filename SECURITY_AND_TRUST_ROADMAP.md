@@ -615,6 +615,18 @@ Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C 
 ### 1. Page layouts and Lightning pages, plus access through Apex and Flows
 
 **Phase 1: assignments and "who can run".**
+**Status: built (branch feat/ui-access), not merged.** Checked against the v68 (Winter '27) guides while building:
+- Record type visibility per profile is read from Tooling Profile.Metadata (one profile per query, capped at 150). Record types granted by permission sets have no queryable source we found, so they aren't read; the screen says so.
+- The org default record page comes from the object's describe (actionOverrides with a pageId). That field isn't described in the guides we could reach: UNVERIFIED.
+- Precedence used, most specific first (Sharan's expectation, 18 Oct): app + record type + profile, then app + record type, then app + profile, then app default, then org default. Only "a profile assignment beats the app default" is documented (Metadata API, CustomApplication); the full order stays UNVERIFIED until tested in Sharan's developer org. Where app + profile (no record type) ranks against app + record type is a guess.
+- Apex sharing reasons: the user's assumption was "custom objects only". From API version 68.0 they're also available on standard objects that have a share object and a Private or Public Read Only default (up to 10 per object), although parts of the Apex guide still say "custom objects only". A share that Apex creates without a reason has RowCause Manual, the same as a user's manual share, so those can't be told apart. Newton labels shares with a reason (RowCause ending __c) "Granted by Apex" with the reason's label from the share object's describe, and says Manual may include Apex. Newton reads Account and Opportunity shares only; other objects come with item 7.
+- Flows: "Run Flows" or the user's Flow User setting lets a user run any flow that isn't restricted; restricted flows (isAdditionalPermissionRequiredToRun) need explicit access. Only record-triggered flows are documented as not depending on the user's flow permissions; scheduled and platform-event flows are marked UNVERIFIED. The field name PermissionsRunFlow wasn't found in the PDFs: UNVERIFIED, read with a fallback.
+- Apex class access covers entry points: a class may still run when called from one the user can run (Apex guide).
+- Stored with the sync job (sync_metadata["ui_access"]), so no migration.
+- App assignments name profiles by API name: the Metadata API guide's CustomApplication example uses `<profile>Admin</profile>` for System Administrator. Newton reads each profile's API name (Tooling `Profile.FullName`, one profile per query) and matches on it, case-insensitively, never on the label; when the API name wasn't read it falls back to the label and says so. Tested with Admin and Standard.
+- Per-profile view (Profiles page and each profile's page) and Apex and flow access on the permission set page: configuration only, so they work at Metadata only, where there's no user page.
+- Item 8 isn't needed: record types are read directly.
+
 - **Problem:** "Why does this user see this layout or page?" and "Which code and automation can this user run, and why?" Today the graph shows object and field access only.
 - **Approach:** for a user and an object:
   - **Page layout:** the layout from their **profile + record type** (with the record types available to them). Layouts are assigned to **profiles only**. Salesforce cancelled moving this to permission sets ✓, so there is no permission-set path to show.

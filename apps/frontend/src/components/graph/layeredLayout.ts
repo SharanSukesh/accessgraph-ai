@@ -2,7 +2,8 @@
  * Left-to-right layered layout for a user's access graph:
  *
  *   user | profile, role, permission sets, groups | a group's included
- *   sets and muting set | object cards
+ *   sets and muting set (and, when shown, layouts, record pages, Apex
+ *   classes and flows) | object cards
  *
  * Columns are fixed by role in the graph; within a column, nodes are
  * ordered by the average position of their neighbours (two sweeps), and
@@ -31,6 +32,7 @@ const OBJECT_GAP = 28
 const COLUMN_GAP = 110
 const OBJECT_COLUMN_GAP = 90
 const GROUP_CHILD_EDGES = new Set(['INCLUDES_PERMISSION_SET', 'MUTES'])
+const PAGES_AND_AUTOMATION = new Set(['layout', 'lightning_page', 'apex_class', 'flow'])
 const COLUMN1_ORDER = ['profile', 'role', 'group', 'permission_set_group', 'permission_set', 'muting_permission_set']
 
 export function assignColumns(nodes: LayoutNode[], edges: LayoutEdge[], centerId?: string): Record<string, number> {
@@ -41,6 +43,8 @@ export function assignColumns(nodes: LayoutNode[], edges: LayoutEdge[], centerId
   for (const n of nodes) {
     if (n.id === center) column[n.id] = 0
     else if (n.type === 'object') column[n.id] = 3
+    // Pages and automation sit between what grants them and the objects.
+    else if (PAGES_AND_AUTOMATION.has(n.type)) column[n.id] = 2
     else if (fromCenter.has(n.id)) column[n.id] = 1
     else if (groupChildren.has(n.id)) column[n.id] = 2
     else column[n.id] = 1
