@@ -14,7 +14,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ListChecks, Layers, Calculator, Cloud, Map,
-  Sparkles, ArrowLeftRight, Loader2,
+  Sparkles, ArrowLeftRight, Loader2, Network,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/Logo'
 import { ThemeToggle } from '@/components/shared/ThemeToggle'
@@ -27,6 +27,7 @@ const NAV = [
   { name: 'Pricebook', path: 'pricebook', icon: Calculator },
   { name: 'Clouds & Add-ons', path: 'clouds', icon: Cloud },
   { name: 'Roadmap', path: 'roadmap', icon: Map },
+  { name: 'Role design', path: 'roles', icon: Network },
   { name: 'Why Salesforce', path: 'why-salesforce', icon: Sparkles },
 ]
 

@@ -94,6 +94,7 @@ CONFIG_TABLES = {
     "vip_designations",
     "restructure_plans",
     "restructure_preservation_constraints",
+    "role_design_drafts",
 }
 
 RETENTION_CLASSES = {

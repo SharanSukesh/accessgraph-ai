@@ -2988,3 +2988,24 @@ class ComplianceScorecardRun(Base, TimestampMixin):
             f"score={self.score_pct:.1f}%, "
             f"{self.controls_passed}/{self.controls_total} passed)>"
         )
+
+
+class RoleDesignDraft(Base, TimestampMixin):
+    """A role hierarchy redesign (roadmap 35b), stored in Newton and never
+    sent to Salesforce. `base` is the hierarchy when the draft was started
+    (internal roles, parents and user assignments), so the diff needs no
+    stored snapshot; `operations[:position]` replayed on it gives the draft,
+    and the operations after `position` are what redo brings back."""
+    __tablename__ = "role_design_drafts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255))
+    base: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    operations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    __table_args__ = (Index("ix_role_design_draft_org", "organization_id"),)

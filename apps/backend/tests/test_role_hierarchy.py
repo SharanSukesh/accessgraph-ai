@@ -80,8 +80,8 @@ async def test_lumenvale(async_db_session, lumenvale):  # noqa: F811
     assert s["flags"] == {"empty": 8, "single_user": 5, "deep": 1}
     ceo = v["roles"][v["roots"][0]]
     assert ceo["name"] == "CEO" and ceo["subtree_user_count"] == 400
-    # Lumenvale has Opportunity owner counts but no Account owner counts yet.
-    assert ceo["subtree_owned"] == {"Account": None, "Opportunity": 9520}
+    # Account owner counts come from the 35b fixture part (5,200 Accounts).
+    assert ceo["subtree_owned"] == {"Account": 5200, "Opportunity": 9520}
     assert [v["roles"][r]["name"] for r in v["portal_roots"]] == ["Northwind Partners Partner Executive"]
     deep = [n["name"] for n in v["roles"].values() if any(f["code"] == "deep" for f in n["flags"])]
     assert deep == ["Support Associate"]
