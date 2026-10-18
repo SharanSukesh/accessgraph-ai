@@ -70,6 +70,7 @@ import {
 } from '@/lib/api/hooks/useOrgAnalyzer'
 import { endpoints } from '@/lib/api/endpoints'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { CodeCoverageCard } from '@/components/healthReport/CodeCoverageCard'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAuth } from '@/lib/auth/AuthContext'
 
@@ -434,6 +435,8 @@ function OverviewTab({
       {/* Quick wins — the top-5-by-savings shortlist so the consultant
           knows where to focus. Reuses the existing findings query. */}
       <QuickWinsPanel orgId={orgId} />
+
+      <CodeCoverageCard coverage={summary.metrics?.code_coverage} />
 
 
       <Reveal>

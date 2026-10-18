@@ -63,6 +63,10 @@ class RecommendationEngine:
             recs = await self._recommendations_from_anomaly(org_id, anomaly)
             recommendations.extend(recs)
 
+        # Org-level actions from the latest Health Report survive this rebuild.
+        from app.services.health_actions import latest_health_actions
+        recommendations.extend(await latest_health_actions(self.db, org_id))
+
         # Replace in one locked transaction so an overlapping run can't
         # leave two sets (see services/replace_lock.py).
         await lock_for_replace(self.db, org_id, "recommendations")
@@ -73,6 +77,13 @@ class RecommendationEngine:
                 Recommendation.track == RecommendationTrack.SECURITY,
             )
         )
+        # The health-derived actions are re-added above, so always clear
+        # them here, whatever track the delete above covers.
+        from app.services.health_actions import HEALTH_ACTION_TYPES
+        await self.db.execute(delete(Recommendation).where(
+            Recommendation.organization_id == org_id,
+            Recommendation.rec_type.in_(HEALTH_ACTION_TYPES),
+        ))
         if recommendations:
             self.db.add_all(recommendations)
         await self.db.commit()
