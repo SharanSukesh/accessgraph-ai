@@ -188,3 +188,34 @@ async def test_live_read_counts_only_the_newest_file_per_day(monkeypatch):
         raise httpx.HTTPStatusError("403", request=httpx.Request("GET", "https://x"), response=httpx.Response(403))
     monkeypatch.setattr(c, "query_all", denied)
     assert await c.get_api_total_usage() == {"status": "unavailable", "days": []}
+
+
+@pytest.mark.asyncio
+async def test_switching_privacy_level_scrubs_earlier_snapshots(async_db_session, lumenvale):  # noqa: F811
+    """Users named in an earlier Health Report's API usage section are
+    aliased (Masked) or removed (Metadata only) by the privacy purge."""
+    from app.domain.models import OrgAnalysisSnapshot
+    from app.services.privacy_purge import enforce_privacy_mode
+
+    db = async_db_session
+    org_id, _ = lumenvale
+    snap = await OrgAnalyzerService(db, org_id).run(actor_email="test")
+    assert snap.metrics["api_usage"]["by_user"][0]["name"] == "Ayla Zielinski"
+    org = await db.get(Organization, org_id)
+
+    privacy_mode.set_privacy(org, privacy_mode.MASKED, True, "test")
+    await enforce_privacy_mode(db, org)
+    await db.flush()
+    row = await db.get(OrgAnalysisSnapshot, snap.id)
+    users = row.metrics["api_usage"]["by_user"]
+    assert users[0]["name"] == privacy_mode.user_alias(org_id, "005000000000150DMO")
+    assert "Ayla Zielinski" not in repr(row.metrics["api_usage"])
+
+    privacy_mode.set_privacy(org, privacy_mode.METADATA_ONLY, False, "test")
+    await enforce_privacy_mode(db, org)
+    await db.flush()
+    row = await db.get(OrgAnalysisSnapshot, snap.id)
+    usage = row.metrics["api_usage"]
+    assert usage["by_user"] is None and usage["users_hidden_reason"]
+    assert all(r["user_id"] is None for d in usage["days"] for r in d["rows"])
+    assert usage["by_app"][0]["name"] == "Warehouse Nightly ETL"
