@@ -192,6 +192,7 @@ export default function OrgAnalyzerPage() {
                 Download PDF
               </a>
             )}
+            {hasRun && <VisualDownloadButton orgId={orgId} visual="summary" label="Summary image" large />}
             {hasRun && (
               <Button variant="secondary" size="md" onClick={() => setPackOpen(true)}>
                 <ImageDown className="h-4 w-4 mr-2" />
