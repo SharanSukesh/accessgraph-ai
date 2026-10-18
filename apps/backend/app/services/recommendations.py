@@ -127,7 +127,6 @@ class RecommendationEngine:
             return recs
 
         features = anomaly.features
-        reasons = anomaly.reasons
         peer_stats = anomaly.peer_stats
 
         # Rule 1: Excessive direct permission sets → PSG migration

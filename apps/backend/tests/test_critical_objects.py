@@ -2,7 +2,6 @@
 the fixture, flags stale / mostly empty / never-populated objects with
 reasons, samples very large objects, counts long text from a sample, and
 labels partial counts."""
-from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select

@@ -213,7 +213,24 @@ section has the detail.
   and no errors.
 - **Merge order:** #29, #27, #30, #23, #24, #25, #26, #31, #28, #41.
   Simulated clean; the combined tree passes all tests with one alembic head.
-- **Next:** item 7 with 35c, then phase C. Item 1 phase 2 stays a plan.
+- **18 Oct, merged:** Sharan approved merging that list, in that order, for
+  this round only. Each PR was rebased onto main and merged after its CI
+  passed: #29 (bd00a5c), #27 (17da1ae), #30 (b5eaf99), #23 (8bdf1ac), #24
+  (310e645), #25 (5f20a29), #26 (2699990), #31 (67e298b), #28 (d3ebe4c),
+  #41 (92c2a16). After each merge, main's CI passed (Backend, Frontend,
+  Shared Packages) and both Railway deployments succeeded. #26's API
+  deployment succeeded and /health answered before #31 was merged; the
+  server starts only after `alembic upgrade head` succeeds, so its
+  migration ran (the deploy log itself wasn't read).
+  Exception: #24's rebased head merged without its own PR CI run (the
+  branch was pushed before the PR was retargeted to main); main's CI on
+  310e645 passed. Main is at 92c2a16; api.accessgraphai.com/health is ok.
+- **18 Oct:** lint PR (not merged): Ruff and frontend lint become blocking,
+  and mypy fails CI only on errors that aren't in mypy-baseline.txt (208
+  errors). Before it, main had Ruff 134 issues, mypy 209 errors in 44
+  files, frontend lint 6 warnings.
+- **Next:** Sharan re-syncs Lumenvale on production and tests. Then item 7
+  with 35c, then phase C. Item 1 phase 2 stays a plan.
 
 ## Build order
 

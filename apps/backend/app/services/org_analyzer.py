@@ -563,8 +563,8 @@ def _is_billed_for_org(
         return True, None
     if not ctx.is_paying_org:
         reason_edition = (
-            f"Sandbox org" if ctx.is_sandbox
-            else f"Trial org" if ctx.is_trial
+            "Sandbox org" if ctx.is_sandbox
+            else "Trial org" if ctx.is_trial
             else f"Org edition is {ctx.org_type or 'non-paying'}"
         )
         return False, f"{reason_edition} — license seats are bundled at no cost."

@@ -9,7 +9,6 @@ Run this ONCE before re-enabling ENABLE_FIELD_ENCRYPTION=true in production.
 Usage:
     python migrate_encrypt_tokens.py
 """
-import asyncio
 import os
 import sys
 
@@ -33,7 +32,7 @@ def migrate_tokens():
     """
 
     # Connect to database
-    print(f"Connecting to database...")
+    print("Connecting to database...")
     print(f"DATABASE_URL: {settings.DATABASE_URL[:50]}...")  # Show first 50 chars only
     print(f"ENABLE_FIELD_ENCRYPTION: {settings.ENABLE_FIELD_ENCRYPTION}")
     print(f"DATABASE_ENCRYPTION_KEY set: {bool(settings.DATABASE_ENCRYPTION_KEY)}")

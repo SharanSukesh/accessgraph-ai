@@ -169,6 +169,7 @@ export function Sidebar() {
   // (completed / failed / partial), polling stops and the spinner clears.
   const { data: syncJobs } = useSyncJobs(showOrgControls ? orgId : null)
   const latestJobStatus = syncJobs?.[0]?.status
+  const latestJobError = syncJobs?.[0]?.error_message
   const isJobRunning = latestJobStatus === 'pending' || latestJobStatus === 'running'
   const isSyncing = isTriggering || isJobRunning
 
@@ -183,7 +184,7 @@ export function Sidebar() {
         setSyncMessage('Sync completed.')
         setTimeout(() => setSyncMessage(null), 5000)
       } else if (latestJobStatus === 'failed') {
-        const detail = syncJobs?.[0]?.error_message ?? ''
+        const detail = latestJobError ?? ''
         setSyncMessage(
           /401|Unauthorized|INVALID_SESSION|No active Salesforce connection/i.test(detail)
             ? 'Sync failed: Salesforce rejected the stored connection. Click Reconnect.'
@@ -193,7 +194,7 @@ export function Sidebar() {
       }
     }
     wasRunningRef.current = isJobRunning
-  }, [isJobRunning, latestJobStatus])
+  }, [isJobRunning, latestJobStatus, latestJobError])
 
   // Build navigation with current orgId, preserving the section grouping.
   // Items whose `path` starts with '/' are treated as absolute app-level

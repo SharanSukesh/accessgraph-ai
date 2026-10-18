@@ -3,7 +3,6 @@ Graph Builder
 Builds Neo4j graph from PostgreSQL snapshots
 """
 import logging
-from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

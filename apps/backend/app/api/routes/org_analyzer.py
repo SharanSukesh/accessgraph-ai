@@ -1432,7 +1432,7 @@ async def image_pack_download(
     """The chosen visuals as a ZIP, a .pptx, or a ZIP holding both."""
     from app.services.report.image_pack import LAYOUTS, build_pack, gather_pack_source
 
-    layouts = [l for l in dict.fromkeys(body.layouts) if l in LAYOUTS]
+    layouts = [name for name in dict.fromkeys(body.layouts) if name in LAYOUTS]
     if body.images and not layouts:
         raise HTTPException(status_code=400, detail="Choose at least one layout.")
     if not (body.images or body.pptx):

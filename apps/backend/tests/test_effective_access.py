@@ -50,7 +50,7 @@ async def test_effective_access_computation(async_db_session):
         None
     )
     assert opp_access is not None
-    assert opp_access["access"]["read"] == True
+    assert opp_access["access"]["read"] is True
 
     # Test explanation
     explanation = await service.explain_user_object_access(

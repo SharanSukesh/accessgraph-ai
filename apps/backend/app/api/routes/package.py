@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.deps import PACKAGE_KEY_HEADER, package_org_for_salesforce_id, require_credentials, require_credentials
+from app.auth.deps import PACKAGE_KEY_HEADER, package_org_for_salesforce_id, require_credentials
 from app.db.session import get_db
 from app.domain.models import (
     AuditAction,

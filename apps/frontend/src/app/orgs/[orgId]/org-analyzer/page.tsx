@@ -2132,6 +2132,7 @@ function BrandSettingsModal({
             </label>
             <div className="flex items-center gap-3">
               {brand.data?.has_logo && (
+                // eslint-disable-next-line @next/next/no-img-element -- next/image can't fetch session-authenticated API images
                 <img
                   src={`${API_BASE}${endpoints.orgAnalyzerBrandLogo(orgId)}?t=${Date.now()}`}
                   alt="Current firm logo"
@@ -2207,6 +2208,7 @@ function ClientLogoField({
       </label>
       <div className="flex flex-wrap items-center gap-3">
         {hasLogo && (
+          // eslint-disable-next-line @next/next/no-img-element -- next/image can't fetch session-authenticated API images
           <img
             src={`${API_BASE}${endpoints.orgAnalyzerClientLogo(orgId)}?t=${Date.now()}`}
             alt="Client logo"

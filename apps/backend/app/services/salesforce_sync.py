@@ -5,14 +5,12 @@ Orchestrates extraction and storage of Salesforce data
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List
-from uuid import uuid4
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
-    Organization,
     SalesforceConnection,
     SyncJob,
     SyncStatus,
@@ -56,7 +54,7 @@ class SalesforceSyncService:
         # Get organization's Salesforce connection
         stmt = select(SalesforceConnection).where(
             SalesforceConnection.organization_id == self.org_id,
-            SalesforceConnection.is_active == True
+            SalesforceConnection.is_active == True  # noqa: E712
         )
         result = await self.db.execute(stmt)
         sf_connection = result.scalar_one_or_none()
@@ -65,7 +63,7 @@ class SalesforceSyncService:
             raise ValueError(f"No active Salesforce connection for org {self.org_id}")
 
         # Log encryption status for debugging
-        logger.info(f"🔐 Token encryption status:")
+        logger.info("🔐 Token encryption status:")
         logger.info(f"   ENABLE_FIELD_ENCRYPTION: {settings.ENABLE_FIELD_ENCRYPTION}")
         logger.info(f"   DATABASE_ENCRYPTION_KEY set: {bool(settings.DATABASE_ENCRYPTION_KEY)}")
         logger.info(f"   Access token length: {len(sf_connection.access_token)} chars")
@@ -73,10 +71,10 @@ class SalesforceSyncService:
         logger.info(f"   Refresh token available: {bool(sf_connection.refresh_token)}")
 
         if settings.ENABLE_FIELD_ENCRYPTION:
-            logger.info(f"   ✅ Tokens are encrypted at rest (AES-256)")
-            logger.info(f"   ✅ Successfully decrypted for API use")
+            logger.info("   ✅ Tokens are encrypted at rest (AES-256)")
+            logger.info("   ✅ Successfully decrypted for API use")
         else:
-            logger.warning(f"   ⚠️  Encryption is DISABLED - tokens stored as plain text")
+            logger.warning("   ⚠️  Encryption is DISABLED - tokens stored as plain text")
 
         return SalesforceAPIClient(
             instance_url=sf_connection.instance_url,
@@ -96,7 +94,7 @@ class SalesforceSyncService:
         # Get organization's Salesforce connection
         stmt = select(SalesforceConnection).where(
             SalesforceConnection.organization_id == self.org_id,
-            SalesforceConnection.is_active == True
+            SalesforceConnection.is_active == True  # noqa: E712
         )
         result = await self.db.execute(stmt)
         sf_connection = result.scalar_one_or_none()

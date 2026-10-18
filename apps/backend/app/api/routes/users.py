@@ -881,11 +881,8 @@ async def get_object_details(
     db: AsyncSession = Depends(get_database),
 ):
     """Get detailed information about a Salesforce object"""
-    from sqlalchemy import func
     from app.domain.models import (
         ObjectPermissionSnapshot,
-        PermissionSetSnapshot,
-        ProfileSnapshot,
         PermissionSetAssignmentSnapshot,
         UserSnapshot
     )
@@ -1127,11 +1124,8 @@ async def get_field_details(
     db: AsyncSession = Depends(get_database),
 ):
     """Get detailed information about a Salesforce field"""
-    from sqlalchemy import func
     from app.domain.models import (
         FieldPermissionSnapshot,
-        PermissionSetSnapshot,
-        ProfileSnapshot,
         PermissionSetAssignmentSnapshot,
         UserSnapshot
     )
@@ -1165,7 +1159,7 @@ async def get_field_details(
         obj_perms_query = select(ObjectPermissionSnapshot).where(
             ObjectPermissionSnapshot.organization_id == org_id,
             ObjectPermissionSnapshot.sobject_type == object_name,
-            ObjectPermissionSnapshot.permissions_read == True,
+            ObjectPermissionSnapshot.permissions_read == True,  # noqa: E712
         )
         obj_perms_result = await db.execute(obj_perms_query)
         obj_permissions = obj_perms_result.scalars().all()
@@ -1978,10 +1972,14 @@ async def get_user_graph(
             if not any(e["id"] == edge_id for e in edges):
                 # Build permission label
                 perms = []
-                if obj_perm.permissions_read: perms.append("R")
-                if obj_perm.permissions_create: perms.append("C")
-                if obj_perm.permissions_edit: perms.append("E")
-                if obj_perm.permissions_delete: perms.append("D")
+                if obj_perm.permissions_read:
+                    perms.append("R")
+                if obj_perm.permissions_create:
+                    perms.append("C")
+                if obj_perm.permissions_edit:
+                    perms.append("E")
+                if obj_perm.permissions_delete:
+                    perms.append("D")
                 perm_label = ",".join(perms) if perms else "access"
 
                 edges.append({
@@ -2197,12 +2195,18 @@ async def get_node_details(
         objects_granted = []
         for obj_perm in obj_perms:
             permissions = []
-            if obj_perm.permissions_read: permissions.append("Read")
-            if obj_perm.permissions_create: permissions.append("Create")
-            if obj_perm.permissions_edit: permissions.append("Edit")
-            if obj_perm.permissions_delete: permissions.append("Delete")
-            if obj_perm.permissions_view_all_records: permissions.append("View All")
-            if obj_perm.permissions_modify_all_records: permissions.append("Modify All")
+            if obj_perm.permissions_read:
+                permissions.append("Read")
+            if obj_perm.permissions_create:
+                permissions.append("Create")
+            if obj_perm.permissions_edit:
+                permissions.append("Edit")
+            if obj_perm.permissions_delete:
+                permissions.append("Delete")
+            if obj_perm.permissions_view_all_records:
+                permissions.append("View All")
+            if obj_perm.permissions_modify_all_records:
+                permissions.append("Modify All")
 
             objects_granted.append({
                 "objectName": obj_perm.sobject_type,
@@ -2233,8 +2237,10 @@ async def get_node_details(
                 field_name = field_perm.field
 
             permissions = []
-            if field_perm.permissions_read: permissions.append("Read")
-            if field_perm.permissions_edit: permissions.append("Edit")
+            if field_perm.permissions_read:
+                permissions.append("Read")
+            if field_perm.permissions_edit:
+                permissions.append("Edit")
 
             fields_granted.append({
                 "fieldName": field_perm.field,

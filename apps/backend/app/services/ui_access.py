@@ -115,7 +115,7 @@ def _visible(ui: Dict[str, Any], profile_id: str) -> Optional[Dict[str, Dict[str
 
 
 def resolve_layouts(ui: Dict[str, Any], profile_id: str, profile_name: str) -> List[Dict[str, Any]]:
-    layouts = {l["id"]: l for l in ui.get("layouts", [])}
+    layouts = {lay["id"]: lay for lay in ui.get("layouts", [])}
     rts = {r["id"]: r for r in ui.get("record_types", [])}
     vis = _visible(ui, profile_id)
     rows = []
@@ -385,7 +385,7 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
                             "name": r["Name"], "active": bool(r.get("IsActive"))} for r in rts]
     layouts = await part("layouts", lambda: tooling("SELECT Id, Name, TableEnumOrId FROM Layout"),
                          "Page layouts couldn't be read.") or []
-    out["layouts"] = [{"id": l["Id"], "object": name_of(l.get("TableEnumOrId")), "name": l.get("Name")} for l in layouts]
+    out["layouts"] = [{"id": lay["Id"], "object": name_of(lay.get("TableEnumOrId")), "name": lay.get("Name")} for lay in layouts]
     pls = await part("profile layouts", lambda: tooling("SELECT ProfileId, LayoutId, RecordTypeId, TableEnumOrId FROM ProfileLayout"),
                      "Profile layout assignments couldn't be read.") or []
     out["profile_layouts"] = [{"profile_id": p["ProfileId"], "layout_id": p["LayoutId"], "record_type_id": p.get("RecordTypeId"),

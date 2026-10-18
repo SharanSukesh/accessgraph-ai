@@ -109,11 +109,11 @@ class RestructureProbeService:
         lost: Dict[str, int] = {}
 
         for obj in DEFAULT_PROBED_OBJECTS:
-            g, l = await self._probe_object(
+            gain, loss = await self._probe_object(
                 obj, move, users, role_by_id, sample_size,
             )
-            gained[obj] = g
-            lost[obj] = l
+            gained[obj] = gain
+            lost[obj] = loss
 
         # 4. Persist.
         move.records_gained_by_object = gained
@@ -242,11 +242,11 @@ class RestructureProbeService:
         gained_total = 0
         lost_total = 0
         for u in users:
-            g, l = self._score_user_delta(
+            gain, loss = self._score_user_delta(
                 u, move, role_by_id, shared_to,
             )
-            gained_total += g
-            lost_total += l
+            gained_total += gain
+            lost_total += loss
 
         # Extrapolate from sample to estimated total count.
         if limit == 0:

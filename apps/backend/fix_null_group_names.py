@@ -3,7 +3,7 @@ One-time script to fix existing NULL group names in production database.
 This should be run once after deployment to clean up existing data.
 """
 import asyncio
-from sqlalchemy import select, update
+from sqlalchemy import select
 from app.db.session import AsyncSessionLocal
 from app.domain.models import GroupSnapshot
 

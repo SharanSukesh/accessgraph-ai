@@ -139,6 +139,25 @@ export default function ReportingGraphPage() {
   )
 }
 
+// Color ramp by role-hierarchy depth: 0 (root) = deep evergreen,
+// deeper = lighter sage/mint. Capped at 6 levels which covers
+// virtually every real Salesforce role tree. Users without a role
+// get neutral gray.
+const ROLE_COLORS = [
+  '#094230', // depth 0 — deep evergreen / executive
+  '#0d573c', // depth 1 — VP
+  '#146b4a', // depth 2 — director
+  '#2e8064', // depth 3 — manager
+  '#6bbf95', // depth 4 — lead
+  '#b8d1c0', // depth 5+ — IC
+]
+const colorForDepth = (depth: number | null | undefined): string => {
+  if (depth == null) return '#9ca3af'  // gray-400 — no role
+  if (depth < 0) return ROLE_COLORS[0]
+  if (depth >= ROLE_COLORS.length) return ROLE_COLORS[ROLE_COLORS.length - 1]
+  return ROLE_COLORS[depth]
+}
+
 function ReportingGraphContent() {
   const params = useParams()
   const orgId = params.orgId as string
@@ -181,25 +200,6 @@ function ReportingGraphContent() {
   // Stash the edgehandles instance + on/off so the toolbar button can
   // flip modes without re-mounting Cytoscape.
   const ehRef = useRef<any>(null)
-
-  // Color ramp by role-hierarchy depth: 0 (root) = deep evergreen,
-  // deeper = lighter sage/mint. Capped at 6 levels which covers
-  // virtually every real Salesforce role tree. Users without a role
-  // get neutral gray.
-  const ROLE_COLORS = [
-    '#094230', // depth 0 — deep evergreen / executive
-    '#0d573c', // depth 1 — VP
-    '#146b4a', // depth 2 — director
-    '#2e8064', // depth 3 — manager
-    '#6bbf95', // depth 4 — lead
-    '#b8d1c0', // depth 5+ — IC
-  ]
-  const colorForDepth = (depth: number | null | undefined): string => {
-    if (depth == null) return '#9ca3af'  // gray-400 — no role
-    if (depth < 0) return ROLE_COLORS[0]
-    if (depth >= ROLE_COLORS.length) return ROLE_COLORS[ROLE_COLORS.length - 1]
-    return ROLE_COLORS[depth]
-  }
 
   // --- Build the Cytoscape graph from the API response ---
   const elements = useMemo<ElementDefinition[]>(() => {

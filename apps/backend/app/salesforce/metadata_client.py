@@ -200,10 +200,9 @@ class SalesforceMetadataClient:
                         # Field format is "ObjectName.FieldName"
                         field_name = field_elem.text
                         if '.' in field_name:
-                            obj_name, field_api_name = field_name.split('.', 1)
+                            obj_name = field_name.split('.', 1)[0]
                         else:
                             obj_name = "Unknown"
-                            field_api_name = field_name
 
                         field_permissions.append({
                             "SobjectType": obj_name,

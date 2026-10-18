@@ -52,7 +52,7 @@ def _for(assignments, components=(), groups=None, ui=UI):
 
 def test_layouts_come_from_the_profile_and_record_type():
     out = _for([])
-    assert [(l["record_type"], l["layout"]) for l in out["layouts"]] == [
+    assert [(lay["record_type"], lay["layout"]) for lay in out["layouts"]] == [
         ("Master (no record type)", "Opp Layout"), ("Renewal", "Renewal Layout")]
     assert "profiles only" in out["layout_note"]
 
@@ -110,7 +110,7 @@ async def test_lumenvale(client, async_db_session, lumenvale):  # noqa: F811
     r = await client.get(f"/orgs/{org_id}/users/{JUN}/pages-and-automation", cookies=cookie)
     d = r.json()
     assert r.status_code == 200 and d["profile"] == "Sales Manager"
-    layouts = {(l["object"], l["record_type"]): l["layout"] for l in d["layouts"]}
+    layouts = {(lay["object"], lay["record_type"]): lay["layout"] for lay in d["layouts"]}
     assert layouts[("Opportunity", "New Business")] == "Opportunity - Sales Manager Layout"
     assert layouts[("Case", "Billing Inquiry")] == "Case Layout"
     page = next(p for p in d["pages"] if p["app"] == "Lumenvale Sales" and p["record_type"] == "Renewal" and p["form_factor"] == "Desktop")
@@ -142,7 +142,7 @@ def test_flow_user_setting_and_record_type_visibility():
     out = _for([], ui=ui)
     assert {f["api_name"]: f for f in out["flows"]}["Open"]["can_run"] is True
     assert ["Flow User (user setting)"] in out["run_flows_via"]
-    renewal = next(l for l in out["layouts"] if l["record_type"] == "Renewal")
+    renewal = next(lay for lay in out["layouts"] if lay["record_type"] == "Renewal")
     assert renewal["available"] is False and renewal["default"] is False
     # Pages only list record types the profile can use, when that's known.
     assert {p["record_type"] for p in out["pages"]} == {"Master (no record type)"}

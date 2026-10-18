@@ -19,6 +19,21 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domain.models import (
+    AccessAnomaly,
+    AnomalySeverity,
+    PermissionSetAssignmentSnapshot,
+    SalesforceConnection,
+    UserSnapshot,
+)
+from app.salesforce.client import SalesforceAPIClient
+from app.services import privacy_mode
+from app.services.effective_access import EffectiveAccessService
+from app.services.replace_lock import lock_for_replace
+
 try:
     import numpy as np
     import pandas as pd
@@ -254,23 +269,6 @@ class _MahalanobisGMMAvgDetector:
 
         return (to_ranks(s_maha) + to_ranks(s_gmm)) / 2.0
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.domain.models import (
-    AccessAnomaly,
-    AnomalySeverity,
-    FieldPermissionSnapshot,
-    ObjectPermissionSnapshot,
-    PermissionSetAssignmentSnapshot,
-    SalesforceConnection,
-    UserSnapshot,
-)
-from app.services.replace_lock import lock_for_replace
-from app.salesforce.client import SalesforceAPIClient
-from app.services import privacy_mode
-from app.services.effective_access import EffectiveAccessService
-from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +359,7 @@ class AnomalyDetectionService:
         result = await self.db.execute(
             select(UserSnapshot).where(
                 UserSnapshot.organization_id == org_id,
-                UserSnapshot.is_active == True,
+                UserSnapshot.is_active == True,  # noqa: E712
             )
         )
         users = result.scalars().all()
@@ -410,9 +408,6 @@ class AnomalyDetectionService:
 
         # Create DataFrame
         df = pd.DataFrame(feature_data)
-        user_ids = df["user_id"].tolist()
-        roles = df["role_id"].tolist()
-        profiles = df["profile_id"].tolist()
 
         # Feature columns for ML. v2 = 13 features (was 10 in v1). The 3
         # additions close blind spots identified in REPORT.md § 7.2:
@@ -726,7 +721,6 @@ class AnomalyDetectionService:
         # Compute stats
         user_features = df.iloc[user_idx][feature_cols]
         peer_medians = peers[feature_cols].median()
-        peer_means = peers[feature_cols].mean()
 
         deviations = {}
         for col in feature_cols:
