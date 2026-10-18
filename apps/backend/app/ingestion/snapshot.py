@@ -769,6 +769,7 @@ class SnapshotPersister:
                 existing.access_level = access_level
                 existing.shared_to_type = shared_to_type
                 existing.shared_to_id = shared_to_id
+                existing.criteria = rule_data.get("Criteria")
                 existing.snapshot_date = snapshot_date
             else:
                 rule = SharingRuleSnapshot(
@@ -780,6 +781,7 @@ class SnapshotPersister:
                     access_level=access_level,
                     shared_to_type=shared_to_type,
                     shared_to_id=shared_to_id,
+                    criteria=rule_data.get("Criteria"),
                     is_active=True,
                     snapshot_date=snapshot_date,
                 )

@@ -114,14 +114,23 @@ def test_impact_counts_who_gains_and_loses():
 def test_references_through_role_groups():
     groups = [NS(salesforce_id="G1", name="Role group", group_type="RoleAndSubordinatesInternal", related_id="R3"),
               NS(salesforce_id="G2", name="EMEA Deal Desk", group_type="Regular", related_id=None),
-              NS(salesforce_id="G3", name="Other", group_type="Regular", related_id=None)]
+              NS(salesforce_id="G3", name="Other", group_type="Regular", related_id=None),
+              NS(salesforce_id="G4", name="Ops role", group_type="Role", related_id="R4")]
     members = [NS(group_id="G2", user_or_group_id="G1"), NS(group_id="G3", user_or_group_id="005x")]
-    rules = [NS(rule_name="Share to sales", sobject_type="Account", shared_to_type="RoleAndSubordinates"),
-             NS(rule_name="Group rule", sobject_type="Account", shared_to_type="Group"),
-             NS(rule_name="Case rule", sobject_type="Case", shared_to_type="Role")]
-    out = rd.references({"R3"}, rules, groups, members)
+    rules = [NS(rule_name="Share to sales", sobject_type="Account", shared_to_type="Group", shared_to_id="G1", criteria=None),
+             NS(rule_name="From ops", sobject_type="Opportunity", shared_to_type="Group", shared_to_id="G9",
+                criteria={"source_group_id": "G4"}),
+             NS(rule_name="Target unknown", sobject_type="Account", shared_to_type="RoleAndSubordinates", shared_to_id=None),
+             NS(rule_name="Group rule", sobject_type="Account", shared_to_type="Group", shared_to_id="G9", criteria=None),
+             NS(rule_name="Case rule", sobject_type="Case", shared_to_type="Role", shared_to_id="G1", criteria=None)]
+    out = rd.references({"R3", "R4"}, rules, groups, members,
+                        {"Account": {"G1": 7, "G9": 3}, "Opportunity": {"G4": 2}})
     assert out["public_groups"] == ["EMEA Deal Desk"]
-    assert out["role_sharing_rules"] == ["Share to sales (Account)"] and "can't tell" in out["sharing_rules_note"]
+    # Named through the role group's RelatedId, as target or as source.
+    assert out["named_rules"] == ["From ops (Opportunity): shares records owned in a changed role",
+                                  "Share to sales (Account): shares to a changed role"]
+    assert out["role_sharing_rules"] == ["Target unknown (Account)"] and "Support enables" in out["sharing_rules_note"]
+    assert out["rule_shares"] == {"Account": 7, "Opportunity": 2} and out["rule_shares_note"]
 
 
 def test_export_zip():
@@ -183,7 +192,8 @@ async def test_lumenvale_draft_routes(client, async_db_session, lumenvale):  # n
     assert not acc["some_counts_unknown"] and acc["records_owned"] == tobias.raw_data["NewtonOwnedRecords"]["Account"]
     assert acc["users_gaining"] == 1 and acc["effect"] == opp["effect"] == "view_and_edit"
     assert opp["org_wide_default"] == "Private" and opp["explanation"].startswith("Private:")
-    assert impact["references"]["role_sharing_rules"] == ["EMEA opportunities to Sales Operations (Opportunity)"]
+    assert impact["references"]["named_rules"] == [
+        "EMEA opportunities to Sales Operations (Opportunity): shares to a changed role"]
     assert impact["coverage_label"] and impact["recalculation_warning"]
 
     r = await client.post(f"/orgs/{org_id}/role-designs/{did}/export", json={}, cookies=cookie)
@@ -256,3 +266,26 @@ async def test_lumenvale_runbook_numbers_hold_with_the_35b_part(async_db_session
     assert sum(f.estimated_annual_savings_cents or 0 for f in rows) == 18_318_000
     lf = await LicenseFitService(db, org_id).run(actor_email="test")
     assert lf.total_annual_savings_cents == 11_622_000
+
+
+@pytest.mark.asyncio
+async def test_owner_sharing_rules_are_read_with_their_groups(monkeypatch):
+    """No network: Tooling is refused, the owner-rule objects answer for
+    Opportunity and are refused for Account (Support hasn't enabled them)."""
+    import httpx
+    from app.salesforce import client as sf
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(sf.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(lambda req: httpx.Response(400, json=[])), **kw))
+    c = sf.SalesforceAPIClient("https://example.invalid", "token")
+
+    async def query_all(soql):
+        if "FROM OpportunityOwnerSharingRule" in soql:
+            return [{"Id": "02c1", "Name": "EMEA to Ops", "DeveloperName": "EMEA_to_Ops", "GroupId": "00GSRC",
+                     "UserOrGroupId": "00GDST", "OpportunityAccessLevel": "Read"}]
+        raise httpx.HTTPStatusError("400", request=httpx.Request("GET", "https://x"), response=httpx.Response(400))
+    monkeypatch.setattr(c, "query_all", query_all)
+    rules = await c.extract_sharing_rules()
+    assert [(r.Name, r.SobjectType, r.SharedToId, r.Criteria) for r in rules] == [
+        ("EMEA to Ops", "Opportunity", "00GDST", {"source_group_id": "00GSRC"})]
