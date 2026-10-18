@@ -207,8 +207,12 @@ section has the detail.
   matching, the most-specific-first page order (UNVERIFIED) and the profile
   and permission set views. #32 (Railway builder proposal) was closed:
   Sharan sets the builders in Railway's service settings (Owner: Sharan).
-- **Merge order:** #29, #27, #30, #23, #24, #25, #26, #31, #28. Simulated
-  clean; the combined tree passes all tests with one alembic head.
+- **18 Oct:** #41 adds a page per permission set group (stacked on #28).
+  Lint counts on main, for deciding what to make blocking: Ruff 126 issues
+  (51 auto-fixable), mypy 179 errors in 36 files, frontend lint 6 warnings
+  and no errors.
+- **Merge order:** #29, #27, #30, #23, #24, #25, #26, #31, #28, #41.
+  Simulated clean; the combined tree passes all tests with one alembic head.
 - **Next:** item 7 with 35c, then phase C. Item 1 phase 2 stays a plan.
 
 ## Build order
