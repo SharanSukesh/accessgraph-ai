@@ -30,8 +30,10 @@ async def test_six_hundred_users_with_flags(client, async_db_session):  # noqa: 
 
     flagged = lambda f: {i for i, n in nodes.items() if f in n["flags"]}  # noqa: E731
     users = {u["salesforce_id"]: u for u in data["users"]}
-    # The CEO and the 8 planted people have no manager.
-    assert len(flagged("no_manager")) == 9
+    # The 8 planted people have no manager; the CEO has none either but has reports, so is the top, not a flag.
+    assert len(flagged("no_manager")) == 8
+    ceo = next(i for i, u in users.items() if u["title"] == "Chief Executive Officer")
+    assert "no_manager" not in nodes[ceo]["flags"]
     # Every active report of the 3 inactive managers.
     inactive_managers = {i for i, u in users.items() if not u["is_active"] and u["title"].endswith("Manager")}
     assert len(inactive_managers) == 3
@@ -65,3 +67,21 @@ async def test_manager_loops_are_flagged(client, async_db_session):  # noqa: F81
              (await client.get(f"/orgs/{org.id}/reporting-graph", cookies=_cookie(admin))).json()["nodes"]}
     assert {i for i, f in nodes.items() if "manager_loop" in f} == {"005A", "005B", "005C"}
     assert nodes["005D"] == [] and nodes["005E"] == ["no_manager"]
+
+
+@pytest.mark.asyncio
+async def test_no_manager_skips_the_top_of_a_tree(client, async_db_session):  # noqa: F811
+    from app.domain.models import UserSnapshot
+    admin, _ = await _users(async_db_session)
+    org = Organization(name="Tops", is_demo=False)
+    async_db_session.add(org)
+    await async_db_session.flush()
+    # top has an active report; lone has none; boss's only report is inactive.
+    for sid, mgr, active in (("005T", None, True), ("005R", "005T", True), ("005L", None, True),
+                             ("005B", None, True), ("005X", "005B", False)):
+        async_db_session.add(UserSnapshot(organization_id=org.id, salesforce_id=sid, username=sid, name=sid,
+                                          is_active=active, manager_id=mgr))
+    await async_db_session.commit()
+    nodes = {n["user_sf_id"]: n["flags"] for n in
+             (await client.get(f"/orgs/{org.id}/reporting-graph", cookies=_cookie(admin))).json()["nodes"]}
+    assert nodes["005T"] == [] and nodes["005L"] == ["no_manager"] and nodes["005B"] == ["no_manager"]

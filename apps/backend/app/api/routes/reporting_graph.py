@@ -50,7 +50,8 @@ class ReportingGraphNode(BaseModel):
     role_depth: Optional[int] = None
     # People at scale: the raw relationships (even when the other user isn't
     # synced), the latest risk level, and what needs attention:
-    #   no_manager                   an active user with no manager
+    #   no_manager                   an active user with no manager and no active direct
+    #                                reports (someone with reports is the top of a tree)
     #   manager_inactive             the manager is an inactive user
     #   delegated_approver_inactive  the delegated approver is an inactive user
     #   manager_loop                 following managers up comes back to this user
@@ -122,13 +123,14 @@ def _manager_loops(users: Iterable[UserSnapshot]) -> set:
     return in_loop
 
 
-def _flags(u: UserSnapshot, active_by_id: dict, loops: set) -> List[str]:
+def _flags(u: UserSnapshot, active_by_id: dict, loops: set, has_reports: set) -> List[str]:
     """What needs attention about a user's relationships (active users only)."""
     if not u.is_active:
         return []
     out = []
     if not u.manager_id:
-        out.append("no_manager")
+        if u.salesforce_id not in has_reports:
+            out.append("no_manager")
     elif active_by_id.get(u.manager_id) is False:
         out.append("manager_inactive")
     if u.salesforce_id in loops:
@@ -210,6 +212,8 @@ async def get_reporting_graph(
 
     active_by_id = {u.salesforce_id: u.is_active for u in users}
     loops = _manager_loops(users)
+    # People with at least one active direct report: the top of a tree when they have no manager.
+    has_reports = {u.manager_id for u in users if u.is_active and u.manager_id}
     nodes = [
         ReportingGraphNode(
             user_sf_id=u.salesforce_id,
@@ -233,7 +237,7 @@ async def get_reporting_graph(
             manager_id=u.manager_id,
             delegated_approver_id=u.delegated_approver_id,
             risk_level=risk.get(u.salesforce_id),
-            flags=_flags(u, active_by_id, loops),
+            flags=_flags(u, active_by_id, loops, has_reports),
         )
         for u in users
     ]
