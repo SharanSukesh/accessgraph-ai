@@ -259,4 +259,3 @@ async def test_routes(client, async_db_session, lumenvale):  # noqa: F811
     assert zipfile.ZipFile(io.BytesIO(r.content)).namelist()[0] == "demo-health-score-slide.png"
     # No access without a session.
     assert (await client.get(f"/orgs/{org_id}/image-pack")).status_code in (401, 403)
-
