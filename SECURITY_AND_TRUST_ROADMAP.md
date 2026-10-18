@@ -193,8 +193,13 @@ section has the detail.
   Oct); Sharan's developer-org check dated 17 Oct.
 - **17-18 Oct, phase B (not merged; Sharan merges):** item 5 API usage
   (#23); item 3 image pack (#24, stacked on #23); 35a role view (#25);
-  35b role design (#26, stacked on #25); item 1 phase 1 (see the item).
-- **Next:** item 7 with 35c, then phase C.
+  35b role design with its Lumenvale data (#26, stacked on #25); item 1
+  phase 1, pages and automation (#28). Suggested merge order: #27 (this
+  log), #23, #24, #25, #26, #28. #26 adds a migration (a9c3e5f7b2d4); #28
+  stores its data with the sync job, so there's only one new alembic head.
+- **18 Oct:** every phase B PR keeps Lumenvale at Health 41, 18 findings,
+  $183,180 and License Fit $116,220 (tested in #26 and #28).
+- **Next:** item 7 with 35c, then phase C. Item 1 phase 2 stays a plan.
 
 ## Build order
 
