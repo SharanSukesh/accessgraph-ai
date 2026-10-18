@@ -402,7 +402,7 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
   - **Each draft saves its starting hierarchy** (roles, parents, user assignments) when it's created, and the diff compares the draft with that, so no phase C snapshot is needed. When the org has been synced since, Newton compares the saved start with the current hierarchy and warns that the draft is stale, listing what changed in Salesforce, before it can be exported.
   - **Impact preview, Account and Opportunity only, counts only, never record contents:**
     - which users gain and which lose visibility through the hierarchy, and how many in total: the ancestors of each moved role before and after the change, and the records owned by users in the moved branch (owner counts from the sync, 32);
-    - when an object's org-wide default is Public Read/Write, the preview says the move changes nothing on it, since everyone can already see those records;
+    - for each object it says **what** changes, not just how many: users above a role can view and edit what's owned by or shared with users below them ✓, so with a **Private** org-wide default a move changes both who can see and who can edit; with **Public Read Only** everyone can already see the records, so only edit access changes; with **Public Read/Write** nothing changes;
     - records shared to users in the moved branch (manual, team and rule shares, from the Account and Opportunity share rows the sync already reads) are counted separately;
     - the figures are an upper bound: some ancestors may still see the same records through other sharing, and counts carry the "Based on records the integration user can see" label without View All (31). Whether Account and Opportunity both use hierarchies is UNVERIFIED (Help says "most" standard objects do) and must be confirmed before the preview claims it;
     - sharing rules (SharedTo role, roleAndSubordinatesInternal, roleAndSubordinates, portal role types ✓) and public groups that reference the moved roles, by name;
@@ -418,7 +418,12 @@ Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C 
 - **Salesforce sources:** as 35a, plus Role metadata type ✓; Group Type values for roles and Group.RelatedId ✓; sharing recalculation on hierarchy changes ✓; org-wide defaults and Account/Opportunity share rows (already synced).
 - **New permissions:** none (read only; nothing is written to Salesforce).
 - **Privacy and demo:** drafts are Newton data, follow the org's privacy level and are erased with the org. On demo orgs drafts work normally and exports are marked demo.
-- **Fixture:** Lumenvale needs Account owner counts (it has Opportunity, Case, Lead and Contact, not Account), org-wide defaults, and a sharing rule and public group that reference its roles, so the preview has something to show. License Fit reads Account owner counts, so this must be measured before it's added: it may change License Fit's $116,220. Check the Health Report the same way as PR #20.
+- **Fixture (measured 21 Oct in a scratch prototype on top of PR #20; not yet added):**
+  - **Account owner counts:** total 5,200 (the Account count Data Quality reports), given only to users who already own Opportunities, Leads, Cases or Contacts. License Fit only looks at Account ownership when a user owns nothing at all, so no License Fit result can change. Measured: Health Report 41, 18 findings, $183,180; License Fit $116,220; risk, anomalies and Priority Actions all unchanged.
+  - **Org-wide defaults, all Private** (Contact Controlled by Parent): measured, nothing changes.
+  - **A role-based sharing rule and a public group:** blocked for now. The Health Report's empty-group rule counts every group with no member rows, including role groups, so adding them raised "5 Public Groups / Queues have zero members" (measured 40, 19 findings). Prerequisite: the rule counts only public groups and queues (see Known technical debt).
+  - **Opportunity Public Read Only, to demo the edit-only case:** this is a genuine High finding ("sensitive objects have Public OWD"). Measured 32 and 20 findings, together with the empty-group issue. Sharan to decide: keep Opportunity Private (the preview's edit-only case then isn't demoed on Lumenvale) or accept the finding and update the runbook.
+  - Nothing goes into the fixture or the runbook until Sharan approves any change to these numbers.
 - **Depends on:** 35a, 3 (ZIP export). Not on phase C. **Effort: L.**
 
 ## Phase C: foundations
@@ -915,3 +920,4 @@ Checked in October 2026 against current documentation: API v62 to v68 developer 
 - The Health Report's "predictive" findings function is a stub.
 - Data Quality is refused on demo orgs (fixed by item 2's fixture path).
 - Field type and encryption are shown as unknown until item 8.
+- The empty-group rule (GROUP_EMPTY) counts every group the sync reads, including role groups, which likely have no GroupMember rows (UNVERIFIED; a read-only query in a developer org would confirm it). On live orgs that would flag every role group as empty. Count only public groups (Type Regular) and queues. Prerequisite for 35b's demo data.
