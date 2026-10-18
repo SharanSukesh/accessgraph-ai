@@ -26,6 +26,26 @@ const EDGE_LABELS: Record<string, string> = {
   MUTES: 'mutes',
 }
 
+/** The node's outline as a small glyph, so shape (not colour) tells these types apart. */
+function ShapeGlyph({ type, color }: { type: GraphNodeType; color: string }) {
+  const style = NODE_TYPE_STYLES[type]
+  const common = { fill: 'none', stroke: color, strokeWidth: 1.5 }
+  let outline: React.ReactNode = null
+  if (style.shape === 'rectangle') outline = <rect x="1" y="1" width="16" height="10" {...common} />
+  else if (style.shape === 'cut-rectangle') outline = <polygon points="4,1 14,1 17,4 17,8 14,11 4,11 1,8 1,4" {...common} />
+  else if (style.shape === 'barrel') outline = <path d="M4,1 H14 Q17.5,6 14,11 H4 Q0.5,6 4,1 Z" {...common} />
+  else if (style.double) {
+    outline = (
+      <>
+        <rect x="0.75" y="0.75" width="16.5" height="10.5" rx="3" {...common} strokeWidth={1} />
+        <rect x="3" y="3" width="12" height="6" rx="1.5" {...common} strokeWidth={1} />
+      </>
+    )
+  }
+  if (!outline) return null
+  return <svg width="18" height="12" viewBox="0 0 18 12" aria-hidden>{outline}</svg>
+}
+
 function LegendChip({ type, fill }: { type: GraphNodeType; fill: string }) {
   const style = NODE_TYPE_STYLES[type]
   const Icon = NODE_TYPE_ICONS[type]
@@ -44,12 +64,14 @@ function LegendChip({ type, fill }: { type: GraphNodeType; fill: string }) {
   }
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1"
+      className="inline-flex items-center gap-1.5 px-2 py-1"
       style={{
-        border: `1.5px ${style.dashed ? 'dashed' : 'solid'} ${style.color}`,
+        border: style.double ? `3px double ${style.color}` : `1.5px ${style.dashed ? 'dashed' : 'solid'} ${style.color}`,
+        borderRadius: style.shape === 'rectangle' ? 0 : style.shape === 'barrel' ? 999 : 6,
         background: style.outline ? 'transparent' : fill,
       }}
     >
+      <ShapeGlyph type={type} color={style.color} />
       <Icon className="h-3.5 w-3.5" style={{ color: style.color }} strokeWidth={2} />
       <span className="text-xs font-medium text-grove-ink/85 dark:text-grove-ink-dk/85">{style.label}</span>
     </span>

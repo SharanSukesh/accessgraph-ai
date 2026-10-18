@@ -22,6 +22,7 @@ import { exportGraphToJSON, exportStamp } from '@/lib/utils/exports'
 import {
   EDGE_REST_ALPHA,
   GRAPH_PALETTE,
+  PICKED_TYPES,
   SPECIAL_EDGES,
   USER_NODE_SIZE,
   edgeColor,
@@ -63,6 +64,8 @@ interface Graph {
 interface ERGraphVisualizationProps {
   graph: Graph
   selectedObjects: string[]
+  /** Ids of the layouts, record pages, Apex classes and flows to draw (PICKED_TYPES). */
+  selectedItems?: string[]
   onNodeSelect?: (node: any) => void
   height?: string
   className?: string
@@ -90,7 +93,9 @@ function decorate(cy: Core, theme: GraphTheme) {
         w: art.width,
         h: art.height,
         color: style.color,
-        borderStyle: style.dashed ? 'dashed' : 'solid',
+        shape: style.shape ?? 'round-rectangle',
+        borderStyle: style.double ? 'double' : style.dashed ? 'dashed' : 'solid',
+        borderWidth: style.double ? 4 : 1.5,
         fillOpacity: style.outline ? 0 : 1,
       })
     })
@@ -124,7 +129,7 @@ function stylesheet(theme: GraphTheme): any[] {
     {
       selector: 'node[chip]',
       style: {
-        shape: 'round-rectangle',
+        shape: 'data(shape)',
         width: 'data(w)',
         height: 'data(h)',
         'background-color': p.chip,
@@ -132,7 +137,7 @@ function stylesheet(theme: GraphTheme): any[] {
         'background-image': 'data(chip)',
         'background-fit': 'contain',
         'background-clip': 'none',
-        'border-width': 1.5,
+        'border-width': 'data(borderWidth)',
         'border-color': 'data(color)',
         'border-style': 'data(borderStyle)',
         label: '',
@@ -296,9 +301,16 @@ function placeEdgeLabels(cy: Core) {
   })
 }
 
+const PICKED = new Set<string>(PICKED_TYPES)
+const NO_ITEMS: string[] = []
+
+/** Nodes drawn from the start; objects and picked items are added when chosen. */
+const isBase = (type: string | undefined) => !!type && type !== 'object' && type !== 'field' && !PICKED.has(type)
+
 export function ERGraphVisualization({
   graph,
   selectedObjects,
+  selectedItems = NO_ITEMS,
   onNodeSelect,
   height = '800px',
   className = '',
@@ -410,7 +422,7 @@ export function ERGraphVisualization({
     setLit(keep ? new Set(keep.map((e) => e.id())) : null)
   }, [])
 
-  /** Every path that grants access to an object, and any muting on those groups. */
+  /** Every path that grants access to an object (or a picked item), and any muting on those groups. */
   const focusObject = useCallback((id: string) => {
     const cy = cyRef.current
     if (!cy) return
@@ -439,7 +451,7 @@ export function ERGraphVisualization({
     const initialElements: ElementDefinition[] = []
 
     graph.nodes.forEach((node) => {
-      if (node.type !== 'object' && node.type !== 'field') {
+      if (isBase(node.type)) {
         initialElements.push({
           group: 'nodes',
           data: {
@@ -457,12 +469,12 @@ export function ERGraphVisualization({
       }
     })
 
-    // Edges between non-object nodes; object edges arrive with their objects.
+    // Edges between base nodes; object and picked-item edges arrive with them.
     graph.edges.forEach((edge) => {
       const sourceNode = graph.nodes.find(n => n.id === edge.source)
       const targetNode = graph.nodes.find(n => n.id === edge.target)
-      const sourceIsBase = sourceNode && sourceNode.type !== 'object' && sourceNode.type !== 'field'
-      const targetIsBase = targetNode && targetNode.type !== 'object' && targetNode.type !== 'field'
+      const sourceIsBase = isBase(sourceNode?.type)
+      const targetIsBase = isBase(targetNode?.type)
 
       if (sourceIsBase && targetIsBase) {
         initialElements.push({
@@ -506,7 +518,7 @@ export function ERGraphVisualization({
       }
       setSelectedNode(node.id())
       onNodeSelect?.(nodeData)
-      if (node.data('type') === 'object') focusObject(node.id())
+      if (node.data('type') === 'object' || PICKED.has(node.data('type'))) focusObject(node.id())
     })
 
     // Background click clears selection and any pinned paths.
@@ -522,6 +534,7 @@ export function ERGraphVisualization({
       if (pinned.current) return
       const node = event.target as NodeSingular
       if (node.data('type') === 'object') return
+      if (PICKED.has(node.data('type'))) return highlight(node.union(node.predecessors()))
       highlight(node.union(node.predecessors()).union(node.successors()))
     })
     cy.on('mouseout', 'node', () => {
@@ -637,6 +650,50 @@ export function ERGraphVisualization({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedObjects, graph])
+
+  // Add and remove picked layouts, record pages, Apex classes and flows.
+  useEffect(() => {
+    const cy = cyRef.current
+    if (!cy || !graph) return
+    const wanted = new Set(selectedItems)
+    let graphModified = false
+    cy.nodes().forEach((node: NodeSingular) => {
+      if (PICKED.has(node.data('type')) && !wanted.has(node.id())) {
+        node.connectedEdges().remove()
+        node.remove()
+        graphModified = true
+      }
+    })
+    const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+    selectedItems.forEach((id) => {
+      const item = byId.get(id)
+      if (!item || !PICKED.has(item.type) || cy.getElementById(id).length > 0) return
+      cy.add({
+        group: 'nodes',
+        data: { id, label: item.label, type: item.type, ...item.properties },
+        classes: [item.type],
+      })
+      graphModified = true
+    })
+    if (graphModified) {
+      // Edges of the items now drawn, to anything else on screen (objects included).
+      graph.edges.forEach((edge) => {
+        if (cy.getElementById(edge.id).length > 0) return
+        if (!(wanted.has(edge.source) || wanted.has(edge.target))) return
+        if (cy.getElementById(edge.source).length > 0 && cy.getElementById(edge.target).length > 0) {
+          cy.add({
+            group: 'edges',
+            data: { id: edge.id, source: edge.source, target: edge.target, label: edge.label || edge.type, type: edge.type, ...edge.properties },
+            classes: [edge.type],
+          })
+        }
+      })
+      clearFocus()
+      decorate(cy, currentTheme())
+      runLayout(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItems, graph])
 
   const zoomBy = (factor: number) => {
     const cy = cyRef.current

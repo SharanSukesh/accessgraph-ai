@@ -280,21 +280,28 @@ def for_user(ui: Optional[Dict[str, Any]], user: Any, profile_names: Dict[str, s
     }
 
 
-GRAPH_MAX_PER_KIND = 12
+def _profile_rule(rule: str) -> bool:
+    return "profile" in rule.lower()
 
 
 def graph_extras(ui: Optional[Dict[str, Any]], user: Any, profile_names: Dict[str, str], ps_rows: Dict[str, Any],
                  assignments: Iterable[Any], components: Iterable[Any], group_names: Dict[str, str],
-                 objects_in_graph: Iterable[str]) -> Dict[str, Any]:
-    """Nodes and edges for the access graph's "Pages and automation" layer:
-    Apex classes and flows from the profile, set or group that grants them,
-    and each object's layouts (from the profile) and assigned record pages.
-    At most GRAPH_MAX_PER_KIND of each kind; the rest are counted."""
+                 objects_in_graph: Iterable[str] = ()) -> Dict[str, Any]:
+    """Every page layout, Lightning record page, Apex class and flow this
+    user gets, as access-graph nodes (the graph's picker chooses which to
+    draw), each with edges showing how the user reaches it:
+      Apex class, flow   from the profile, permission set or group granting it
+                         (a flow run through Run Flows, from what grants that)
+      page layout        from the profile, labelled with its record types
+      record page        from the profile when the winning assignment names
+                         the profile, otherwise from the user; labelled with
+                         the assignment level (desktop pages)
+    Layouts and record pages also point at their object, drawn when the
+    object is. objects_in_graph is kept for callers; nothing is filtered."""
     nodes: List[Dict[str, Any]] = []
     edges: List[Dict[str, Any]] = []
-    hidden: Dict[str, int] = {}
     if not ui:
-        return {"nodes": nodes, "edges": edges, "hidden": hidden, "available": False}
+        return {"nodes": nodes, "edges": edges, "hidden": {}, "available": False}
     sources = user_sources(user, profile_names, ps_rows, assignments, components, group_names)
     for kind, node_type, catalog, name_key, edge_type in (
         ("ApexClass", "apex_class", ui.get("apex_classes", []), "name", "GRANTS_APEX_CLASS"),
@@ -302,42 +309,70 @@ def graph_extras(ui: Optional[Dict[str, Any]], user: Any, profile_names: Dict[st
     ):
         by_id = {c["id"]: c for c in catalog}
         granted = _granted(ui, sources, kind, with_nodes=True)
-        ordered = sorted(granted, key=lambda i: (by_id.get(i, {}).get(name_key) or i).lower())
-        hidden[node_type] = max(0, len(ordered) - GRAPH_MAX_PER_KIND)
-        for eid in ordered[:GRAPH_MAX_PER_KIND]:
+        for eid in sorted(granted, key=lambda i: (by_id.get(i, {}).get(name_key) or i).lower()):
             item = by_id.get(eid, {})
             nodes.append({"id": f"{node_type}_{eid}", "type": node_type, "label": item.get(name_key) or eid,
                           "properties": {k: v for k, v in item.items() if k != "id"}})
-            for path, origin in {(tuple(p), o) for p, o in granted[eid]}:
+            for path, origin in sorted({(tuple(p), o) for p, o in granted[eid]}):
+                # The edge starts at the profile, set or group, so its label is short: a
+                # group names the permission set inside it that grants the item.
+                label = f"via {path[-1].split(': ', 1)[-1]}" if len(path) > 1 else "grants"
                 edges.append({"id": f"{edge_type}_{origin}_{eid}", "source": origin, "target": f"{node_type}_{eid}",
-                              "type": edge_type, "label": " → ".join(path)})
-    wanted = set(objects_in_graph)
-    profile_name = profile_names.get(user.profile_id, user.profile_id or "")
-    seen = set()
-    for row in resolve_layouts(ui, user.profile_id, profile_name):
-        if row["object"] not in wanted:
+                              "type": edge_type, "label": label, "properties": {"path": " → ".join(path)}})
+    # Flows the user can run without a grant of their own: through the Run
+    # Flows permission (from whatever grants it) or the Flow User setting.
+    # Self-starting flows don't depend on the user, so they aren't drawn.
+    run_flows = ui.get("run_flows") or {}
+    run_nodes = sorted({(tuple(p), o) for ps, paths in sources.items() if run_flows.get(ps) for p, o in paths})
+    flows = resolve_flows(ui, sources, getattr(user, "salesforce_id", None))
+    for f in flows["flows"]:
+        if f["can_run"] is not True or f["via"]:
             continue
+        nid = f"flow_{f['id']}"
+        nodes.append({"id": nid, "type": "flow", "label": f.get("label") or f["id"],
+                      "properties": {k: v for k, v in f.items() if k not in ("id", "via", "can_run", "why")}})
+        for path, origin in run_nodes:
+            edges.append({"id": f"RUN_FLOWS_{origin}_{f['id']}", "source": origin, "target": nid, "type": "GRANTS_FLOW",
+                          "label": "Run Flows", "properties": {"path": " → ".join(path) + " (Run Flows)"}})
+        if ["Flow User (user setting)"] in flows["run_flows_via"]:
+            edges.append({"id": f"FLOW_USER_{f['id']}", "source": user.salesforce_id, "target": nid, "type": "GRANTS_FLOW",
+                          "label": "Flow User setting"})
+    profile_name = profile_names.get(user.profile_id, user.profile_id or "")
+    layouts: Dict[str, Dict[str, Any]] = {}
+    for row in resolve_layouts(ui, user.profile_id, profile_name):
         nid = f"layout_{row['object']}_{row['layout']}"
-        if nid not in seen:
-            seen.add(nid)
-            nodes.append({"id": nid, "type": "layout", "label": row["layout"], "properties": {"object": row["object"], "recordTypes": []}})
-            edges.append({"id": f"USES_LAYOUT_{nid}", "source": user.profile_id, "target": nid, "type": "USES_LAYOUT", "label": "page layout"})
-            edges.append({"id": f"LAYOUT_FOR_{nid}", "source": nid, "target": f"object_{row['object']}", "type": "LAYOUT_FOR", "label": row["object"]})
-        next(n for n in nodes if n["id"] == nid)["properties"]["recordTypes"].append(row["record_type"])
+        node = layouts.setdefault(nid, {"id": nid, "type": "layout", "label": row["layout"],
+                                         "properties": {"object": row["object"], "recordTypes": []}})
+        node["properties"]["recordTypes"].append(row["record_type"])
+    for nid, node in layouts.items():
+        nodes.append(node)
+        rts = node["properties"]["recordTypes"]
+        edges.append({"id": f"USES_LAYOUT_{nid}", "source": user.profile_id, "target": nid, "type": "USES_LAYOUT",
+                      "label": f"{'record type' if len(rts) == 1 else 'record types'}: {', '.join(rts)}"})
+        edges.append({"id": f"LAYOUT_FOR_{nid}", "source": nid, "target": f"object_{node['properties']['object']}",
+                      "type": "LAYOUT_FOR", "label": node["properties"]["object"]})
+    pages: Dict[str, Dict[str, Any]] = {}
+    reach: Dict[Tuple[str, str], List[str]] = defaultdict(list)
     for row in resolve_pages(ui, profile_name, user.profile_id):
-        if row["object"] not in wanted or row["form_factor"] != "Desktop" or row["page"] == SYSTEM_DEFAULT:
+        if row["form_factor"] != "Desktop" or row["page"] == SYSTEM_DEFAULT:
             continue
         nid = f"page_{row['object']}_{row['page']}"
-        if nid not in seen:
-            seen.add(nid)
-            nodes.append({"id": nid, "type": "lightning_page", "label": row["page"],
-                          "properties": {"object": row["object"], "rules": []}})
-            edges.append({"id": f"PAGE_FOR_{nid}", "source": nid, "target": f"object_{row['object']}", "type": "RECORD_PAGE_FOR", "label": "record page"})
+        node = pages.setdefault(nid, {"id": nid, "type": "lightning_page", "label": row["page"],
+                                       "properties": {"object": row["object"], "rules": []}})
         rule = f"{row['app'] or 'Any other app'} · {row['record_type']}: {row['rule']}"
-        rules = next(n for n in nodes if n["id"] == nid)["properties"]["rules"]
-        if rule not in rules:
-            rules.append(rule)
-    return {"nodes": nodes, "edges": edges, "hidden": hidden, "available": True}
+        if rule not in node["properties"]["rules"]:
+            node["properties"]["rules"].append(rule)
+        source = user.profile_id if _profile_rule(row["rule"]) else user.salesforce_id
+        if row["rule"] not in reach[(source, nid)]:
+            reach[(source, nid)].append(row["rule"])
+    for nid, node in pages.items():
+        nodes.append(node)
+        edges.append({"id": f"PAGE_FOR_{nid}", "source": nid, "target": f"object_{node['properties']['object']}",
+                      "type": "RECORD_PAGE_FOR", "label": "record page"})
+    for (source, nid), rules in reach.items():
+        edges.append({"id": f"GETS_PAGE_{source}_{nid}", "source": source, "target": nid, "type": "GETS_RECORD_PAGE",
+                      "label": "; ".join(rules)})
+    return {"nodes": nodes, "edges": edges, "hidden": {}, "available": True}
 
 
 # ---------------------------------------------------------------- live read

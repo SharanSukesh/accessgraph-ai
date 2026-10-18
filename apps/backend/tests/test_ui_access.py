@@ -127,6 +127,28 @@ async def test_lumenvale(client, async_db_session, lumenvale):  # noqa: F811
     assert {"apex_class", "flow", "layout"} <= types and g["metadata"]["pagesAndAutomation"]["available"]
     ids = {n["id"] for n in g["nodes"]}
     assert all(e["source"] in ids and e["target"] in ids for e in g["edges"])
+    # Every item, not a capped sample: the graph's picker chooses what to draw.
+    assert len([n for n in g["nodes"] if n["type"] == "apex_class"]) == len(d["apex"])
+    # Flows: every one the user can run, explicit grants and Run Flows alike (self-starting ones don't depend on them).
+    assert len([n for n in g["nodes"] if n["type"] == "flow"]) == len([f for f in d["flows"] if f["can_run"] is True])
+    # How the user reaches each: the group grants the flow, the profile the layout (with its record types), and a
+    # record page won by a profile assignment hangs off the profile, an app default off the user.
+    by_target = {}
+    for e in g["edges"]:
+        by_target.setdefault(e["target"], []).append(e)
+    flow = next(n["id"] for n in g["nodes"] if n["type"] == "flow" and n["label"] == "Discount Approval Request")
+    assert [(e["label"], e["properties"]["path"]) for e in by_target[flow]] == [
+        ("via Discount Approvals", "Permission set group: Sales Manager Bundle → Permission set: Discount Approvals")]
+    layout = by_target["layout_Opportunity_Opportunity - Sales Manager Layout"]
+    types_by_id = {n["id"]: n["type"] for n in g["nodes"]}
+    assert [(e["type"], types_by_id[e["source"]]) for e in layout] == [("USES_LAYOUT", "profile")]
+    assert "New Business" in layout[0]["label"]
+    renewal = by_target["page_Opportunity_Renewal, Sales Manager"]
+    assert renewal[0]["source"] == layout[0]["source"] and "App, record type and profile assignment" in renewal[0]["label"]
+    run = next(f for f in d["flows"] if f["can_run"] is True and not f["via"])
+    assert {e["label"] for e in by_target[f"flow_{run['id']}"]} == {"Run Flows"}
+    partner = by_target["page_Opportunity_Partner Deal"]
+    assert partner[0]["source"] == JUN and partner[0]["label"] == "App and record type assignment"
     plain = (await client.get(f"/orgs/{org_id}/graph/user/{JUN}", cookies=cookie)).json()
     assert not {"apex_class", "flow", "layout", "lightning_page"} & {n["type"] for n in plain["nodes"]}
 
