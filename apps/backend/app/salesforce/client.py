@@ -2038,6 +2038,7 @@ class SalesforceAPIClient:
                 continue
             by_date[day] = counter.rows()
         return {"status": "ok", "days": [{"date": d, "rows": rows} for d, rows in sorted(by_date.items())]}
+
     async def extract_organization(self) -> Optional[Dict[str, Any]]:
         """Single-row Organization fetch with edition + sandbox flags.
 
