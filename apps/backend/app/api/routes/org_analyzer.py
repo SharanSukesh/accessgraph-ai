@@ -1355,12 +1355,14 @@ class ImagePackRequest(BaseModel):
     layouts: List[str] = Field(default_factory=lambda: ["slide"])
     images: bool = True
     pptx: bool = False
+    # The org's name in the slide footer; off by default.
+    org_name: bool = False
 
 
-def _image_options(fmt: str, transparent: bool, layout: str):
+def _image_options(fmt: str, transparent: bool, layout: str, org_name: bool = False):
     from app.services.report.image_pack import ImageOptions
     try:
-        return ImageOptions(fmt=fmt, transparent=transparent, layout=layout)
+        return ImageOptions(fmt=fmt, transparent=transparent, layout=layout, org_name=org_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1391,6 +1393,7 @@ async def image_pack_visual(
     format: str = Query("png"),
     transparent: bool = Query(False),
     layout: str = Query("slide"),
+    org_name: bool = Query(False),
     _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> StreamingResponse:
@@ -1399,7 +1402,7 @@ async def image_pack_visual(
 
     if visual not in VISUAL_BY_KEY:
         raise HTTPException(status_code=404, detail="Unknown visual.")
-    opts = _image_options(format, transparent, layout)
+    opts = _image_options(format, transparent, layout, org_name)
     src = await gather_pack_source(db, org_id)
     body, note = build_visual(visual, src)
     if body is None:
@@ -1432,7 +1435,7 @@ async def image_pack_download(
         raise HTTPException(status_code=400, detail="Choose at least one layout.")
     if not (body.images or body.pptx):
         raise HTTPException(status_code=400, detail="Choose images, a PowerPoint file, or both.")
-    opts = _image_options(body.format, body.transparent, layouts[0] if layouts else "slide")
+    opts = _image_options(body.format, body.transparent, layouts[0] if layouts else "slide", body.org_name)
     src = await gather_pack_source(db, org_id)
     brand = await _report_brand(db, org_id, request)
     try:

@@ -60,6 +60,7 @@ export function ImagePackDialog({ orgId, onClose }: { orgId: string; onClose: ()
   const [layouts, setLayouts] = useState<ImageLayout[]>(['slide'])
   const [images, setImages] = useState(true)
   const [pptx, setPptx] = useState(false)
+  const [orgName, setOrgName] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -81,6 +82,7 @@ export function ImagePackDialog({ orgId, onClose }: { orgId: string; onClose: ()
     layouts,
     images,
     pptx,
+    org_name: orgName,
   }
   const problem = packProblem(req)
 
@@ -213,6 +215,9 @@ export function ImagePackDialog({ orgId, onClose }: { orgId: string; onClose: ()
                   </Check>
                   <Check checked={layouts.includes('crop')} disabled={!images} onChange={(on) => toggleLayout('crop', on)}>
                     Tight crop <span className={MUTED}>(no slide frame)</span>
+                  </Check>
+                  <Check checked={orgName} onChange={setOrgName}>
+                    Org name in the slide footer <span className={MUTED}>(no footer otherwise)</span>
                   </Check>
                 </div>
               </fieldset>

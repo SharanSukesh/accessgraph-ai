@@ -8,12 +8,14 @@ const req: PackRequest = {
   layouts: ['slide', 'crop'],
   images: true,
   pptx: false,
+  org_name: false,
 }
 
 describe('image pack', () => {
   it('never asks for a transparent JPEG', () => {
     expect(visualQuery({ format: 'jpeg', transparent: true, layout: 'crop' })).toContain('transparent=false')
-    expect(visualQuery({ format: 'png', transparent: true, layout: 'slide' })).toBe('format=png&transparent=true&layout=slide')
+    expect(visualQuery({ format: 'png', transparent: true, layout: 'slide' })).toBe('format=png&transparent=true&layout=slide&org_name=false')
+    expect(visualQuery({ format: 'png', transparent: false, layout: 'slide' }, true)).toContain('org_name=true')
     expect(IMAGE_CHOICES.filter((c) => c.choice.format === 'jpeg').every((c) => !c.choice.transparent)).toBe(true)
   })
 

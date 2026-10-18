@@ -27,6 +27,7 @@ export function VisualDownloadButton({
 }) {
   const { data } = useImagePack(orgId)
   const [open, setOpen] = useState(false)
+  const [orgName, setOrgName] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -70,7 +71,7 @@ export function VisualDownloadButton({
             <a
               key={c.label}
               role="menuitem"
-              href={`${API_BASE_URL}${endpoints.imagePackVisual(orgId, visual)}?${visualQuery(c.choice)}`}
+              href={`${API_BASE_URL}${endpoints.imagePackVisual(orgId, visual)}?${visualQuery(c.choice, orgName)}`}
               onClick={() => setOpen(false)}
               className="block rounded px-2.5 py-1.5 text-xs hover:bg-primary-50/50 dark:hover:bg-primary-900/20"
             >
@@ -78,6 +79,10 @@ export function VisualDownloadButton({
               <span className="block text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">{c.hint}</span>
             </a>
           ))}
+          <label className="mt-1 flex cursor-pointer items-center gap-2 border-t border-grove-border px-2.5 pb-1 pt-2 text-xs dark:border-grove-border-dk">
+            <input type="checkbox" className="accent-primary-700" checked={orgName} onChange={(e) => setOrgName(e.target.checked)} />
+            Org name in the slide footer
+          </label>
         </div>
       )}
     </div>

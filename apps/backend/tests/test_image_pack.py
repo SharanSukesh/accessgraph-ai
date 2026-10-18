@@ -238,3 +238,24 @@ async def test_routes(client, async_db_session, lumenvale):  # noqa: F811
     assert zipfile.ZipFile(io.BytesIO(r.content)).namelist()[0] == "demo-health-score-slide.png"
     # No access without a session.
     assert (await client.get(f"/orgs/{org_id}/image-pack")).status_code in (401, 403)
+
+
+@needs_render
+@pytest.mark.asyncio
+async def test_footer_only_when_the_org_name_is_asked_for(client, async_db_session, lumenvale):  # noqa: F811
+    src = await _analysed(async_db_session, lumenvale[0])
+    for key in ("summary", "health_score"):
+        plain = ip.page_html(key, src, None, ip.ImageOptions())
+        assert 'class="foot"' not in plain and src.org_name not in _pdf_text(plain), key
+        named = ip.page_html(key, src, None, ip.ImageOptions(org_name=True))
+        assert src.org_name in _pdf_text(named), key
+    org_id, cookie = lumenvale
+    r = await client.get(f"/orgs/{org_id}/image-pack/health_score", params={"org_name": "true"}, cookies=cookie)
+    assert r.status_code == 200
+    r = await client.post(f"/orgs/{org_id}/image-pack", cookies=cookie,
+                          json={"visuals": ["summary"], "layouts": ["slide"], "pptx": True, "images": False, "org_name": True})
+    assert r.status_code == 200
+    # The demo markers stay off the images but in the files: the name prefix and the speaker notes.
+    from pptx import Presentation
+    deck = Presentation(io.BytesIO(r.content))
+    assert "Demo data" in deck.slides[0].notes_slide.notes_text_frame.text

@@ -5,7 +5,8 @@ Each visual is an HTML page drawn with the PDF report's charts and
 styles, rendered by WeasyPrint and rasterised with pypdfium2:
 
   slide  16:9, laid out at 800x450 and rendered at 3840x2160, with a
-         title, a short caption and the org and date.
+         title and a short caption; no footer unless the org name is
+         asked for (org_name).
   crop   the visual alone (no slide frame), for pasting into an existing
          slide: laid out 680 wide, rendered at the same scale and cropped
          to its content.
@@ -88,6 +89,8 @@ class ImageOptions:
     fmt: str = "png"
     transparent: bool = False
     layout: str = "slide"
+    # Slides carry no footer unless asked: then the org's name, bottom left.
+    org_name: bool = False
 
     def __post_init__(self) -> None:
         self.fmt = "jpeg" if self.fmt in ("jpg", "jpeg") else self.fmt
@@ -531,10 +534,10 @@ def page_html(key: str, src: PackSource, brand: Any, opts: ImageOptions) -> str:
         content = f'<div class="crop">{body}</div>'
     else:
         w, h = SLIDE_W, SLIDE_H
-        at = getattr(src.snapshot, "snapshot_at", None) or datetime.now(timezone.utc)
         content = (
             f'<div class="frame"><h1>{_esc(title)}</h1><p class="caption">{_esc(caption)}</p>{body}'
-            f'<div class="foot"><span>{_esc(src.org_name)} · {at.strftime("%d %b %Y")}</span></div></div>'
+            + (f'<div class="foot"><span>{_esc(src.org_name)}</span></div>' if opts.org_name else "")
+            + '</div>'
         )
     style = STYLE.replace("ACCENT", accent)
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>@page {{ size: {w}px {h}px; margin: 0 }}{style}'
@@ -594,7 +597,7 @@ def build_pptx(keys: List[str], src: PackSource, brand: Any, opts: ImageOptions)
     prs = Presentation()
     prs.slide_width, prs.slide_height = Emu(12192000), Emu(6858000)  # 13.333 x 7.5 in
     blank = prs.slide_layouts[6]
-    slide_opts = ImageOptions(fmt="png", transparent=False, layout="slide")
+    slide_opts = ImageOptions(fmt="png", transparent=False, layout="slide", org_name=opts.org_name)
     for key in keys:
         slide = prs.slides.add_slide(blank)
         img = render_visual(key, src, brand, slide_opts)
@@ -628,7 +631,7 @@ def build_pack(keys: List[str], src: PackSource, brand: Any, opts: ImageOptions,
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         for k in ready:
             for layout in layouts:
-                o = ImageOptions(fmt=opts.fmt, transparent=opts.transparent, layout=layout)
+                o = ImageOptions(fmt=opts.fmt, transparent=opts.transparent, layout=layout, org_name=opts.org_name)
                 z.writestr(file_name(k, o, src.is_demo), render_visual(k, src, brand, o))
         if deck is not None:
             z.writestr(f"{prefix}visuals.pptx", deck)

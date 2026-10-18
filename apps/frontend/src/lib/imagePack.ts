@@ -49,11 +49,13 @@ export const IMAGE_CHOICES: { label: string; hint: string; choice: ImageChoice }
   { label: 'Tight crop, JPEG', hint: 'no slide frame', choice: { format: 'jpeg', transparent: false, layout: 'crop' } },
 ]
 
-export function visualQuery(c: ImageChoice): string {
+/** orgName: the org's name in the slide footer (no footer otherwise). */
+export function visualQuery(c: ImageChoice, orgName = false): string {
   return new URLSearchParams({
     format: c.format,
     transparent: String(c.format === 'png' && c.transparent),
     layout: c.layout,
+    org_name: String(orgName),
   }).toString()
 }
 
@@ -64,6 +66,8 @@ export interface PackRequest {
   layouts: ImageLayout[]
   images: boolean
   pptx: boolean
+  /** The org's name in the slide footer; slides have no footer otherwise. */
+  org_name: boolean
 }
 
 /** What the dialog's choices allow, in words; null when it can be downloaded. */
