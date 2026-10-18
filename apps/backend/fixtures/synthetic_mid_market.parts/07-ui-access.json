@@ -688,8 +688,33 @@
      "developer_name": "Case_Record_Page",
      "label": "Case Record Page",
      "object": "Case"
+    },
+    {
+     "id": "0M0000000000005DMO",
+     "developer_name": "Opportunity_Partner_Deal",
+     "label": "Partner Deal",
+     "object": "Opportunity"
+    },
+    {
+     "id": "0M0000000000006DMO",
+     "developer_name": "Opportunity_Partner_Admin",
+     "label": "Partner Deal, Admin",
+     "object": "Opportunity"
     }
    ],
+   "profile_api_names": {
+    "00e000000000001DMO": "Finance_Analyst",
+    "00e000000000002DMO": "Finance_Director",
+    "00e000000000003DMO": "Marketing_Manager",
+    "00e000000000004DMO": "Marketing_User",
+    "00e000000000005DMO": "Sales_Director",
+    "00e000000000006DMO": "Sales_Manager",
+    "00e000000000007DMO": "Sales_Rep",
+    "00e000000000008DMO": "Standard",
+    "00e000000000009DMO": "Support_Agent",
+    "00e000000000010DMO": "Support_Manager",
+    "00e000000000011DMO": "Admin"
+   },
    "org_default_pages": {
     "Opportunity": {
      "Large": "Opportunity_Record_Page",
@@ -718,7 +743,21 @@
        "form_factor": "Large",
        "page": "Opportunity_Renewal_Sales_Manager",
        "record_type": "Opportunity.Renewal",
-       "profile": "Sales Manager"
+       "profile": "Sales_Manager"
+      },
+      {
+       "object": "Opportunity",
+       "form_factor": "Large",
+       "page": "Opportunity_Partner_Deal",
+       "record_type": "Opportunity.Partner_Deal",
+       "profile": null
+      },
+      {
+       "object": "Opportunity",
+       "form_factor": "Large",
+       "page": "Opportunity_Partner_Admin",
+       "record_type": "Opportunity.Partner_Deal",
+       "profile": "Admin"
       }
      ]
     },

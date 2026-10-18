@@ -294,6 +294,7 @@ async def get_user(
         "is_active": user.is_active,
         "role": role_name,
         "profile": profile_name,
+        "profileId": user.profile_id,
         "riskLevel": risk_level,
         "lastLoginDate": user.last_login_at.isoformat() if user.last_login_at else None,
     }

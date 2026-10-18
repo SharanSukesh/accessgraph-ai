@@ -184,7 +184,11 @@ function UserDetailContent() {
                   Profile
                 </div>
                 <div className="text-sm text-grove-ink dark:text-grove-ink-dk mt-1">
-                  {user.profile || '-'}
+                  {(user as { profileId?: string }).profileId && user.profile ? (
+                    <Link className="underline-offset-2 hover:underline" href={`/orgs/${orgId}/profiles/${(user as { profileId?: string }).profileId}`}>
+                      {user.profile}
+                    </Link>
+                  ) : (user.profile || '-')}
                 </div>
               </div>
             </div>
