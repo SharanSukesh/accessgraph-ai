@@ -402,6 +402,17 @@ Requested by the Salesforce lead (20 Oct): turn the org chart tab into a role hi
 - Lumenvale's Account owner counts come with 35b's demo data (#26); on this branch alone Account shows "Unknown".
 
 ### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
+**Status: built (branch feat/role-design, on top of 35a), not merged.** Notes from building it:
+- Drafts are stored in a new table, `role_design_drafts` (migration a9c3e5f7b2d4, tested up and down on a throwaway database). Each draft keeps its starting hierarchy and a list of changes; undo and redo move through that list.
+- The draft is validated on every save.
+- An existing role's API name can't change in a draft: the export identifies roles by API name, so a changed name would deploy as a new role.
+- Deleting a role needs it to have no users and no roles below it. Deletions go in the readme as manual steps; no destructive metadata is exported.
+- Sharing rules: the sync stores each rule's target type but not which role it targets (SharedToId is always None). So the preview lists the Account and Opportunity rules shared to roles and says it can't tell whether they use the moved roles. UNVERIFIED until the sync reads the target.
+- Public groups are matched through the role groups (Group.RelatedId) they contain.
+- A count the sync didn't take is shown as unknown ("records not counted", "at least N"), never as zero.
+- The export's `.role` element names and order, and the access-level values, follow the Role metadata fields checked earlier; whether a deploy accepts them is part of Sharan's developer-org test, along with the deploy order.
+- The Implementation Advisor's design-from-scratch draft lives in the browser, like the rest of the advisor's answers, and exports through an endpoint that needs a signed-in user but no org.
+- **Fixture, re-measured after PR #22 merged (scratch only, not added):** Account owner counts, all-Private org-wide defaults, and the role-based sharing rule with its public group. Each step leaves every runbook number unchanged: Health 41, 18 findings, $183,180; License Fit $116,220; risk levels, anomalies and Priority Actions the same. Waiting for Sharan's approval before adding it.
 Mike's core ask. Moved up from phase D on 21 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
 - **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.
 - **Approach:**

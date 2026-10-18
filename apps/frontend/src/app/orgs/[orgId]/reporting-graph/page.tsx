@@ -39,6 +39,8 @@ import { Reveal } from '@/components/v2/motion'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { RoleHierarchyView } from '@/components/roles/RoleHierarchyView'
+import { OrgRoleDesign } from '@/components/roles/OrgRoleDesign'
+import { useAuth } from '@/lib/auth/AuthContext'
 import {
   useReportingGraph,
   useApplyReportingGraphEdits,
@@ -63,16 +65,17 @@ type PendingEdit = RelationshipEdit & {
   target_name?: string
 }
 
-type OrgChartView = 'roles' | 'people'
+type OrgChartView = 'roles' | 'design' | 'people'
 
-/** Roles (the role hierarchy, read-only) or People (managers and delegated
- * approvers, editable). Kept in the URL so a link opens the same view. */
+/** Roles (the role hierarchy, read-only), Design (role hierarchy drafts,
+ * never sent to Salesforce) or People (managers and delegated approvers,
+ * editable). Kept in the URL so a link opens the same view. */
 function ViewToggle({ view }: { view: OrgChartView }) {
   const router = useRouter()
   const pathname = usePathname()
   return (
     <div role="tablist" aria-label="Org chart view" className="flex items-center gap-1 rounded-md border border-grove-border bg-grove-surface p-0.5 dark:border-grove-border-dk dark:bg-grove-canvas-dk">
-      {(['roles', 'people'] as const).map((v) => (
+      {(['roles', 'design', 'people'] as const).map((v) => (
         <button
           key={v}
           role="tab"
@@ -82,7 +85,7 @@ function ViewToggle({ view }: { view: OrgChartView }) {
             view === v ? 'bg-primary-700 text-grove-canvas shadow' : 'text-grove-ink/65 hover:bg-primary-50 dark:text-grove-ink-dk/65 dark:hover:bg-primary-900/20'
           }`}
         >
-          {v === 'roles' ? 'Roles' : 'People'}
+          {v === 'roles' ? 'Roles' : v === 'design' ? 'Design' : 'People'}
         </button>
       ))}
     </div>
@@ -91,7 +94,25 @@ function ViewToggle({ view }: { view: OrgChartView }) {
 
 export default function ReportingGraphPage() {
   const params = useParams()
-  const view: OrgChartView = useSearchParams().get('view') === 'people' ? 'people' : 'roles'
+  const requested = useSearchParams().get('view')
+  const view: OrgChartView = requested === 'people' || requested === 'design' ? requested : 'roles'
+  const { currentOrg } = useAuth()
+  if (view === 'design') {
+    return (
+      <div className="space-y-4">
+        <Reveal>
+          <PageHeader
+            icon={Users2}
+            title="Org Chart"
+            eyebrow="Admin · hierarchy"
+            subtitle="Design changes to the role hierarchy, see who gains or loses access, and export them for the client to apply. Drafts stay in Newton."
+            actions={<ViewToggle view="design" />}
+          />
+        </Reveal>
+        <OrgRoleDesign orgId={params.orgId as string} isDemo={!!currentOrg?.is_demo} />
+      </div>
+    )
+  }
   if (view === 'roles') {
     return (
       <div className="space-y-4">
