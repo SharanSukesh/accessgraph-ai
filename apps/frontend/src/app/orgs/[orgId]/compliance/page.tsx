@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/shared/PageHeader'
+import { VisualDownloadButton } from '@/components/imagePack/VisualDownloadButton'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { Card, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
@@ -94,6 +95,7 @@ export default function CompliancePage() {
           eyebrow="Optimize · assurance"
           title="Compliance Control Indicators"
           subtitle="Pass/fail indicators for SOX, SOC 2, HIPAA, GDPR and PCI DSS controls, read from this org's configuration"
+          actions={<VisualDownloadButton orgId={orgId} visual="compliance" />}
         />
       </Reveal>
 

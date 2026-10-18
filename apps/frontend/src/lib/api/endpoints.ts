@@ -75,6 +75,8 @@ export const endpoints = {
   orgAnalyzerHistory: (orgId: string) => `/orgs/${orgId}/org-analyzer/history`,
   orgAnalyzerReportPdf: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.pdf`,
   orgAnalyzerReportXlsx: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.xlsx`,
+  imagePack: (orgId: string) => `/orgs/${orgId}/image-pack`,
+  imagePackVisual: (orgId: string, key: string) => `/orgs/${orgId}/image-pack/${key}`,
   orgAnalyzerPriceBook: (orgId: string) => `/orgs/${orgId}/org-analyzer/price-book`,
   // v1.8 — CSV export, apply-fix, brand settings
   orgAnalyzerFindingsCsv: (orgId: string) => `/orgs/${orgId}/org-analyzer/findings.csv`,

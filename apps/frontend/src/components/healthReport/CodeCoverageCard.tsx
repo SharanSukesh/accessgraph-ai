@@ -30,7 +30,7 @@ function NameList({ title, items }: { title: string; items: { name: string }[] }
   )
 }
 
-export function CodeCoverageCard({ coverage }: { coverage?: CodeCoverage | null }) {
+export function CodeCoverageCard({ coverage, action }: { coverage?: CodeCoverage | null; action?: React.ReactNode }) {
   if (!coverage) return null
   const status = coverageStatus(coverage)
   const pct = coverage.org_wide_pct ?? 0
@@ -39,7 +39,10 @@ export function CodeCoverageCard({ coverage }: { coverage?: CodeCoverage | null 
   return (
     <Card variant="bordered">
       <CardHeader>
-        <CardTitle>Code coverage</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>Code coverage</CardTitle>
+          {action}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">

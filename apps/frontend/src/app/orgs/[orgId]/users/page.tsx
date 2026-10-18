@@ -16,6 +16,7 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { VisualDownloadButton } from '@/components/imagePack/VisualDownloadButton'
 import { MaskedUsersBanner, PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { isPrivacyModeError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
@@ -70,6 +71,7 @@ function UsersContent() {
           eyebrow="Explore · people"
           actions={
             <>
+            <VisualDownloadButton orgId={orgId} visual="risk_distribution" />
             <Button
               variant="secondary"
               disabled={!users?.length}

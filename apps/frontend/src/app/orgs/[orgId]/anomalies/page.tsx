@@ -18,6 +18,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { VisualDownloadButton } from '@/components/imagePack/VisualDownloadButton'
 import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
@@ -86,15 +87,18 @@ function AnomaliesContent() {
           eyebrow="Attention · detection"
           subtitle="Review detected access anomalies and unusual patterns"
           actions={
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!anomalies?.length}
-              onClick={() => exportAnomaliesToCSV(anomalies ?? [], `anomalies-${exportStamp()}`)}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            <>
+              <VisualDownloadButton orgId={orgId} visual="top_anomalies" />
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!anomalies?.length}
+                onClick={() => exportAnomaliesToCSV(anomalies ?? [], `anomalies-${exportStamp()}`)}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            </>
           }
         />
       </Reveal>

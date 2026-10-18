@@ -13,6 +13,7 @@ import { AlertTriangle, SlidersHorizontal } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { Button } from '@/components/shared/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/Card'
+import { VisualDownloadButton } from '@/components/imagePack/VisualDownloadButton'
 import {
   type CriticalObjectSettings,
   type ObjectScore,
@@ -97,9 +98,12 @@ export function CriticalObjectsPanel({
             <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden />
             Critical objects
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => setShowThresholds((v) => !v)}>
-            <SlidersHorizontal className="mr-2 h-4 w-4" aria-hidden /> Thresholds
-          </Button>
+          <div className="flex items-center gap-2">
+            <VisualDownloadButton orgId={orgId} visual="critical_objects" />
+            <Button variant="ghost" size="sm" onClick={() => setShowThresholds((v) => !v)}>
+              <SlidersHorizontal className="mr-2 h-4 w-4" aria-hidden /> Thresholds
+            </Button>
+          </div>
         </div>
         <p className="mt-1 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
           Objects whose data is stale, mostly empty or carries fields nobody fills in, from the latest Data Quality run.

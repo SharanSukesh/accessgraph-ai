@@ -703,6 +703,38 @@ async def _get_brand_row(db: AsyncSession, org_id: str) -> Optional[BrandSetting
     return res.scalar_one_or_none()
 
 
+async def _report_brand(db: AsyncSession, org_id: str, request: Request):
+    """Letterhead for the PDF and the image pack: the firm's branding
+    (per-client override, else the firm-wide default on the operator's own
+    org) plus the client's logo."""
+    import base64
+
+    from app.services.org_analyzer_pdf import BrandContext
+
+    def _b64(data: Optional[bytes]) -> Optional[str]:
+        return base64.b64encode(data).decode("ascii") if data else None
+
+    org_brand = await _get_brand_row(db, org_id)
+    home_org_id = getattr(getattr(request.state, "principal", None), "home_org_id", None)
+    firm_brand = await _get_brand_row(db, home_org_id) if home_org_id else None
+
+    def _pick(attr: str):
+        for row in (org_brand, firm_brand):
+            if row is not None and getattr(row, attr):
+                return row
+        return None
+
+    logo_row = _pick("logo_bytes")
+    return BrandContext(
+        firm_name=getattr(_pick("firm_name"), "firm_name", None),
+        accent_hex=getattr(_pick("accent_hex"), "accent_hex", None),
+        logo_mime=logo_row.logo_mime if logo_row else None,
+        logo_b64=_b64(logo_row.logo_bytes) if logo_row else None,
+        client_logo_mime=org_brand.client_logo_mime if org_brand else None,
+        client_logo_b64=_b64(org_brand.client_logo_bytes) if org_brand else None,
+    )
+
+
 @router.get(
     "/orgs/{org_id}/org-analyzer/brand",
     response_model=BrandRow,
@@ -1271,7 +1303,7 @@ async def download_report(
 
     try:
         from app.services.org_analyzer_pdf import (
-            BrandContext, build_report_pdf,
+            build_report_pdf,
         )
     except Exception as e:
         logger.exception("PDF library not available: %s", e)
@@ -1280,32 +1312,7 @@ async def download_report(
             detail="PDF generation unavailable. Check server logs.",
         )
 
-    # Letterhead: the firm's branding (per-client override, else the
-    # firm-wide default on the operator's own org) plus the client's logo.
-    import base64
-
-    def _b64(data: Optional[bytes]) -> Optional[str]:
-        return base64.b64encode(data).decode("ascii") if data else None
-
-    org_brand = await _get_brand_row(db, org_id)
-    home_org_id = getattr(getattr(request.state, "principal", None), "home_org_id", None)
-    firm_brand = await _get_brand_row(db, home_org_id) if home_org_id else None
-
-    def _pick(attr: str):
-        for row in (org_brand, firm_brand):
-            if row is not None and getattr(row, attr):
-                return row
-        return None
-
-    logo_row = _pick("logo_bytes")
-    brand_ctx = BrandContext(
-        firm_name=getattr(_pick("firm_name"), "firm_name", None),
-        accent_hex=getattr(_pick("accent_hex"), "accent_hex", None),
-        logo_mime=logo_row.logo_mime if logo_row else None,
-        logo_b64=_b64(logo_row.logo_bytes) if logo_row else None,
-        client_logo_mime=org_brand.client_logo_mime if org_brand else None,
-        client_logo_b64=_b64(org_brand.client_logo_bytes) if org_brand else None,
-    )
+    brand_ctx = await _report_brand(db, org_id, request)
 
     from app.services.report.context import gather_report_context
 
@@ -1334,3 +1341,114 @@ async def download_report(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+# ---------------------------------------------------------------- image pack
+# Roadmap item 3: the Health Report's visuals as PNG/JPEG images, one at a
+# time or as a ZIP / PowerPoint set (services/report/image_pack.py).
+
+
+class ImagePackRequest(BaseModel):
+    visuals: List[str] = Field(..., min_length=1)
+    format: str = "png"
+    transparent: bool = False
+    layouts: List[str] = Field(default_factory=lambda: ["slide"])
+    images: bool = True
+    pptx: bool = False
+    firm_logo: bool = True
+    client_logo: bool = True
+
+
+def _image_options(fmt: str, transparent: bool, layout: str, firm_logo: bool, client_logo: bool):
+    from app.services.report.image_pack import ImageOptions
+    try:
+        return ImageOptions(fmt=fmt, transparent=transparent, layout=layout,
+                            firm_logo=firm_logo, client_logo=client_logo)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+def _render_unavailable(e: OSError):
+    logger.exception("Image rendering libraries missing: %s", e)
+    return HTTPException(status_code=503, detail="Image rendering unavailable. Check server logs.")
+
+
+@router.get("/orgs/{org_id}/image-pack")
+async def image_pack_visuals(
+    org_id: str,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> Dict[str, Any]:
+    """Which visuals can be drawn now, and why the others can't."""
+    from app.services.report.image_pack import FORMATS, LAYOUTS, availability, gather_pack_source
+
+    src = await gather_pack_source(db, org_id)
+    return {"visuals": availability(src), "is_demo": src.is_demo, "formats": list(FORMATS), "layouts": list(LAYOUTS)}
+
+
+@router.get("/orgs/{org_id}/image-pack/{visual}")
+async def image_pack_visual(
+    org_id: str,
+    visual: str,
+    request: Request,
+    format: str = Query("png"),
+    transparent: bool = Query(False),
+    layout: str = Query("slide"),
+    firm_logo: bool = Query(True),
+    client_logo: bool = Query(True),
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> StreamingResponse:
+    """One visual as an image (the per-visual download buttons)."""
+    from app.services.report.image_pack import VISUAL_BY_KEY, build_visual, file_name, gather_pack_source, render_visual
+
+    if visual not in VISUAL_BY_KEY:
+        raise HTTPException(status_code=404, detail="Unknown visual.")
+    opts = _image_options(format, transparent, layout, firm_logo, client_logo)
+    src = await gather_pack_source(db, org_id)
+    body, note = build_visual(visual, src)
+    if body is None:
+        raise HTTPException(status_code=409, detail=note)
+    brand = await _report_brand(db, org_id, request)
+    try:
+        data = render_visual(visual, src, brand, opts)
+    except OSError as e:
+        raise _render_unavailable(e)
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="image/jpeg" if opts.fmt == "jpeg" else "image/png",
+        headers={"Content-Disposition": f'attachment; filename="{file_name(visual, opts, src.is_demo)}"'},
+    )
+
+
+@router.post("/orgs/{org_id}/image-pack")
+async def image_pack_download(
+    org_id: str,
+    body: ImagePackRequest,
+    request: Request,
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> StreamingResponse:
+    """The chosen visuals as a ZIP, a .pptx, or a ZIP holding both."""
+    from app.services.report.image_pack import LAYOUTS, build_pack, gather_pack_source
+
+    layouts = [l for l in dict.fromkeys(body.layouts) if l in LAYOUTS]
+    if body.images and not layouts:
+        raise HTTPException(status_code=400, detail="Choose at least one layout.")
+    if not (body.images or body.pptx):
+        raise HTTPException(status_code=400, detail="Choose images, a PowerPoint file, or both.")
+    opts = _image_options(body.format, body.transparent, layouts[0] if layouts else "slide",
+                          body.firm_logo, body.client_logo)
+    src = await gather_pack_source(db, org_id)
+    brand = await _report_brand(db, org_id, request)
+    try:
+        data, media, _skipped = build_pack(body.visuals, src, brand, opts, layouts, images=body.images, pptx=body.pptx)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except OSError as e:
+        raise _render_unavailable(e)
+    stamp = (src.snapshot.snapshot_at if src.snapshot is not None else datetime.now(timezone.utc)).strftime("%Y%m%d")
+    ext = "zip" if media == "application/zip" else "pptx"
+    name = f"{'demo-' if src.is_demo else ''}visuals-{stamp}.{ext}"
+    return StreamingResponse(io.BytesIO(data), media_type=media,
+                             headers={"Content-Disposition": f'attachment; filename="{name}"'})
