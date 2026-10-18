@@ -13,9 +13,21 @@ import { endpoints } from '@/lib/api/endpoints'
 import { useImagePack } from '@/lib/api/hooks/useImagePack'
 import { IMAGE_CHOICES, type VisualKey, visualQuery } from '@/lib/imagePack'
 
-export function VisualDownloadButton({ orgId, visual }: { orgId: string; visual: VisualKey }) {
+export function VisualDownloadButton({
+  orgId,
+  visual,
+  label: buttonLabel = 'Image',
+  large = false,
+}: {
+  orgId: string
+  visual: VisualKey
+  label?: string
+  /** Header-sized, to sit beside the page's other download buttons. */
+  large?: boolean
+}) {
   const { data } = useImagePack(orgId)
   const [open, setOpen] = useState(false)
+  const [orgName, setOrgName] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -44,9 +56,11 @@ export function VisualDownloadButton({ orgId, visual }: { orgId: string; visual:
         title={info.available ? label : info.note ?? undefined}
         aria-label={label}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-md border border-grove-border px-2 py-1 text-xs font-medium text-grove-ink/80 hover:bg-primary-50/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-grove-border-dk dark:text-grove-ink-dk/80 dark:hover:bg-primary-900/15"
+        className={`inline-flex items-center rounded-md border border-grove-border font-medium text-grove-ink/80 hover:bg-primary-50/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-grove-border-dk dark:text-grove-ink-dk/80 dark:hover:bg-primary-900/15 ${
+          large ? 'gap-2 px-3 py-2 text-sm' : 'gap-1.5 px-2 py-1 text-xs'
+        }`}
       >
-        <ImageDown className="h-3.5 w-3.5" aria-hidden /> Image
+        <ImageDown className={large ? 'h-4 w-4' : 'h-3.5 w-3.5'} aria-hidden /> {buttonLabel}
       </button>
       {open && (
         <div
@@ -57,7 +71,7 @@ export function VisualDownloadButton({ orgId, visual }: { orgId: string; visual:
             <a
               key={c.label}
               role="menuitem"
-              href={`${API_BASE_URL}${endpoints.imagePackVisual(orgId, visual)}?${visualQuery(c.choice)}`}
+              href={`${API_BASE_URL}${endpoints.imagePackVisual(orgId, visual)}?${visualQuery(c.choice, orgName)}`}
               onClick={() => setOpen(false)}
               className="block rounded px-2.5 py-1.5 text-xs hover:bg-primary-50/50 dark:hover:bg-primary-900/20"
             >
@@ -65,11 +79,10 @@ export function VisualDownloadButton({ orgId, visual }: { orgId: string; visual:
               <span className="block text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">{c.hint}</span>
             </a>
           ))}
-          {data?.is_demo && (
-            <p className="border-t border-grove-border px-2.5 py-1.5 text-[11px] text-amber-700 dark:border-grove-border-dk dark:text-amber-300">
-              Demo org: every image carries the &ldquo;Demo data&rdquo; label.
-            </p>
-          )}
+          <label className="mt-1 flex cursor-pointer items-center gap-2 border-t border-grove-border px-2.5 pb-1 pt-2 text-xs dark:border-grove-border-dk">
+            <input type="checkbox" className="accent-primary-700" checked={orgName} onChange={(e) => setOrgName(e.target.checked)} />
+            Org name in the slide footer
+          </label>
         </div>
       )}
     </div>

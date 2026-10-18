@@ -704,9 +704,9 @@ async def _get_brand_row(db: AsyncSession, org_id: str) -> Optional[BrandSetting
 
 
 async def _report_brand(db: AsyncSession, org_id: str, request: Request):
-    """Letterhead for the PDF and the image pack: the firm's branding
-    (per-client override, else the firm-wide default on the operator's own
-    org) plus the client's logo."""
+    """Letterhead for the PDF: the firm's branding (per-client override,
+    else the firm-wide default on the operator's own org) plus the client's
+    logo. The image pack uses only its accent colour (images carry no logos)."""
     import base64
 
     from app.services.org_analyzer_pdf import BrandContext
@@ -1355,15 +1355,14 @@ class ImagePackRequest(BaseModel):
     layouts: List[str] = Field(default_factory=lambda: ["slide"])
     images: bool = True
     pptx: bool = False
-    firm_logo: bool = True
-    client_logo: bool = True
+    # The org's name in the slide footer; off by default.
+    org_name: bool = False
 
 
-def _image_options(fmt: str, transparent: bool, layout: str, firm_logo: bool, client_logo: bool):
+def _image_options(fmt: str, transparent: bool, layout: str, org_name: bool = False):
     from app.services.report.image_pack import ImageOptions
     try:
-        return ImageOptions(fmt=fmt, transparent=transparent, layout=layout,
-                            firm_logo=firm_logo, client_logo=client_logo)
+        return ImageOptions(fmt=fmt, transparent=transparent, layout=layout, org_name=org_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1394,8 +1393,7 @@ async def image_pack_visual(
     format: str = Query("png"),
     transparent: bool = Query(False),
     layout: str = Query("slide"),
-    firm_logo: bool = Query(True),
-    client_logo: bool = Query(True),
+    org_name: bool = Query(False),
     _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> StreamingResponse:
@@ -1404,7 +1402,7 @@ async def image_pack_visual(
 
     if visual not in VISUAL_BY_KEY:
         raise HTTPException(status_code=404, detail="Unknown visual.")
-    opts = _image_options(format, transparent, layout, firm_logo, client_logo)
+    opts = _image_options(format, transparent, layout, org_name)
     src = await gather_pack_source(db, org_id)
     body, note = build_visual(visual, src)
     if body is None:
@@ -1437,8 +1435,7 @@ async def image_pack_download(
         raise HTTPException(status_code=400, detail="Choose at least one layout.")
     if not (body.images or body.pptx):
         raise HTTPException(status_code=400, detail="Choose images, a PowerPoint file, or both.")
-    opts = _image_options(body.format, body.transparent, layouts[0] if layouts else "slide",
-                          body.firm_logo, body.client_logo)
+    opts = _image_options(body.format, body.transparent, layouts[0] if layouts else "slide", body.org_name)
     src = await gather_pack_source(db, org_id)
     brand = await _report_brand(db, org_id, request)
     try:
