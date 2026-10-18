@@ -28,7 +28,7 @@ import re
 import zipfile
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set
 from xml.sax.saxutils import escape
 
 from app.services.role_hierarchy import ACCOUNT_OWNER_ACCESS_FIELDS, OWNED_OBJECTS, OWNED_RECORDS_KEY, is_portal

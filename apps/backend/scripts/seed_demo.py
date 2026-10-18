@@ -35,7 +35,7 @@ async def main():
     async with AsyncSessionLocal() as db:
         # Check if demo org exists
         result = await db.execute(
-            select(Organization).where(Organization.is_demo == True)
+            select(Organization).where(Organization.is_demo == True)  # noqa: E712
         )
         org = result.scalar_one_or_none()
 
@@ -102,7 +102,7 @@ async def main():
 
     logger.info("Demo data seed complete!")
     logger.info(f"Organization ID: {org_id}")
-    logger.info(f"View at: http://localhost:8000/docs")
+    logger.info("View at: http://localhost:8000/docs")
 
 
 if __name__ == "__main__":

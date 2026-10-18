@@ -435,8 +435,8 @@ def _rasterise(html: str, opts: ImageOptions):
         box = img.getchannel("A").getbbox()
         if box:
             pad = int(CROP_PAD * SCALE)
-            l, t, r, b = box
-            img = img.crop((max(0, l - pad), max(0, t - pad), min(img.width, r + pad), min(img.height, b + pad)))
+            left, top, right, bottom = box
+            img = img.crop((max(0, left - pad), max(0, top - pad), min(img.width, right + pad), min(img.height, bottom + pad)))
     return img
 
 

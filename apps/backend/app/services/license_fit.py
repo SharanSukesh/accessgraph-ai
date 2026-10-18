@@ -66,7 +66,6 @@ from app.domain.models import (
     LicensePriceBook,
     ObjectPermissionSnapshot,
     PermissionSetAssignmentSnapshot,
-    PermissionSetSnapshot,
     ProfileSnapshot,
     SalesforceConnection,
     UserSnapshot,
@@ -847,7 +846,7 @@ class LicenseFitService:
                     "overbuilt",
                     "Salesforce Platform",
                     platform_cost,
-                    f"User works only in custom objects or is read-only"
+                    "User works only in custom objects or is read-only"
                     " — Platform SKU is sufficient",
                 )
 

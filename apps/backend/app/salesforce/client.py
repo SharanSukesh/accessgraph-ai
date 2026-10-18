@@ -20,6 +20,7 @@ from app.salesforce.models import (
     SalesforceGroupMember,
     SalesforceObjectPermission,
     SalesforceOpportunityShare,
+    SalesforceOrganizationWideDefault,
     SalesforcePermissionSet,
     SalesforcePermissionSetAssignment,
     SalesforcePermissionSetGroup,
@@ -100,7 +101,6 @@ class SalesforceAPIClient:
             List of all records
         """
         all_records = []
-        next_url = None
 
         # First query
         result = await self.query(soql)
@@ -2818,7 +2818,7 @@ class SalesforceAPIClient:
         logger.info(f"Found {len(system_required_fields)} system-required fields for {object_name}")
         return system_required_fields
 
-    async def extract_organization_wide_defaults(self) -> List["SalesforceOrganizationWideDefault"]:
+    async def extract_organization_wide_defaults(self) -> List[SalesforceOrganizationWideDefault]:
         """
         Extract Organization-Wide Default (OWD) sharing settings for all objects
 
@@ -2832,7 +2832,6 @@ class SalesforceAPIClient:
         Returns:
             List of SalesforceOrganizationWideDefault objects
         """
-        from app.salesforce.models import SalesforceOrganizationWideDefault
 
         owds = []
 

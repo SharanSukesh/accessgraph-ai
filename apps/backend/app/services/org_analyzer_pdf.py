@@ -295,15 +295,15 @@ def _profile(snapshot: OrgAnalysisSnapshot) -> str:
     tiles = "".join(_stat(label, _compact(v)) for label, v in composition if v is not None)
 
     licenses = sorted(
-        [l for l in (m.get("license_utilization") or []) if l.get("total")],
-        key=lambda l: l.get("total", 0), reverse=True,
+        [lic for lic in (m.get("license_utilization") or []) if lic.get("total")],
+        key=lambda lic: lic.get("total", 0), reverse=True,
     )[:10]
     license_rows = "".join(
-        f"<tr><td>{_esc(l.get('license_name') or l.get('developer_key'))}</td>"
-        f"<td>{charts.meter(l['used'] / l['total'], width=180, warn_at=0.9, critical_at=0.98)}</td>"
-        f"<td class='num'>{l['used']:,} of {l['total']:,}</td>"
-        f"<td class='num'>{l['total'] - l['used']:,} unused</td></tr>"
-        for l in licenses
+        f"<tr><td>{_esc(lic.get('license_name') or lic.get('developer_key'))}</td>"
+        f"<td>{charts.meter(lic['used'] / lic['total'], width=180, warn_at=0.9, critical_at=0.98)}</td>"
+        f"<td class='num'>{lic['used']:,} of {lic['total']:,}</td>"
+        f"<td class='num'>{lic['total'] - lic['used']:,} unused</td></tr>"
+        for lic in licenses
     )
     license_html = (
         f'<h3 class="block-title">Licence utilisation</h3>'

@@ -1,0 +1,10 @@
+# Ruff's default rules (E4, E7, E9, F). CI runs `ruff check .` and fails on any issue.
+
+[per-file-ignores]
+# Standalone scripts: they put apps/backend on sys.path before importing app.
+"check_tokens_simple.py" = ["E402"]
+"migrate_encrypt_tokens.py" = ["E402"]
+"verify_encryption.py" = ["E402"]
+"scripts/seed_demo.py" = ["E402"]
+# Sets a test JWT secret before any app module reads the settings.
+"tests/conftest.py" = ["E402"]

@@ -381,7 +381,7 @@ class RecordAccessService:
 
         Returns list of sharing rules with descriptions
         """
-        from app.domain.models import SharingRuleSnapshot, RoleSnapshot
+        from app.domain.models import SharingRuleSnapshot
 
         rules_summary = []
 
@@ -401,7 +401,7 @@ class RecordAccessService:
         # Get all sharing rules for this org
         rules_query = select(SharingRuleSnapshot).where(
             SharingRuleSnapshot.organization_id == org_id,
-            SharingRuleSnapshot.is_active == True,
+            SharingRuleSnapshot.is_active == True,  # noqa: E712
         )
         rules_result = await self.db.execute(rules_query)
         all_rules = rules_result.scalars().all()

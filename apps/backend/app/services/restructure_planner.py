@@ -618,8 +618,8 @@ class RestructurePlannerService:
                 primary_component_id=ps.salesforce_id,
                 primary_component_name=_ps_display(ps, ctx.profiles_by_id),
                 rationale_seed=(
-                    f"Permission Set has zero direct assignments and no "
-                    f"activity — safe candidate to retire."
+                    "Permission Set has zero direct assignments and no "
+                    "activity — safe candidate to retire."
                 ),
             ))
 

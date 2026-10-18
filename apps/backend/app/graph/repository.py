@@ -3,7 +3,7 @@ Neo4j Graph Repository
 Handles graph operations and queries
 """
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from app.db.neo4j_client import Neo4jClient
 from app.graph.schema import NodeLabel, RelType
@@ -209,7 +209,7 @@ class GraphRepository:
             MERGE (ps)-[:{RelType.CAN_DELETE}]->(o))
         """
         await self.client.execute_write(query, {"org_id": org_id, "permissions": permissions})
-        logger.info(f"Created object permissions")
+        logger.info("Created object permissions")
 
     async def create_field_permissions(self, org_id: str, permissions: List[Dict[str, Any]]):
         """Create field permission relationships"""
@@ -224,7 +224,7 @@ class GraphRepository:
             MERGE (ps)-[:{RelType.CAN_EDIT_FIELD}]->(f))
         """
         await self.client.execute_write(query, {"org_id": org_id, "permissions": permissions})
-        logger.info(f"Created field permissions")
+        logger.info("Created field permissions")
 
     async def get_user_access_paths(self, org_id: str, user_sf_id: str, object_name: str) -> List[Dict]:
         """

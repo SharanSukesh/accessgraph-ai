@@ -6,12 +6,19 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import health
+from app.api.routes import (
+    health, auth, accounts, orgs, users, privacy, package, deeplink,
+    equity, reporting_graph, org_analyzer, data_quality,
+    change_risk_radar, package_sprawl, restructure, report_sprawl,
+    automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs, roles, role_design,
+    ui_access,
+)
+from app.auth.deps import require_org_access
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.db.session import engine, test_connection
@@ -156,17 +163,6 @@ async def add_security_headers(request: Request, call_next):
 
 
 # Include routers
-from fastapi import Depends
-
-from app.auth.deps import require_org_access
-from app.api.routes import (
-    auth, accounts, orgs, users, privacy, package, deeplink,
-    equity, reporting_graph, org_analyzer, data_quality,
-    change_risk_radar, package_sprawl, restructure, report_sprawl,
-    automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs, roles, role_design,
-)
-from app.api.routes import ui_access  # noqa: E402  (roadmap item 1)
-
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, tags=["authentication"])
 app.include_router(accounts.router, tags=["accounts"])

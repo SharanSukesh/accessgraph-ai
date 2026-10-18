@@ -24,10 +24,10 @@ from app.domain.models import (
     RecommendationTrack,
     RecommendationType,
 )
+from app.services.replace_lock import lock_for_replace
 
 # Priority Action types owned by this module (re-derived on every rebuild).
 HEALTH_ACTION_TYPES = (RecommendationType.DEPLOYMENT_READINESS, RecommendationType.DATA_CLEANUP)
-from app.services.replace_lock import lock_for_replace
 
 
 def coverage_action(org_id: str, cov: Optional[Dict[str, Any]]) -> Optional[Recommendation]:

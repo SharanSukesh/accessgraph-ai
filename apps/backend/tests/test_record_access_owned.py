@@ -44,21 +44,21 @@ async def _live_extract(monkeypatch, owner_rows):
     """Run the real extract_all with every Salesforce call stubbed out."""
     from app.salesforce.client import SalesforceAPIClient
 
-    client = SalesforceAPIClient(instance_url="https://example.invalid", access_token="x")
+    sf_client = SalesforceAPIClient(instance_url="https://example.invalid", access_token="x")
 
     async def empty(*_a, **_k):
         return []
 
     for name in dir(SalesforceAPIClient):
         if name.startswith("extract_") and name != "extract_all":
-            monkeypatch.setattr(client, name, empty)
+            monkeypatch.setattr(sf_client, name, empty)
 
     async def extract_users():
         from app.salesforce.models import SalesforceUser
         return [SalesforceUser(Id=REP, Username="rep@x", Name="Rep", ProfileId="00e000000000001AAA"),
                 SalesforceUser(Id=NEW, Username="new@x", Name="New", ProfileId="00e000000000001AAA")]
 
-    monkeypatch.setattr(client, "extract_users", extract_users)
+    monkeypatch.setattr(sf_client, "extract_users", extract_users)
 
     async def query(soql):
         obj = soql.split(" FROM ")[1].split()[0]
@@ -66,8 +66,8 @@ async def _live_extract(monkeypatch, owner_rows):
             raise RuntimeError("INVALID_TYPE")  # e.g. no access to the object
         return _Result(owner_rows[obj])
 
-    monkeypatch.setattr(client, "query", query)
-    data = await client.extract_all()
+    monkeypatch.setattr(sf_client, "query", query)
+    data = await sf_client.extract_all()
     return data
 
 

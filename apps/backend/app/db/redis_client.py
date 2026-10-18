@@ -3,7 +3,7 @@ Redis Cache Client
 Connection and utility functions for Redis operations
 """
 import logging
-from typing import Optional, Any
+from typing import Optional
 import redis.asyncio as redis
 from redis.asyncio import Redis
 

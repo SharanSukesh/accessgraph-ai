@@ -74,15 +74,15 @@ def check_tokens():
                     print(f"  Access token: {access_sample}...")
                     # Check if it looks encrypted (random bytes) or plain text
                     if access_sample.startswith("00!") or access_sample.startswith("eyJ"):
-                        print(f"  → Looks like PLAIN TEXT (Salesforce token format)")
+                        print("  → Looks like PLAIN TEXT (Salesforce token format)")
                     else:
-                        print(f"  → Looks like ENCRYPTED (random bytes)")
+                        print("  → Looks like ENCRYPTED (random bytes)")
                 if refresh_sample:
                     print(f"  Refresh token: {refresh_sample}...")
                     if refresh_sample.startswith("eyJ") or "!" in refresh_sample[:20]:
-                        print(f"  → Looks like PLAIN TEXT (Salesforce token format)")
+                        print("  → Looks like PLAIN TEXT (Salesforce token format)")
                     else:
-                        print(f"  → Looks like ENCRYPTED (random bytes)")
+                        print("  → Looks like ENCRYPTED (random bytes)")
                 print()
 
         print("="*60)

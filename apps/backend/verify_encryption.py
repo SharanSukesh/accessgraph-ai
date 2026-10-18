@@ -133,7 +133,7 @@ async def verify_encryption():
         from sqlalchemy import select
 
         stmt = select(SalesforceConnection).where(
-            SalesforceConnection.is_active == True
+            SalesforceConnection.is_active == True  # noqa: E712
         ).limit(1)
 
         result = await async_session.execute(stmt)
@@ -183,7 +183,7 @@ async def verify_encryption():
 
     async with async_session_maker() as async_session:
         stmt = select(SalesforceConnection).where(
-            SalesforceConnection.is_active == True
+            SalesforceConnection.is_active == True  # noqa: E712
         ).limit(1)
 
         result = await async_session.execute(stmt)
@@ -219,8 +219,8 @@ async def verify_encryption():
                     print()
                     return True
                 elif response.status_code == 401:
-                    print(f"❌ API call returned 401 Unauthorized")
-                    print(f"   This means the token was decrypted but is invalid/expired")
+                    print("❌ API call returned 401 Unauthorized")
+                    print("   This means the token was decrypted but is invalid/expired")
                     print(f"   Response: {response.text}")
                     return False
                 else:
