@@ -577,6 +577,9 @@ def _is_billed_for_org(
     return True, None
 
 # Sensitive objects where Public Read/Write OWD is a red flag.
+# Group types whose members are listed as GroupMember rows (see GROUP_EMPTY).
+GROUP_TYPES_WITH_EXPLICIT_MEMBERS = frozenset({"Regular", "Queue"})
+
 SENSITIVE_OBJECTS = {
     "Account", "Opportunity", "Case", "Contact", "Lead",
     "Contract", "Order", "Quote",
@@ -2081,13 +2084,17 @@ class OrgAnalyzerService:
                 sf_setup_deeplink="/lightning/setup/PermSetGroups/home",
             ))
 
-        # GROUP_EMPTY
+        # GROUP_EMPTY. Only public groups (Regular) and queues have explicit
+        # members. Role, RoleAndSubordinates(Internal), Organization, Manager
+        # and Territory groups get theirs implicitly, so no GroupMember rows
+        # doesn't make them empty.
         group_member_count: Dict[str, int] = defaultdict(int)
         for gm in ctx.group_members:
             group_member_count[gm.group_id] += 1
         empty_groups = [
             g for g in ctx.groups
-            if group_member_count.get(g.salesforce_id, 0) == 0
+            if g.group_type in GROUP_TYPES_WITH_EXPLICIT_MEMBERS
+            and group_member_count.get(g.salesforce_id, 0) == 0
         ]
         if empty_groups:
             n = len(empty_groups)
