@@ -418,7 +418,9 @@ def summarize(
     app_names: Dict[Optional[str], str] = {}
     for day in days:
         total = counting = 0
-        app_day, user_day, family_day = Counter(), Counter(), Counter()
+        app_day: Counter = Counter()
+        user_day: Counter = Counter()
+        family_day: Counter = Counter()
         for r in day["rows"]:
             n = int(r["requests"])
             total += n
