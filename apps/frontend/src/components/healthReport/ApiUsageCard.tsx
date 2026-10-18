@@ -199,7 +199,7 @@ function Unavailable({ usage }: { usage: ApiUsage }) {
   )
 }
 
-export function ApiUsageCard({ usage }: { usage?: ApiUsage | null }) {
+export function ApiUsageCard({ usage, action }: { usage?: ApiUsage | null; action?: React.ReactNode }) {
   const [table, setTable] = useState(false)
   if (!usage) return null
   const trend = usage.trend ?? []
@@ -209,7 +209,10 @@ export function ApiUsageCard({ usage }: { usage?: ApiUsage | null }) {
   return (
     <Card variant="bordered">
       <CardHeader>
-        <CardTitle>API usage by source</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle>API usage by source</CardTitle>
+          {action}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {usage.status !== 'ok' ? (

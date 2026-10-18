@@ -261,6 +261,8 @@ export function useRunOrgAnalyzer(orgId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: orgAnalyzerKeys.latest(orgId) })
       qc.invalidateQueries({ queryKey: orgAnalyzerKeys.history(orgId) })
+      // Which visuals the image pack can draw follows the latest run.
+      qc.invalidateQueries({ queryKey: ['image-pack', orgId] })
       // Findings page uses a filter-keyed cache; invalidate the whole branch.
       qc.invalidateQueries({
         queryKey: [...orgAnalyzerKeys.all, 'findings', orgId],
