@@ -115,3 +115,49 @@ export interface SetAutomation {
   /** On a permission set group with a muting set. */
   muting_note?: string | null
 }
+
+/** One step of a "granted through" path, e.g. "Permission set group: Sales Bundle". */
+export interface GrantStep {
+  /** Access-graph node type, for the chip colour (components/graph/graphStyle.ts). */
+  type: 'profile' | 'permission_set' | 'permission_set_group' | 'user'
+  kind: string
+  name: string
+}
+
+const STEP_KINDS: [string, GrantStep['type'], string][] = [
+  ['Permission set group: ', 'permission_set_group', 'Group'],
+  ['Permission set: ', 'permission_set', 'Permission set'],
+  ['Profile: ', 'profile', 'Profile'],
+]
+
+export function grantStep(text: string): GrantStep {
+  for (const [prefix, type, kind] of STEP_KINDS) {
+    if (text.startsWith(prefix)) return { type, kind, name: text.slice(prefix.length) }
+  }
+  // "Flow User (user setting)": a setting on the user record.
+  return { type: 'user', kind: 'User setting', name: text.replace(/ \(user setting\)$/, '') }
+}
+
+/** Case-insensitive match of a search against any of the values. */
+export function matches(query: string, ...values: (string | null | undefined | string[][])[]): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return values.some((v) =>
+    Array.isArray(v) ? v.some((path) => path.some((step) => step.toLowerCase().includes(q))) : (v ?? '').toLowerCase().includes(q),
+  )
+}
+
+/** Rows grouped under their object, objects in A-Z order, rows kept in order. */
+export function byObject<T extends { object: string }>(rows: T[]): { object: string; rows: T[] }[] {
+  const out = new Map<string, T[]>()
+  for (const r of rows) out.set(r.object, [...(out.get(r.object) ?? []), r])
+  return [...out.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([object, rows]) => ({ object, rows }))
+}
+
+/** Record pages in display order: object, then app ("Any other app" last), then record type. */
+export function sortPages(rows: PageRow[]): PageRow[] {
+  const app = (r: PageRow) => (r.app == null ? '\uffff' : r.app)
+  return [...rows].sort(
+    (a, b) => a.object.localeCompare(b.object) || app(a).localeCompare(app(b)) || a.record_type.localeCompare(b.record_type),
+  )
+}
