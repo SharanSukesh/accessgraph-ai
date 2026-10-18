@@ -451,6 +451,13 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - **Fixture:** done in PR #20: Lumenvale has 33 roles (regional sales, department heads, single-user and empty roles, depth 5, a partner portal branch) with no change to its Health Report.
 - **Depends on:** nothing new (uses 31 and 32). **Effort: M.**
 
+**35a status: built (branch feat/role-hierarchy-view), not merged.**
+- Default thresholds: deep = more than 5 levels, wide = more than 6 roles directly below. They're adjustable on screen and labelled as defaults, to be revisited with real-org data.
+- No migration: the extra UserRole fields go into the role snapshot's existing raw_data. If the org rejects the extended query, the sync falls back to Id, Name and ParentRoleId.
+- The tab opens on Roles; People (the editable manager view) is one click away and keeps its privacy gate.
+- At Metadata only, roles are shown without user or record counts: with no user records there's nothing to count them from.
+- Lumenvale's Account owner counts come with 35b's demo data (#26); on this branch alone Account shows "Unknown".
+
 ### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
 Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
 - **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.

@@ -73,6 +73,8 @@ export const endpoints = {
   orgAnalyzerUnignoreFinding: (orgId: string, findingId: string) =>
     `/orgs/${orgId}/org-analyzer/findings/${findingId}/unignore`,
   orgAnalyzerHistory: (orgId: string) => `/orgs/${orgId}/org-analyzer/history`,
+  roleHierarchy: (orgId: string) => `/orgs/${orgId}/roles/hierarchy`,
+  roleUsers: (orgId: string, roleId: string) => `/orgs/${orgId}/roles/${roleId}/users`,
   orgAnalyzerReportPdf: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.pdf`,
   orgAnalyzerReportXlsx: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.xlsx`,
   imagePack: (orgId: string) => `/orgs/${orgId}/image-pack`,

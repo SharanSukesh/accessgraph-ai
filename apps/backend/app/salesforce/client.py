@@ -2235,12 +2235,18 @@ class SalesforceAPIClient:
         Returns:
             List of SalesforceUserRole objects
         """
-        soql = """
-            SELECT Id, Name, ParentRoleId
-            FROM UserRole
-        """
-
-        records = await self.query_all(soql)
+        # The extra fields feed the role hierarchy view. If the org rejects
+        # any of them, fall back to the three the sync has always read, so
+        # a role sync never fails because of the view.
+        try:
+            records = await self.query_all(
+                "SELECT Id, Name, ParentRoleId, DeveloperName, RollupDescription, PortalType, "
+                "PortalRole, PortalAccountId, OpportunityAccessForAccountOwner, "
+                "CaseAccessForAccountOwner, ContactAccessForAccountOwner FROM UserRole"
+            )
+        except httpx.HTTPStatusError as e:
+            logger.info("Extended UserRole query failed (%s); reading Id, Name, ParentRoleId only", e)
+            records = await self.query_all("SELECT Id, Name, ParentRoleId FROM UserRole")
         roles = [SalesforceUserRole(**rec) for rec in records]
 
         logger.info(f"Extracted {len(roles)} roles")

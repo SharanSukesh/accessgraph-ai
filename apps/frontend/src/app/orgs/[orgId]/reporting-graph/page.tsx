@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
   Users2,
@@ -38,6 +38,7 @@ import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal } from '@/components/v2/motion'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { RoleHierarchyView } from '@/components/roles/RoleHierarchyView'
 import {
   useReportingGraph,
   useApplyReportingGraphEdits,
@@ -62,11 +63,55 @@ type PendingEdit = RelationshipEdit & {
   target_name?: string
 }
 
+type OrgChartView = 'roles' | 'people'
+
+/** Roles (the role hierarchy, read-only) or People (managers and delegated
+ * approvers, editable). Kept in the URL so a link opens the same view. */
+function ViewToggle({ view }: { view: OrgChartView }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  return (
+    <div role="tablist" aria-label="Org chart view" className="flex items-center gap-1 rounded-md border border-grove-border bg-grove-surface p-0.5 dark:border-grove-border-dk dark:bg-grove-canvas-dk">
+      {(['roles', 'people'] as const).map((v) => (
+        <button
+          key={v}
+          role="tab"
+          aria-selected={view === v}
+          onClick={() => router.replace(`${pathname}?view=${v}`)}
+          className={`rounded px-3 py-1.5 text-xs font-medium transition ${
+            view === v ? 'bg-primary-700 text-grove-canvas shadow' : 'text-grove-ink/65 hover:bg-primary-50 dark:text-grove-ink-dk/65 dark:hover:bg-primary-900/20'
+          }`}
+        >
+          {v === 'roles' ? 'Roles' : 'People'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function ReportingGraphPage() {
+  const params = useParams()
+  const view: OrgChartView = useSearchParams().get('view') === 'people' ? 'people' : 'roles'
+  if (view === 'roles') {
+    return (
+      <div className="space-y-4">
+        <Reveal>
+          <PageHeader
+            icon={Users2}
+            title="Org Chart"
+            eyebrow="Admin · hierarchy"
+            subtitle="The role hierarchy from the last sync: who sits in each role and what rolls up to it. Read-only."
+            actions={<ViewToggle view="roles" />}
+          />
+        </Reveal>
+        <RoleHierarchyView orgId={params.orgId as string} />
+      </div>
+    )
+  }
   return (
     <PrivacyGate
       feature="reporting_graph"
-      header={<PageHeader icon={Users2} title="Org Chart" eyebrow="Admin · hierarchy" />}
+      header={<PageHeader icon={Users2} title="Org Chart" eyebrow="Admin · hierarchy" actions={<ViewToggle view="people" />} />}
     >
       <ReportingGraphContent />
     </PrivacyGate>
@@ -757,6 +802,7 @@ function ReportingGraphContent() {
           subtitle="Drag from a user to another to set their manager or delegated approver. Save writes back to Salesforce User records."
           actions={
             <>
+              <ViewToggle view="people" />
               <Badge variant={pending.length > 0 ? 'info' : 'default'} size="sm">
                 {pending.length} pending {pending.length === 1 ? 'edit' : 'edits'}
               </Badge>
