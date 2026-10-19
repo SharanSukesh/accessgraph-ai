@@ -261,8 +261,79 @@ section has the detail.
   out of the Lumenvale fixture; the runbook numbers hold. The tree keeps
   its loop handling as a safeguard and shows "Manager loop" only when one
   is found.
-- **Next:** Sharan re-syncs Lumenvale on production and tests. Then item 7
-  with 35c, then phase C. Item 1 phase 2 stays a plan.
+- **19 Oct: #51 merged by Sharan** (manager loops out of the Lumenvale
+  fixture; main 774f0b6).
+- **19 Oct: new direction.** The Salesforce practice lead reviewed Newton
+  and wants it to replace Config Workbook in engagements: every Config
+  Workbook feature we can rebuild reasonably well, we build. Config
+  Workbook parity is the top priority, alongside the access work. The
+  parity matrix is docs/config-workbook-parity.md (29 of 33 features to
+  build, 4 skipped: debug-log process maps and log analysis, in-place
+  metadata edits and mass rule switches; no new permission needed).
+- **Build order (19 Oct; adjust only if dependencies require it, and say why):**
+  0. Config Workbook parity matrix (docs/config-workbook-parity.md), plus
+     replacing the practice lead's first name with his role everywhere
+     editable (no history rewrite).
+  1. Foundations: API v68 (as planned above), field metadata sync (8).
+  2. Parity: documentation export (11), ERDs (12), cleanup impact
+     analysis (13), change-history gaps (14), and every other feature the
+     matrix marks as buildable; each at least as useful in an engagement
+     as Config Workbook's version.
+  3. Versioned snapshots (21), then org-to-org comparison v1 (9), then
+     evidence on every finding (20) with reviewer feedback (10). Item 30:
+     write up the options with Lumenvale's numbers; don't change the risk
+     formula.
+  4. What-if simulator (15) in Restructure Studio, keeping GAEA and equity
+     analysis; reuse the role designer's draft pattern (starting state
+     saved with each draft, impact preview, nothing written to Salesforce)
+     for permission set and group assignments, muting, roles and sharing.
+     Show access gained, lost and kept, users affected, remaining paths
+     that undo the intended restriction, and what can't be predicted;
+     replace the single "access preserved" percentage with this detail.
+  5. Priced roadmap builder: findings into an editable, priced plan with
+     effort ranges and a configurable rate card; inferred effort kept
+     separate from consultant-confirmed effort.
+  6. Record access for Cases, Contacts and Leads (7, opt-in per-object
+     View All), full role impact preview (35c), daily API usage collector
+     (P3), profile and permission set comparison (6).
+  7. Repair planner (16), post-change verification with a before-and-after
+     evidence pack (17), licence renewal planner (18).
+  8. Item 1 phase 2 (Apex and flow system-context reach, as potential
+     exposure), remediation bundles as a ZIP (19), anomaly engine
+     improvements (22), org comparison v2 (9), security review pack (28),
+     large-org performance and several consultants per engagement (29).
+  The later backlog stays as backlog.
+- **Merging (from 19 Oct):** nothing merges until Sharan sends "merge
+  approved" (production must stay as it is while the practice lead may see
+  the app). Until then PRs stack as needed, stacks short and clearly
+  ordered. After approval: merge each finished group in order: rebase onto
+  main, wait for CI, wait for the Railway deployment after any PR with a
+  migration, never force-push to main, stop if CI or a deployment fails or
+  a conflict can't be resolved exactly as reviewed; then keep building from
+  the updated main.
+- **Working rules (from 19 Oct):**
+  - one branch and PR per item, with tests, checked in a headless browser,
+    light and dark, against local and demo data only;
+  - extend Lumenvale so every feature can be demoed, keeping the Health
+    Report at 41, 18 findings, $183,180 and License Fit at $116,220; if a
+    feature can't be demoed without changing them, report before and
+    after and don't change the runbook;
+  - any new integration-user permission is optional, with a clear reduced
+    mode, and listed in the trust docs in the same PR; no View All Data;
+  - a question that affects only part of an item goes in the PR, that part
+    is left out, and work moves on;
+  - never use a personal name for the people Sharan works with; use their
+    role;
+  - update this log after every PR (PRs, what to test with expected
+    values, open questions, UNVERIFIED items), detailed enough for a new
+    session to continue;
+  - read-only against Salesforce, synthetic data only, never a real client
+    org, no production config or environment changes, no push to main
+    except merging after approval, never invent numbers; check Salesforce
+    API details against Salesforce's documentation and mark anything
+    unconfirmed UNVERIFIED.
+- **Next:** step 1, API v68 (branch from main), then field metadata sync
+  (8), stacked on it if it needs the v68 setting.
 
 ## Build order
 
@@ -278,7 +349,7 @@ below; progress is in the [Progress log](#progress-log).
 | **C. Foundations** | API v68 (first), 8, 21, 20 + 10, 30 | The move from API v62 to v68 comes first: later items read through it. 21 before 20 (evidence points at a snapshot). 10 merges into 20. 30 (risk methodology) is decided alongside 20. |
 | **C2. Priced roadmap** | P1 priced roadmap builder (with P2 playbooks) | Moved up from F: central to the positioning and depends on the evidence model (20). |
 | **D. Access depth** | 6 | 6 is the first user of the comparison engine. 1 (phase 1), 7 and 35c moved up to B and B2 on 17 Oct. |
-| **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Order of 11, 12 and 13 held until Mike confirms which Config Workbook features he uses. |
+| **E. Config Workbook parity** | 9 (v1) first; then 11, 12, 13 in an order to be set | Superseded 19 Oct: Config Workbook parity is now the top priority, in the build order in the progress log (docs/config-workbook-parity.md has the matrix). |
 | **F. Differentiators** | 15, 16, 17, 18 | |
 | **G. Depth and scale** | 1 (phase 2), 19 (v1: downloadable ZIP), 22, 9 (v2), 28, 29 | The GitHub piece of 19 moved to the later backlog. |
 
@@ -486,7 +557,7 @@ The compare page's search results were clipped by their card. The fix is pushed 
 - **Depends on:** 2, 4 and 5 for their visuals. **Effort: L** (was M; per-visual downloads, the dialog and the two layouts add work).
 
 ### 35a. Role hierarchy view (read-only)
-Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode v1: drafts, Account and Opportunity impact, ZIP export, phase B), 35c (full impact preview, phase D after 7) and 35d (write-back, plan only, phase H). Mike's core ask, editing the hierarchy, lands in phase B.
+Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hierarchy tool. Split into 35a (view, phase B), 35b (design mode v1: drafts, Account and Opportunity impact, ZIP export, phase B), 35c (full impact preview, phase D after 7) and 35d (write-back, plan only, phase H). The Salesforce practice lead's core ask, editing the hierarchy, lands in phase B.
 
 - **Problem:** consultants redesign role hierarchies on almost every engagement, but the org chart tab shows only users and managers. Roles, who sits in them and what each role rolls up to aren't visible anywhere in Newton.
 - **Approach:**
@@ -508,7 +579,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - Lumenvale's Account owner counts come with 35b's demo data (#26); on this branch alone Account shows "Unknown".
 
 ### 35b. Role design mode v1: drafts, Account and Opportunity impact, export
-**Status: merged 18 Oct (#26, #31). #48 (not merged) adds a Graph mode beside the Tree: both edit the same draft; draw a role to its parent (one parent, replacing asks first, loops refused), drop users onto roles, auto-layout, zoom, fit, search.** Mike's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
+**Status: merged 18 Oct (#26, #31). #48 (not merged) adds a Graph mode beside the Tree: both edit the same draft; draw a role to its parent (one parent, replacing asks first, loops refused), drop users onto roles, auto-layout, zoom, fit, search.** The Salesforce practice lead's core ask. Moved up from phase D on 17 Oct: the parts that needed phase C (a stored snapshot for the diff and rollback) are designed out, and the impact preview starts with the objects whose record access already works.
 - **Problem:** consultants design hierarchy changes in spreadsheets and can't say, before go-live, who gains or loses access. A bad reparent triggers a long sharing recalculation and access surprises.
 - **Approach:**
   - **Drafts, stored in Newton, never sent to Salesforce:** drag a role onto another to reparent it, drag users between roles, create, rename and delete roles. Cycles are blocked (a role can't move under its own descendant). Undo and redo, named drafts.
@@ -763,7 +834,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 
 ## Phase E: Config Workbook parity
 
-Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Salesforce product ✓. Its vendor documents an Excel documentation export, object ERDs, impact analysis and a dependency explorer, an audit trail explorer with risk scoring, and org and profile comparators. **Our parity bar is what Mike uses day to day, not the full vendor list.** Sharan is confirming with Mike which features he uses; until then **9 (v1) goes first** in this phase and the order of 11, 12 and 13 is held.
+Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Salesforce product ✓. Its vendor documents an Excel documentation export, object ERDs, impact analysis and a dependency explorer, an audit trail explorer with risk scoring, and org and profile comparators. **Updated 19 Oct:** the Salesforce practice lead wants Newton to replace Config Workbook in engagements, so every Config Workbook feature we can rebuild well is in scope (docs/config-workbook-parity.md: 29 of its 33 features, none needing a new permission). The order is the build order in the progress log.
 
 ### 9 (v1). Org-to-org comparison
 - **Problem:** before a release, a merge or a sandbox refresh, consultants need to know what differs between two orgs, or within one org between two dates, and **what that difference means**: who gains or loses access, and what depends on it.
