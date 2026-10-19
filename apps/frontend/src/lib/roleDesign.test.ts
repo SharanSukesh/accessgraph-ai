@@ -3,6 +3,8 @@ import {
   applyOperations,
   canDrop,
   personRecords,
+  planReparent,
+  roleLayout,
   DesignError,
   diff,
   pushOperation,
@@ -90,5 +92,38 @@ describe('impact labels', () => {
     expect(personRecords({ records: 1, at_least: false })).toBe('1 record')
     expect(personRecords({ records: 39, at_least: true })).toBe('at least 39 records')
     expect(personRecords({ records: 0, at_least: true })).toBe('records not counted')
+  })
+})
+
+describe('role graph', () => {
+  const base: DesignBase = {
+    roles: [
+      { id: 'ceo', name: 'CEO', developer_name: 'CEO', parent_id: null },
+      { id: 'vp', name: 'VP Sales', developer_name: 'VP_Sales', parent_id: 'ceo' },
+      { id: 'rep', name: 'Sales Rep', developer_name: 'Sales_Rep', parent_id: 'vp' },
+      { id: 'fin', name: 'Finance', developer_name: 'Finance', parent_id: null },
+    ],
+    users: {},
+    synced_at: null,
+  }
+  const state = applyOperations(base, [])
+
+  it('replaces a parent only after a confirmation, and blocks loops', () => {
+    expect(planReparent(state, 'fin', 'ceo')).toEqual({ kind: 'apply', op: { op: 'move_role', role_id: 'fin', parent_id: 'ceo' } })
+    const replace = planReparent(state, 'rep', 'fin')
+    expect(replace.kind).toBe('confirm')
+    expect(replace.kind === 'confirm' && replace.message).toContain('It reports to VP Sales now')
+    const loop = planReparent(state, 'ceo', 'rep')
+    expect(loop.kind).toBe('blocked')
+    expect(planReparent(state, 'rep', 'vp')).toEqual({ kind: 'none' })
+    expect(planReparent(state, 'rep', 'rep')).toEqual({ kind: 'none' })
+  })
+
+  it('lays roles out top-down with several top-level roles', () => {
+    const pos = roleLayout(state)
+    expect(pos.vp.y).toBeGreaterThan(pos.ceo.y)
+    expect(pos.rep.y).toBeGreaterThan(pos.vp.y)
+    expect(pos.ceo.y).toBe(pos.fin.y)
+    expect(pos.fin.x).toBeGreaterThan(pos.ceo.x)
   })
 })
