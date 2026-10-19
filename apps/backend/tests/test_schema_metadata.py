@@ -120,7 +120,7 @@ def test_lumenvale_part_has_the_planted_fields():
     md = sorted(f"{o}.{n}" for o, d in objects.items() for n, f in d["fields"].items() if f.get("relationship") == "master_detail")
     assert md == ["Compensation__c.Employee__c", "Payment__c.Invoice__c"]
     enc = {f"{o}.{n}": f["encryption"] for o, d in objects.items() for n, f in d["fields"].items() if f.get("encryption")}
-    assert enc == {"Benefits_Enrollment__c.Medical_Condition__c": "shield", "Employee__c.National_ID__c": "shield",
+    assert enc == {"Compensation__c.Salary_Band__c": "shield", "Employee__c.National_ID__c": "shield",
                    "Treasury_Account__c.Account_Number__c": "classic"}
     formulas = sorted(f"{o}.{n}" for o, d in objects.items() for n, f in d["fields"].items() if f["formula"])
     assert formulas == ["Employee__c.Tenure_Years__c", "Invoice__c.Days_Overdue__c", "Opportunity.Discounted_Amount__c"]

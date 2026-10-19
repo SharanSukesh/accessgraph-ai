@@ -375,17 +375,20 @@ section has the detail.
     (Compensation__c.Employee__c master-detail).
   - Fields › Treasury_Account__c.Account_Number__c: "Text (Encrypted)(32)",
     Classic encrypted.
-  - Objects › Compensation: Fields (9) with the note "2 fields can't be
-    seen by the integration user"; Bonus__c is Currency(16, 2), Required
-    and Encryption "Not known".
-  - Fields: Medical Condition and National ID Shield; the note about 2
-    hidden fields above the table.
+  - Objects › Compensation: Fields (10) with the note "2 fields can't be
+    seen by the integration user"; Salary Band is "Shield encrypted";
+    Bonus__c is Currency(16, 2), Required and Encryption "Not known".
+  - Fields: National ID Shield; the note about 2 hidden fields above the
+    table.
   - Runbook unchanged: 41 / 18 / $183,180 / $116,220.
-  **Open questions:** the roadmap's planted
-  `Compensation__c.Salary__c` doesn't exist (the fixture has
-  Base_Salary__c, a currency field); Shield is planted on two text fields
-  instead because which field types Shield supports wasn't checked.
-  Caching between syncs is left out: EntityDefinition has no
+  **Answered:** the roadmap's `Compensation__c.Salary__c` doesn't exist
+  and Base_Salary__c is Currency, which Shield's field-level encryption
+  doesn't cover (Salesforce Help, "Which Custom Fields Can I Encrypt?":
+  Email, Phone, Text, Text Area, Text Area (Long), Text Area (Rich), URL,
+  Date, Date/Time). Decided: Shield sits on two text
+  fields: Employee__c.National_ID__c and a new
+  Compensation__c.Salary_Band__c (no field permissions, so the analysis
+  doesn't change). **Open questions:** none. Caching between syncs is left out: EntityDefinition has no
   LastModifiedDate, so every object is read each sync.
   **UNVERIFIED:** that FieldDefinition lists fields hidden by
   field-level security; the JSON shape of FieldDefinition.ReferenceTo; the
@@ -714,7 +717,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - **Privacy and demo:** metadata only, so it's the same at every level. Demo reads from the fixture.
 - **Fixture:** describe-shaped metadata for the fixture's objects. Plants:
   - two master-detail relationships;
-  - a Shield-encrypted `Compensation__c.Salary__c`;
+  - a Shield-encrypted salary band, `Compensation__c.Salary_Band__c` (Text; Shield doesn't cover Currency, see the progress log);
   - a Classic encrypted field;
   - formula fields.
 - **Depends on:** nothing. **Effort: M.**

@@ -527,8 +527,7 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32768,
-      "encrypted": true
+      "length": 32768
      },
      {
       "name": "Plan__c",
@@ -1235,6 +1234,18 @@
       "calculated": false,
       "precision": 18,
       "scale": 2
+     },
+     {
+      "name": "Salary_Band__c",
+      "label": "Salary Band",
+      "type": "string",
+      "custom": true,
+      "nillable": true,
+      "createable": true,
+      "defaultedOnCreate": false,
+      "calculated": false,
+      "length": 40,
+      "encrypted": true
      },
      {
       "name": "CreatedDate",

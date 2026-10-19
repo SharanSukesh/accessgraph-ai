@@ -10,9 +10,13 @@ the planted ones:
     detail objects have no OwnerId, and the parent's childRelationships
     entry has cascadeDelete);
   - Shield Platform Encryption (describe `encrypted: true`) on two text
-    fields, Employee__c.National_ID__c and
-    Benefits_Enrollment__c.Medical_Condition__c (not on Base_Salary__c:
-    which field types Shield supports isn't checked here, UNVERIFIED);
+    fields, Employee__c.National_ID__c and a new Compensation__c.Salary_Band__c
+    (Text), so compensation data reads as encrypted. Not on Base_Salary__c:
+    Shield's field-level encryption covers custom Email, Phone, Text, Text
+    Area, Text Area (Long), Text Area (Rich), URL, Date and Date/Time fields,
+    not Currency or Number (Salesforce Help, "Which Custom Fields Can I
+    Encrypt?"). Salary_Band__c has no field permissions, so the analysis
+    (and the runbook numbers) don't change;
   - a Classic encrypted field (type encryptedstring):
     Treasury_Account__c.Account_Number__c;
   - three formula fields (calculated, with calculatedFormula):
@@ -112,7 +116,8 @@ FORMULAS = {
     "Opportunity": [("Discounted_Amount__c", "Discounted Amount", "currency", "Amount * (1 - Discount_Percent__c)")],
     "Employee__c": [("Tenure_Years__c", "Tenure (Years)", "double", "(TODAY() - Hire_Date__c) / 365")],
 }
-SHIELD = {("Employee__c", "National_ID__c"), ("Benefits_Enrollment__c", "Medical_Condition__c")}
+SHIELD = {("Employee__c", "National_ID__c"), ("Compensation__c", "Salary_Band__c")}
+EXTRA_FIELDS = {"Compensation__c": [("Salary_Band__c", "string", "Salary Band")]}  # (name, type, label)
 CLASSIC = {("Treasury_Account__c", "Account_Number__c")}
 EXTERNAL_ID = {("Legacy_Order__c", "Legacy_System_Id__c")}
 HIDDEN = {"Compensation__c": ["Bonus__c", "Equity_Grant__c"]}
@@ -197,6 +202,8 @@ def build() -> list:
                 continue  # every reference is in LOOKUPS
             fields.append(describe_field(obj, fname, ftype))
             seen.add(fname)
+        for fname, ftype, label in EXTRA_FIELDS.get(obj, []):
+            fields.append(describe_field(obj, fname, ftype, label, length=40))
         for fname, label, ftype, formula in FORMULAS.get(obj, []):
             fields.append(describe_field(obj, fname, ftype, label, calculated=True, calculatedFormula=formula,
                                          createable=False))
