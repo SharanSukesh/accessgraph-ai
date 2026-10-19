@@ -105,7 +105,10 @@ class ApplyResponse(BaseModel):
 
 
 def _manager_loops(users: Iterable[UserSnapshot]) -> set:
-    """Users whose chain of managers comes back to them."""
+    """Users whose chain of managers comes back to them. Salesforce doesn't
+    allow this (the Manager field prevents "selecting a user that directly
+    or indirectly reports to themselves", Object Reference v68), so it's a
+    safeguard: stored data that has a loop still shows, flagged."""
     manager = {u.salesforce_id: u.manager_id for u in users if u.manager_id}
     in_loop: set = set()
     done: set = set()
