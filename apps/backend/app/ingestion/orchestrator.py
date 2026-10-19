@@ -108,6 +108,13 @@ class SyncOrchestrator:
                 ui = data.get("demo_live", {}).get("ui_access")
                 if ui:
                     data["ui_access"] = {**ui, "collected_at": datetime.now(timezone.utc).isoformat()}
+                # Field metadata (services/schema_metadata.py), describe-shaped.
+                described = data.get("demo_live", {}).get("schema")
+                if described:
+                    from app.services.schema_metadata import from_describes, notes_for
+                    objects = from_describes(described, data["demo_live"].get("field_definitions"))
+                    data["schema"] = {"objects": objects, "failed": [], "skipped": [], "notes": notes_for(objects, [], []),
+                                      "collected_at": datetime.now(timezone.utc).isoformat()}
                 # What the integration user could see, as a live sync records it.
                 data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
                 # The org's privacy level applies to demo data exactly as to a
@@ -136,6 +143,9 @@ class SyncOrchestrator:
             # Layouts, record pages, Apex and flows: configuration only.
             if data.get("ui_access"):
                 sync_job.sync_metadata["ui_access"] = data["ui_access"]
+            # Field metadata: configuration only.
+            if data.get("schema"):
+                sync_job.sync_metadata["schema"] = data["schema"]
 
             # Mark as modified so SQLAlchemy knows to update the JSON column
             from sqlalchemy.orm import attributes
@@ -226,7 +236,7 @@ class SyncOrchestrator:
         info = await client.extract_organization()
         apply_salesforce_name(org, (info or {}).get("Name"))
 
-        data = await client.extract_all(
+        data: Dict[str, Any] = await client.extract_all(
             include_users=privacy.allows(org, privacy.USER_RECORDS),
             include_record_shares=privacy.allows(org, privacy.RECORD_SHARES),
         )
@@ -245,6 +255,16 @@ class SyncOrchestrator:
             }
         except Exception as e:  # noqa: BLE001
             logger.warning("Layouts, pages, Apex and flows couldn't be read: %s", e)
+        # Field metadata (roadmap item 8): a describe per object the
+        # permissions mention; configuration, read-only, never fails the sync.
+        try:
+            from app.services.schema_metadata import collect_live, objects_in
+            data["schema"] = {
+                **await collect_live(client, objects_in(data)),
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Field metadata couldn't be read: %s", e)
         return data
 
     async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:

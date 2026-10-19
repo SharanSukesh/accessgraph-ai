@@ -20,6 +20,12 @@ import { apiClient } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { isFeatureAvailable } from '@/lib/privacy'
 import {
+  ObjectFieldsCard,
+  RelationshipsCard,
+  type FieldAttributes,
+  type Relationships,
+} from '@/components/schema/FieldMetadata'
+import {
   useDataQualityObject,
   type ObjectScore,
 } from '@/lib/api/hooks/useDataQuality'
@@ -54,6 +60,11 @@ interface ObjectDetail {
   totalUsers: number
   totalProfiles: number
   totalPermissionSets: number
+  schemaSynced?: boolean
+  fields?: FieldAttributes[] | null
+  fieldsFromFieldDefinition?: number
+  describeFailed?: boolean
+  relationships?: Relationships | null
 }
 
 export default function ObjectDetailPage() {
@@ -197,6 +208,23 @@ export default function ObjectDetailPage() {
           on first visit; the card silently hides in that case. */}
       {dqScore && !dqError && (
         <DataQualityCard score={dqScore} />
+      )}
+
+      {/* Fields and relationships from the synced describe (roadmap item 8). */}
+      {objectDetail.fields && (
+        <ObjectFieldsCard
+          orgId={orgId}
+          objectName={objectDetail.apiName}
+          fields={objectDetail.fields}
+          hiddenCount={objectDetail.fieldsFromFieldDefinition}
+          describeFailed={objectDetail.describeFailed}
+        />
+      )}
+      {objectDetail.relationships && <RelationshipsCard orgId={orgId} relationships={objectDetail.relationships} />}
+      {objectDetail.schemaSynced === false && (
+        <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+          Fields and relationships appear after the next sync reads this org&apos;s field metadata.
+        </p>
       )}
 
       {/* Profiles with Access */}

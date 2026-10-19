@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_database
 from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
 from app.services.grant_sources import KIND_PROFILE, resolve_grant_sources
+from app.services.schema_metadata import field as schema_field
+from app.services.schema_metadata import field_details, field_payload, latest_schema, relationships
 from app.services.risk_scoring import base_risk, classify_sensitive_field, classify_sensitive_object, latest_user_risks
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
@@ -818,6 +820,7 @@ async def list_objects(
 
     result = await db.execute(query)
     objects = result.all()
+    described = ((await latest_schema(db, org_id)) or {}).get("objects") or {}
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
@@ -863,10 +866,11 @@ async def list_objects(
             "id": obj.sobject_type,
             "name": obj.sobject_type,
             "apiName": obj.sobject_type,
-            "label": create_label(obj.sobject_type),
+            "label": (described.get(obj.sobject_type) or {}).get("label") or create_label(obj.sobject_type),
             "isCustom": obj.sobject_type.endswith('__c'),
             **_object_sensitivity(obj.sobject_type),
-            "fieldCount": 0,
+            # From the synced describe; null when field metadata isn't synced.
+            "fieldCount": len(described[obj.sobject_type]["fields"]) if obj.sobject_type in described else None,
             "userCount": total_users,
             "permissionSetCount": obj.permission_set_count,
         })
@@ -994,12 +998,29 @@ async def get_object_details(
         label = label.replace('_', ' ')
         return label
 
+    schema = await latest_schema(db, org_id)
+    described = ((schema or {}).get("objects") or {}).get(object_name)
+    fields = None
+    if described:
+        fields = [
+            {"apiName": name, **(field_details(f) or {}), **_field_sensitivity(name)}
+            for name, f in described["fields"].items()
+        ]
+
     return {
         "name": object_name,
         "apiName": object_name,
-        "label": create_label(object_name),
+        "label": (described or {}).get("label") or create_label(object_name),
         "isCustom": object_name.endswith('__c'),
         **_object_sensitivity(object_name),
+        # Field metadata from the synced describe (roadmap item 8); null
+        # when it isn't synced.
+        "schemaSynced": described is not None,
+        "fields": fields,
+        # Fields the describe left out (field-level security), typed from FieldDefinition.
+        "fieldsFromFieldDefinition": (described or {}).get("fields_from_field_definition", 0),
+        "describeFailed": bool((described or {}).get("describe_failed")),
+        "relationships": relationships(schema, object_name) if described else None,
         "profilesWithAccess": profiles_with_access,
         "permissionSetsWithAccess": permission_sets_with_access,
         "usersWithAccess": users_with_access,
@@ -1075,6 +1096,7 @@ async def list_fields(
 
     result = await db.execute(query)
     fields = result.all()
+    schema = await latest_schema(db, org_id)
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
@@ -1096,17 +1118,19 @@ async def list_fields(
                 "id": f"{field.sobject_type}.{field.field}",
                 "objectName": field.sobject_type,
                 "apiName": field.field,
-                "label": create_label(field.field),
-                # Field type and encryption aren't synced; null, never a guess.
-                "dataType": None,
+                "label": (schema_field(schema, field.sobject_type, field.field.split('.')[-1]) or {}).get("label")
+                or create_label(field.field),
                 **_field_sensitivity(field.field),
-                "isEncrypted": None,
+                # Type and encryption from the synced describe; null when not synced.
+                **field_payload(schema_field(schema, field.sobject_type, field.field.split('.')[-1])),
                 "isCustom": field.field.endswith('__c'),
                 "userCount": field.permission_count,
                 "permissionCount": field.permission_count,
             }
             for field in fields
         ],
+        # What the field metadata read couldn't cover (services/schema_metadata.py).
+        "schemaNotes": (schema or {}).get("notes") or [],
         "pagination": {
             "page": page,
             "limit": limit,
@@ -1135,12 +1159,14 @@ async def get_field_details(
         raise HTTPException(status_code=400, detail="Invalid field_id format. Expected 'ObjectName.FieldName'")
 
     object_name, field_name = field_id.split('.', 1)
+    # FieldPermissions name a field "Object.Field"; the describe, just "Field".
+    bare_name = field_name.split('.')[-1]
 
     # Get all permissions for this field
     perms_query = select(FieldPermissionSnapshot).where(
         FieldPermissionSnapshot.organization_id == org_id,
         FieldPermissionSnapshot.sobject_type == object_name,
-        FieldPermissionSnapshot.field == field_name
+        FieldPermissionSnapshot.field.in_({field_name, f"{object_name}.{bare_name}"})
     )
     perms_result = await db.execute(perms_query)
     permissions = perms_result.scalars().all()
@@ -1283,16 +1309,17 @@ async def get_field_details(
             api_name = api_name[:-3]
         return ' '.join(word.capitalize() for word in api_name.replace('_', ' ').split())
 
+    described = schema_field(await latest_schema(db, org_id), object_name, bare_name)
     return {
         "id": field_id,
         "objectName": object_name,
         "fieldName": field_name,
-        "label": create_label(field_name),
+        "label": (described or {}).get("label") or create_label(field_name),
         "isCustom": field_name.endswith('__c'),
-        # Field type and encryption aren't synced; null, never a guess.
-        "dataType": None,
         **_field_sensitivity(field_name),
-        "isEncrypted": None,
+        # Type, encryption and the rest from the synced describe; null when not synced.
+        **field_payload(described),
+        "attributes": field_details(described),
         "profilesWithAccess": profiles_with_access,
         "permissionSetsWithAccess": permission_sets_with_access,
         "usersWithAccess": users_with_access,

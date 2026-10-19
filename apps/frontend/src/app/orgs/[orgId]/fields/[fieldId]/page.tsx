@@ -16,6 +16,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useFieldDetails } from '@/lib/api/hooks/useFields'
+import { EncryptionBadge, FieldDetailsCard } from '@/components/schema/FieldMetadata'
 
 export default function FieldDetailPage() {
   const params = useParams()
@@ -70,11 +71,15 @@ export default function FieldDetailPage() {
           </span>
         }
         actions={
-          field.isCustom && (
-            <Badge variant="info" size="sm">
-              Custom
-            </Badge>
-          )
+          <span className="flex items-center gap-2">
+            {field.typeLabel && <Badge variant="default" size="sm">{field.typeLabel}</Badge>}
+            <EncryptionBadge encryption={field.encryption} />
+            {field.isCustom && (
+              <Badge variant="info" size="sm">
+                Custom
+              </Badge>
+            )}
+          </span>
         }
       />
 
@@ -128,6 +133,15 @@ export default function FieldDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* What the field is, from the synced describe (roadmap item 8). */}
+      <FieldDetailsCard orgId={orgId} attributes={field.attributes} />
+
+      {field.inheritedFromObject && (
+        <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+          No field-level security rows name this field, so the access below is the {objectName} object&apos;s.
+        </p>
+      )}
 
       {/* Profiles with Access */}
       {field.profilesWithAccess && field.profilesWithAccess.length > 0 && (

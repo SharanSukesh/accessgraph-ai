@@ -23,6 +23,20 @@ apps) and says on screen when it stopped. UNVERIFIED: whether View Setup and
 Configuration alone is enough for those per-record metadata reads; if one is
 refused, that part is skipped and the screen says what wasn't read.
 
+For the Schema pages it reads field metadata (no new permission): for each
+object the org's permissions mention, the object's describe (field types,
+lengths, formulas, picklist values, lookups and master-detail
+relationships, and whether a field is Shield or Classic encrypted) and its
+FieldDefinition rows from the Tooling API. That's two API calls per object
+per sync, at most 500 objects. Salesforce's describe returns only the
+fields the integration user can see, so for fields hidden from it Newton
+shows the type from FieldDefinition and says that encryption, formula
+text, picklist values and whether the field is required aren't known.
+Granting the integration user Read on those fields would fill the gaps,
+but it also lets it read their values, so Newton doesn't ask for it.
+UNVERIFIED: that FieldDefinition lists fields hidden by field-level
+security; check in a developer org.
+
 Newton changes nothing in Salesforce unless an engagement admin explicitly
 turns on **write-back** for that org (see section 6).
 

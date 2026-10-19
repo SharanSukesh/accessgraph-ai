@@ -351,7 +351,49 @@ section has the detail.
   developer org run scripts/compare_api_versions.py (exits 1 on a
   difference). UNVERIFIED: the full v62-vs-v68 sync comparison in a real
   org (Sharan to run the script).
-- **Next:** step 1b, field metadata sync (8), stacked on #53.
+- **#54 (step 1b, field metadata sync, item 8, not merged; stacked on
+  #53):** each sync reads, per object the permissions mention, the REST
+  describe and the Tooling FieldDefinition rows (two calls per object, at
+  most 500 objects; a failure never fails the sync); stored in
+  sync_metadata["schema"] (no migration). Shield = describe
+  `encrypted: true`, Classic = type `encryptedstring`; master-detail =
+  relationshipOrder 0/1. The describe returns only fields the integration
+  user can see (SOAP API guide, Field), so hidden fields are typed from
+  FieldDefinition and their encryption, formula text, picklist values and
+  required flag show "Not known", never "none". Schema pages: type and
+  encryption on Fields (with the sync's notes), a Field details card,
+  and Fields and Relationships cards on the object page. No new
+  permission (trust doc updated). Lumenvale part
+  08-field-metadata.json (generator
+  research/demo_fixture/build_field_metadata_part.py): 29 objects.
+  **Test (Lumenvale, after a re-sync):**
+  - Objects › Invoice: Fields (11), 1 formula (Days Overdue,
+    `IF(ISBLANK(Due_Date__c), NULL, TODAY() - Due_Date__c)`);
+    Relationships: referenced by Payment__c.Invoice__c, Master-detail,
+    "deleted with this record".
+  - Objects › Employee: National ID "Shield encrypted"; referenced by 4
+    (Compensation__c.Employee__c master-detail).
+  - Fields › Treasury_Account__c.Account_Number__c: "Text (Encrypted)(32)",
+    Classic encrypted.
+  - Objects › Compensation: Fields (9) with the note "2 fields can't be
+    seen by the integration user"; Bonus__c is Currency(16, 2), Required
+    and Encryption "Not known".
+  - Fields: Medical Condition and National ID Shield; the note about 2
+    hidden fields above the table.
+  - Runbook unchanged: 41 / 18 / $183,180 / $116,220.
+  **Open questions:** the roadmap's planted
+  `Compensation__c.Salary__c` doesn't exist (the fixture has
+  Base_Salary__c, a currency field); Shield is planted on two text fields
+  instead because which field types Shield supports wasn't checked.
+  Caching between syncs is left out: EntityDefinition has no
+  LastModifiedDate, so every object is read each sync.
+  **UNVERIFIED:** that FieldDefinition lists fields hidden by
+  field-level security; the JSON shape of FieldDefinition.ReferenceTo; the
+  exact wording of FieldDefinition.DataType beyond the documented
+  "Text(40)" (master-detail is read from a "Master-Detail" prefix). Check
+  all three in a developer org.
+- **Next:** step 2, documentation export (11; matrix #1–19), stacked on
+  #54.
 
 ## Build order
 
@@ -657,6 +699,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - **New permissions:** none. **Depends on:** Sharan's developer-org comparison. **Effort: M.**
 
 ### 8. Field metadata sync
+**Status: built in #54 (not merged).** Describe plus Tooling FieldDefinition for fields the describe hides; caching between syncs left out (see the progress log).
 - **Problem:** several features need to know what a field is: its type, encryption, and whether it is a lookup or master-detail (ERD, documentation export, comparison, impact analysis, sensitive-data maps). Today the app shows field type and encryption as unknown.
 - **Approach:** sync describe metadata per object: field type, length, required, formula (and its formula), references and relationship name, master-detail status and cascade delete. Encryption is recorded as **Shield** or **Classic** separately.
 
