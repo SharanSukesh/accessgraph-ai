@@ -414,14 +414,17 @@ section has the detail.
   layouts.
   **Test (Lumenvale, after a re-sync; Objects › Org documentation):** file
   demo-org-documentation-YYYYMMDD.xlsx; Objects 29 rows (Account: Users
-  with Read 376; Payment__c master-detail parent Invoice__c); Fields 259
-  rows (National_ID__c Shield; Bonus__c Encryption and Required "Not
+  with Read 376; Payment__c master-detail parent Invoice__c); Fields 260
+  rows (National_ID__c and Salary_Band__c Shield; Bonus__c Encryption and Required "Not
   known"; Account.Name follows object access, 376 readers); Object Access:
   System Administrator on Account "R C E D VA MA"; Unused Layouts:
   "Account - Legacy Layout" and "Case - Old Support Layout"; Flows:
   Discount_Approval_Request granted by "Discount Approvals (in Sales
   Manager Bundle)"; Profile Users 400. Runbook unchanged: 41 / 18 /
   $183,180 / $116,220.
+  Sample for meetings: docs/samples/lumenvale-org-documentation.xlsx
+  (regenerate with apps/backend/scripts/make_documentation_sample.py;
+  synthetic data only).
   **Open questions:** none. **UNVERIFIED:** none new (IsFlsEnabled and
   permissionable are documented).
 - **Next:** item 11 part b (new reads: validation rules with formulas,

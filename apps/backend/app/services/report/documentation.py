@@ -52,6 +52,15 @@ SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Object Access", "Fie
           "Profile Users", "Record Types", "Layouts", "Unused Layouts", "Record Pages", "Flows", "Apex Classes")
 
 
+def _when(iso: Optional[str]) -> str:
+    if not iso:
+        return "Not synced yet"
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return iso
+
+
 def _yes(v: Optional[bool]) -> str:
     return "" if v is None else ("Yes" if v else "No")
 
@@ -182,8 +191,8 @@ def _about(ws: Worksheet, org: Organization, o: _Org, now: datetime) -> None:
         ("Organization", org.name),
         ("Generated", now.strftime("%Y-%m-%d %H:%M UTC")),
         ("Privacy level", level or ""),
-        ("Field metadata read", (o.schema or {}).get("collected_at") or "Not synced yet"),
-        ("Layouts, pages, Apex, flows read", (o.ui or {}).get("collected_at") or "Not synced yet"),
+        ("Field metadata read", _when((o.schema or {}).get("collected_at"))),
+        ("Layouts, pages, Apex, flows read", _when((o.ui or {}).get("collected_at"))),
         ("Who can reach it", "Counts are active users, by the same rules as Newton's user pages: profile, permission "
                              "sets, and permission set groups with muting applied." if o.users_allowed else NOT_AT_METADATA_ONLY
          + " User counts and the Assignments and Profile Users sheets are left out."),
@@ -191,9 +200,9 @@ def _about(ws: Worksheet, org: Organization, o: _Org, now: datetime) -> None:
                            "Read or Read/Edit (Field Access)."),
         ("Field access", "Fields whose field-level security can't be set (record id, required fields, system "
                          "fields) follow the object's access; the Fields sheet says which."),
-        ("Not in this version", "Validation rules and their formulas, picklist values per record type, buttons and "
-                                "links, list views, field sets, tabs, Visualforce, static resources, approval "
-                                "processes and flow detail: roadmap item 11, part b."),
+        ("Not included yet", "Validation rules and their formulas, picklist values per record type, buttons and "
+                             "links, list views, field sets, tabs, Visualforce, static resources, approval "
+                             "processes and flow detail."),
     ]
     for note in ((o.schema or {}).get("notes") or []) + ((o.ui or {}).get("notes") or []):
         rows.append(("Note", note))

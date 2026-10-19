@@ -55,8 +55,9 @@ async def test_documentation_workbook_on_lumenvale(client, lumenvale):  # noqa: 
 
     _, fields = _rows(wb["Fields"])
     f = {(x["Object"], x["Field"]): x for x in fields}
-    assert len(fields) == 259
+    assert len(fields) == 260
     assert f[("Employee__c", "National_ID__c")]["Encryption"] == "Shield"
+    assert f[("Compensation__c", "Salary_Band__c")]["Encryption"] == "Shield"
     assert f[("Treasury_Account__c", "Account_Number__c")]["Type"] == "Text (Encrypted)(32)"
     assert (f[("Compensation__c", "Bonus__c")]["Encryption"], f[("Compensation__c", "Bonus__c")]["Required"]) == ("Not known", "Not known")
     assert f[("Invoice__c", "Days_Overdue__c")]["Formula"].startswith("IF(ISBLANK(")
@@ -101,4 +102,4 @@ async def test_metadata_only_leaves_out_people(async_db_session):
     head, objects = _rows(wb["Objects"])
     assert "Users with Read" not in head and len(objects) == 29
     _, fields = _rows(wb["Fields"])
-    assert len(fields) == 259  # configuration is the same at every level
+    assert len(fields) == 260  # configuration is the same at every level
