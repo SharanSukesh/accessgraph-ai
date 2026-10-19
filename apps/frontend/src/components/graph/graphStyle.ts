@@ -27,6 +27,10 @@ export interface NodeTypeStyle {
   dashed?: boolean
   /** No fill, border only (muting sets, public groups). */
   outline?: boolean
+  /** Node outline (Cytoscape shape); chips default to a rounded rectangle. */
+  shape?: 'round-rectangle' | 'rectangle' | 'cut-rectangle' | 'barrel'
+  /** Double border (record pages). */
+  double?: boolean
 }
 
 export const NODE_TYPE_STYLES: Record<GraphNodeType, NodeTypeStyle> = {
@@ -41,13 +45,16 @@ export const NODE_TYPE_STYLES: Record<GraphNodeType, NodeTypeStyle> = {
   },
   object: { label: 'Object', caption: 'OBJECT', color: '#146B4A' },
   // Pages and automation (roadmap item 1): one muted hue, outlined, told
-  // apart by icon and caption. The graph already has more types than a
-  // categorical palette can separate, so no new hues.
-  layout: { label: 'Page Layout', caption: 'PAGE LAYOUT', color: '#64748B', outline: true },
-  lightning_page: { label: 'Record Page', caption: 'RECORD PAGE', color: '#64748B', outline: true },
-  apex_class: { label: 'Apex Class', caption: 'APEX CLASS', color: '#64748B', outline: true },
-  flow: { label: 'Flow', caption: 'FLOW', color: '#64748B', outline: true },
+  // apart by shape, icon and caption. The graph already has more types than
+  // a categorical palette can separate, so no new hues.
+  layout: { label: 'Page Layout', caption: 'PAGE LAYOUT', color: '#64748B', outline: true, shape: 'rectangle' },
+  lightning_page: { label: 'Record Page', caption: 'RECORD PAGE', color: '#64748B', outline: true, double: true },
+  apex_class: { label: 'Apex Class', caption: 'APEX CLASS', color: '#64748B', outline: true, shape: 'cut-rectangle' },
+  flow: { label: 'Flow', caption: 'FLOW', color: '#64748B', outline: true, shape: 'barrel' },
 }
+
+/** Types the graph's picker adds one by one, like objects (not drawn until picked). */
+export const PICKED_TYPES: GraphNodeType[] = ['layout', 'lightning_page', 'apex_class', 'flow']
 
 export function nodeTypeStyle(type: string): NodeTypeStyle {
   return NODE_TYPE_STYLES[type as GraphNodeType] ?? NODE_TYPE_STYLES.permission_set

@@ -42,7 +42,8 @@ import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { PageSkeleton, TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { Reveal } from '@/components/v2/motion'
 import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
-import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
+import { GraphPicker } from '@/components/graph/GraphPicker'
+import { visibleGraph } from '@/components/graph/graphPick'
 import { GraphLegend } from '@/components/graph/GraphLegend'
 import { GraphDetailPanel } from '@/components/graph/GraphDetailPanel'
 import { RecordAccessInfo } from '@/components/users/RecordAccessInfo'
@@ -90,9 +91,9 @@ function UserDetailContent() {
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
   const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
   const { data: recommendations, isLoading: recommendationsLoading } = useUserRecommendations(orgId, userId)
-  // Layouts, record pages, Apex and flows are an optional graph layer (off by default).
-  const [showPagesAutomation, setShowPagesAutomation] = useState(false)
-  const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId, showPagesAutomation ? 'pages_and_automation' : undefined)
+  // Layouts, record pages, Apex classes and flows come with the graph; the picker chooses which to draw.
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
+  const { data: graph, isLoading: graphLoading } = useUserGraph(orgId, userId, 'pages_and_automation')
 
   // The risk endpoint has shipped both camelCase and snake_case shapes.
   const riskScore = risk?.score ?? risk?.risk_score
@@ -587,20 +588,6 @@ function UserDetailContent() {
         {/* Graph Tab */}
         <TabsContent value="graph">
           <Reveal>
-          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" className="accent-primary-700" checked={showPagesAutomation}
-                onChange={(e) => setShowPagesAutomation(e.target.checked)} />
-              Show page layouts, record pages, Apex and flows
-            </label>
-            {showPagesAutomation && graph?.metadata?.pagesAndAutomation && (
-              <span className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
-                {graph.metadata.pagesAndAutomation.available
-                  ? `Up to 12 Apex classes and 12 flows are drawn; the Pages & automation tab lists them all. ${graph.metadata.pagesAndAutomation.note}`
-                  : 'Not read yet: sync the org.'}
-              </span>
-            )}
-          </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Main Graph Area */}
             <div className="lg:col-span-8">
@@ -620,12 +607,13 @@ function UserDetailContent() {
                   <ERGraphVisualization
                     graph={graph}
                     selectedObjects={selectedObjects}
+                    selectedItems={selectedItems}
                     onNodeSelect={(node) => setSelectedGraphNode(node)}
                     height="800px"
                     exportName={`access-graph-${fileSlug(user?.name ?? userId)}`}
                   />
                   <div className="mt-4">
-                    <GraphLegend compact graph={graph} />
+                    <GraphLegend compact graph={visibleGraph(graph, selectedObjects, selectedItems)} />
                   </div>
                 </>
               ) : (
@@ -642,31 +630,20 @@ function UserDetailContent() {
                   onClose={() => setSelectedGraphNode(null)}
                 />
               ) : (
-                <ObjectFilterPanel
-                  availableObjects={
-                    graph?.nodes
-                      .filter((n) => n.type === 'object')
-                      .map((n) => ({
-                        id: n.id,
-                        name: n.properties.objectName || n.label,
-                        fieldCount: n.properties.fields?.length || 0,
-                      })) || []
-                  }
+                <GraphPicker
+                  graph={graph}
                   selectedObjects={selectedObjects}
-                  onObjectToggle={(objectName) => {
-                    setSelectedObjects((prev) =>
-                      prev.includes(objectName)
-                        ? prev.filter((n) => n !== objectName)
-                        : [...prev, objectName]
-                    )
-                  }}
-                  onSelectAll={() => {
-                    const allObjects = graph?.nodes
-                      .filter((n) => n.type === 'object')
-                      .map((n) => n.properties.objectName || n.label) || []
-                    setSelectedObjects(allObjects)
-                  }}
-                  onDeselectAll={() => setSelectedObjects([])}
+                  onObjectsChange={setSelectedObjects}
+                  selectedItems={selectedItems}
+                  onItemsChange={setSelectedItems}
+                  itemsNote={
+                    graph?.metadata?.pagesAndAutomation
+                      ? graph.metadata.pagesAndAutomation.available
+                        ? graph.metadata.pagesAndAutomation.note
+                        : 'Pages and automation not read yet: sync the org.'
+                      : null
+                  }
+                  className="max-h-[860px]"
                 />
               )}
             </div>

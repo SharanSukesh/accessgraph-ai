@@ -16,7 +16,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal } from '@/components/v2/motion'
 import { ERGraphVisualization } from '@/components/graph/ERGraphVisualization'
-import { ObjectFilterPanel } from '@/components/graph/ObjectFilterPanel'
+import { GraphPicker } from '@/components/graph/GraphPicker'
+import { visibleGraph } from '@/components/graph/graphPick'
 import { GraphLegend } from '@/components/graph/GraphLegend'
 import { GraphDetailPanel } from '@/components/graph/GraphDetailPanel'
 import { useUserGraph } from '@/lib/api/hooks/useGraph'
@@ -32,6 +33,7 @@ export default function GraphExplorerPage() {
   const [selectedUserId, setSelectedUserId] = useState(initialUserId)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedObjects, setSelectedObjects] = useState<string[]>([])
+  const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [selectedNode, setSelectedNode] = useState<any>(null)
 
   // Fetch user list for search
@@ -43,7 +45,7 @@ export default function GraphExplorerPage() {
     isLoading,
     error,
     refetch,
-  } = useUserGraph(orgId, selectedUserId)
+  } = useUserGraph(orgId, selectedUserId, 'pages_and_automation')
 
   // Filter users by search
   const filteredUsers = users?.filter(
@@ -57,6 +59,7 @@ export default function GraphExplorerPage() {
     setSelectedUserId(userId)
     setSelectedNode(null)
     setSelectedObjects([]) // Reset objects when changing users
+    setSelectedItems([])
     // Update URL
     router.push(`/orgs/${orgId}/graph?userId=${userId}`)
   }
@@ -69,6 +72,7 @@ export default function GraphExplorerPage() {
     setSelectedUserId('')
     setSearchTerm('')
     setSelectedObjects([])
+    setSelectedItems([])
     setSelectedNode(null)
     router.push(`/orgs/${orgId}/graph`)
   }
@@ -200,11 +204,12 @@ export default function GraphExplorerPage() {
                 <ERGraphVisualization
                   graph={graph}
                   selectedObjects={selectedObjects}
+                  selectedItems={selectedItems}
                   onNodeSelect={handleNodeSelect}
                   height="800px"
                   exportName={`access-graph-${fileSlug(selectedUser?.name ?? selectedUserId ?? 'user')}`}
                 />
-                <GraphLegend compact graph={graph} />
+                <GraphLegend compact graph={visibleGraph(graph, selectedObjects, selectedItems)} />
               </>
             ) : (
               <EmptyState
@@ -224,31 +229,20 @@ export default function GraphExplorerPage() {
                 onClose={() => setSelectedNode(null)}
               />
             ) : (
-              <ObjectFilterPanel
-                availableObjects={
-                  graph?.nodes
-                    .filter((n) => n.type === 'object')
-                    .map((n) => ({
-                      id: n.id,
-                      name: n.properties.objectName || n.label,
-                      fieldCount: n.properties.fields?.length || 0,
-                    })) || []
-                }
+              <GraphPicker
+                graph={graph}
                 selectedObjects={selectedObjects}
-                onObjectToggle={(objectName) => {
-                  setSelectedObjects((prev) =>
-                    prev.includes(objectName)
-                      ? prev.filter((n) => n !== objectName)
-                      : [...prev, objectName]
-                  )
-                }}
-                onSelectAll={() => {
-                  const allObjects = graph?.nodes
-                    .filter((n) => n.type === 'object')
-                    .map((n) => n.properties.objectName || n.label) || []
-                  setSelectedObjects(allObjects)
-                }}
-                onDeselectAll={() => setSelectedObjects([])}
+                onObjectsChange={setSelectedObjects}
+                selectedItems={selectedItems}
+                onItemsChange={setSelectedItems}
+                itemsNote={
+                  graph?.metadata?.pagesAndAutomation
+                    ? graph.metadata.pagesAndAutomation.available
+                      ? graph.metadata.pagesAndAutomation.note
+                      : 'Pages and automation not read yet: sync the org.'
+                    : null
+                }
+                className="max-h-[860px]"
               />
             )}
           </div>

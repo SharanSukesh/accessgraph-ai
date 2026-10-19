@@ -11,6 +11,7 @@ import { Badge, RiskBadge } from '@/components/shared/Badge'
 import { Button } from '@/components/shared/Button'
 import { X, ExternalLink, User, Shield, Database, Key, Users, FileText, Lock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { NODE_TYPES, EDGE_TYPES } from '@/lib/constants'
+import { NODE_TYPE_STYLES, PICKED_TYPES, type GraphNodeType } from './graphStyle'
 import { apiClient } from '@/lib/api/client'
 import { useState } from 'react'
 
@@ -152,7 +153,10 @@ function NodeDetailPanel({
   }
 
   const Icon = getNodeIcon(node.type)
-  const nodeTypeLabel = Object.values(NODE_TYPES).find((t) => t.value === node.type)?.label || node.type
+  const nodeTypeLabel =
+    Object.values(NODE_TYPES).find((t) => t.value === node.type)?.label ||
+    NODE_TYPE_STYLES[node.type as GraphNodeType]?.label ||
+    node.type
 
   // Fetch detailed breakdown for permission sets and profiles
   const shouldFetchDetails = node.type === NODE_TYPES.PERMISSION_SET.value || node.type === NODE_TYPES.PROFILE.value
@@ -272,6 +276,45 @@ function NodeDetailPanel({
               </div>
             )}
           </>
+        )}
+
+        {/* Page layouts, record pages, Apex classes and flows (picked in the graph's picker) */}
+        {PICKED_TYPES.includes(node.type as GraphNodeType) && (
+          <div className="space-y-3 text-sm">
+            {node.object && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">Object</div>
+                <div className="text-grove-ink dark:text-grove-ink-dk">{node.object}</div>
+              </div>
+            )}
+            {Array.isArray(node.recordTypes) && node.recordTypes.length > 0 && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">Record types (from the profile)</div>
+                <ul className="list-disc pl-5 text-grove-ink dark:text-grove-ink-dk">{node.recordTypes.map((r: string) => <li key={r}>{r}</li>)}</ul>
+              </div>
+            )}
+            {Array.isArray(node.rules) && node.rules.length > 0 && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">Assigned by (app · record type: level)</div>
+                <ul className="list-disc pl-5 text-grove-ink dark:text-grove-ink-dk">{node.rules.map((r: string) => <li key={r}>{r}</li>)}</ul>
+              </div>
+            )}
+            {node.namespace && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">Namespace</div>
+                <div className="font-mono text-grove-ink dark:text-grove-ink-dk">{node.namespace}</div>
+              </div>
+            )}
+            {node.type === 'flow' && (node.process_type || node.trigger_type) && (
+              <div>
+                <div className="mb-1 text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55">Flow type</div>
+                <div className="text-grove-ink dark:text-grove-ink-dk">{[node.process_type, node.trigger_type].filter(Boolean).join(' · ')}</div>
+              </div>
+            )}
+            <p className="text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
+              The highlighted path in the graph shows how this user reaches it; the Pages &amp; automation tab lists every grant.
+            </p>
+          </div>
         )}
 
         {/* Profile/Permission Set specific */}
