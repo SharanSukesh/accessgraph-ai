@@ -427,12 +427,49 @@ section has the detail.
   synthetic data only).
   **Open questions:** none. **UNVERIFIED:** none new (IsFlsEnabled and
   permissionable are documented).
-- **Next:** item 11 part b (new reads: validation rules with formulas,
-  picklist values per record type, tabs, Visualforce pages and
-  components, static resources, Lightning component inventory, custom
-  permissions and the rest of #11, app sheet, login IP ranges and hours,
-  approval processes, flow detail, field × layout matrix, opt-in custom
-  metadata records, per-class coverage), stacked on #55.
+- **#56 (item 11 part b, not merged; stacked on #55):** the new reads,
+  all read-only, configuration only, no new permission (trust doc
+  updated): services/org_docs.py stored in sync_metadata["org_docs"]
+  (validation rules with formulas, one Tooling query per rule, at most
+  300; picklist values per record type via /describe/layouts/; tab
+  settings; Visualforce pages and components; static resources; Aura and
+  LWC bundles; custom permissions; apps (AppMenuItem TabSet); approval
+  processes (inventory); Apex class detail with the sharing keyword parsed
+  from the body, body never kept; trigger detail; per-class coverage from
+  the existing coverage read; buttons and links; list views; field sets),
+  plus SetupEntityAccess for ApexPage, CustomPermission and TabSet and
+  each profile's login IP ranges and hours in ui_access. Workbook now 28
+  sheets; validation rules list the custom permissions they check with how
+  many active users hold them. Lumenvale part 09 extended (generator
+  research/demo_fixture/build_documentation_part.py). Matrix rows: #3
+  (validation rules, buttons and links, list views, field sets), #8
+  (inventory), #11 (custom permissions, Visualforce, apps), #13, #14
+  (lighter), #15, #16, #18 (inventory), #19.
+  **Test (Lumenvale, after a re-sync; Org documentation):** 28 sheets;
+  Validation Rules 25 (3 inactive; Industry_Required checks
+  Bypass_Validation, "9 active users hold it"); Picklists by Record Type:
+  Case Billing Inquiry Status "New, Working, Closed", left out
+  "Escalated"; Tab Visibility: Compensation__c Default On for Compensation
+  Admin, Default Off for System Administrator; Login Restrictions: Finance
+  Director "198.51.100.0 to 198.51.100.63 (Finance floor)…", Support Agent
+  "Mon 06:00 to 21:00…"; Apex Classes 81 (AccountHandler without sharing,
+  75.6%); Apex Triggers 12; Visualforce: LegacyTreasuryDashboard API 29,
+  Treasury Data Steward, 1 user; Apps: Lumenvale Sales 161 users. Runbook
+  unchanged: 41 / 18 / $183,180 / $116,220. Sample regenerated.
+  **Open questions:** none.
+  **UNVERIFIED:** whether describe/layouts maps record types the
+  integration user can't use; whether Apex bodies are readable with our
+  permissions (as for API usage); WebLink DisplayType and LinkType API
+  values; whether AppMenuItem lists apps the integration user can't open;
+  FieldSet has no documented object column, so the sheet doesn't show the
+  object.
+- **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
+  the objects and fields each flow reads or writes, from the Flow metadata
+  already read per active flow), the field × layout matrix (#4, Layout
+  Metadata one per query), opt-in custom metadata records (#7, off by
+  default, trust docs), approval process steps (#18, UNVERIFIED read path),
+  external data sources and record types per permission set (#11,
+  UNVERIFIED source).
 
 ## Build order
 
@@ -966,7 +1003,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 8. **Effort: M.**
 
 ### 11. Documentation export
-**Status: part a built in #55 (not merged): the workbook from synced data. Part b (the new reads) next.**
+**Status: part a built in #55, part b (the new reads) in #56 (not merged). Part c next: flow detail, field × layout matrix, custom metadata records.**
 - **Problem:** clients ask for "the org documented" as a deliverable.
 - **Approach:** add sheets to the existing Excel export:
   - Objects and Fields (from 8);

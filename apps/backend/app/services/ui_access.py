@@ -383,6 +383,34 @@ MAX_FLOW_METADATA = 150      # Flow.Metadata is one record per query
 MAX_DESCRIBES = 40
 
 
+DAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+
+
+def login_restrictions(md: Dict[str, Any]) -> Dict[str, Any]:
+    """Profile metadata's loginIpRanges (startAddress, endAddress,
+    description) and loginHours ({day}Start / {day}End in minutes since
+    midnight), Metadata API v68 ProfileLoginIpRange and ProfileLoginHours.
+    loginHours is read as an object or a one-item list (JSON shape
+    UNVERIFIED). Empty when the profile restricts neither."""
+    out: Dict[str, Any] = {}
+    ranges = [{"start": r.get("startAddress"), "end": r.get("endAddress"), "description": r.get("description")}
+              for r in md.get("loginIpRanges") or [] if isinstance(r, dict)]
+    if ranges:
+        out["ip_ranges"] = ranges
+    hours = md.get("loginHours")
+    if isinstance(hours, list):
+        hours = hours[0] if hours else None
+    if isinstance(hours, dict):
+        days = {}
+        for d in DAYS:
+            start, end = hours.get(f"{d}Start"), hours.get(f"{d}End")
+            if start is not None or end is not None:
+                days[d] = {"start": start, "end": end}
+        if days:
+            out["hours"] = days
+    return out
+
+
 def _short(i: Optional[str]) -> Optional[str]:
     return i[:15] if i else i
 
@@ -430,6 +458,7 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
     profiles = await part("profiles", lambda: soql("SELECT Id, Name FROM Profile"), "Profiles couldn't be listed.") or []
     vis: Dict[str, Dict[str, Any]] = {}
     api_names: Dict[str, str] = {}  # profile id -> API name (FullName), e.g. Admin
+    logins: Dict[str, Dict[str, Any]] = {}  # profile id -> login IP ranges and hours
     for p in profiles[:MAX_PROFILE_METADATA]:
         rows = await part("profile metadata", lambda pid=p["Id"]: tooling(
             f"SELECT FullName, Metadata FROM Profile WHERE Id = '{pid}'"), "")
@@ -437,6 +466,9 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
         if row.get("FullName"):
             api_names[p["Id"]] = row["FullName"]
         md = row.get("Metadata") or {}
+        login = login_restrictions(md)
+        if login:
+            logins[p["Id"]] = login
         for v in md.get("recordTypeVisibilities") or []:
             obj = (v.get("recordType") or "").split(".")[0]
             slot = vis.setdefault(p["Id"], {}).setdefault(obj, {"available": [], "default": None})
@@ -446,6 +478,7 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
                 slot["default"] = v.get("recordType")
     out["notes"] = [n for n in out["notes"] if n]
     out["profile_api_names"] = api_names
+    out["profile_logins"] = logins
     if vis:
         out["record_type_visibility"] = vis
         out["record_type_visibility_note"] = (
@@ -517,8 +550,8 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
 
     sea = await part("setup entity access", lambda: soql(
         "SELECT ParentId, SetupEntityId, SetupEntityType FROM SetupEntityAccess "
-        "WHERE SetupEntityType IN ('ApexClass', 'FlowDefinition')"),
-        "Apex class and flow access couldn't be read.") or []
+        "WHERE SetupEntityType IN ('ApexClass', 'FlowDefinition', 'ApexPage', 'CustomPermission', 'TabSet')"),
+        "Apex class, flow, Visualforce page, custom permission and app access couldn't be read.") or []
     grants: Dict[str, Dict[str, List[str]]] = {}
     for r in sea:
         grants.setdefault(r["ParentId"], {}).setdefault(r["SetupEntityType"], []).append(r["SetupEntityId"])

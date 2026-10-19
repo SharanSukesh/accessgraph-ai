@@ -115,6 +115,10 @@ class SyncOrchestrator:
                     objects = from_describes(described, data["demo_live"].get("field_definitions"))
                     data["schema"] = {"objects": objects, "failed": [], "skipped": [], "notes": notes_for(objects, [], []),
                                       "collected_at": datetime.now(timezone.utc).isoformat()}
+                # Documentation reads (services/org_docs.py).
+                docs = data.get("demo_live", {}).get("org_docs")
+                if docs:
+                    data["org_docs"] = {**docs, "collected_at": datetime.now(timezone.utc).isoformat()}
                 # What the integration user could see, as a live sync records it.
                 data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
                 # The org's privacy level applies to demo data exactly as to a
@@ -146,6 +150,9 @@ class SyncOrchestrator:
             # Field metadata: configuration only.
             if data.get("schema"):
                 sync_job.sync_metadata["schema"] = data["schema"]
+            # Validation rules, tabs, Visualforce and the rest: configuration only.
+            if data.get("org_docs"):
+                sync_job.sync_metadata["org_docs"] = data["org_docs"]
 
             # Mark as modified so SQLAlchemy knows to update the JSON column
             from sqlalchemy.orm import attributes
@@ -265,6 +272,17 @@ class SyncOrchestrator:
             }
         except Exception as e:  # noqa: BLE001
             logger.warning("Field metadata couldn't be read: %s", e)
+        # Documentation reads (roadmap item 11): configuration, read-only;
+        # a failure never fails the sync.
+        try:
+            from app.services import org_docs
+            rt_objects = {r["object"] for r in (data.get("ui_access") or {}).get("record_types", []) if r.get("object")}
+            data["org_docs"] = {
+                **await org_docs.collect_live(client, rt_objects),
+                "collected_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Documentation reads failed: %s", e)
         return data
 
     async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:

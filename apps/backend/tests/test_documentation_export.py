@@ -103,3 +103,107 @@ async def test_metadata_only_leaves_out_people(async_db_session):
     assert "Users with Read" not in head and len(objects) == 29
     _, fields = _rows(wb["Fields"])
     assert len(fields) == 260  # configuration is the same at every level
+    head, rules = _rows(wb["Validation Rules"])
+    assert len(rules) == 25 and next(r for r in rules if r["Rule"] == "Industry_Required")[
+        "Custom permissions it checks"] == "Bypass_Validation"
+    head, perms = _rows(wb["Custom Permissions"])
+    assert "Active users granted it" not in head and len(perms) == 3
+
+
+# --------------------------------------------------------------------------- part b
+
+def test_sharing_keyword_is_all_that_is_kept():
+    from app.services.org_docs import sharing_of
+    assert sharing_of("public with sharing class A {}") == "with sharing"
+    assert sharing_of("/* without sharing */ public inherited sharing class B {}") == "inherited sharing"
+    assert sharing_of("// with sharing\npublic class C { class D without sharing {} }") == "not declared"
+    assert sharing_of("@isTest private without sharing class E {}") == "without sharing"
+    assert sharing_of(None) is None
+
+
+def test_login_restrictions_from_profile_metadata():
+    from app.services.ui_access import login_restrictions
+    md = {"loginIpRanges": [{"startAddress": "192.0.2.0", "endAddress": "192.0.2.255", "description": "VPN"}],
+          "loginHours": {"mondayStart": 360, "mondayEnd": 1260}}
+    assert login_restrictions(md) == {"ip_ranges": [{"start": "192.0.2.0", "end": "192.0.2.255", "description": "VPN"}],
+                                      "hours": {"monday": {"start": 360, "end": 1260}}}
+    assert login_restrictions({"loginHours": [{"fridayStart": 0, "fridayEnd": 600}]}) == {"hours": {"friday": {"start": 0, "end": 600}}}
+    assert login_restrictions({}) == {}
+
+
+@pytest.mark.asyncio
+async def test_live_documentation_reads_degrade_part_by_part():
+    from app.services import org_docs
+
+    queries = []
+
+    class Client:
+        async def query_tooling(self, q):
+            queries.append(q)
+            if "FROM CustomObject" in q:
+                return [{"Id": "01I000000000001AAA", "DeveloperName": "Invoice", "NamespacePrefix": None}]
+            if q.startswith("SELECT Metadata FROM ValidationRule"):
+                return [{"Metadata": {"errorConditionFormula": "Amount__c <= 0"}}]
+            if "FROM ValidationRule" in q:
+                return [{"Id": "03d1", "ValidationName": "Amount_Positive", "Active": True, "ErrorMessage": "Positive.",
+                         "EntityDefinition": {"QualifiedApiName": "Invoice__c"}}]
+            if "FROM ApexClass" in q:
+                return [{"Id": "01p1", "Name": "A", "ApiVersion": 58.0, "Status": "Active", "IsValid": True,
+                         "LengthWithoutComments": 10, "Body": "public without sharing class A {}"}]
+            if "FROM ApexTrigger" in q:
+                return [{"Id": "01q1", "Name": "T", "TableEnumOrId": "01I000000000001AAA", "UsageBeforeInsert": True}]
+            raise RuntimeError("not allowed")
+
+        async def query_all(self, q):
+            queries.append(q)
+            if "FROM PermissionSetTabSetting" in q:
+                return [{"ParentId": "0PS1", "Name": "standard-Account", "Visibility": "DefaultOn"}]
+            raise RuntimeError("not allowed")
+
+        async def describe_layouts(self, name):
+            return {"recordTypeMappings": [{"name": "Renewal", "picklistsForRecordType": [
+                {"picklistName": "StageName", "picklistValues": [{"value": "Closed Won"}]}]}]}
+
+        async def get_code_coverage(self):
+            return {"items": [{"name": "A", "type": "class", "covered": 3, "uncovered": 1, "is_test": False}]}
+
+    out = await org_docs.collect_live(Client(), ["Opportunity"])
+    assert out["validation_rules"][0]["formula"] == "Amount__c <= 0"
+    assert out["apex_classes"][0]["sharing"] == "without sharing" and "Body" not in repr(out)
+    assert out["apex_triggers"][0]["object"] == "Invoice__c" and out["apex_triggers"][0]["events"] == ["before insert"]
+    assert out["record_type_picklists"] == {"Opportunity": {"Renewal": {"StageName": ["Closed Won"]}}}
+    assert out["tab_settings"] == [{"parent_id": "0PS1", "tab": "standard-Account", "visibility": "DefaultOn"}]
+    assert "Visualforce pages couldn't be read." in out["notes"] and "static_resources" not in out
+    assert all(q.lstrip().upper().startswith("SELECT") for q in queries)  # reads only
+
+
+@pytest.mark.asyncio
+async def test_part_b_sheets_on_lumenvale(client, lumenvale):  # noqa: F811
+    org_id, cookie = lumenvale
+    wb = load_workbook(io.BytesIO((await client.get(f"/orgs/{org_id}/documentation.xlsx", cookies=cookie)).content))
+    _, rules = _rows(wb["Validation Rules"])
+    assert len(rules) == 25 and sum(r["Active"] == "No" for r in rules) == 3
+    industry = next(r for r in rules if r["Rule"] == "Industry_Required")
+    assert industry["Custom permissions it checks"] == "Bypass_Validation (9 active users hold it)"
+    _, rt = _rows(wb["Picklists by Record Type"])
+    billing = next(r for r in rt if r["Record type"] == "Billing Inquiry" and r["Field"] == "Status")
+    assert (billing["Values available"], billing["Values left out"]) == ("New, Working, Closed", "Escalated")
+    head, tabs = _rows(wb["Tab Visibility"])
+    comp = next(t for t in tabs if t["Tab"] == "Compensation__c")
+    assert comp["Compensation Admin"] == "Default On" and comp["System Administrator (Profile)"] == "Default Off"
+    _, logins = _rows(wb["Login Restrictions"])
+    fd = next(r for r in logins if r["Profile"] == "Finance Director")
+    assert fd["Login IP ranges"].startswith("198.51.100.0 to 198.51.100.63 (Finance floor)")
+    assert next(r for r in logins if r["Profile"] == "Support Agent")["Login hours"].startswith("Mon 06:00 to 21:00")
+    _, apex = _rows(wb["Apex Classes"])
+    acct = next(a for a in apex if a["Class"] == "AccountHandler")
+    assert (acct["Sharing"], acct["Coverage %"]) == ("without sharing", 75.6)
+    assert len(apex) == 81 and len(_rows(wb["Apex Triggers"])[1]) == 12
+    _, vf = _rows(wb["Visualforce"])
+    legacy = next(v for v in vf if v["Name"] == "LegacyTreasuryDashboard")
+    assert (legacy["API version"], legacy["Access granted by"], legacy["Active users granted it"]) == (29, "Treasury Data Steward", 1)
+    _, apps = _rows(wb["Apps"])
+    assert next(a for a in apps if a["App"] == "Lumenvale Sales")["Active users granted it"] == 161
+    for sheet, n in (("Approval Processes", 3), ("Buttons and Links", 5), ("List Views", 13), ("Field Sets", 2),
+                     ("Lightning Components", 7), ("Static Resources", 4), ("Custom Permissions", 3)):
+        assert len(_rows(wb[sheet])[1]) == n, sheet

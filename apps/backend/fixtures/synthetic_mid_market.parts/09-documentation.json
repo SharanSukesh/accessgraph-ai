@@ -13,6 +13,2651 @@
      "object": "Case",
      "name": "Case - Old Support Layout"
     }
+   ],
+   "setup_entity_access": {
+    "0PS000000000001DMO": {
+     "ApexPage": [
+      "066000000000001DMO"
+     ],
+     "TabSet": [
+      "02u000000000003DMO"
+     ]
+    },
+    "0PS000000000002DMO": {
+     "ApexPage": [
+      "066000000000001DMO"
+     ],
+     "TabSet": [
+      "02u000000000003DMO"
+     ]
+    },
+    "0PS000000000021DMO": {
+     "ApexPage": [
+      "066000000000001DMO"
+     ]
+    },
+    "0PS000000000005DMO": {
+     "ApexPage": [
+      "066000000000002DMO"
+     ],
+     "CustomPermission": [
+      "0CP000000000002DMO"
+     ],
+     "TabSet": [
+      "02u000000000001DMO"
+     ]
+    },
+    "0PS000000000006DMO": {
+     "ApexPage": [
+      "066000000000002DMO"
+     ],
+     "TabSet": [
+      "02u000000000001DMO"
+     ]
+    },
+    "0PS000000000007DMO": {
+     "ApexPage": [
+      "066000000000002DMO"
+     ],
+     "TabSet": [
+      "02u000000000001DMO"
+     ]
+    },
+    "0PS000000000032DMO": {
+     "ApexPage": [
+      "066000000000003DMO"
+     ]
+    },
+    "0PS000000000011DMO": {
+     "CustomPermission": [
+      "0CP000000000001DMO"
+     ],
+     "TabSet": [
+      "02u000000000001DMO",
+      "02u000000000002DMO",
+      "02u000000000003DMO",
+      "02u000000000004DMO",
+      "02u000000000005DMO"
+     ]
+    },
+    "0PS000000000028DMO": {
+     "CustomPermission": [
+      "0CP000000000001DMO"
+     ]
+    },
+    "0PS000000000039DMO": {
+     "CustomPermission": [
+      "0CP000000000002DMO"
+     ]
+    },
+    "0PS000000000029DMO": {
+     "CustomPermission": [
+      "0CP000000000003DMO"
+     ],
+     "TabSet": [
+      "02u000000000004DMO"
+     ]
+    },
+    "0PS000000000009DMO": {
+     "TabSet": [
+      "02u000000000002DMO"
+     ]
+    },
+    "0PS000000000010DMO": {
+     "TabSet": [
+      "02u000000000002DMO"
+     ]
+    },
+    "0PS000000000024DMO": {
+     "TabSet": [
+      "02u000000000004DMO"
+     ]
+    },
+    "0PS000000000003DMO": {
+     "TabSet": [
+      "02u000000000005DMO"
+     ]
+    },
+    "0PS000000000004DMO": {
+     "TabSet": [
+      "02u000000000005DMO"
+     ]
+    }
+   },
+   "profile_logins": {
+    "00e000000000011DMO": {
+     "ip_ranges": [
+      {
+       "start": "192.0.2.0",
+       "end": "192.0.2.255",
+       "description": "Office VPN"
+      }
+     ]
+    },
+    "00e000000000002DMO": {
+     "ip_ranges": [
+      {
+       "start": "198.51.100.0",
+       "end": "198.51.100.63",
+       "description": "Finance floor"
+      },
+      {
+       "start": "203.0.113.10",
+       "end": "203.0.113.20",
+       "description": "Treasury desk"
+      }
+     ]
+    },
+    "00e000000000009DMO": {
+     "hours": {
+      "monday": {
+       "start": 360,
+       "end": 1260
+      },
+      "tuesday": {
+       "start": 360,
+       "end": 1260
+      },
+      "wednesday": {
+       "start": 360,
+       "end": 1260
+      },
+      "thursday": {
+       "start": 360,
+       "end": 1260
+      },
+      "friday": {
+       "start": 360,
+       "end": 1260
+      }
+     }
+    }
+   }
+  },
+  "org_docs": {
+   "notes": [],
+   "validation_rules": [
+    {
+     "id": "03d000000000001DMO",
+     "object": "Account",
+     "name": "Industry_Required",
+     "active": true,
+     "description": null,
+     "error_message": "Select an industry.",
+     "error_field": "Industry",
+     "formula": "AND(NOT($Permission.Bypass_Validation), ISBLANK(TEXT(Industry)))"
+    },
+    {
+     "id": "03d000000000002DMO",
+     "object": "Account",
+     "name": "Tax_ID_Format",
+     "active": true,
+     "description": null,
+     "error_message": "Tax ID must look like 12-3456789.",
+     "error_field": "Tax_ID__c",
+     "formula": "AND(NOT($Permission.Bypass_Validation), NOT(ISBLANK(Tax_ID__c)), NOT(REGEX(Tax_ID__c, \"[0-9]{2}-[0-9]{7}\")))"
+    },
+    {
+     "id": "03d000000000003DMO",
+     "object": "Account",
+     "name": "Rating_Hot_Needs_Revenue",
+     "active": true,
+     "description": null,
+     "error_message": "Hot accounts need an annual revenue.",
+     "error_field": "AnnualRevenue",
+     "formula": "AND(ISPICKVAL(Rating, \"Hot\"), ISBLANK(AnnualRevenue))"
+    },
+    {
+     "id": "03d000000000004DMO",
+     "object": "Opportunity",
+     "name": "Close_Date_Not_In_Past",
+     "active": true,
+     "description": null,
+     "error_message": "The close date can't be in the past.",
+     "error_field": "CloseDate",
+     "formula": "AND(NOT($Permission.Bypass_Validation), ISNEW(), CloseDate < TODAY())"
+    },
+    {
+     "id": "03d000000000005DMO",
+     "object": "Opportunity",
+     "name": "Discount_Cap",
+     "active": true,
+     "description": null,
+     "error_message": "Discounts over 40% need the discount approval process.",
+     "error_field": "Discount_Percent__c",
+     "formula": "AND(NOT($Permission.Bypass_Validation), Discount_Percent__c > 0.4)"
+    },
+    {
+     "id": "03d000000000006DMO",
+     "object": "Opportunity",
+     "name": "Amount_Required_After_Qualification",
+     "active": true,
+     "description": null,
+     "error_message": "Enter an amount once the deal is past qualification.",
+     "error_field": "Amount",
+     "formula": "AND(ISBLANK(Amount), NOT(ISPICKVAL(StageName, \"Prospecting\")), NOT(ISPICKVAL(StageName, \"Qualification\")))"
+    },
+    {
+     "id": "03d000000000007DMO",
+     "object": "Opportunity",
+     "name": "Closed_Lost_Reason",
+     "active": false,
+     "description": null,
+     "error_message": "Record why the deal was lost in Next Step.",
+     "error_field": "NextStep",
+     "formula": "AND(ISPICKVAL(StageName, \"Closed Lost\"), ISBLANK(NextStep))"
+    },
+    {
+     "id": "03d000000000008DMO",
+     "object": "Case",
+     "name": "Billing_Case_Needs_Account",
+     "active": true,
+     "description": null,
+     "error_message": "Billing inquiries need an account.",
+     "error_field": "AccountId",
+     "formula": "AND(RecordType.DeveloperName = \"Billing_Inquiry\", ISBLANK(AccountId))"
+    },
+    {
+     "id": "03d000000000009DMO",
+     "object": "Case",
+     "name": "Escalated_Needs_Priority",
+     "active": true,
+     "description": null,
+     "error_message": "Escalated cases must be High priority.",
+     "error_field": "Priority",
+     "formula": "AND(ISPICKVAL(Status, \"Escalated\"), NOT(ISPICKVAL(Priority, \"High\")))"
+    },
+    {
+     "id": "03d000000000010DMO",
+     "object": "Case",
+     "name": "Negative_Sentiment_Note",
+     "active": false,
+     "description": null,
+     "error_message": "Add a subject for negative-sentiment cases.",
+     "error_field": "Subject",
+     "formula": "AND(ISPICKVAL(Customer_Sentiment__c, \"Negative\"), ISBLANK(Subject))"
+    },
+    {
+     "id": "03d000000000011DMO",
+     "object": "Lead",
+     "name": "Company_Required",
+     "active": true,
+     "description": null,
+     "error_message": "Company is required.",
+     "error_field": "Company",
+     "formula": "AND(NOT($Permission.Bypass_Validation), ISBLANK(Company))"
+    },
+    {
+     "id": "03d000000000012DMO",
+     "object": "Lead",
+     "name": "Lead_Score_Range",
+     "active": true,
+     "description": null,
+     "error_message": "Lead score must be 0 to 100.",
+     "error_field": "Lead_Score__c",
+     "formula": "OR(Lead_Score__c < 0, Lead_Score__c > 100)"
+    },
+    {
+     "id": "03d000000000013DMO",
+     "object": "Contract",
+     "name": "Term_Positive",
+     "active": true,
+     "description": null,
+     "error_message": "The contract term must be at least one month.",
+     "error_field": "ContractTerm",
+     "formula": "ContractTerm <= 0"
+    },
+    {
+     "id": "03d000000000014DMO",
+     "object": "Contract",
+     "name": "Payment_Terms_Required",
+     "active": true,
+     "description": null,
+     "error_message": "Activated contracts need payment terms.",
+     "error_field": "Payment_Terms__c",
+     "formula": "AND(ISPICKVAL(Status, \"Activated\"), ISBLANK(TEXT(Payment_Terms__c)))"
+    },
+    {
+     "id": "03d000000000015DMO",
+     "object": "Invoice__c",
+     "name": "Amount_Positive",
+     "active": true,
+     "description": null,
+     "error_message": "Invoice amount must be positive.",
+     "error_field": "Amount__c",
+     "formula": "Amount__c <= 0"
+    },
+    {
+     "id": "03d000000000016DMO",
+     "object": "Invoice__c",
+     "name": "Due_Date_Required",
+     "active": true,
+     "description": null,
+     "error_message": "Enter a due date.",
+     "error_field": "Due_Date__c",
+     "formula": "AND(NOT($Permission.Bypass_Validation), ISBLANK(Due_Date__c))"
+    },
+    {
+     "id": "03d000000000017DMO",
+     "object": "Invoice__c",
+     "name": "PO_Number_Format",
+     "active": true,
+     "description": null,
+     "error_message": "PO numbers start with PO-.",
+     "error_field": "PO_Number__c",
+     "formula": "AND(NOT(ISBLANK(PO_Number__c)), LEFT(PO_Number__c, 3) <> \"PO-\")"
+    },
+    {
+     "id": "03d000000000018DMO",
+     "object": "Payment__c",
+     "name": "Payment_Not_Over_Invoice",
+     "active": true,
+     "description": null,
+     "error_message": "A payment can't be more than its invoice.",
+     "error_field": "Amount__c",
+     "formula": "Amount__c > Invoice__r.Amount__c"
+    },
+    {
+     "id": "03d000000000019DMO",
+     "object": "Payment__c",
+     "name": "Card_Last4_Digits",
+     "active": true,
+     "description": null,
+     "error_message": "Card last 4 must be four digits.",
+     "error_field": "Card_Last4__c",
+     "formula": "AND(NOT(ISBLANK(Card_Last4__c)), NOT(REGEX(Card_Last4__c, \"[0-9]{4}\")))"
+    },
+    {
+     "id": "03d000000000020DMO",
+     "object": "Employee__c",
+     "name": "Hire_Date_Not_Future",
+     "active": true,
+     "description": null,
+     "error_message": "The hire date can't be in the future.",
+     "error_field": "Hire_Date__c",
+     "formula": "Hire_Date__c > TODAY()"
+    },
+    {
+     "id": "03d000000000021DMO",
+     "object": "Employee__c",
+     "name": "Manager_Not_Self",
+     "active": true,
+     "description": null,
+     "error_message": "An employee can't be their own manager.",
+     "error_field": "Manager__c",
+     "formula": "Manager__c = Id"
+    },
+    {
+     "id": "03d000000000022DMO",
+     "object": "Compensation__c",
+     "name": "Bonus_Target_Range",
+     "active": true,
+     "description": null,
+     "error_message": "Bonus target must be between 0% and 100%.",
+     "error_field": "Bonus_Target__c",
+     "formula": "OR(Bonus_Target__c < 0, Bonus_Target__c > 1)"
+    },
+    {
+     "id": "03d000000000023DMO",
+     "object": "Compensation__c",
+     "name": "Base_Salary_Required",
+     "active": true,
+     "description": null,
+     "error_message": "Enter a base salary.",
+     "error_field": "Base_Salary__c",
+     "formula": "AND(NOT($Permission.Bypass_Validation), ISBLANK(Base_Salary__c))"
+    },
+    {
+     "id": "03d000000000024DMO",
+     "object": "Change_Request__c",
+     "name": "High_Risk_Needs_Approver",
+     "active": true,
+     "description": null,
+     "error_message": "High-risk changes need an approver.",
+     "error_field": "Approver__c",
+     "formula": "AND(ISPICKVAL(Risk_Level__c, \"High\"), ISBLANK(Approver__c))"
+    },
+    {
+     "id": "03d000000000025DMO",
+     "object": "Change_Request__c",
+     "name": "Legacy_Freeze",
+     "active": false,
+     "description": null,
+     "error_message": "Change freeze: submissions are closed.",
+     "error_field": null,
+     "formula": "ISPICKVAL(Status__c, \"Submitted\")"
+    }
+   ],
+   "record_type_picklists": {
+    "Opportunity": {
+     "New Business": {
+      "StageName": [
+       "Prospecting",
+       "Qualification",
+       "Needs Analysis",
+       "Proposal/Price Quote",
+       "Negotiation/Review",
+       "Closed Won",
+       "Closed Lost"
+      ]
+     },
+     "Renewal": {
+      "StageName": [
+       "Needs Analysis",
+       "Proposal/Price Quote",
+       "Negotiation/Review",
+       "Closed Won",
+       "Closed Lost"
+      ]
+     },
+     "Partner Deal": {
+      "StageName": [
+       "Qualification",
+       "Proposal/Price Quote",
+       "Closed Won",
+       "Closed Lost"
+      ]
+     }
+    },
+    "Case": {
+     "Support Request": {
+      "Status": [
+       "New",
+       "Working",
+       "Escalated",
+       "Closed"
+      ],
+      "Priority": [
+       "High",
+       "Medium",
+       "Low"
+      ]
+     },
+     "Billing Inquiry": {
+      "Status": [
+       "New",
+       "Working",
+       "Closed"
+      ],
+      "Priority": [
+       "Medium",
+       "Low"
+      ]
+     }
+    }
+   },
+   "tab_settings": [
+    {
+     "parent_id": "0PS000000000005DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000006DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000007DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000001DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000002DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000009DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOff"
+    },
+    {
+     "parent_id": "0PS000000000010DMO",
+     "tab": "standard-Account",
+     "visibility": "DefaultOff"
+    },
+    {
+     "parent_id": "0PS000000000005DMO",
+     "tab": "standard-Opportunity",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000006DMO",
+     "tab": "standard-Opportunity",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000007DMO",
+     "tab": "standard-Opportunity",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "standard-Opportunity",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000005DMO",
+     "tab": "standard-Lead",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000006DMO",
+     "tab": "standard-Lead",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000007DMO",
+     "tab": "standard-Lead",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000003DMO",
+     "tab": "standard-Lead",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000004DMO",
+     "tab": "standard-Lead",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "standard-Lead",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000009DMO",
+     "tab": "standard-Case",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000010DMO",
+     "tab": "standard-Case",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "standard-Case",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000006DMO",
+     "tab": "standard-Case",
+     "visibility": "DefaultOff"
+    },
+    {
+     "parent_id": "0PS000000000003DMO",
+     "tab": "standard-Campaign",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000004DMO",
+     "tab": "standard-Campaign",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "standard-Campaign",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000019DMO",
+     "tab": "standard-Campaign",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000001DMO",
+     "tab": "Invoice__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000002DMO",
+     "tab": "Invoice__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "Invoice__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000021DMO",
+     "tab": "Invoice__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "Employee__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000024DMO",
+     "tab": "Employee__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000011DMO",
+     "tab": "Compensation__c",
+     "visibility": "DefaultOff"
+    },
+    {
+     "parent_id": "0PS000000000029DMO",
+     "tab": "Compensation__c",
+     "visibility": "DefaultOn"
+    },
+    {
+     "parent_id": "0PS000000000002DMO",
+     "tab": "Treasury_Account__c",
+     "visibility": "DefaultOff"
+    },
+    {
+     "parent_id": "0PS000000000032DMO",
+     "tab": "Treasury_Account__c",
+     "visibility": "DefaultOn"
+    }
+   ],
+   "visualforce": [
+    {
+     "id": "066000000000001DMO",
+     "kind": "Page",
+     "name": "InvoicePrint",
+     "label": "Invoice Print",
+     "api_version": 58.0,
+     "namespace": null,
+     "description": "Printable invoice."
+    },
+    {
+     "id": "066000000000002DMO",
+     "kind": "Page",
+     "name": "QuotePdf",
+     "label": "Quote PDF",
+     "api_version": 52.0,
+     "namespace": null,
+     "description": "Quote rendered as a PDF."
+    },
+    {
+     "id": "066000000000003DMO",
+     "kind": "Page",
+     "name": "LegacyTreasuryDashboard",
+     "label": "Legacy Treasury Dashboard",
+     "api_version": 29.0,
+     "namespace": null,
+     "description": "Pre-Lightning treasury balances page."
+    },
+    {
+     "id": "099000000000001DMO",
+     "kind": "Component",
+     "name": "AddressBlock",
+     "label": "Address Block",
+     "api_version": 55.0,
+     "namespace": null,
+     "description": "Formatted postal address."
+    }
+   ],
+   "static_resources": [
+    {
+     "name": "jquery_3_6",
+     "namespace": null,
+     "content_type": "application/javascript",
+     "size": 89476,
+     "cache_control": "Public",
+     "description": "jQuery for the legacy treasury page."
+    },
+    {
+     "name": "lumenvale_logo",
+     "namespace": null,
+     "content_type": "image/png",
+     "size": 18342,
+     "cache_control": "Public",
+     "description": "Logo for PDFs."
+    },
+    {
+     "name": "legacy_charts",
+     "namespace": null,
+     "content_type": "application/zip",
+     "size": 412907,
+     "cache_control": "Private",
+     "description": "Charting library for the legacy treasury page."
+    },
+    {
+     "name": "invoice_styles",
+     "namespace": null,
+     "content_type": "text/css",
+     "size": 5120,
+     "cache_control": "Private",
+     "description": "Styles for InvoicePrint."
+    }
+   ],
+   "lightning_components": [
+    {
+     "kind": "Aura",
+     "name": "legacyCaseSidebar",
+     "label": "Legacy Case Sidebar",
+     "api_version": 44.0,
+     "namespace": null,
+     "exposed": null,
+     "description": "Case console sidebar (Aura)."
+    },
+    {
+     "kind": "Aura",
+     "name": "quickQuoteAction",
+     "label": "Quick Quote",
+     "api_version": 50.0,
+     "namespace": null,
+     "exposed": null,
+     "description": "Quick action to start a quote."
+    },
+    {
+     "kind": "Lightning web component",
+     "name": "invoiceSummary",
+     "label": "Invoice Summary",
+     "api_version": 62.0,
+     "namespace": null,
+     "exposed": true,
+     "description": "Invoice totals on the account page."
+    },
+    {
+     "kind": "Lightning web component",
+     "name": "approvalBanner",
+     "label": "Approval Banner",
+     "api_version": 62.0,
+     "namespace": null,
+     "exposed": true,
+     "description": "Shows pending approvals."
+    },
+    {
+     "kind": "Lightning web component",
+     "name": "salaryBandBadge",
+     "label": "Salary Band Badge",
+     "api_version": 64.0,
+     "namespace": null,
+     "exposed": true,
+     "description": "Shows an employee's salary band."
+    },
+    {
+     "kind": "Lightning web component",
+     "name": "treasuryBalanceCard",
+     "label": "Treasury Balance Card",
+     "api_version": 60.0,
+     "namespace": null,
+     "exposed": true,
+     "description": "Treasury balances."
+    },
+    {
+     "kind": "Lightning web component",
+     "name": "caseTimeline",
+     "label": "Case Timeline",
+     "api_version": 61.0,
+     "namespace": null,
+     "exposed": false,
+     "description": "Used inside other components."
+    }
+   ],
+   "custom_permissions": [
+    {
+     "id": "0CP000000000001DMO",
+     "name": "Bypass_Validation",
+     "label": "Bypass Validation",
+     "namespace": null,
+     "description": "Skips validation rules that check it, for data loads."
+    },
+    {
+     "id": "0CP000000000002DMO",
+     "name": "Approve_Large_Discounts",
+     "label": "Approve Large Discounts",
+     "namespace": null,
+     "description": "Approves discounts over 20%."
+    },
+    {
+     "id": "0CP000000000003DMO",
+     "name": "View_Salary_Bands",
+     "label": "View Salary Bands",
+     "namespace": null,
+     "description": "Shows salary bands in the salary band badge."
+    }
+   ],
+   "apps": [
+    {
+     "id": "02u000000000001DMO",
+     "name": "Lumenvale_Sales",
+     "label": "Lumenvale Sales",
+     "namespace": null,
+     "description": "Sales app."
+    },
+    {
+     "id": "02u000000000002DMO",
+     "name": "Service_Console",
+     "label": "Service Console",
+     "namespace": null,
+     "description": "Support console."
+    },
+    {
+     "id": "02u000000000003DMO",
+     "name": "Finance_Hub",
+     "label": "Finance Hub",
+     "namespace": null,
+     "description": "Invoices, payments and treasury."
+    },
+    {
+     "id": "02u000000000004DMO",
+     "name": "HR_Portal",
+     "label": "HR Portal",
+     "namespace": null,
+     "description": "Employees and compensation."
+    },
+    {
+     "id": "02u000000000005DMO",
+     "name": "Marketing",
+     "label": "Marketing",
+     "namespace": null,
+     "description": "Campaigns and leads."
+    }
+   ],
+   "approval_processes": [
+    {
+     "name": "Discount over 20%",
+     "api_name": "Discount_Over_20",
+     "object": "Opportunity",
+     "state": "Active",
+     "lock_type": "Total",
+     "description": "Discounts over 20% go to a sales director."
+    },
+    {
+     "name": "Invoice over 50K",
+     "api_name": "Invoice_Over_50K",
+     "object": "Invoice__c",
+     "state": "Active",
+     "lock_type": "Total",
+     "description": "Large invoices need finance director approval."
+    },
+    {
+     "name": "Legacy Contract Approval",
+     "api_name": "Legacy_Contract_Approval",
+     "object": "Contract",
+     "state": "Inactive",
+     "lock_type": "Admin",
+     "description": "Replaced by a flow in 2025."
+    }
+   ],
+   "apex_classes": [
+    {
+     "id": "01p000000000001DMO",
+     "name": "AccountService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2320,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000002DMO",
+     "name": "AccountSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3820,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000003DMO",
+     "name": "AccountHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1828,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000004DMO",
+     "name": "AccountController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4252,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000005DMO",
+     "name": "OpportunityService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2656,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000006DMO",
+     "name": "OpportunitySelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2236,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000007DMO",
+     "name": "OpportunityHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4072,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000008DMO",
+     "name": "OpportunityController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1936,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000009DMO",
+     "name": "QuoteService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1528,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000010DMO",
+     "name": "QuoteSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1036,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000011DMO",
+     "name": "QuoteHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4816,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000012DMO",
+     "name": "QuoteController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2068,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000013DMO",
+     "name": "InvoiceService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1888,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000014DMO",
+     "name": "InvoiceSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 5368,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000015DMO",
+     "name": "InvoiceHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3160,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000016DMO",
+     "name": "InvoiceController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4996,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000017DMO",
+     "name": "TreasuryService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3256,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000018DMO",
+     "name": "TreasurySelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3784,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000019DMO",
+     "name": "TreasuryHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2596,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000020DMO",
+     "name": "TreasuryController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4240,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000101DMO",
+     "name": "PayrollService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2716,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000102DMO",
+     "name": "PayrollSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 5200,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000103DMO",
+     "name": "PayrollHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2788,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000104DMO",
+     "name": "PayrollController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3412,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000105DMO",
+     "name": "CaseService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3472,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000106DMO",
+     "name": "CaseSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1864,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000107DMO",
+     "name": "CaseHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2308,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000108DMO",
+     "name": "CaseController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1144,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000109DMO",
+     "name": "LeadService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1372,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000110DMO",
+     "name": "LeadSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2596,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000111DMO",
+     "name": "LeadHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4060,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000112DMO",
+     "name": "LeadController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2980,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000113DMO",
+     "name": "TerritoryService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1768,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000114DMO",
+     "name": "TerritorySelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3412,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000115DMO",
+     "name": "TerritoryHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2116,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000116DMO",
+     "name": "TerritoryController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2008,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000117DMO",
+     "name": "CommissionService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3064,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000118DMO",
+     "name": "CommissionSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4768,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000119DMO",
+     "name": "CommissionHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4300,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000120DMO",
+     "name": "CommissionController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1252,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000121DMO",
+     "name": "RenewalService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 5224,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000122DMO",
+     "name": "RenewalSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4660,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000123DMO",
+     "name": "RenewalHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2332,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000124DMO",
+     "name": "RenewalController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2656,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000125DMO",
+     "name": "ContractService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3700,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000126DMO",
+     "name": "ContractSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1384,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000127DMO",
+     "name": "ContractHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2632,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000128DMO",
+     "name": "ContractController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 988,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000129DMO",
+     "name": "OrderService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2860,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000130DMO",
+     "name": "OrderSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4876,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000131DMO",
+     "name": "OrderHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3400,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000132DMO",
+     "name": "OrderController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 5056,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000133DMO",
+     "name": "ShipmentService",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1348,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000134DMO",
+     "name": "ShipmentSelector",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3604,
+     "sharing": "inherited sharing"
+    },
+    {
+     "id": "01p000000000135DMO",
+     "name": "ShipmentHandler",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2668,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000136DMO",
+     "name": "ShipmentController",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 1852,
+     "sharing": "with sharing"
+    },
+    {
+     "id": "01p000000000137DMO",
+     "name": "LegacyInvoiceSync",
+     "namespace": null,
+     "api_version": 29.0,
+     "status": "Active",
+     "valid": true,
+     "length": 2908,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000138DMO",
+     "name": "ManualShareCleanup",
+     "namespace": null,
+     "api_version": 29.0,
+     "status": "Active",
+     "valid": true,
+     "length": 4396,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000139DMO",
+     "name": "OldQuotePdfGenerator",
+     "namespace": null,
+     "api_version": 29.0,
+     "status": "Active",
+     "valid": false,
+     "length": 928,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000140DMO",
+     "name": "TerritoryRebalanceBatch",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 3112,
+     "sharing": "without sharing"
+    },
+    {
+     "id": "01p000000000141DMO",
+     "name": "AccountServiceTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000142DMO",
+     "name": "AccountSelectorTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000143DMO",
+     "name": "AccountHandlerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000144DMO",
+     "name": "AccountControllerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000145DMO",
+     "name": "OpportunityServiceTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000146DMO",
+     "name": "OpportunitySelectorTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000147DMO",
+     "name": "OpportunityHandlerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000148DMO",
+     "name": "OpportunityControllerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000149DMO",
+     "name": "QuoteServiceTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000150DMO",
+     "name": "QuoteSelectorTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000151DMO",
+     "name": "QuoteHandlerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000152DMO",
+     "name": "QuoteControllerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000153DMO",
+     "name": "InvoiceServiceTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000154DMO",
+     "name": "InvoiceSelectorTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000155DMO",
+     "name": "InvoiceHandlerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000156DMO",
+     "name": "InvoiceControllerTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000157DMO",
+     "name": "TreasuryServiceTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000158DMO",
+     "name": "TreasurySelectorTest",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000159DMO",
+     "name": "CommissionCalculationSpec",
+     "namespace": null,
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000160DMO",
+     "name": "LegacyBatchExporter",
+     "namespace": null,
+     "api_version": 29.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "not declared"
+    },
+    {
+     "id": "01p000000000161DMO",
+     "name": "ContestEntryHandler",
+     "namespace": null,
+     "api_version": 29.0,
+     "status": "Active",
+     "valid": true,
+     "length": 400,
+     "sharing": "without sharing"
+    }
+   ],
+   "apex_triggers": [
+    {
+     "id": "01q000000000001DMO",
+     "name": "AccountTrigger",
+     "namespace": null,
+     "object": "Account",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000002DMO",
+     "name": "OpportunityTrigger",
+     "namespace": null,
+     "object": "Opportunity",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000003DMO",
+     "name": "ContactTrigger",
+     "namespace": null,
+     "object": "Contact",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000004DMO",
+     "name": "LeadTrigger",
+     "namespace": null,
+     "object": "Lead",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000005DMO",
+     "name": "CaseTrigger",
+     "namespace": null,
+     "object": "Case",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000006DMO",
+     "name": "QuoteTrigger",
+     "namespace": null,
+     "object": "Quote",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000007DMO",
+     "name": "InvoiceTrigger",
+     "namespace": null,
+     "object": "Invoice__c",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000008DMO",
+     "name": "TreasuryAccountTrigger",
+     "namespace": null,
+     "object": "Treasury_Account__c",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000009DMO",
+     "name": "OrderTrigger",
+     "namespace": null,
+     "object": "Order",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000010DMO",
+     "name": "ContractTrigger",
+     "namespace": null,
+     "object": "Contract",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000011DMO",
+     "name": "CommissionTrigger",
+     "namespace": null,
+     "object": "Commission__c",
+     "api_version": 58.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    },
+    {
+     "id": "01q000000000012DMO",
+     "name": "ShipmentTrigger",
+     "namespace": null,
+     "object": "Shipment__c",
+     "api_version": 41.0,
+     "status": "Active",
+     "valid": true,
+     "events": [
+      "before insert",
+      "before update",
+      "after insert",
+      "after update"
+     ]
+    }
+   ],
+   "coverage": [
+    {
+     "name": "AccountService",
+     "type": "class",
+     "covered": 106,
+     "uncovered": 54,
+     "is_test": false
+    },
+    {
+     "name": "AccountSelector",
+     "type": "class",
+     "covered": 261,
+     "uncovered": 24,
+     "is_test": false
+    },
+    {
+     "name": "AccountHandler",
+     "type": "class",
+     "covered": 90,
+     "uncovered": 29,
+     "is_test": false
+    },
+    {
+     "name": "AccountController",
+     "type": "class",
+     "covered": 239,
+     "uncovered": 82,
+     "is_test": false
+    },
+    {
+     "name": "OpportunityService",
+     "type": "class",
+     "covered": 150,
+     "uncovered": 38,
+     "is_test": false
+    },
+    {
+     "name": "OpportunitySelector",
+     "type": "class",
+     "covered": 80,
+     "uncovered": 73,
+     "is_test": false
+    },
+    {
+     "name": "OpportunityHandler",
+     "type": "class",
+     "covered": 193,
+     "uncovered": 113,
+     "is_test": false
+    },
+    {
+     "name": "OpportunityController",
+     "type": "class",
+     "covered": 91,
+     "uncovered": 37,
+     "is_test": false
+    },
+    {
+     "name": "QuoteService",
+     "type": "class",
+     "covered": 67,
+     "uncovered": 27,
+     "is_test": false
+    },
+    {
+     "name": "QuoteSelector",
+     "type": "class",
+     "covered": 48,
+     "uncovered": 5,
+     "is_test": false
+    },
+    {
+     "name": "QuoteHandler",
+     "type": "class",
+     "covered": 299,
+     "uncovered": 69,
+     "is_test": false
+    },
+    {
+     "name": "QuoteController",
+     "type": "class",
+     "covered": 72,
+     "uncovered": 67,
+     "is_test": false
+    },
+    {
+     "name": "InvoiceService",
+     "type": "class",
+     "covered": 83,
+     "uncovered": 41,
+     "is_test": false
+    },
+    {
+     "name": "InvoiceSelector",
+     "type": "class",
+     "covered": 371,
+     "uncovered": 43,
+     "is_test": false
+    },
+    {
+     "name": "InvoiceHandler",
+     "type": "class",
+     "covered": 203,
+     "uncovered": 27,
+     "is_test": false
+    },
+    {
+     "name": "InvoiceController",
+     "type": "class",
+     "covered": 315,
+     "uncovered": 68,
+     "is_test": false
+    },
+    {
+     "name": "TreasuryService",
+     "type": "class",
+     "covered": 155,
+     "uncovered": 83,
+     "is_test": false
+    },
+    {
+     "name": "TreasurySelector",
+     "type": "class",
+     "covered": 205,
+     "uncovered": 77,
+     "is_test": false
+    },
+    {
+     "name": "TreasuryHandler",
+     "type": "class",
+     "covered": 167,
+     "uncovered": 16,
+     "is_test": false
+    },
+    {
+     "name": "TreasuryController",
+     "type": "class",
+     "covered": 285,
+     "uncovered": 35,
+     "is_test": false
+    },
+    {
+     "name": "PayrollService",
+     "type": "class",
+     "covered": 162,
+     "uncovered": 31,
+     "is_test": false
+    },
+    {
+     "name": "PayrollSelector",
+     "type": "class",
+     "covered": 294,
+     "uncovered": 106,
+     "is_test": false
+    },
+    {
+     "name": "PayrollHandler",
+     "type": "class",
+     "covered": 163,
+     "uncovered": 36,
+     "is_test": false
+    },
+    {
+     "name": "PayrollController",
+     "type": "class",
+     "covered": 152,
+     "uncovered": 99,
+     "is_test": false
+    },
+    {
+     "name": "CaseService",
+     "type": "class",
+     "covered": 159,
+     "uncovered": 97,
+     "is_test": false
+    },
+    {
+     "name": "CaseSelector",
+     "type": "class",
+     "covered": 80,
+     "uncovered": 42,
+     "is_test": false
+    },
+    {
+     "name": "CaseHandler",
+     "type": "class",
+     "covered": 104,
+     "uncovered": 55,
+     "is_test": false
+    },
+    {
+     "name": "CaseController",
+     "type": "class",
+     "covered": 57,
+     "uncovered": 5,
+     "is_test": false
+    },
+    {
+     "name": "LeadService",
+     "type": "class",
+     "covered": 73,
+     "uncovered": 8,
+     "is_test": false
+    },
+    {
+     "name": "LeadSelector",
+     "type": "class",
+     "covered": 143,
+     "uncovered": 40,
+     "is_test": false
+    },
+    {
+     "name": "LeadHandler",
+     "type": "class",
+     "covered": 180,
+     "uncovered": 125,
+     "is_test": false
+    },
+    {
+     "name": "LeadController",
+     "type": "class",
+     "covered": 151,
+     "uncovered": 64,
+     "is_test": false
+    },
+    {
+     "name": "TerritoryService",
+     "type": "class",
+     "covered": 93,
+     "uncovered": 21,
+     "is_test": false
+    },
+    {
+     "name": "TerritorySelector",
+     "type": "class",
+     "covered": 183,
+     "uncovered": 68,
+     "is_test": false
+    },
+    {
+     "name": "TerritoryHandler",
+     "type": "class",
+     "covered": 92,
+     "uncovered": 51,
+     "is_test": false
+    },
+    {
+     "name": "TerritoryController",
+     "type": "class",
+     "covered": 84,
+     "uncovered": 50,
+     "is_test": false
+    },
+    {
+     "name": "CommissionService",
+     "type": "class",
+     "covered": 128,
+     "uncovered": 94,
+     "is_test": false
+    },
+    {
+     "name": "CommissionSelector",
+     "type": "class",
+     "covered": 291,
+     "uncovered": 73,
+     "is_test": false
+    },
+    {
+     "name": "CommissionHandler",
+     "type": "class",
+     "covered": 249,
+     "uncovered": 76,
+     "is_test": false
+    },
+    {
+     "name": "CommissionController",
+     "type": "class",
+     "covered": 60,
+     "uncovered": 11,
+     "is_test": false
+    },
+    {
+     "name": "RenewalService",
+     "type": "class",
+     "covered": 305,
+     "uncovered": 97,
+     "is_test": false
+    },
+    {
+     "name": "RenewalSelector",
+     "type": "class",
+     "covered": 325,
+     "uncovered": 30,
+     "is_test": false
+    },
+    {
+     "name": "RenewalHandler",
+     "type": "class",
+     "covered": 147,
+     "uncovered": 14,
+     "is_test": false
+    },
+    {
+     "name": "RenewalController",
+     "type": "class",
+     "covered": 172,
+     "uncovered": 16,
+     "is_test": false
+    },
+    {
+     "name": "ContractService",
+     "type": "class",
+     "covered": 234,
+     "uncovered": 41,
+     "is_test": false
+    },
+    {
+     "name": "ContractSelector",
+     "type": "class",
+     "covered": 62,
+     "uncovered": 20,
+     "is_test": false
+    },
+    {
+     "name": "ContractHandler",
+     "type": "class",
+     "covered": 130,
+     "uncovered": 56,
+     "is_test": false
+    },
+    {
+     "name": "ContractController",
+     "type": "class",
+     "covered": 20,
+     "uncovered": 29,
+     "is_test": false
+    },
+    {
+     "name": "OrderService",
+     "type": "class",
+     "covered": 133,
+     "uncovered": 72,
+     "is_test": false
+    },
+    {
+     "name": "OrderSelector",
+     "type": "class",
+     "covered": 341,
+     "uncovered": 32,
+     "is_test": false
+    },
+    {
+     "name": "OrderHandler",
+     "type": "class",
+     "covered": 225,
+     "uncovered": 25,
+     "is_test": false
+    },
+    {
+     "name": "OrderController",
+     "type": "class",
+     "covered": 207,
+     "uncovered": 181,
+     "is_test": false
+    },
+    {
+     "name": "ShipmentService",
+     "type": "class",
+     "covered": 56,
+     "uncovered": 23,
+     "is_test": false
+    },
+    {
+     "name": "ShipmentSelector",
+     "type": "class",
+     "covered": 217,
+     "uncovered": 50,
+     "is_test": false
+    },
+    {
+     "name": "ShipmentHandler",
+     "type": "class",
+     "covered": 154,
+     "uncovered": 35,
+     "is_test": false
+    },
+    {
+     "name": "ShipmentController",
+     "type": "class",
+     "covered": 100,
+     "uncovered": 21,
+     "is_test": false
+    },
+    {
+     "name": "LegacyInvoiceSync",
+     "type": "class",
+     "covered": 0,
+     "uncovered": 209,
+     "is_test": false
+    },
+    {
+     "name": "ManualShareCleanup",
+     "type": "class",
+     "covered": 0,
+     "uncovered": 333,
+     "is_test": false
+    },
+    {
+     "name": "OldQuotePdfGenerator",
+     "type": "class",
+     "covered": 0,
+     "uncovered": 44,
+     "is_test": false
+    },
+    {
+     "name": "TerritoryRebalanceBatch",
+     "type": "class",
+     "covered": 0,
+     "uncovered": 226,
+     "is_test": false
+    },
+    {
+     "name": "AccountTrigger",
+     "type": "trigger",
+     "covered": 14,
+     "uncovered": 6,
+     "is_test": false
+    },
+    {
+     "name": "OpportunityTrigger",
+     "type": "trigger",
+     "covered": 94,
+     "uncovered": 23,
+     "is_test": false
+    },
+    {
+     "name": "ContactTrigger",
+     "type": "trigger",
+     "covered": 55,
+     "uncovered": 6,
+     "is_test": false
+    },
+    {
+     "name": "LeadTrigger",
+     "type": "trigger",
+     "covered": 55,
+     "uncovered": 16,
+     "is_test": false
+    },
+    {
+     "name": "CaseTrigger",
+     "type": "trigger",
+     "covered": 30,
+     "uncovered": 11,
+     "is_test": false
+    },
+    {
+     "name": "QuoteTrigger",
+     "type": "trigger",
+     "covered": 18,
+     "uncovered": 4,
+     "is_test": false
+    },
+    {
+     "name": "InvoiceTrigger",
+     "type": "trigger",
+     "covered": 18,
+     "uncovered": 4,
+     "is_test": false
+    },
+    {
+     "name": "TreasuryAccountTrigger",
+     "type": "trigger",
+     "covered": 80,
+     "uncovered": 21,
+     "is_test": false
+    },
+    {
+     "name": "OrderTrigger",
+     "type": "trigger",
+     "covered": 23,
+     "uncovered": 11,
+     "is_test": false
+    },
+    {
+     "name": "ContractTrigger",
+     "type": "trigger",
+     "covered": 63,
+     "uncovered": 26,
+     "is_test": false
+    },
+    {
+     "name": "CommissionTrigger",
+     "type": "trigger",
+     "covered": 0,
+     "uncovered": 46,
+     "is_test": false
+    },
+    {
+     "name": "ShipmentTrigger",
+     "type": "trigger",
+     "covered": 0,
+     "uncovered": 56,
+     "is_test": false
+    },
+    {
+     "name": "AccountServiceTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "AccountSelectorTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "AccountHandlerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "AccountControllerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "OpportunityServiceTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "OpportunitySelectorTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "OpportunityHandlerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "OpportunityControllerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "QuoteServiceTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "QuoteSelectorTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "QuoteHandlerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "QuoteControllerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "InvoiceServiceTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "InvoiceSelectorTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "InvoiceHandlerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "InvoiceControllerTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "TreasuryServiceTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "TreasurySelectorTest",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "CommissionCalculationSpec",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": true
+    },
+    {
+     "name": "LegacyBatchExporter",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": false
+    },
+    {
+     "name": "ContestEntryHandler",
+     "type": "class",
+     "covered": null,
+     "uncovered": null,
+     "is_test": false
+    }
+   ],
+   "web_links": [
+    {
+     "object": "Account",
+     "name": "Open_in_ERP",
+     "label": "Open in ERP",
+     "link_type": "url",
+     "display_type": "button",
+     "open_type": "NewWindow"
+    },
+    {
+     "object": "Account",
+     "name": "Credit_Check",
+     "label": "Credit Check",
+     "link_type": "url",
+     "display_type": "link",
+     "open_type": "NewWindow"
+    },
+    {
+     "object": "Invoice__c",
+     "name": "Print_Invoice",
+     "label": "Print Invoice",
+     "link_type": "url",
+     "display_type": "button",
+     "open_type": "NewWindow"
+    },
+    {
+     "object": "Opportunity",
+     "name": "Request_Discount",
+     "label": "Request Discount",
+     "link_type": "url",
+     "display_type": "button",
+     "open_type": "NoSidebar"
+    },
+    {
+     "object": "Case",
+     "name": "Mass_Close",
+     "label": "Mass Close",
+     "link_type": "url",
+     "display_type": "massActionButton",
+     "open_type": "NoSidebar"
+    }
+   ],
+   "list_views": [
+    {
+     "object": "Account",
+     "name": "All Accounts",
+     "api_name": "AllAccounts"
+    },
+    {
+     "object": "Account",
+     "name": "My Accounts",
+     "api_name": "MyAccounts"
+    },
+    {
+     "object": "Account",
+     "name": "Hot Prospects",
+     "api_name": "Hot_Prospects"
+    },
+    {
+     "object": "Opportunity",
+     "name": "All Opportunities",
+     "api_name": "AllOpportunities"
+    },
+    {
+     "object": "Opportunity",
+     "name": "Closing This Quarter",
+     "api_name": "Closing_This_Quarter"
+    },
+    {
+     "object": "Case",
+     "name": "All Open Cases",
+     "api_name": "AllOpenCases"
+    },
+    {
+     "object": "Case",
+     "name": "Escalated",
+     "api_name": "Escalated"
+    },
+    {
+     "object": "Case",
+     "name": "Billing Queue",
+     "api_name": "Billing_Queue"
+    },
+    {
+     "object": "Lead",
+     "name": "All Open Leads",
+     "api_name": "AllOpenLeads"
+    },
+    {
+     "object": "Lead",
+     "name": "Today's Leads",
+     "api_name": "TodaysLeads"
+    },
+    {
+     "object": "Invoice__c",
+     "name": "All",
+     "api_name": "All"
+    },
+    {
+     "object": "Invoice__c",
+     "name": "Overdue",
+     "api_name": "Overdue"
+    },
+    {
+     "object": "Employee__c",
+     "name": "All",
+     "api_name": "All"
+    }
+   ],
+   "field_sets": [
+    {
+     "name": "Invoice_Summary",
+     "label": "Invoice Summary",
+     "description": "Fields for the invoice summary component."
+    },
+    {
+     "name": "Employee_Directory",
+     "label": "Employee Directory",
+     "description": "Fields shown in the HR portal directory."
+    }
    ]
   }
  }
