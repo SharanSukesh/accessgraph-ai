@@ -332,8 +332,26 @@ section has the detail.
     except merging after approval, never invent numbers; check Salesforce
     API details against Salesforce's documentation and mark anything
     unconfirmed UNVERIFIED.
-- **Next:** step 1, API v68 (branch from main), then field metadata sync
-  (8), stacked on it if it needs the v68 setting.
+- **Stacking (19 Oct):** every item PR updates this log, so PRs form one
+  ordered stack until "merge approved": #52 (parity matrix) <- #53 (v68)
+  <- each next item. Stacked PRs don't get GitHub CI until they're
+  retargeted to main at merge time; each is tested locally (full backend
+  suite, frontend tests, Ruff, mypy baseline, lint) before it's opened.
+- **#52 (step 0, not merged):** docs/config-workbook-parity.md. Test: read
+  it; 33 features (5 yes, 14 partial, 14 no), 29 to build, 4 skipped, no
+  new permission. UNVERIFIED: approval process detail and Bulk API 2.0 on
+  the dependency object with our permissions.
+- **#53 (step 1a, API v68, not merged):** one version setting
+  (app/salesforce/api_version.py, v68.0); each org gets the lower of v68
+  and its newest version (GET /services/data/, cached 6 h); export
+  package.xml says 68.0. Every queried field checked in the v68 Object
+  Reference and Tooling guide: all present except
+  PermissionSet.PermissionsRunFlow (UNVERIFIED, fallback as before). Test:
+  nothing visible changes; Lumenvale 41 / 18 / $183,180 / $116,220; in a
+  developer org run scripts/compare_api_versions.py (exits 1 on a
+  difference). UNVERIFIED: the full v62-vs-v68 sync comparison in a real
+  org (Sharan to run the script).
+- **Next:** step 1b, field metadata sync (8), stacked on #53.
 
 ## Build order
 
@@ -628,6 +646,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 ## Phase C: foundations
 
 ### Salesforce API v68 (first in phase C)
+**Status: built in #53 (not merged).** Steps 1, 2 and 4 done (4 as a check of every queried field against the v68 references); step 3 is a script for Sharan's developer org (scripts/compare_api_versions.py).
 - **Problem:** Newton pins API v62 (Winter '25): the REST and Tooling client and the Metadata (SOAP) client default to `v62.0`, and the 35b export writes `62.0` into package.xml. The current version is v68 (Winter '27). Apex sharing reasons on standard objects exist only from v68, so at v62 Newton may not see or label those share rows correctly (UNVERIFIED how v62 queries return them).
 - **Approach:**
   1. One version setting instead of three (client, metadata client, export package.xml).
