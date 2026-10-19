@@ -6,6 +6,8 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 
+from app.salesforce import api_version as api_version_setting
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -17,12 +19,13 @@ class SalesforceMetadataClient:
     Reads profile metadata to get field-level security for standard profiles
     """
 
-    def __init__(self, instance_url: str, access_token: str, api_version: str = "v62.0"):
+    def __init__(self, instance_url: str, access_token: str, api_version: Optional[str] = None):
         self.instance_url = instance_url.rstrip("/")
         self.access_token = access_token
-        self.api_version = api_version
+        # Given by the REST client (already settled for this org), else the org's cached version.
+        self.api_version = api_version or f"v{api_version_setting.cached(self.instance_url)}"
         # Tooling API base URL for metadata operations
-        self.tooling_base_url = f"{self.instance_url}/services/data/{api_version}/tooling"
+        self.tooling_base_url = f"{self.instance_url}/services/data/{self.api_version}/tooling"
 
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers with auth"""

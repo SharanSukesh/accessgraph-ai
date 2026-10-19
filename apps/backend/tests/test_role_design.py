@@ -152,7 +152,7 @@ def test_export_zip():
     vp = z.read("before/roles/VP_Sales.role").decode()
     assert "<caseAccessLevel>Read</caseAccessLevel>" in vp and "<opportunityAccessLevel>Edit</opportunityAccessLevel>" in vp
     pkg = z.read("after/package.xml").decode()
-    assert "<members>Sales_Ops</members>" in pkg and "<members>Sales_Rep</members>" in pkg and "<version>62.0</version>" in pkg
+    assert "<members>Sales_Ops</members>" in pkg and "<members>Sales_Rep</members>" in pkg and "<version>68.0</version>" in pkg
     csv = z.read("after/user-role-assignments.csv").decode().splitlines()
     assert csv[0] == "Id,UserRoleId,RoleApiName,Name"
     assert "u1,R4,VP_Finance,Ana" in csv and "u2,,Sales_Ops,Bo" in csv  # new role: Id filled in after deploying
