@@ -17,7 +17,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -28,7 +29,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -44,7 +46,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AnnualRevenue",
@@ -56,7 +59,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "DUNS_Override__c",
@@ -67,7 +71,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Industry",
@@ -110,7 +115,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Legacy_Region__c",
@@ -121,7 +127,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Phone",
@@ -132,7 +139,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 40
+      "length": 40,
+      "permissionable": true
      },
      {
       "name": "Rating",
@@ -163,7 +171,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Region__c",
@@ -174,7 +183,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Secondary_SIC__c",
@@ -185,7 +195,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Segment__c",
@@ -196,7 +207,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Strategy_Notes__c",
@@ -207,7 +219,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32768
+      "length": 32768,
+      "permissionable": true
      },
      {
       "name": "Tax_ID__c",
@@ -218,7 +231,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Website",
@@ -229,7 +243,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -239,7 +254,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -249,7 +265,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -333,7 +350,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -344,7 +362,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -360,7 +379,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -375,7 +395,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Product2Id",
@@ -390,7 +411,8 @@
        "Product2"
       ],
       "relationshipName": "Product2",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "SerialNumber",
@@ -401,7 +423,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Status",
@@ -412,7 +435,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -422,7 +446,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -432,7 +457,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -452,7 +478,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -463,7 +490,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -479,7 +507,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Employee__c",
@@ -494,7 +523,8 @@
        "Employee__c"
       ],
       "relationshipName": "Employee__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Dependents__c",
@@ -506,7 +536,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 0
+      "scale": 0,
+      "permissionable": true
      },
      {
       "name": "Effective_Date__c",
@@ -516,7 +547,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "Medical_Condition__c",
@@ -527,7 +559,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32768
+      "length": 32768,
+      "permissionable": true
      },
      {
       "name": "Plan__c",
@@ -558,7 +591,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -568,7 +602,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -578,7 +613,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -598,7 +634,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -609,7 +646,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -625,7 +663,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CreatedDate",
@@ -635,7 +674,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -645,7 +685,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -673,7 +714,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -689,7 +731,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CampaignId",
@@ -704,7 +747,8 @@
        "Campaign"
       ],
       "relationshipName": "Campaign",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "ContactId",
@@ -719,7 +763,8 @@
        "Contact"
       ],
       "relationshipName": "Contact",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "LeadId",
@@ -734,7 +779,8 @@
        "Lead"
       ],
       "relationshipName": "Lead",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -744,7 +790,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -754,7 +801,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -774,7 +822,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CaseNumber",
@@ -785,7 +834,8 @@
       "createable": false,
       "defaultedOnCreate": true,
       "calculated": false,
-      "length": 30
+      "length": 30,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -801,7 +851,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -816,7 +867,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "ContactId",
@@ -831,7 +883,8 @@
        "Contact"
       ],
       "relationshipName": "Contact",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Customer_Sentiment__c",
@@ -862,7 +915,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Priority",
@@ -893,7 +947,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Product_Area__c",
@@ -904,7 +959,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Reason",
@@ -915,7 +971,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Status",
@@ -952,7 +1009,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Subject",
@@ -963,7 +1021,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -973,7 +1032,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -983,7 +1043,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -1011,7 +1072,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -1022,7 +1084,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1038,7 +1101,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Approver__c",
@@ -1053,7 +1117,8 @@
        "User"
       ],
       "relationshipName": "Approver__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Incident__c",
@@ -1068,7 +1133,8 @@
        "Incident__c"
       ],
       "relationshipName": "Incident__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Risk_Level__c",
@@ -1099,7 +1165,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Status__c",
@@ -1142,7 +1209,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -1152,7 +1220,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1162,7 +1231,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -1182,7 +1252,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -1193,7 +1264,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "Employee__c",
@@ -1209,7 +1281,8 @@
       ],
       "relationshipName": "Employee__r",
       "relationshipOrder": 0,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Base_Salary__c",
@@ -1221,7 +1294,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Bonus_Target__c",
@@ -1233,7 +1307,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Salary_Band__c",
@@ -1245,7 +1320,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "length": 40,
-      "encrypted": true
+      "encrypted": true,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -1255,7 +1331,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1265,7 +1342,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -1285,7 +1363,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "LastName",
@@ -1296,7 +1375,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1312,7 +1392,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -1327,7 +1408,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Birthdate",
@@ -1337,7 +1419,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "Department",
@@ -1348,7 +1431,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Email",
@@ -1359,7 +1443,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": true
      },
      {
       "name": "Home_Address__c",
@@ -1370,7 +1455,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32768
+      "length": 32768,
+      "permissionable": true
      },
      {
       "name": "Phone",
@@ -1381,7 +1467,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 40
+      "length": 40,
+      "permissionable": true
      },
      {
       "name": "Title",
@@ -1392,7 +1479,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -1402,7 +1490,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1412,7 +1501,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -1447,7 +1537,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "ContractNumber",
@@ -1458,7 +1549,8 @@
       "createable": false,
       "defaultedOnCreate": true,
       "calculated": false,
-      "length": 30
+      "length": 30,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1474,7 +1566,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -1489,7 +1582,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "ContractTerm",
@@ -1499,7 +1593,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "Payment_Terms__c",
@@ -1530,7 +1625,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -1540,7 +1636,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1550,7 +1647,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -1578,7 +1676,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -1589,7 +1688,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1605,7 +1705,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Manager__c",
@@ -1620,7 +1721,8 @@
        "Employee__c"
       ],
       "relationshipName": "Manager__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "User__c",
@@ -1635,7 +1737,8 @@
        "User"
       ],
       "relationshipName": "User__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Cost_Center__c",
@@ -1646,7 +1749,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Date_of_Birth__c",
@@ -1656,7 +1760,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "Department__c",
@@ -1705,7 +1810,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Hire_Date__c",
@@ -1715,7 +1821,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "Home_Address__c",
@@ -1726,7 +1833,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32768
+      "length": 32768,
+      "permissionable": true
      },
      {
       "name": "National_ID__c",
@@ -1738,7 +1846,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "length": 255,
-      "encrypted": true
+      "encrypted": true,
+      "permissionable": true
      },
      {
       "name": "Tenure_Years__c",
@@ -1751,7 +1860,8 @@
       "calculated": true,
       "precision": 18,
       "scale": 2,
-      "calculatedFormula": "(TODAY() - Hire_Date__c) / 365"
+      "calculatedFormula": "(TODAY() - Hire_Date__c) / 365",
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -1761,7 +1871,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1771,7 +1882,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -1820,7 +1932,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -1831,7 +1944,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1847,7 +1961,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -1862,7 +1977,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -1872,7 +1988,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1882,7 +1999,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -1902,7 +2020,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Subject",
@@ -1913,7 +2032,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1929,7 +2049,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CreatedDate",
@@ -1939,7 +2060,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -1949,7 +2071,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -1969,7 +2092,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -1980,7 +2104,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -1996,7 +2121,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Case__c",
@@ -2011,7 +2137,8 @@
        "Case"
       ],
       "relationshipName": "Case__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Root_Cause__c",
@@ -2022,7 +2149,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Severity__c",
@@ -2059,7 +2187,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2069,7 +2198,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2079,7 +2209,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -2107,7 +2238,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -2118,7 +2250,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -2134,7 +2267,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Account__c",
@@ -2149,7 +2283,8 @@
        "Account"
       ],
       "relationshipName": "Account__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Amount__c",
@@ -2161,7 +2296,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Bank_Account_Number__c",
@@ -2172,7 +2308,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Due_Date__c",
@@ -2182,7 +2319,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "PO_Number__c",
@@ -2193,7 +2331,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Days_Overdue__c",
@@ -2206,7 +2345,8 @@
       "calculated": true,
       "precision": 18,
       "scale": 2,
-      "calculatedFormula": "IF(ISBLANK(Due_Date__c), NULL, TODAY() - Due_Date__c)"
+      "calculatedFormula": "IF(ISBLANK(Due_Date__c), NULL, TODAY() - Due_Date__c)",
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2216,7 +2356,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2226,7 +2367,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -2254,7 +2396,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "LastName",
@@ -2265,7 +2408,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -2281,7 +2425,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Company",
@@ -2292,7 +2437,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Email",
@@ -2303,7 +2449,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": true
      },
      {
       "name": "Industry",
@@ -2314,7 +2461,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "LeadSource",
@@ -2325,7 +2473,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Lead_Score__c",
@@ -2337,7 +2486,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Phone",
@@ -2348,7 +2498,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 40
+      "length": 40,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2358,7 +2509,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2368,7 +2520,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -2396,7 +2549,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -2407,7 +2561,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -2423,7 +2578,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Order__c",
@@ -2438,7 +2594,8 @@
        "Order"
       ],
       "relationshipName": "Order__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Legacy_System_Id__c",
@@ -2451,7 +2608,8 @@
       "calculated": false,
       "length": 255,
       "externalId": true,
-      "unique": true
+      "unique": true,
+      "permissionable": true
      },
      {
       "name": "Order_Total__c",
@@ -2463,7 +2621,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Ship_Date__c",
@@ -2473,7 +2632,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2483,7 +2643,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2493,7 +2654,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -2513,7 +2675,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -2524,7 +2687,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -2540,7 +2704,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -2555,7 +2720,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Amount",
@@ -2567,7 +2733,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "CloseDate",
@@ -2577,7 +2744,8 @@
       "nillable": true,
       "createable": true,
       "defaultedOnCreate": false,
-      "calculated": false
+      "calculated": false,
+      "permissionable": true
      },
      {
       "name": "Discount_Percent__c",
@@ -2589,7 +2757,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Forecast_Notes__c",
@@ -2600,7 +2769,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "NextStep",
@@ -2611,7 +2781,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "StageName",
@@ -2666,7 +2837,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Discounted_Amount__c",
@@ -2679,7 +2851,8 @@
       "calculated": true,
       "precision": 18,
       "scale": 2,
-      "calculatedFormula": "Amount * (1 - Discount_Percent__c)"
+      "calculatedFormula": "Amount * (1 - Discount_Percent__c)",
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2689,7 +2862,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2699,7 +2873,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -2727,7 +2902,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "OrderNumber",
@@ -2738,7 +2914,8 @@
       "createable": false,
       "defaultedOnCreate": true,
       "calculated": false,
-      "length": 30
+      "length": 30,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -2754,7 +2931,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "AccountId",
@@ -2769,7 +2947,8 @@
        "Account"
       ],
       "relationshipName": "Account",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "ContractId",
@@ -2784,7 +2963,8 @@
        "Contract"
       ],
       "relationshipName": "Contract",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Status",
@@ -2795,7 +2975,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "TotalAmount",
@@ -2807,7 +2988,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2817,7 +2999,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2827,7 +3010,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -2855,7 +3039,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -2866,7 +3051,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -2882,7 +3068,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Account__c",
@@ -2897,7 +3084,8 @@
        "Account"
       ],
       "relationshipName": "Account__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Follow_Up_Owner__c",
@@ -2912,7 +3100,8 @@
        "User"
       ],
       "relationshipName": "Follow_Up_Owner__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Comments__c",
@@ -2923,7 +3112,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Partner_Tier__c",
@@ -2934,7 +3124,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Region__c",
@@ -2945,7 +3136,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Satisfaction__c",
@@ -2956,7 +3148,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Would_Recommend__c",
@@ -2967,7 +3160,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -2977,7 +3171,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -2987,7 +3182,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3007,7 +3203,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3018,7 +3215,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "Invoice__c",
@@ -3034,7 +3232,8 @@
       ],
       "relationshipName": "Invoice__r",
       "relationshipOrder": 0,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Amount__c",
@@ -3046,7 +3245,8 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "precision": 18,
-      "scale": 2
+      "scale": 2,
+      "permissionable": true
      },
      {
       "name": "Card_Last4__c",
@@ -3057,7 +3257,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Method__c",
@@ -3088,7 +3289,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Routing_Number__c",
@@ -3099,7 +3301,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -3109,7 +3312,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3119,7 +3323,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3139,7 +3344,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3150,7 +3356,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3166,7 +3373,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Employee__c",
@@ -3181,7 +3389,8 @@
        "Employee__c"
       ],
       "relationshipName": "Employee__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Manager_Notes__c",
@@ -3192,7 +3401,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32768
+      "length": 32768,
+      "permissionable": true
      },
      {
       "name": "Rating__c",
@@ -3229,7 +3439,8 @@
         "active": true,
         "defaultValue": false
        }
-      ]
+      ],
+      "permissionable": true
      },
      {
       "name": "Review_Period__c",
@@ -3240,7 +3451,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -3250,7 +3462,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3260,7 +3473,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3280,7 +3494,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3291,7 +3506,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3307,7 +3523,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CreatedDate",
@@ -3317,7 +3534,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3327,7 +3545,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3347,7 +3566,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3358,7 +3578,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3374,7 +3595,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CreatedDate",
@@ -3384,7 +3606,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3394,7 +3617,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": [
@@ -3422,7 +3646,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3433,7 +3658,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3449,7 +3675,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "OpportunityId",
@@ -3464,7 +3691,8 @@
        "Opportunity"
       ],
       "relationshipName": "Opportunity",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -3474,7 +3702,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3484,7 +3713,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3504,7 +3734,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "SolutionName",
@@ -3515,7 +3746,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3531,7 +3763,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CreatedDate",
@@ -3541,7 +3774,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3551,7 +3785,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3571,7 +3806,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Subject",
@@ -3582,7 +3818,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3598,7 +3835,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "CreatedDate",
@@ -3608,7 +3846,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3618,7 +3857,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3638,7 +3878,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3649,7 +3890,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3665,7 +3907,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Signatory__c",
@@ -3680,7 +3923,8 @@
        "User"
       ],
       "relationshipName": "Signatory__r",
-      "length": 18
+      "length": 18,
+      "permissionable": true
      },
      {
       "name": "Account_Number__c",
@@ -3691,7 +3935,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 32
+      "length": 32,
+      "permissionable": true
      },
      {
       "name": "Bank__c",
@@ -3702,7 +3947,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Routing_Number__c",
@@ -3713,7 +3959,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -3723,7 +3970,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3733,7 +3981,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3753,7 +4002,8 @@
       "createable": false,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Name",
@@ -3764,7 +4014,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 80
+      "length": 80,
+      "permissionable": false
      },
      {
       "name": "OwnerId",
@@ -3780,7 +4031,8 @@
        "User"
       ],
       "relationshipName": "Owner",
-      "length": 18
+      "length": 18,
+      "permissionable": false
      },
      {
       "name": "Campaign_Code__c",
@@ -3791,7 +4043,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Page__c",
@@ -3802,7 +4055,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Referrer__c",
@@ -3813,7 +4067,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "Session_Id__c",
@@ -3824,7 +4079,8 @@
       "createable": true,
       "defaultedOnCreate": false,
       "calculated": false,
-      "length": 255
+      "length": 255,
+      "permissionable": true
      },
      {
       "name": "CreatedDate",
@@ -3834,7 +4090,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      },
      {
       "name": "LastModifiedDate",
@@ -3844,7 +4101,8 @@
       "nillable": false,
       "createable": false,
       "defaultedOnCreate": true,
-      "calculated": false
+      "calculated": false,
+      "permissionable": false
      }
     ],
     "childRelationships": []
@@ -3860,6 +4118,7 @@
      "Precision": 0,
      "Scale": 0,
      "IsCalculated": false,
+     "IsFlsEnabled": false,
      "ReferenceTo": null,
      "RelationshipName": null
     },
@@ -3871,6 +4130,7 @@
      "Precision": 0,
      "Scale": 0,
      "IsCalculated": false,
+     "IsFlsEnabled": false,
      "ReferenceTo": {
       "referenceTo": [
        "Employee__c"
@@ -3886,6 +4146,7 @@
      "Precision": 18,
      "Scale": 2,
      "IsCalculated": false,
+     "IsFlsEnabled": true,
      "ReferenceTo": null,
      "RelationshipName": null
     },
@@ -3897,6 +4158,7 @@
      "Precision": 18,
      "Scale": 2,
      "IsCalculated": false,
+     "IsFlsEnabled": true,
      "ReferenceTo": null,
      "RelationshipName": null
     }

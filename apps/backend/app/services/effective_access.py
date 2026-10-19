@@ -11,7 +11,7 @@ another assignment survives. Mirrors RiskScoringService's bundle().
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,6 +86,41 @@ def _evaluate(source: _Source, perms_by_parent: Dict[str, Dict[str, Dict[str, bo
                     granted[key][f] = False
                     muted[key][f] = comp.name
     return _SourceAccess(dict(granted), dict(granting), dict(muted))
+
+
+def _assigned_sources(sources: List[_Source], assigned_ids: Iterable[str], groups: Dict[str, Any],
+                      components_by_group: Dict[str, List[str]], ps_rows: Dict[str, Any]) -> List[_Source]:
+    """Add a user's assigned permission sets and groups to their sources:
+    shared by the per-user views and the org-wide pass (org_access)."""
+    def component(ps_id: str) -> _Component:
+        ps = ps_rows.get(ps_id)
+        return _Component(ps_id, (ps.label or ps.name) if ps else ps_id, bool(ps and ps.is_muting))
+
+    for ps_id in assigned_ids:
+        if ps_id in groups:
+            group = groups[ps_id]
+            sources.append(_Source(
+                "permission_set_group",
+                group.master_label or group.developer_name or ps_id,
+                [component(c) for c in components_by_group.get(ps_id, [])],
+                group_id=ps_id,
+            ))
+            continue
+        ps = ps_rows.get(ps_id)
+        # Salesforce also lists the profile's own permission set as an
+        # assignment; it's covered by the profile source. A muting set
+        # can't grant anything outside its group.
+        if ps is not None and (ps.is_owned_by_profile or ps.is_muting):
+            continue
+        if ps is not None and ps.ps_type == "Group":
+            # Salesforce's aggregate permission set for a group: its rows
+            # are already the group's net access, muting applied. Same
+            # evaluation as a permission set; labelled as the group.
+            sources.append(_Source("permission_set_group", component(ps_id).name,
+                                   [component(ps_id)], group_id=ps_id))
+            continue
+        sources.append(_Source("permission_set", component(ps_id).name, [component(ps_id)]))
+    return sources
 
 
 class EffectiveAccessService:
@@ -182,35 +217,7 @@ class EffectiveAccessService:
             ).scalars().all()
         }
 
-        def component(ps_id: str) -> _Component:
-            ps = ps_rows.get(ps_id)
-            return _Component(ps_id, (ps.label or ps.name) if ps else ps_id, bool(ps and ps.is_muting))
-
-        for ps_id in assigned_ids:
-            if ps_id in groups:
-                group = groups[ps_id]
-                sources.append(_Source(
-                    "permission_set_group",
-                    group.master_label or group.developer_name or ps_id,
-                    [component(c) for c in components_by_group.get(ps_id, [])],
-                    group_id=ps_id,
-                ))
-                continue
-            ps = ps_rows.get(ps_id)
-            # Salesforce also lists the profile's own permission set as an
-            # assignment; it's covered by the profile source. A muting set
-            # can't grant anything outside its group.
-            if ps is not None and (ps.is_owned_by_profile or ps.is_muting):
-                continue
-            if ps is not None and ps.ps_type == "Group":
-                # Salesforce's aggregate permission set for a group: its rows
-                # are already the group's net access, muting applied. Same
-                # evaluation as a permission set; labelled as the group.
-                sources.append(_Source("permission_set_group", component(ps_id).name,
-                                       [component(ps_id)], group_id=ps_id))
-                continue
-            sources.append(_Source("permission_set", component(ps_id).name, [component(ps_id)]))
-        return sources
+        return _assigned_sources(sources, assigned_ids, groups, components_by_group, ps_rows)
 
     async def _object_perms(self, org_id: str, ps_ids: Iterable[str],
                             object_name: Optional[str] = None) -> Dict[str, Dict[str, Dict[str, bool]]]:
@@ -256,6 +263,53 @@ class EffectiveAccessService:
                 for f in flags:
                     access[key][f] = access[key][f] or perms[f]
         return dict(access), dict(sources_granting)
+
+    async def org_access(self, org_id: str, active_only: bool = True) -> Dict[str, Dict[str, Dict[str, Dict[str, bool]]]]:
+        """Every user's effective object and field access in one pass, by the
+        same rules as the per-user views (profile, assigned sets, groups with
+        muting). user id -> {"objects": {object: flags}, "fields": {Object.Field: flags}}.
+        Each distinct source is evaluated once."""
+        users_q = select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
+        if active_only:
+            users_q = users_q.where(UserSnapshot.is_active.is_(True))
+        users = (await self.db.execute(users_q)).scalars().all()
+        ps_rows = {p.salesforce_id: p for p in (await self.db.execute(select(PermissionSetSnapshot).where(
+            PermissionSetSnapshot.organization_id == org_id))).scalars().all()}
+        profile_ps = {p.profile_id: p.salesforce_id for p in ps_rows.values() if p.is_owned_by_profile and p.profile_id}
+        profile_names = {p.salesforce_id: p.name for p in (await self.db.execute(select(ProfileSnapshot).where(
+            ProfileSnapshot.organization_id == org_id))).scalars().all()}
+        groups = {g.salesforce_id: g for g in (await self.db.execute(select(PermissionSetGroupSnapshot).where(
+            PermissionSetGroupSnapshot.organization_id == org_id))).scalars().all()}
+        components_by_group: Dict[str, List[str]] = defaultdict(list)
+        for c in (await self.db.execute(select(PermissionSetGroupComponentSnapshot).where(
+                PermissionSetGroupComponentSnapshot.organization_id == org_id))).scalars().all():
+            components_by_group[c.permission_set_group_id].append(c.permission_set_id)
+        assigned: Dict[str, List[str]] = defaultdict(list)
+        for a in (await self.db.execute(select(PermissionSetAssignmentSnapshot).where(
+                PermissionSetAssignmentSnapshot.organization_id == org_id))).scalars().all():
+            if a.permission_set_id not in assigned[a.assignee_id]:
+                assigned[a.assignee_id].append(a.permission_set_id)
+        object_perms = await self._object_perms(org_id, ps_rows)
+        field_perms = await self._field_perms(org_id, ps_rows)
+
+        cache: Dict[Tuple, Tuple[_SourceAccess, _SourceAccess]] = {}
+        out: Dict[str, Dict[str, Dict[str, Dict[str, bool]]]] = {}
+        for user in users:
+            sources: List[_Source] = []
+            if user.profile_id in profile_ps:
+                name = profile_names.get(user.profile_id, user.profile_id)
+                sources.append(_Source("profile", name, [_Component(profile_ps[user.profile_id], name)]))
+            sources = _assigned_sources(sources, assigned.get(user.salesforce_id, []), groups, components_by_group, ps_rows)
+            evaluated = []
+            for src in sources:
+                key = tuple((c.ps_id, c.is_muting) for c in src.components)
+                if key not in cache:
+                    cache[key] = (_evaluate(src, object_perms, OBJECT_FLAGS), _evaluate(src, field_perms, FIELD_FLAGS))
+                evaluated.append(cache[key])
+            objects, _ = self._combine([e[0] for e in evaluated], OBJECT_FLAGS)
+            fields, _ = self._combine([e[1] for e in evaluated], FIELD_FLAGS)
+            out[user.salesforce_id] = {"objects": objects, "fields": fields}
+        return out
 
     async def get_user_object_access(self, org_id: str, user_sf_id: str) -> Dict:
         user = await self._user(org_id, user_sf_id)

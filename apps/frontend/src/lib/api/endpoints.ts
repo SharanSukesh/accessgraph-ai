@@ -87,6 +87,7 @@ export const endpoints = {
   roleDesignBlankExport: () => `/role-designs/export`,
   orgAnalyzerReportPdf: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.pdf`,
   orgAnalyzerReportXlsx: (orgId: string) => `/orgs/${orgId}/org-analyzer/report.xlsx`,
+  documentationXlsx: (orgId: string) => `/orgs/${orgId}/documentation.xlsx`,
   imagePack: (orgId: string) => `/orgs/${orgId}/image-pack`,
   imagePackVisual: (orgId: string, key: string) => `/orgs/${orgId}/image-pack/${key}`,
   orgAnalyzerPriceBook: (orgId: string) => `/orgs/${orgId}/org-analyzer/price-book`,

@@ -15,6 +15,7 @@ import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { DocumentationDownload } from '@/components/schema/DocumentationDownload'
 import { Stagger, StaggerItem } from '@/components/v2/motion'
 import { PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
 import { useObjects } from '@/lib/api/hooks/useObjects'
@@ -100,6 +101,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
   // embedded in /schema (which has its own header).
   const dqActions = (
     <div className="flex items-center gap-2">
+      <DocumentationDownload orgId={orgId} />
       <ScopeToggle
         value={scope}
         onChange={setScope}
