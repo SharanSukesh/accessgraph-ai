@@ -31,11 +31,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Set
 from xml.sax.saxutils import escape
 
+from app.salesforce.api_version import TARGET as API_TARGET
 from app.services.role_hierarchy import ACCOUNT_OWNER_ACCESS_FIELDS, OWNED_OBJECTS, OWNED_RECORDS_KEY, is_portal
 
 NEW_PREFIX = "new:"
 MAX_OPERATIONS = 2000
-METADATA_API_VERSION = "62.0"  # the API version the Salesforce client uses
+METADATA_API_VERSION = API_TARGET  # package.xml version: the one setting in app/salesforce/api_version.py
 _API_NAME = re.compile(r"^[A-Za-z](?:[A-Za-z0-9]|_(?!_))*(?<!_)$")
 
 # What the org-wide default leaves the hierarchy to change, per object.

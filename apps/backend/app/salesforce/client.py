@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from app.salesforce import api_version as api_version_setting
 from app.salesforce.models import (
     QueryResponse,
     SalesforceAccountShare,
@@ -47,11 +48,22 @@ class SalesforceAPIClient:
     Handles SOQL queries and metadata extraction
     """
 
-    def __init__(self, instance_url: str, access_token: str, api_version: str = "v62.0"):
+    def __init__(self, instance_url: str, access_token: str, api_version: Optional[str] = None):
         self.instance_url = instance_url.rstrip("/")
         self.access_token = access_token
-        self.api_version = api_version
-        self.base_url = f"{self.instance_url}/services/data/{api_version}"
+        # An explicit version is kept; otherwise the org's (app/salesforce/api_version.py),
+        # settled by the first query.
+        self._pinned = api_version is not None
+        self.api_version = api_version or f"v{api_version_setting.cached(self.instance_url)}"
+
+    @property
+    def base_url(self) -> str:
+        return f"{self.instance_url}/services/data/{self.api_version}"
+
+    async def _settle_version(self) -> None:
+        if not self._pinned:
+            self.api_version = f"v{await api_version_setting.negotiate(self.instance_url, self._get_headers())}"
+            self._pinned = True
 
     def _get_headers(self) -> Dict[str, str]:
         """Get HTTP headers with auth"""
@@ -79,6 +91,7 @@ class SalesforceAPIClient:
         Raises:
             httpx.HTTPError: If query fails
         """
+        await self._settle_version()
         url = f"{self.base_url}/query"
         params = {"q": soql}
 
@@ -148,7 +161,7 @@ class SalesforceAPIClient:
         user_sf_id: str,
         fields: Dict[str, Any],
     ) -> int:
-        """PATCH /services/data/v62.0/sobjects/User/{id}.
+        """PATCH /services/data/{version}/sobjects/User/{id}.
 
         Salesforce returns 204 No Content on success (no response body)
         and a 4xx with a JSON error array on failure. We return the HTTP
@@ -294,6 +307,7 @@ class SalesforceAPIClient:
         ApexTrigger, FlowDefinitionView, ValidationRule, etc. — anything
         the regular query endpoint doesn't expose.
         """
+        await self._settle_version()
         tooling_query_url = f"{self.base_url}/tooling/query"
         all_records: List[Dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=60.0) as client:
