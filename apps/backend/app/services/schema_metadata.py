@@ -48,8 +48,8 @@ CONCURRENCY = 6
 FIELD_KEYS = ("name", "label", "type", "length", "precision", "scale", "calculatedFormula", "relationshipName",
               "relationshipOrder", "inlineHelpText")
 FIELD_DEFINITION_SOQL = (
-    "SELECT QualifiedApiName, Label, DataType, Length, Precision, Scale, IsCalculated, ReferenceTo, "
-    "RelationshipName FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '{name}'"
+    "SELECT QualifiedApiName, Label, DataType, Length, Precision, Scale, IsCalculated, IsFlsEnabled, "
+    "ReferenceTo, RelationshipName FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '{name}'"
 )
 
 
@@ -67,6 +67,9 @@ def normalize_field(f: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {k: f.get(k) for k in FIELD_KEYS if f.get(k) is not None}
     out["custom"] = bool(f.get("custom"))
     out["formula"] = bool(f.get("calculated"))
+    if f.get("permissionable") is not None:
+        # Whether field-level security can be set; when not, access follows the object.
+        out["permissionable"] = bool(f["permissionable"])
     # Required on create: not nillable, created by the user, no default.
     out["required"] = (f.get("nillable") is False and f.get("createable") is not False
                        and not f.get("defaultedOnCreate"))
@@ -110,6 +113,8 @@ def normalize_field_definition(row: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {"name": name, "label": row.get("Label"), "uiType": ui_type or None,
                            "custom": name.endswith("__c"), "formula": bool(row.get("IsCalculated")),
                            "source": "field_definition"}
+    if row.get("IsFlsEnabled") is not None:
+        out["permissionable"] = bool(row["IsFlsEnabled"])
     for src, key in (("Length", "length"), ("Precision", "precision"), ("Scale", "scale"),
                      ("RelationshipName", "relationshipName")):
         if row.get(src) not in (None, 0, ""):
@@ -285,7 +290,7 @@ def field_details(f: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return None
     keep = ("label", "type", "length", "precision", "scale", "required", "formula", "calculatedFormula", "referenceTo",
             "relationship", "relationshipName", "externalId", "unique", "encryption", "picklistValues",
-            "inlineHelpText", "custom")
+            "inlineHelpText", "custom", "permissionable")
     return {**{k: f[k] for k in keep if k in f}, "typeLabel": type_label(f),
             "fromFieldDefinition": not encryption_known(f)}
 

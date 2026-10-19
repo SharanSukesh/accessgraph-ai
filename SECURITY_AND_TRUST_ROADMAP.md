@@ -395,8 +395,44 @@ section has the detail.
   exact wording of FieldDefinition.DataType beyond the documented
   "Text(40)" (master-detail is read from a "Master-Detail" prefix). Check
   all three in a developer org.
-- **Next:** step 2, documentation export (11; matrix #1–19), stacked on
-  #54.
+- **#55 (step 2, documentation export part a, item 11, not merged;
+  stacked on #54):** item 11 is split in two PRs. Part a: an "Org
+  documentation" Excel workbook from what's already synced, no new
+  Salesforce reads (GET /orgs/{id}/documentation.xlsx; "Org documentation"
+  button on Schema › Objects and Fields). 14 sheets: About, Objects, Fields,
+  Picklist Values, Object Access, Field Access, Assignments, Profile Users,
+  Record Types, Layouts, Unused Layouts, Record Pages, Flows, Apex Classes.
+  Who can reach each: active-user counts by the same rules as the user
+  pages (EffectiveAccessService.org_access, tested equal to the per-user
+  views for every Lumenvale user). Fields whose field-level security can't
+  be set (describe `permissionable` false, FieldDefinition `IsFlsEnabled`;
+  both added to item 8's read) follow the object's access. Masked users stay
+  aliases; Metadata only leaves out user counts, Assignments and Profile
+  Users. Matrix rows covered: #1, #2, #3 (picklists and formulas), #5,
+  #10, #12, #17. New Lumenvale part 09-documentation.json (generator
+  research/demo_fixture/build_documentation_part.py): two unassigned
+  layouts.
+  **Test (Lumenvale, after a re-sync; Objects › Org documentation):** file
+  demo-org-documentation-YYYYMMDD.xlsx; Objects 29 rows (Account: Users
+  with Read 376; Payment__c master-detail parent Invoice__c); Fields 260
+  rows (National_ID__c and Salary_Band__c Shield; Bonus__c Encryption and Required "Not
+  known"; Account.Name follows object access, 376 readers); Object Access:
+  System Administrator on Account "R C E D VA MA"; Unused Layouts:
+  "Account - Legacy Layout" and "Case - Old Support Layout"; Flows:
+  Discount_Approval_Request granted by "Discount Approvals (in Sales
+  Manager Bundle)"; Profile Users 400. Runbook unchanged: 41 / 18 /
+  $183,180 / $116,220.
+  Sample for meetings: docs/samples/lumenvale-org-documentation.xlsx
+  (regenerate with apps/backend/scripts/make_documentation_sample.py;
+  synthetic data only).
+  **Open questions:** none. **UNVERIFIED:** none new (IsFlsEnabled and
+  permissionable are documented).
+- **Next:** item 11 part b (new reads: validation rules with formulas,
+  picklist values per record type, tabs, Visualforce pages and
+  components, static resources, Lightning component inventory, custom
+  permissions and the rest of #11, app sheet, login IP ranges and hours,
+  approval processes, flow detail, field × layout matrix, opt-in custom
+  metadata records, per-class coverage), stacked on #55.
 
 ## Build order
 
@@ -930,6 +966,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 8. **Effort: M.**
 
 ### 11. Documentation export
+**Status: part a built in #55 (not merged): the workbook from synced data. Part b (the new reads) next.**
 - **Problem:** clients ask for "the org documented" as a deliverable.
 - **Approach:** add sheets to the existing Excel export:
   - Objects and Fields (from 8);

@@ -123,14 +123,18 @@ EXTERNAL_ID = {("Legacy_Order__c", "Legacy_System_Id__c")}
 HIDDEN = {"Compensation__c": ["Bonus__c", "Equity_Grant__c"]}
 FIELD_DEFINITIONS = {"Compensation__c": [
     {"QualifiedApiName": "Name", "Label": "Compensation Name", "DataType": "Text(80)", "Length": 80,
-     "Precision": 0, "Scale": 0, "IsCalculated": False, "ReferenceTo": None, "RelationshipName": None},
+     "Precision": 0, "Scale": 0, "IsCalculated": False, "IsFlsEnabled": False, "ReferenceTo": None,
+     "RelationshipName": None},
     {"QualifiedApiName": "Employee__c", "Label": "Employee", "DataType": "Master-Detail(Employee)", "Length": 18,
-     "Precision": 0, "Scale": 0, "IsCalculated": False, "ReferenceTo": {"referenceTo": ["Employee__c"]},
+     "Precision": 0, "Scale": 0, "IsCalculated": False, "IsFlsEnabled": False,
+     "ReferenceTo": {"referenceTo": ["Employee__c"]},
      "RelationshipName": "Employee"},
     {"QualifiedApiName": "Bonus__c", "Label": "Bonus", "DataType": "Currency(16, 2)", "Length": 0,
-     "Precision": 18, "Scale": 2, "IsCalculated": False, "ReferenceTo": None, "RelationshipName": None},
+     "Precision": 18, "Scale": 2, "IsCalculated": False, "IsFlsEnabled": True, "ReferenceTo": None,
+     "RelationshipName": None},
     {"QualifiedApiName": "Equity_Grant__c", "Label": "Equity Grant", "DataType": "Number(16, 2)", "Length": 0,
-     "Precision": 18, "Scale": 2, "IsCalculated": False, "ReferenceTo": None, "RelationshipName": None},
+     "Precision": 18, "Scale": 2, "IsCalculated": False, "IsFlsEnabled": True, "ReferenceTo": None,
+     "RelationshipName": None},
 ]}
 LENGTH = {"string": 255, "textarea": 32768, "phone": 40, "email": 80, "url": 255, "picklist": 255}
 
@@ -156,6 +160,10 @@ def describe_field(obj: str, name: str, ftype: str, label: str | None = None, **
     if (obj, name) in EXTERNAL_ID:
         f["externalId"], f["unique"] = True, True
     f.update(extra)
+    # Field-level security can't be set on the record id, system dates, the owner, required or
+    # auto-number name fields, or a master-detail field; their access follows the object.
+    f.setdefault("permissionable", not (ftype == "id" or name in ("OwnerId", "CreatedDate", "LastModifiedDate")
+                                        or f.get("nillable") is False or f.get("relationshipOrder") is not None))
     return f
 
 

@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal } from '@/components/v2/motion'
 import { useFields } from '@/lib/api/hooks/useFields'
 import { EncryptionBadge } from '@/components/schema/FieldMetadata'
+import { DocumentationDownload } from '@/components/schema/DocumentationDownload'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -75,6 +76,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
         icon={FileText}
         title="Salesforce Fields"
         subtitle="Browse fields and analyze field-level security"
+        actions={<DocumentationDownload orgId={orgId} />}
       />}
 
       {/* Summary Cards */}
