@@ -14,7 +14,7 @@ export function DocumentationDownload({ orgId }: { orgId: string }) {
     <a
       href={`${API_BASE}${endpoints.documentationXlsx(orgId)}`}
       className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-grove-border dark:border-grove-border-dk text-grove-ink dark:text-grove-ink-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
-      title="Objects, fields, picklists, object and field access, assignments, record types, layouts, record pages, flows and Apex, with who can reach each, as an Excel workbook"
+      title="Objects, fields, picklists, validation rules, access matrices, tabs, assignments, login restrictions, record types, layouts, record pages, apps, flows, approval processes, Apex, Visualforce, components and custom permissions, with who can reach each, as an Excel workbook"
     >
       <FileSpreadsheet className="h-4 w-4" aria-hidden />
       Org documentation

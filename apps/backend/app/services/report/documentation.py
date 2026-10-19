@@ -16,6 +16,7 @@ from the database, which privacy mode has already masked; no emails.
 from __future__ import annotations
 
 import io
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -40,6 +41,7 @@ from app.domain.models import (
 from app.services import privacy_mode
 from app.services import schema_metadata as sm
 from app.services import ui_access as ua
+from app.services.org_docs import latest_org_docs
 from app.services.effective_access import EffectiveAccessService, _Component, _evaluate, _Source
 from app.services.report.workbook import Column, _safe, _table
 
@@ -48,8 +50,14 @@ OBJECT_LETTERS = {"read": "R", "create": "C", "edit": "E", "delete": "D", "view_
 NOT_AT_METADATA_ONLY = "Not available at this org's privacy level (metadata only)."
 NOT_SYNCED_SCHEMA = "Field metadata isn't synced yet: sync the org to read field types, formulas and relationships."
 NOT_SYNCED_UI = "Not read yet: sync the org to read page layouts, record pages, Apex and flows."
-SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Object Access", "Field Access", "Assignments",
-          "Profile Users", "Record Types", "Layouts", "Unused Layouts", "Record Pages", "Flows", "Apex Classes")
+SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Picklists by Record Type", "Validation Rules",
+          "Object Access", "Field Access", "Tab Visibility", "Assignments", "Profile Users", "Login Restrictions",
+          "Record Types", "Layouts", "Unused Layouts", "Record Pages", "Buttons and Links", "List Views", "Field Sets",
+          "Apps", "Flows", "Approval Processes", "Apex Classes", "Apex Triggers", "Visualforce",
+          "Lightning Components", "Static Resources", "Custom Permissions")
+NOT_SYNCED_DOCS = "Not read yet: sync the org to read this part of its configuration."
+DAY_ABBR = {"monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu", "friday": "Fri",
+            "saturday": "Sat", "sunday": "Sun"}
 
 
 def _when(iso: Optional[str]) -> str:
@@ -80,6 +88,7 @@ class _Org:
         self.field_rows: List[Any] = []
         self.schema: Optional[Dict[str, Any]] = None
         self.ui: Optional[Dict[str, Any]] = None
+        self.docs: Optional[Dict[str, Any]] = None
         self.access: Dict[str, Dict[str, Dict[str, Dict[str, bool]]]] = {}
         self.users_allowed = False
 
@@ -130,6 +139,7 @@ async def _load(db: AsyncSession, org: Organization) -> _Org:
         FieldPermissionSnapshot.organization_id == oid))).scalars().all())
     o.schema = await sm.latest_schema(db, oid)
     o.ui = await latest_ui_access(db, oid)
+    o.docs = await latest_org_docs(db, oid)
     if o.users_allowed:
         o.assignments = list((await db.execute(select(PermissionSetAssignmentSnapshot).where(
             PermissionSetAssignmentSnapshot.organization_id == oid))).scalars().all())
@@ -200,11 +210,13 @@ def _about(ws: Worksheet, org: Organization, o: _Org, now: datetime) -> None:
                            "Read or Read/Edit (Field Access)."),
         ("Field access", "Fields whose field-level security can't be set (record id, required fields, system "
                          "fields) follow the object's access; the Fields sheet says which."),
-        ("Not included yet", "Validation rules and their formulas, picklist values per record type, buttons and "
-                             "links, list views, field sets, tabs, Visualforce, static resources, approval "
-                             "processes and flow detail."),
+        ("Tab visibility", "Default On or Default Off per profile and permission set; a blank cell means no "
+                           "tab setting was returned for it."),
+        ("Documentation read", _when((o.docs or {}).get("collected_at"))),
+        ("Not included yet", "Flow detail (elements, and the objects and fields each flow uses), which fields sit "
+                             "on which layout, custom metadata records, and approval process steps."),
     ]
-    for note in ((o.schema or {}).get("notes") or []) + ((o.ui or {}).get("notes") or []):
+    for note in ((o.schema or {}).get("notes") or []) + ((o.ui or {}).get("notes") or []) + ((o.docs or {}).get("notes") or []):
         rows.append(("Note", note))
     for i, (k, v) in enumerate(rows, start=1):
         ws.cell(row=i, column=1, value=k).font = Font(bold=True)
@@ -466,12 +478,17 @@ def _grant_names(o: _Org, kind: str) -> Dict[str, List[str]]:
     return out
 
 
-def _per_user_runs(o: _Org) -> Tuple[Dict[str, int], Dict[str, int]]:
-    """Flow id -> users who can run it; Apex class id -> users granted it."""
+GRANT_KINDS = ("ApexClass", "ApexPage", "CustomPermission", "TabSet")
+
+
+def _per_user_runs(o: _Org) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]:
+    """Flow id -> active users who can run it; for each SetupEntityAccess kind
+    (Apex class, Visualforce page, custom permission, app), entity id -> active
+    users granted it, through their profile, sets and groups."""
     flows: Dict[str, int] = defaultdict(int)
-    apex: Dict[str, int] = defaultdict(int)
+    granted: Dict[str, Dict[str, int]] = {k: defaultdict(int) for k in GRANT_KINDS}
     if not (o.ui and o.users_allowed):
-        return flows, apex
+        return flows, granted
     by_user: Dict[str, List[Any]] = defaultdict(list)
     for a in o.assignments:
         by_user[a.assignee_id].append(a)
@@ -480,9 +497,10 @@ def _per_user_runs(o: _Org) -> Tuple[Dict[str, int], Dict[str, int]]:
         for f in ua.resolve_flows(o.ui, sources, uid)["flows"]:
             if f["can_run"] is True:
                 flows[f["id"]] += 1
-        for c in ua.resolve_apex(o.ui, sources):
-            apex[c["id"]] += 1
-    return flows, apex
+        for kind in GRANT_KINDS:
+            for eid in ua._granted(o.ui, sources, kind):
+                granted[kind][eid] += 1
+    return flows, granted
 
 
 def _flows(ws: Worksheet, o: _Org, runs: Dict[str, int]) -> None:
@@ -516,21 +534,193 @@ def _flows(ws: Worksheet, o: _Org, runs: Dict[str, int]) -> None:
     _table(ws, cols, rows, "No flows.")
 
 
+def _docs_list(o: _Org, key: str) -> Optional[List[Dict[str, Any]]]:
+    return None if o.docs is None else o.docs.get(key)
+
+
+def _coverage(o: _Org) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    return {(c.get("type") or "", c.get("name") or ""): c for c in _docs_list(o, "coverage") or []}
+
+
+def _pct(c: Optional[Dict[str, Any]]) -> Optional[float]:
+    if not c or c.get("covered") is None or c.get("uncovered") is None:
+        return None
+    total = c["covered"] + c["uncovered"]
+    return round(100 * c["covered"] / total, 1) if total else None
+
+
 def _apex(ws: Worksheet, o: _Org, granted_users: Dict[str, int]) -> None:
-    cols = [Column("Class", 34), Column("Namespace", 16), Column("Access granted by", 60, wrap=True)]
+    cols = [Column("Class", 32), Column("Namespace", 14), Column("API version", 11), Column("Status", 10),
+            Column("Valid", 8), Column("Sharing", 18), Column("Size (characters)", 12), Column("Test class", 10),
+            Column("Coverage %", 11, fmt='0.0'), Column("Lines covered", 11), Column("Lines not covered", 11),
+            Column("Access granted by", 50, wrap=True)]
     if o.users_allowed:
         cols.append(Column("Active users granted it", 14))
+    detail = _docs_list(o, "apex_classes")
+    listed = detail if detail is not None else (o.ui or {}).get("apex_classes")
+    if listed is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    granted = _grant_names(o, "ApexClass")
+    coverage = _coverage(o)
+    rows = []
+    for c in sorted(listed, key=lambda c: (c.get("name") or "").lower()):
+        cov = coverage.get(("class", c.get("name") or ""))
+        row = [c.get("name"), c.get("namespace") or "", c.get("api_version"), c.get("status") or "",
+               _yes(c.get("valid")), c.get("sharing") or "", c.get("length"),
+               _yes(cov.get("is_test")) if cov else "", _pct(cov),
+               cov.get("covered") if cov else None, cov.get("uncovered") if cov else None,
+               ", ".join(sorted(granted.get(c.get("id") or "", []))) or ""]
+        if o.users_allowed:
+            row.append(granted_users.get(c.get("id") or "", 0))
+        rows.append(row)
+    _table(ws, cols, rows, "No Apex classes.")
+
+
+def _apex_triggers(ws: Worksheet, o: _Org) -> None:
+    cols = [Column("Trigger", 30), Column("Object", 24), Column("Events", 50, wrap=True), Column("Status", 10),
+            Column("Valid", 8), Column("API version", 11), Column("Coverage %", 11, fmt='0.0'),
+            Column("Lines covered", 11), Column("Lines not covered", 11)]
+    triggers = _docs_list(o, "apex_triggers")
+    if triggers is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    coverage = _coverage(o)
+    rows = []
+    for t in sorted(triggers, key=lambda t: ((t.get("object") or ""), (t.get("name") or "").lower())):
+        cov = coverage.get(("trigger", t.get("name") or ""))
+        rows.append([t.get("name"), t.get("object") or "", ", ".join(t.get("events") or []), t.get("status") or "",
+                     _yes(t.get("valid")), t.get("api_version"), _pct(cov),
+                     cov.get("covered") if cov else None, cov.get("uncovered") if cov else None])
+    _table(ws, cols, rows, "No Apex triggers.")
+
+
+_PERMISSION_REF = re.compile(r"\$Permission\.([A-Za-z0-9_]+)")
+
+
+def _validation_rules(ws: Worksheet, o: _Org, permission_users: Dict[str, int]) -> None:
+    cols = [Column("Object", 22), Column("Rule", 32), Column("Active", 8), Column("Formula (error when true)", 70, wrap=True),
+            Column("Error message", 44, wrap=True), Column("Shown on", 20),
+            Column("Custom permissions it checks", 40, wrap=True), Column("Description", 36, wrap=True)]
+    rules = _docs_list(o, "validation_rules")
+    if rules is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    perm_ids = {p.get("name"): p.get("id") for p in _docs_list(o, "custom_permissions") or []}
+
+    def checks(formula: Optional[str]) -> str:
+        out = []
+        for name in sorted(set(_PERMISSION_REF.findall(formula or ""))):
+            pid = perm_ids.get(name)
+            if o.users_allowed and pid:
+                n = permission_users.get(pid, 0)
+                out.append(f"{name} ({n} active user{'s' if n != 1 else ''} hold it)")
+            else:
+                out.append(name)
+        return "; ".join(out)
+
+    rows = [[r.get("object") or "", r.get("name"), _yes(r.get("active")),
+             r.get("formula") if r.get("formula") is not None else "Not read",
+             r.get("error_message") or "", r.get("error_field") or "Top of page", checks(r.get("formula")),
+             r.get("description") or ""]
+            for r in sorted(rules, key=lambda r: ((r.get("object") or ""), (r.get("name") or "").lower()))]
+    _table(ws, cols, rows, "No validation rules.")
+
+
+def _rt_picklists(ws: Worksheet, o: _Org) -> None:
+    cols = [Column("Object", 22), Column("Record type", 26), Column("Field", 26), Column("Values available", 90, wrap=True),
+            Column("Values left out", 50, wrap=True)]
+    data = None if o.docs is None else o.docs.get("record_type_picklists")
+    if data is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    described = _described_objects(o)
+    rows = []
+    for obj in sorted(data):
+        for rt in sorted(data[obj]):
+            for fld, values in sorted(data[obj][rt].items()):
+                every = [v.get("value") for v in ((described.get(obj) or {}).get("fields", {}).get(fld) or {}).get("picklistValues") or []]
+                left_out = [v for v in every if v not in values]
+                rows.append([obj, rt, fld, ", ".join(values), ", ".join(left_out)])
+    _table(ws, cols, rows, "No record-type-specific picklist values.")
+
+
+def _tabs(ws: Worksheet, o: _Org) -> None:
+    settings = _docs_list(o, "tab_settings")
+    if settings is None:
+        _table(ws, [Column("Tab", 30)], [], NOT_SYNCED_DOCS)
+        return
+    columns = [(h, src.components[0].ps_id) for kind, h, src in o.columns() if kind != "permission_set_group"]
+    by: Dict[str, Dict[str, str]] = defaultdict(dict)
+    for t in settings:
+        by[t.get("tab") or ""][t.get("parent_id") or ""] = {"DefaultOn": "Default On", "DefaultOff": "Default Off"}.get(
+            t.get("visibility") or "", t.get("visibility") or "")
+    used = [(h, pid) for h, pid in columns if any(pid in v for v in by.values())]
+    head = [Column("Tab", 30)] + [Column(h, 14) for h, _ in used]
+    rows = [[tab] + [by[tab].get(pid, "") for _, pid in used] for tab in sorted(by)]
+    _table(ws, head, rows, "No tab settings.")
+    for i in range(2, len(used) + 2):
+        ws.cell(row=1, column=i).alignment = Alignment(wrap_text=True, vertical="top")
+    ws.freeze_panes = "B2"
+
+
+def _login_restrictions(ws: Worksheet, o: _Org) -> None:
+    cols = [Column("Profile", 28), Column("Login IP ranges", 60, wrap=True), Column("Login hours", 60, wrap=True)]
+    if o.users_allowed:
+        cols.append(Column("Active users with the profile", 14))
     if not o.ui:
         _table(ws, cols, [], NOT_SYNCED_UI)
         return
-    granted = _grant_names(o, "ApexClass")
+    logins = o.ui.get("profile_logins") or {}
+    per_profile = _active_by_profile(o)
+
+    def hhmm(m: Any) -> str:
+        try:
+            return f"{int(m) // 60:02d}:{int(m) % 60:02d}"
+        except (TypeError, ValueError):
+            return str(m)
+
     rows = []
-    for c in sorted(o.ui.get("apex_classes", []), key=lambda c: c["name"].lower()):
-        row = [c["name"], c.get("namespace") or "", ", ".join(sorted(granted.get(c["id"], [])))]
+    for pid, name in sorted(o.profiles.items(), key=lambda p: p[1].lower()):
+        lg = logins.get(pid) or {}
+        ranges = "; ".join(f"{r.get('start')} to {r.get('end')}" + (f" ({r['description']})" if r.get("description") else "")
+                           for r in lg.get("ip_ranges") or [])
+        hours = "; ".join(f"{DAY_ABBR.get(d, d)} {hhmm(h.get('start'))} to {hhmm(h.get('end'))}"
+                          for d, h in (lg.get("hours") or {}).items())
+        row: List[Any] = [name, ranges or "No restriction", hours or "No restriction"]
         if o.users_allowed:
-            row.append(granted_users.get(c["id"], 0))
+            row.append(per_profile.get(pid, 0))
         rows.append(row)
-    _table(ws, cols, rows, "No Apex classes.")
+    _table(ws, cols, rows, "No profiles synced.")
+
+
+def _simple(ws: Worksheet, o: _Org, key: str, cols: List[Column], row_of, sort_key, empty: str) -> None:
+    items = _docs_list(o, key)
+    if items is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    _table(ws, cols, [row_of(x) for x in sorted(items, key=sort_key)], empty)
+
+
+def _granted_sheet(ws: Worksheet, o: _Org, key: str, kind: str, cols: List[Column], row_of, users: Dict[str, int],
+                   empty: str) -> None:
+    """A list whose items are granted through SetupEntityAccess, with who."""
+    granted = _grant_names(o, kind)
+    full = cols + [Column("Access granted by", 50, wrap=True)] + ([Column("Active users granted it", 14)] if o.users_allowed else [])
+
+    def row(x: Dict[str, Any]) -> List[Any]:
+        r = row_of(x)
+        if kind != "ApexPage" or x.get("kind") == "Page":
+            r.append(", ".join(sorted(granted.get(x.get("id") or "", []))))
+            if o.users_allowed:
+                r.append(users.get(x.get("id") or "", 0))
+        else:
+            r.append("Components aren't granted on their own")
+            if o.users_allowed:
+                r.append(None)
+        return r
+
+    _simple(ws, o, key, full, row, lambda x: ((x.get("kind") or ""), (x.get("name") or "").lower()), empty)
 
 
 async def build_documentation_workbook(db: AsyncSession, org: Organization, now: Optional[datetime] = None) -> bytes:
@@ -546,7 +736,7 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
         else:
             ws = wb.create_sheet(title)
         sheets[title] = ws
-    flow_runs, apex_users = _per_user_runs(o)
+    flow_runs, granted_users = _per_user_runs(o)
     _about(sheets["About"], org, o, now)
     _objects(sheets["Objects"], o)
     _fields(sheets["Fields"], o)
@@ -559,8 +749,58 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
     _layouts(sheets["Layouts"], o)
     _unused_layouts(sheets["Unused Layouts"], o)
     _record_pages(sheets["Record Pages"], o)
+    _rt_picklists(sheets["Picklists by Record Type"], o)
+    _validation_rules(sheets["Validation Rules"], o, granted_users["CustomPermission"])
+    _tabs(sheets["Tab Visibility"], o)
+    _login_restrictions(sheets["Login Restrictions"], o)
+    _simple(sheets["Buttons and Links"], o, "web_links",
+            [Column("Object", 22), Column("Label", 28), Column("API name", 28), Column("Shown as", 18),
+             Column("Link type", 12), Column("Opens", 14)],
+            lambda w: [w.get("object"), w.get("label"), w.get("name"), w.get("display_type"), w.get("link_type"),
+                       w.get("open_type")],
+            lambda w: ((w.get("object") or ""), (w.get("label") or "").lower()), "No custom buttons or links.")
+    _simple(sheets["List Views"], o, "list_views", [Column("Object", 22), Column("List view", 32), Column("API name", 32)],
+            lambda v: [v.get("object"), v.get("name"), v.get("api_name")],
+            lambda v: ((v.get("object") or ""), (v.get("name") or "").lower()), "No list views.")
+    _simple(sheets["Field Sets"], o, "field_sets", [Column("Field set", 32), Column("Label", 32), Column("Description", 60, wrap=True)],
+            lambda f: [f.get("name"), f.get("label"), f.get("description") or ""],
+            lambda f: (f.get("name") or "").lower(), "No field sets.")
+    _granted_sheet(sheets["Apps"], o, "apps", "TabSet",
+                   [Column("App", 28), Column("API name", 28), Column("Namespace", 14), Column("Description", 40, wrap=True)],
+                   lambda a: [a.get("label"), a.get("name"), a.get("namespace") or "", a.get("description") or ""],
+                   granted_users["TabSet"], "No apps.")
     _flows(sheets["Flows"], o, flow_runs)
-    _apex(sheets["Apex Classes"], o, apex_users)
+    _simple(sheets["Approval Processes"], o, "approval_processes",
+            [Column("Approval process", 32), Column("API name", 30), Column("Object", 22), Column("State", 10),
+             Column("Record lock", 12), Column("Description", 50, wrap=True)],
+            lambda p: [p.get("name"), p.get("api_name"), p.get("object"), p.get("state"), p.get("lock_type"),
+                       p.get("description") or ""],
+            lambda p: ((p.get("object") or ""), (p.get("name") or "").lower()), "No approval processes.")
+    _apex(sheets["Apex Classes"], o, granted_users["ApexClass"])
+    _apex_triggers(sheets["Apex Triggers"], o)
+    _granted_sheet(sheets["Visualforce"], o, "visualforce", "ApexPage",
+                   [Column("Type", 11), Column("Name", 30), Column("Label", 30), Column("Namespace", 14),
+                    Column("API version", 11), Column("Description", 40, wrap=True)],
+                   lambda v: [v.get("kind"), v.get("name"), v.get("label"), v.get("namespace") or "", v.get("api_version"),
+                              v.get("description") or ""],
+                   granted_users["ApexPage"], "No Visualforce pages or components.")
+    _simple(sheets["Lightning Components"], o, "lightning_components",
+            [Column("Type", 24), Column("Name", 28), Column("Label", 28), Column("Namespace", 14), Column("API version", 11),
+             Column("Exposed in App Builder", 12), Column("Description", 44, wrap=True)],
+            lambda c: [c.get("kind"), c.get("name"), c.get("label"), c.get("namespace") or "", c.get("api_version"),
+                       _yes(c.get("exposed")), c.get("description") or ""],
+            lambda c: ((c.get("kind") or ""), (c.get("name") or "").lower()), "No Lightning components.")
+    _simple(sheets["Static Resources"], o, "static_resources",
+            [Column("Name", 28), Column("Namespace", 14), Column("Content type", 24), Column("Size (bytes)", 14, fmt="#,##0"),
+             Column("Cache control", 12), Column("Description", 44, wrap=True)],
+            lambda r: [r.get("name"), r.get("namespace") or "", r.get("content_type"), r.get("size"), r.get("cache_control"),
+                       r.get("description") or ""],
+            lambda r: (r.get("name") or "").lower(), "No static resources.")
+    _granted_sheet(sheets["Custom Permissions"], o, "custom_permissions", "CustomPermission",
+                   [Column("Custom permission", 30), Column("Label", 30), Column("Namespace", 14),
+                    Column("Description", 44, wrap=True)],
+                   lambda p: [p.get("name"), p.get("label"), p.get("namespace") or "", p.get("description") or ""],
+                   granted_users["CustomPermission"], "No custom permissions.")
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

@@ -2799,6 +2799,16 @@ class SalesforceAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def describe_layouts(self, object_name: str) -> Dict[str, Any]:
+        """GET /sobjects/{name}/describe/layouts/ (read-only): the object's
+        layouts and recordTypeMappings, with picklist values per record type."""
+        await self._settle_version()
+        url = f"{self.base_url}/sobjects/{object_name}/describe/layouts/"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.get(url, headers=self._get_headers())
+            response.raise_for_status()
+            return response.json()
+
     async def get_system_required_fields(self, object_name: str) -> List[Dict[str, Any]]:
         """
         Get system-required/mandatory fields for an object

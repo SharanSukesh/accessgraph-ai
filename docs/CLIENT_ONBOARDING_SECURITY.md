@@ -37,6 +37,21 @@ but it also lets it read their values, so Newton doesn't ask for it.
 UNVERIFIED: that FieldDefinition lists fields hidden by field-level
 security; check in a developer org.
 
+For the Org documentation workbook it reads more configuration (no new
+permission): validation rules with their formulas (one query per rule, at
+most 300 formulas per sync), picklist values per record type (one layout
+describe per object with record types), tab visibility per profile and
+permission set, Visualforce pages and components, static resources (name,
+type and size, never the file), Aura and Lightning web component bundles
+(names, never the code), custom permissions, apps and who can see them,
+approval processes (name, object, state; not their steps), Apex trigger
+details, buttons and links, list views, field sets, and each profile's
+login IP ranges and login hours. To record whether an Apex class runs
+"with sharing", "without sharing" or "inherited sharing", Newton reads the
+class body and keeps only that keyword, never the code (UNVERIFIED, as for
+API usage: whether the bodies are readable with the permissions above; if
+not, the sharing column is empty).
+
 Newton changes nothing in Salesforce unless an engagement admin explicitly
 turns on **write-back** for that org (see section 6).
 
