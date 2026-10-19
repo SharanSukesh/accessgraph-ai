@@ -24,7 +24,15 @@ export interface ReportingGraphNode {
   profile_name?: string | null
   // 0 = top of role hierarchy, +1 per parent hop. null = no role assigned.
   role_depth?: number | null
+  // Raw relationships (even when the other user isn't synced), latest risk
+  // level, and what needs attention (see lib/peopleTree.ts FLAG_LABELS).
+  manager_id?: string | null
+  delegated_approver_id?: string | null
+  risk_level?: string | null
+  flags?: PersonFlag[]
 }
+
+export type PersonFlag = 'no_manager' | 'manager_inactive' | 'manager_loop' | 'delegated_approver_inactive'
 
 export interface ReportingGraphEdge {
   source: string

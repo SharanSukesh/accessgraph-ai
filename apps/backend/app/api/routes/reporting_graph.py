@@ -11,7 +11,7 @@ prior_value + new_value in context_data.
 from __future__ import annotations
 
 import logging
-from typing import List, Literal, Optional
+from typing import Iterable, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -48,6 +48,17 @@ class ReportingGraphNode(BaseModel):
     # 0 = root of role hierarchy, 1 = next level, ..., None if user has
     # no role assigned. Drives the canvas color ramp.
     role_depth: Optional[int] = None
+    # People at scale: the raw relationships (even when the other user isn't
+    # synced), the latest risk level, and what needs attention:
+    #   no_manager                   an active user with no manager and no active direct
+    #                                reports (someone with reports is the top of a tree)
+    #   manager_inactive             the manager is an inactive user
+    #   delegated_approver_inactive  the delegated approver is an inactive user
+    #   manager_loop                 following managers up comes back to this user
+    manager_id: Optional[str] = None
+    delegated_approver_id: Optional[str] = None
+    risk_level: Optional[str] = None
+    flags: List[str] = Field(default_factory=list)
 
 
 class ReportingGraphEdge(BaseModel):
@@ -90,6 +101,63 @@ class ApplyResponse(BaseModel):
     results: List[EditResultResponse]
 
 
+# ----- Helpers -----
+
+
+def _manager_loops(users: Iterable[UserSnapshot]) -> set:
+    """Users whose chain of managers comes back to them."""
+    manager = {u.salesforce_id: u.manager_id for u in users if u.manager_id}
+    in_loop: set = set()
+    done: set = set()
+    for start in manager:
+        path: List[str] = []
+        on_path: set = set()
+        cur: Optional[str] = start
+        while cur and cur not in done and cur not in on_path:
+            path.append(cur)
+            on_path.add(cur)
+            cur = manager.get(cur)
+        if cur is not None and cur in on_path:
+            in_loop.update(path[path.index(cur):])
+        done.update(path)
+    return in_loop
+
+
+def _flags(u: UserSnapshot, active_by_id: dict, loops: set, has_reports: set) -> List[str]:
+    """What needs attention about a user's relationships (active users only)."""
+    if not u.is_active:
+        return []
+    out = []
+    if not u.manager_id:
+        if u.salesforce_id not in has_reports:
+            out.append("no_manager")
+    elif active_by_id.get(u.manager_id) is False:
+        out.append("manager_inactive")
+    if u.salesforce_id in loops:
+        out.append("manager_loop")
+    if u.delegated_approver_id and active_by_id.get(u.delegated_approver_id) is False:
+        out.append("delegated_approver_inactive")
+    return out
+
+
+async def _latest_risk_levels(db: AsyncSession, org_id: str) -> dict:
+    """Salesforce user id -> the latest risk level ("low" ... "critical")."""
+    from sqlalchemy import func
+    from app.domain.models import RiskScore
+    latest = (
+        select(RiskScore.entity_id, func.max(RiskScore.calculated_at).label("at"))
+        .where(RiskScore.organization_id == org_id, RiskScore.entity_type == "user")
+        .group_by(RiskScore.entity_id)
+        .subquery()
+    )
+    rows = (await db.execute(
+        select(RiskScore.entity_id, RiskScore.risk_level).join(
+            latest, (RiskScore.entity_id == latest.c.entity_id) & (RiskScore.calculated_at == latest.c.at),
+        ).where(RiskScore.organization_id == org_id)
+    )).all()
+    return {eid: str(getattr(level, "value", level)).lower() for eid, level in rows}
+
+
 # ----- Endpoints -----
 
 
@@ -102,19 +170,16 @@ async def get_reporting_graph(
     _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> ReportingGraphResponse:
-    """Current manager + delegated-approver edges for the canvas.
-
-    Reads from UserSnapshot (no SF callout). Inactive users are excluded
-    from nodes but kept on the source side of edges if they appear as a
-    subordinate elsewhere — keeps the graph from breaking on archival.
+    """Every user with their manager and delegated-approver edges, for the
+    People view. Reads from UserSnapshot (no SF callout). Inactive users are
+    included (is_active false) so an inactive manager or delegated approver
+    can be shown and flagged; the page hides inactive users unless asked.
     """
     await privacy_mode.require_feature(db, org_id, "reporting_graph")
     users = (await db.execute(
-        select(UserSnapshot).where(
-            UserSnapshot.organization_id == org_id,
-            UserSnapshot.is_active.is_(True),
-        )
+        select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
     )).scalars().all()
+    risk = await _latest_risk_levels(db, org_id)
 
     # Side-panel enrichment + canvas color-by-role: pull RoleSnapshot +
     # ProfileSnapshot once per org and compute each role's depth in the
@@ -145,6 +210,10 @@ async def get_reporting_graph(
             current = parent.parent_role_id
         role_depth[r.salesforce_id] = depth
 
+    active_by_id = {u.salesforce_id: u.is_active for u in users}
+    loops = _manager_loops(users)
+    # People with at least one active direct report: the top of a tree when they have no manager.
+    has_reports = {u.manager_id for u in users if u.is_active and u.manager_id}
     nodes = [
         ReportingGraphNode(
             user_sf_id=u.salesforce_id,
@@ -165,19 +234,23 @@ async def get_reporting_graph(
             role_depth=(
                 role_depth.get(u.user_role_id) if u.user_role_id else None
             ),
+            manager_id=u.manager_id,
+            delegated_approver_id=u.delegated_approver_id,
+            risk_level=risk.get(u.salesforce_id),
+            flags=_flags(u, active_by_id, loops, has_reports),
         )
         for u in users
     ]
     edges: List[ReportingGraphEdge] = []
-    active_sf_ids = {u.salesforce_id for u in users}
+    all_sf_ids = set(active_by_id)
     for u in users:
-        if u.manager_id and u.manager_id in active_sf_ids:
+        if u.manager_id and u.manager_id in all_sf_ids:
             edges.append(ReportingGraphEdge(
                 source=u.salesforce_id,
                 target=u.manager_id,
                 edge_type="manager",
             ))
-        if u.delegated_approver_id and u.delegated_approver_id in active_sf_ids:
+        if u.delegated_approver_id and u.delegated_approver_id in all_sf_ids:
             edges.append(ReportingGraphEdge(
                 source=u.salesforce_id,
                 target=u.delegated_approver_id,

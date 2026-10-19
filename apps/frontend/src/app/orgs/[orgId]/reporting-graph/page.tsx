@@ -1,22 +1,33 @@
 'use client'
 
 /**
- * Reporting Graph editor.
+ * Reporting Graph editor (Org chart > People).
  *
- * Drag-and-drop canvas (Cytoscape + edgehandles) for admins to construct
- * the org's reporting hierarchy. Two edge types: manager and delegated-
- * approver. Saving the diff PATCHes the corresponding Salesforce User
- * records via the backend's /reporting-graph/apply endpoint, which gates
- * the write on OrgUserRole.ORG_ADMIN.
+ * Built for 500-600 users: the graph opens collapsed at the top of the
+ * hierarchy (each manager with direct and total reports, opened on click),
+ * focus mode shows one person's chain to the top and their direct reports,
+ * filters narrow by department, role, profile, high risk or inactive, and a
+ * tree table is the alternative to the graph. Flags call out people with no
+ * manager, inactive managers and inactive delegated approvers
+ * (components/people, lib/peopleTree.ts).
+ *
+ * Editing: draw from a person to another (Cytoscape + edgehandles) to set
+ * their manager or delegated approver. Saving the diff PATCHes the
+ * corresponding Salesforce User records via the backend's
+ * /reporting-graph/apply endpoint, which gates the write on
+ * OrgUserRole.ORG_ADMIN.
  *
  * Pending edits live entirely client-side until the admin clicks Save —
  * gives them a chance to review the full diff before committing.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertCircle,
+  ChevronRight,
+  ListTree,
+  Network,
   Users2,
   Search,
   Save,
@@ -26,9 +37,6 @@ import {
   MousePointer,
   Pencil,
 } from 'lucide-react'
-import cytoscape, { Core, ElementDefinition } from 'cytoscape'
-// @ts-expect-error — cytoscape-edgehandles has no bundled types
-import edgehandles from 'cytoscape-edgehandles'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
@@ -44,19 +52,25 @@ import { useAuth } from '@/lib/auth/AuthContext'
 import {
   useReportingGraph,
   useApplyReportingGraphEdits,
-  type ReportingGraphEdge,
+  type PersonFlag,
   type RelationshipEdit,
   type RelationshipField,
 } from '@/lib/api/hooks/useReportingGraph'
-
-// Register edgehandles plugin once at module load
-if (typeof window !== 'undefined') {
-  try {
-    cytoscape.use(edgehandles)
-  } catch {
-    /* already registered — fine */
-  }
-}
+import { PeopleCanvas, roleColor } from '@/components/people/PeopleCanvas'
+import { PeopleTreeTable } from '@/components/people/PeopleTreeTable'
+import {
+  FLAG_LABELS,
+  type Filters,
+  NO_FILTERS,
+  type SortKey,
+  buildPeople,
+  chainTo,
+  filterOptions,
+  flagCounts,
+  hasFilters,
+  treeRows,
+  visiblePeople,
+} from '@/lib/peopleTree'
 
 type PendingEdit = RelationshipEdit & {
   kind: 'add' | 'remove' | 'update'
@@ -139,25 +153,6 @@ export default function ReportingGraphPage() {
   )
 }
 
-// Color ramp by role-hierarchy depth: 0 (root) = deep evergreen,
-// deeper = lighter sage/mint. Capped at 6 levels which covers
-// virtually every real Salesforce role tree. Users without a role
-// get neutral gray.
-const ROLE_COLORS = [
-  '#094230', // depth 0 — deep evergreen / executive
-  '#0d573c', // depth 1 — VP
-  '#146b4a', // depth 2 — director
-  '#2e8064', // depth 3 — manager
-  '#6bbf95', // depth 4 — lead
-  '#b8d1c0', // depth 5+ — IC
-]
-const colorForDepth = (depth: number | null | undefined): string => {
-  if (depth == null) return '#9ca3af'  // gray-400 — no role
-  if (depth < 0) return ROLE_COLORS[0]
-  if (depth >= ROLE_COLORS.length) return ROLE_COLORS[ROLE_COLORS.length - 1]
-  return ROLE_COLORS[depth]
-}
-
 function ReportingGraphContent() {
   const params = useParams()
   const orgId = params.orgId as string
@@ -165,606 +160,135 @@ function ReportingGraphContent() {
   const { data: graph, isLoading, error } = useReportingGraph(orgId)
   const apply = useApplyReportingGraphEdits(orgId)
 
-  const cyRef = useRef<Core | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [search, setSearch] = useState('')
   const [edgeMode, setEdgeMode] = useState<RelationshipField>('ManagerId')
-  // The Cytoscape 'ehcomplete' listener captures values at canvas-build time,
-  // so a useState alone would be stale when the user toggles modes after the
-  // canvas mounts. The ref is the source of truth read inside the listener.
-  const edgeModeRef = useRef<RelationshipField>('ManagerId')
-  useEffect(() => {
-    edgeModeRef.current = edgeMode
-  }, [edgeMode])
   const [pending, setPending] = useState<PendingEdit[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   // Toast for save outcomes (errors or partial-success messages).
-  // null = no toast. Persists until dismissed or a new one replaces it.
   const [toast, setToast] = useState<
     { kind: 'success' | 'error' | 'warning'; message: string } | null
   >(null)
-  // Canvas tool state. Move = node drag works for repositioning; Draw =
-  // node drag creates a new edge. Mutually exclusive because the same
-  // drag gesture can't do both.
+  // Move = drag nodes to reposition; Draw = drag from a person to another to set a relationship.
   const [tool, setTool] = useState<'move' | 'draw'>('move')
-  // Mirror tool into a ref so the canvas-init useEffect (which doesn't
-  // depend on `tool` because we don't want a full rebuild on toggle)
-  // can re-apply the user's chosen mode to a freshly-built canvas after
-  // a refetch — without this, post-save the canvas resets to "Move" while
-  // the toolbar button still says "Draw."
-  const toolRef = useRef<'move' | 'draw'>('move')
-  useEffect(() => {
-    toolRef.current = tool
-  }, [tool])
-  // Stash the edgehandles instance + on/off so the toolbar button can
-  // flip modes without re-mounting Cytoscape.
-  const ehRef = useRef<any>(null)
+  // At scale: graph or tree table; which managers are open; focus on one person; filters.
+  const [layout, setLayout] = useState<'graph' | 'table'>('graph')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
+  const [find, setFind] = useState('')
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'total', desc: true })
 
-  // --- Build the Cytoscape graph from the API response ---
-  const elements = useMemo<ElementDefinition[]>(() => {
-    if (!graph) return []
-    const out: ElementDefinition[] = []
-    for (const n of graph.nodes) {
-      out.push({
-        data: {
-          id: n.user_sf_id,
-          label: n.name,
-          department: n.department || '',
-          // Per-node color baked into data so the style selector can
-          // pick it up with `data(color)` instead of a CSS class explosion.
-          color: colorForDepth(n.role_depth),
-        },
-      })
-    }
-    for (const e of graph.edges) {
-      out.push({
-        data: {
-          id: `${e.source}__${e.edge_type}__${e.target}`,
-          source: e.source,
-          target: e.target,
-          edge_type: e.edge_type,
-          // Direction label so it's obvious who manages whom at a glance.
-          // Arrow + label both point from junior (source) → senior (target).
-          label:
-            e.edge_type === 'manager'
-              ? '→ manager'
-              : '→ delegated',
-        },
-        classes: e.edge_type === 'manager' ? 'edge-manager' : 'edge-delegated',
-      })
-    }
-    return out
-  }, [graph])
+  const people = useMemo(() => buildPeople(graph?.nodes ?? [], graph?.edges ?? []), [graph])
+  const visible = useMemo(() => visiblePeople(people, expanded, focusId, filters), [people, expanded, focusId, filters])
+  const isolated = useMemo(
+    () => people.roots.filter((id) => !(people.reports.get(id)?.length) && !(people.byId.get(id)?.flags ?? []).includes('manager_inactive')),
+    [people],
+  )
+  const rows = useMemo(() => treeRows(people, expanded, filters, sort), [people, expanded, filters, sort])
+  const counts = useMemo(() => flagCounts(graph?.nodes ?? []), [graph])
+  const options = useMemo(() => ({
+    department: filterOptions(graph?.nodes ?? [], 'department'),
+    role: filterOptions(graph?.nodes ?? [], 'role_name'),
+    profile: filterOptions(graph?.nodes ?? [], 'profile_name'),
+  }), [graph])
+  const found = useMemo(() => {
+    const q = find.trim().toLowerCase()
+    if (!q) return []
+    return [...people.shown]
+      .map((id) => people.byId.get(id)!)
+      .filter((n) => [n.name, n.title, n.department].some((v) => (v ?? '').toLowerCase().includes(q)))
+      .slice(0, 8)
+  }, [find, people])
+  const filtered = hasFilters(filters)
+  const nameOf = (id: string | null | undefined) => (id ? people.byId.get(id)?.name ?? id : '')
 
-  // --- Initialize Cytoscape once + each time elements change ---
-  useEffect(() => {
-    if (!containerRef.current || !graph) return
-    const cy = cytoscape({
-      container: containerRef.current,
-      elements,
-      // Nodes must remain user-grabbable so admins can reposition the
-      // org chart. Pan/zoom enabled. Layout runs once to seed positions;
-      // afterwards positions are sticky.
-      autoungrabify: false,
-      autounselectify: false,
-      userPanningEnabled: true,
-      userZoomingEnabled: true,
-      boxSelectionEnabled: false,
-      layout: {
-        name: 'cose',
-        animate: false,
-        fit: true,
-        nodeRepulsion: 12000,
-        idealEdgeLength: 90,
-        edgeElasticity: 100,
-      } as any,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            // Per-node color is computed from role_depth and baked into
-            // the node's data — see colorForDepth() above.
-            'background-color': 'data(color)',
-            label: 'data(label)',
-            color: '#fff',
-            'font-size': 10,
-            'font-family': 'Inter, system-ui, sans-serif',
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'text-outline-color': '#0f172a',
-            'text-outline-width': 1,
-            width: 36,
-            height: 36,
-            // Sleek: no default blue tap/selection overlay box; smooth
-            // color/border transitions on state changes. (Typed defs want
-            // transition-duration as a number of ms.)
-            'overlay-opacity': 0,
-            'transition-property': 'background-color, border-color, border-width',
-            'transition-duration': 150,
-          },
-        },
-        {
-          selector: 'node:selected',
-          style: {
-            'border-width': 2.5,
-            'border-color': '#c26b47',
-            'text-outline-color': '#16221a',
-          },
-        },
-        // Subtle copper tap feedback replaces the default grey block.
-        {
-          selector: ':active',
-          style: {
-            'overlay-opacity': 0.06,
-            'overlay-color': '#c26b47',
-            'overlay-padding': 6,
-          },
-        },
-        {
-          selector: 'edge',
-          style: {
-            width: 1.5,
-            'curve-style': 'bezier',
-            'target-arrow-shape': 'triangle',
-            'arrow-scale': 0.8,
-            opacity: 0.8,
-            label: 'data(label)',
-            'font-size': 8,
-            'font-family': 'Inter, system-ui, sans-serif',
-            color: '#6b7280',
-            'text-background-color': '#fff',
-            'text-background-opacity': 0.85,
-            'text-background-shape': 'roundrectangle',
-            'text-background-padding': '2px',
-            'overlay-opacity': 0,
-          },
-        },
-        {
-          selector: '.edge-manager',
-          style: {
-            'line-color': '#2e8064',
-            'target-arrow-color': '#2e8064',
-          },
-        },
-        {
-          selector: '.edge-delegated',
-          style: {
-            'line-color': '#c26b47',
-            'target-arrow-color': '#c26b47',
-            'line-style': 'dashed',
-          },
-        },
-        {
-          selector: '.pending-add-manager',
-          style: {
-            'line-color': '#22c55e',
-            'target-arrow-color': '#22c55e',
-            width: 3,
-          },
-        },
-        {
-          selector: '.pending-add-delegated',
-          style: {
-            'line-color': '#22c55e',
-            'target-arrow-color': '#22c55e',
-            'line-style': 'dashed',
-            width: 3,
-          },
-        },
-        {
-          selector: '.pending-remove',
-          style: {
-            'line-color': '#ef4444',
-            'target-arrow-color': '#ef4444',
-            opacity: 0.4,
-          },
-        },
-        {
-          selector: '.eh-handle',
-          style: {
-            'background-color': '#22c55e',
-            width: 12,
-            height: 12,
-            shape: 'ellipse',
-            'overlay-opacity': 0,
-            'border-width': 2,
-            'border-color': '#fff',
-          },
-        },
-      ],
+  const focusOn = (id: string) => {
+    setFocusId(id)
+    setSelectedNodeId(id)
+    setFilters(NO_FILTERS)
+    setFind('')
+  }
+  const toggle = (id: string) => {
+    if (visible.mode === 'focus') {
+      if (id !== focusId) focusOn(id)
+      return
+    }
+    if (visible.mode !== 'collapsed' || !people.reports.get(id)?.length) return
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
     })
-    cyRef.current = cy
+  }
+  const setFilter = (patch: Partial<Filters>) => {
+    setFocusId(null)
+    setFilters((f) => ({ ...f, ...patch }))
+  }
 
-    // Initialize edgehandles. In v4 of the plugin, "draw mode" means every
-    // node-drag creates an edge — which conflicts with node-drag-to-move.
-    // We expose a toolbar toggle ("Move" vs "Draw") to switch between
-    // them. enableDrawMode() / disableDrawMode() is driven by a separate
-    // useEffect that reacts to the `tool` state below.
-    const eh = (cy as any).edgehandles({
-      preview: false,
-      hoverDelay: 120,
-      snap: true,
-      noEdgeEventsInDraw: false,
-      handleNodes: 'node',
-      edgeType: () => 'flat',
-    })
-    ehRef.current = eh
-    // Re-apply the user's current tool mode to this fresh instance. The
-    // [tool] effect below only fires when tool changes — if the canvas
-    // rebuilt under us (e.g. post-save refetch) but the tool didn't, the
-    // new instance would be left in default mode while the toolbar still
-    // says "Draw."
-    if (toolRef.current === 'draw') {
-      try {
-        eh.enableDrawMode()
-      } catch {
-        /* idempotent */
-      }
-      cy.nodes().ungrabify()
-      if (containerRef.current) {
-        containerRef.current.style.cursor = 'crosshair'
-      }
-    }
-
-    cy.on('ehcomplete', (_evt: any, sourceNode: any, targetNode: any, addedEdge: any) => {
-      const src = sourceNode.id()
-      const tgt = targetNode.id()
-      if (!src || !tgt || src === tgt) {
-        addedEdge.remove()
-        return
-      }
-      // Read the current edge mode from the ref, not the closure — the
-      // useState value would be stale because this listener was bound at
-      // canvas-build time.
-      const field: RelationshipField = edgeModeRef.current
-      const sourceName = sourceNode.data('label')
-      const targetName = targetNode.data('label')
-      const edgeClass =
-        field === 'ManagerId'
-          ? 'pending-add-manager'
-          : 'pending-add-delegated'
-      const edgeLabel =
-        field === 'ManagerId'
-          ? `→ manager (pending)`
-          : `→ delegated (pending)`
-      // Replace the auto-created edge with a styled pending edge.
-      addedEdge.remove()
-      const newEdgeId = `pending__${field}__${src}__${tgt}`
-      // A user can only have one ManagerId / DelegatedApproverId, so any
-      // earlier pending edge for the same (src, field) is now superseded.
-      // Remove it from the canvas BEFORE adding the new one — otherwise
-      // both stay visible and the pending list (which dedupes by user+field)
-      // disagrees with what the user sees. Same logic for committed edges
-      // of the same field: drag re-routing should mark the original for
-      // removal too, so the save batch ends up clearing the prior value.
-      const edgeType =
-        field === 'ManagerId' ? 'manager' : 'delegated_approver'
-      cy.edges().forEach(e => {
-        const eid = (e.data('id') as string) || ''
-        if (eid === newEdgeId) return
-        // Superseded pending edge for same (user, field)
-        if (
-          eid.startsWith(`pending__${field}__${src}__`) &&
-          eid !== newEdgeId
-        ) {
-          e.remove()
-          return
-        }
-        // Committed edge of same field originating from same user — mark
-        // it as pending-remove so the save batch clears the prior value
-        // before setting the new one.
-        if (
-          e.data('source') === src &&
-          e.data('edge_type') === edgeType &&
-          !eid.startsWith('pending__')
-        ) {
-          e.addClass('pending-remove')
-        }
-      })
-      cy.add({
-        group: 'edges',
-        data: {
-          id: newEdgeId,
-          source: src,
-          target: tgt,
-          label: edgeLabel,
-        },
-        classes: edgeClass,
-      })
-      setPending(prev => {
-        // Dedupe by (user, field) only; every other pending edit stays.
-        const filtered = prev.filter(
-          p => !(p.user_sf_id === src && p.field === field),
-        )
-        return [
-          ...filtered,
-          {
-            user_sf_id: src,
-            field,
-            new_value: tgt,
-            kind: 'add',
-            source_name: sourceName,
-            target_name: targetName,
-          },
-        ]
-      })
-    })
-
-    cy.on('tap', 'node', evt => {
-      setSelectedNodeId(evt.target.id())
-    })
-    cy.on('tap', evt => {
-      if (evt.target === cy) setSelectedNodeId(null)
-    })
-    // Right-click an edge → mark for removal (or drop a pending add)
-    cy.on('cxttap', 'edge', evt => {
-      const edge = evt.target
-      const edgeId = (edge.data('id') as string) || ''
-      // pending-add edges have IDs like "pending__ManagerId__sf1__sf2"
-      if (edgeId.startsWith('pending__')) {
-        const parts = edgeId.split('__')
-        const field = (parts[1] as RelationshipField) || 'ManagerId'
-        const src = edge.data('source')
-        setPending(prev => prev.filter(p => !(p.user_sf_id === src && p.field === field)))
-        edge.remove()
-        return
-      }
-      const edgeType = edge.data('edge_type') as 'manager' | 'delegated_approver' | undefined
-      if (!edgeType) return
-      const field: RelationshipField =
-        edgeType === 'manager' ? 'ManagerId' : 'DelegatedApproverId'
-      edge.addClass('pending-remove')
-      setPending(prev => [
-        ...prev.filter(p =>
-          !(p.user_sf_id === edge.data('source') && p.field === field),
-        ),
-        {
-          user_sf_id: edge.data('source'),
-          field,
-          new_value: null,
-          kind: 'remove',
-          source_name: edge.source().data('label'),
-          target_name: edge.target().data('label'),
-        },
-      ])
-    })
-
-    return () => {
-      cy.destroy()
-      cyRef.current = null
-      ehRef.current = null
-    }
-    // edgeMode intentionally NOT in deps — the listener captures the
-    // closure value at edge-creation time via the ref-less approach above
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [elements, graph])
-
-  // Sync the Cytoscape edge-handle draw mode with the toolbar `tool`.
-  // Also force the cursor + node grabbability to match so the canvas
-  // feels right in each mode.
-  useEffect(() => {
-    const cy = cyRef.current
-    const eh = ehRef.current
-    if (!cy || !eh) return
-    if (tool === 'draw') {
-      try {
-        eh.enableDrawMode()
-      } catch {
-        /* idempotent on the plugin's side */
-      }
-      cy.nodes().ungrabify()
-      if (containerRef.current) {
-        containerRef.current.style.cursor = 'crosshair'
-      }
-    } else {
-      try {
-        eh.disableDrawMode()
-      } catch {
-        /* idempotent */
-      }
-      cy.nodes().grabify()
-      if (containerRef.current) {
-        containerRef.current.style.cursor = ''
-      }
-    }
-  }, [tool])
-
-  // --- Filter the user list in the left panel ---
-  const filteredNodes = useMemo(() => {
-    if (!graph) return []
-    const q = search.trim().toLowerCase()
-    return graph.nodes
-      .filter(n =>
-        !q ||
-        n.name.toLowerCase().includes(q) ||
-        (n.department || '').toLowerCase().includes(q),
-      )
-      .slice(0, 30)
-  }, [graph, search])
-
-  const selectedNode = useMemo(() => {
-    if (!graph || !selectedNodeId) return null
-    return graph.nodes.find(n => n.user_sf_id === selectedNodeId) || null
-  }, [graph, selectedNodeId])
-
-  // For the selected user, what's currently their committed manager /
-  // delegated approver (from the loaded graph) and what's any pending
-  // change against it? The right panel renders this so the admin can
-  // clear a relationship with one click instead of having to find the
-  // edge on the canvas and right-click.
-  const selectedRelationships = useMemo(() => {
-    if (!graph || !selectedNodeId) {
-      return null
-    }
-    const nodeById = new Map(graph.nodes.map(n => [n.user_sf_id, n]))
-    const findTarget = (field: RelationshipField) => {
-      const edgeType = field === 'ManagerId' ? 'manager' : 'delegated_approver'
-      const e = graph.edges.find(
-        ed => ed.source === selectedNodeId && ed.edge_type === edgeType,
-      )
-      if (!e) return null
-      const target = nodeById.get(e.target)
-      return {
-        target_id: e.target,
-        target_name: target?.name || e.target,
-      }
-    }
-    const findPending = (field: RelationshipField) =>
-      pending.find(
-        p => p.user_sf_id === selectedNodeId && p.field === field,
-      ) || null
-    return {
-      manager: {
-        committed: findTarget('ManagerId'),
-        pending: findPending('ManagerId'),
-      },
-      delegated: {
-        committed: findTarget('DelegatedApproverId'),
-        pending: findPending('DelegatedApproverId'),
-      },
-    }
-  }, [graph, selectedNodeId, pending])
-
-  // Mark a committed edge from `userSfId` of the given field for deletion.
-  // Same effect as right-clicking the edge on the canvas: adds a pending
-  // {kind: 'remove', new_value: null} edit and adds the .pending-remove
-  // class to the committed edge so the strikethrough renders.
+  // Pending edits are state; the canvas draws them (pending adds, committed edges marked for removal).
+  const draw = (src: string, tgt: string, field: RelationshipField) =>
+    setPending((prev) => [
+      ...prev.filter((p) => !(p.user_sf_id === src && p.field === field)),
+      { user_sf_id: src, field, new_value: tgt, kind: 'add', source_name: nameOf(src), target_name: nameOf(tgt) },
+    ])
   const markCommittedEdgeForRemoval = (
     userSfId: string,
     field: RelationshipField,
     targetUserSfId: string,
     sourceName?: string,
     targetName?: string,
-  ) => {
-    const cy = cyRef.current
-    if (cy) {
-      const edgeType = field === 'ManagerId' ? 'manager' : 'delegated_approver'
-      cy.edges().forEach(e => {
-        if (
-          e.data('source') === userSfId &&
-          e.data('edge_type') === edgeType
-        ) {
-          e.addClass('pending-remove')
-        }
-      })
-    }
-    setPending(prev => [
-      ...prev.filter(p => !(p.user_sf_id === userSfId && p.field === field)),
-      {
-        user_sf_id: userSfId,
-        field,
-        new_value: null,
-        kind: 'remove',
-        source_name: sourceName,
-        target_name: targetName || targetUserSfId,
-      },
+  ) =>
+    setPending((prev) => [
+      ...prev.filter((p) => !(p.user_sf_id === userSfId && p.field === field)),
+      { user_sf_id: userSfId, field, new_value: null, kind: 'remove', source_name: sourceName, target_name: targetName || targetUserSfId },
     ])
+  const removeEdge = (src: string, field: RelationshipField) => {
+    const target = field === 'ManagerId' ? people.managerOf.get(src) : people.approverOf.get(src)
+    if (target) markCommittedEdgeForRemoval(src, field, target, nameOf(src), nameOf(target))
   }
+  const dropPending = (src: string, field: RelationshipField) =>
+    setPending((prev) => prev.filter((p) => !(p.user_sf_id === src && p.field === field)))
+  const handleRevert = (edit: PendingEdit) => dropPending(edit.user_sf_id, edit.field)
 
-  const handleRevert = (edit: PendingEdit) => {
-    setPending(prev =>
-      prev.filter(p => !(p.user_sf_id === edit.user_sf_id && p.field === edit.field)),
-    )
-    // Only remove THIS pending edge from the canvas — not the whole graph.
-    // The earlier impl did elements().remove() + add(elements) which
-    // nuked every other pending edge in the process.
-    const cy = cyRef.current
-    if (!cy) return
-    if (edit.kind === 'add' && edit.new_value) {
-      const pendingId = `pending__${edit.field}__${edit.user_sf_id}__${edit.new_value}`
-      cy.$(`edge[id="${pendingId}"]`).remove()
-    } else if (edit.kind === 'remove') {
-      // The committed edge was marked .pending-remove; drop that class
-      // so it goes back to looking normal.
-      const edgeType =
-        edit.field === 'ManagerId' ? 'manager' : 'delegated_approver'
-      cy.edges().forEach(e => {
-        if (
-          e.data('source') === edit.user_sf_id &&
-          e.data('edge_type') === edgeType
-        ) {
-          e.removeClass('pending-remove')
-        }
-      })
+  const selectedNode = useMemo(() => {
+    if (!graph || !selectedNodeId) return null
+    return graph.nodes.find(n => n.user_sf_id === selectedNodeId) || null
+  }, [graph, selectedNodeId])
+
+  // The selected user's committed manager / delegated approver and any pending change.
+  const selectedRelationships = useMemo(() => {
+    if (!graph || !selectedNodeId) return null
+    const findTarget = (field: RelationshipField) => {
+      const target = field === 'ManagerId' ? people.managerOf.get(selectedNodeId) : people.approverOf.get(selectedNodeId)
+      return target ? { target_id: target, target_name: nameOf(target) } : null
     }
-  }
+    const findPending = (field: RelationshipField) =>
+      pending.find(p => p.user_sf_id === selectedNodeId && p.field === field) || null
+    return {
+      manager: { committed: findTarget('ManagerId'), pending: findPending('ManagerId') },
+      delegated: { committed: findTarget('DelegatedApproverId'), pending: findPending('DelegatedApproverId') },
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, people, selectedNodeId, pending])
 
   const handleSave = async () => {
     setConfirmOpen(false)
     setToast(null)
-    const edits: RelationshipEdit[] = pending.map(p => ({
-      user_sf_id: p.user_sf_id,
-      field: p.field,
-      new_value: p.new_value,
-    }))
+    const edits: RelationshipEdit[] = pending.map(p => ({ user_sf_id: p.user_sf_id, field: p.field, new_value: p.new_value }))
     try {
       const result = await apply.mutateAsync(edits)
-      const failedKeys = new Set(
-        result.results
-          .filter(r => !r.success)
-          .map(r => `${r.user_sf_id}::${r.field}`),
-      )
-      // Drop succeeded edits from pending so the side panel clears.
-      // Failed rows stay so the admin can retry / revert.
-      setPending(prev =>
-        prev.filter(p => failedKeys.has(`${p.user_sf_id}::${p.field}`)),
-      )
-      // Eagerly clean the canvas — the React Query refetch will rebuild
-      // the whole canvas momentarily, but doing it here means the side
-      // panel and the canvas are consistent instantly rather than during
-      // the network round-trip. Remove succeeded pending-add edges; clear
-      // the pending-remove class on committed edges that just got cleared
-      // (those will vanish entirely once refetch lands, but stripping the
-      // strikethrough now avoids a flash of red).
-      const cy = cyRef.current
-      if (cy) {
-        for (const r of result.results) {
-          if (!r.success) continue
-          const k = `${r.user_sf_id}::${r.field}`
-          if (failedKeys.has(k)) continue
-          // For add edits, remove the corresponding pending__ edge
-          if (r.new_value) {
-            const pendingId = `pending__${r.field}__${r.user_sf_id}__${r.new_value}`
-            cy.$(`edge[id="${pendingId}"]`).remove()
-          }
-          // For remove edits (new_value = null) or re-routes, drop the
-          // pending-remove class on any committed edge of the same field
-          // from this user — it'll be re-rendered by the refetch with the
-          // new state.
-          const edgeType =
-            r.field === 'ManagerId' ? 'manager' : 'delegated_approver'
-          cy.edges().forEach(e => {
-            if (
-              e.data('source') === r.user_sf_id &&
-              e.data('edge_type') === edgeType
-            ) {
-              e.removeClass('pending-remove')
-            }
-          })
-        }
-      }
+      const failedKeys = new Set(result.results.filter(r => !r.success).map(r => `${r.user_sf_id}::${r.field}`))
+      // Succeeded edits leave the pending list; failed ones stay to retry or revert.
+      setPending(prev => prev.filter(p => failedKeys.has(`${p.user_sf_id}::${p.field}`)))
       if (result.failed === 0) {
-        setToast({
-          kind: 'success',
-          message: `Saved ${result.succeeded} ${result.succeeded === 1 ? 'change' : 'changes'} to Salesforce.`,
-        })
+        setToast({ kind: 'success', message: `Saved ${result.succeeded} ${result.succeeded === 1 ? 'change' : 'changes'} to Salesforce.` })
       } else if (result.succeeded > 0) {
-        setToast({
-          kind: 'warning',
-          message: `Partial save: ${result.succeeded} succeeded, ${result.failed} failed. Failed rows remain in the pending list.`,
-        })
+        setToast({ kind: 'warning', message: `Partial save: ${result.succeeded} succeeded, ${result.failed} failed. Failed rows remain in the pending list.` })
       } else {
         const firstError = result.results.find(r => r.error)?.error
-        setToast({
-          kind: 'error',
-          message: firstError
-            ? `Save failed: ${firstError}`
-            : 'Save failed. All edits returned errors.',
-        })
+        setToast({ kind: 'error', message: firstError ? `Save failed: ${firstError}` : 'Save failed. All edits returned errors.' })
       }
     } catch (err: any) {
-      // Network / 403 / 500 — extract a useful message
       let message = 'Save failed.'
       if (err?.status === 403) {
         message =
@@ -786,6 +310,11 @@ function ReportingGraphContent() {
     if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
     return <ErrorState message="Failed to load reporting graph" />
   }
+
+  const SELECT = 'w-full rounded border border-grove-border bg-grove-surface px-2 py-1.5 text-xs dark:border-grove-border-dk dark:bg-grove-surface-dk'
+  const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55'
+  const chain = focusId ? chainTo(people, focusId) : []
+  const shownCount = layout === 'table' ? rows.length : visible.ids.size
 
   return (
     <div className="space-y-4">
@@ -820,19 +349,14 @@ function ReportingGraphContent() {
           icon={Users2}
           title="Org Chart"
           eyebrow="Admin · hierarchy"
-          subtitle="Drag from a user to another to set their manager or delegated approver. Save writes back to Salesforce User records."
+          subtitle="Open managers to see their teams, focus on one person, or filter. In the graph, draw from a person to another to set their manager or delegated approver; Save writes back to Salesforce User records."
           actions={
             <>
               <ViewToggle view="people" />
               <Badge variant={pending.length > 0 ? 'info' : 'default'} size="sm">
                 {pending.length} pending {pending.length === 1 ? 'edit' : 'edits'}
               </Badge>
-              <Button
-                variant="primary"
-                size="md"
-                disabled={pending.length === 0 || apply.isPending}
-                onClick={() => setConfirmOpen(true)}
-              >
+              <Button variant="primary" size="md" disabled={pending.length === 0 || apply.isPending} onClick={() => setConfirmOpen(true)}>
                 <Save className="h-4 w-4 mr-2" />
                 {apply.isPending ? 'Saving…' : `Save changes (${pending.length})`}
               </Button>
@@ -841,154 +365,225 @@ function ReportingGraphContent() {
         />
       </Reveal>
 
-      {/* Tool + edge-mode toolbar. Two independent groups: which CANVAS
-          TOOL is active (move vs draw) and, when drawing, which EDGE TYPE
-          gets created. Putting both in one row keeps the controls close
-          to the canvas so the active mode is hard to miss. */}
+      {/* Layout, canvas tool and edge type. Editing happens in the graph. */}
       <div className="flex items-center gap-3 text-sm flex-wrap p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 border border-grove-border dark:border-grove-border-dk">
-        {/* Canvas tool toggle */}
-        <div className="flex items-center gap-1 bg-grove-surface dark:bg-grove-canvas-dk rounded-md border border-grove-border dark:border-grove-border-dk p-0.5">
-          <button
-            onClick={() => setTool('move')}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${
-              tool === 'move'
-                ? 'bg-primary-700 text-grove-canvas shadow'
-                : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'
-            }`}
-            title="Drag node bodies to reposition them"
-          >
-            <MousePointer className="h-3 w-3" />
-            Move
-          </button>
-          <button
-            onClick={() => setTool('draw')}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${
-              tool === 'draw'
-                ? 'bg-green-600 text-white shadow'
-                : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'
-            }`}
-            title="Drag from one node to another to create an edge"
-          >
-            <Pencil className="h-3 w-3" />
-            Draw edges
-          </button>
+        <div role="tablist" aria-label="Layout" className="flex items-center gap-1 bg-grove-surface dark:bg-grove-canvas-dk rounded-md border border-grove-border dark:border-grove-border-dk p-0.5">
+          {(['graph', 'table'] as const).map((l) => (
+            <button key={l} role="tab" aria-selected={layout === l} onClick={() => setLayout(l)}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${layout === l ? 'bg-primary-700 text-grove-canvas shadow' : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'}`}>
+              {l === 'graph' ? <Network className="h-3 w-3" /> : <ListTree className="h-3 w-3" />}
+              {l === 'graph' ? 'Graph' : 'Tree table'}
+            </button>
+          ))}
         </div>
-
-        {/* Edge type — only meaningful when drawing */}
-        <div
-          className={`flex items-center gap-2 transition ${
-            tool === 'draw' ? 'opacity-100' : 'opacity-40 pointer-events-none'
-          }`}
-        >
-          <span className="text-grove-ink/65 dark:text-grove-ink-dk/65 text-xs">Edge type:</span>
-          <button
-            onClick={() => setEdgeMode('ManagerId')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-              edgeMode === 'ManagerId'
-                ? 'bg-primary-700 text-grove-canvas shadow'
-                : 'bg-grove-surface dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-grove-surface-dk'
-            }`}
-          >
-            Manager (solid)
-          </button>
-          <button
-            onClick={() => setEdgeMode('DelegatedApproverId')}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-              edgeMode === 'DelegatedApproverId'
-                ? 'bg-sky-600 text-white shadow'
-                : 'bg-grove-surface dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-grove-surface-dk'
-            }`}
-          >
-            Delegated approver (dashed)
-          </button>
-        </div>
-
-        <div className="ml-auto text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 max-w-md text-right">
-          {tool === 'move' ? (
-            <>
-              <strong>Move mode</strong>: click+drag a node to reposition.
-              Click a node to inspect or clear its relationships in the
-              right panel. Switch to <strong>Draw</strong> to create edges.
-            </>
-          ) : (
-            <>
-              <strong>Draw mode</strong>: drag from a{' '}
-              <strong>subordinate</strong> to their{' '}
-              <strong>
-                {edgeMode === 'ManagerId' ? 'manager' : 'delegated approver'}
-              </strong>
-              . Arrow points to the senior. Right-click an edge or use the
-              Clear button in the right panel to remove one.
-            </>
+        {layout === 'graph' && (
+          <>
+            <div className="flex items-center gap-1 bg-grove-surface dark:bg-grove-canvas-dk rounded-md border border-grove-border dark:border-grove-border-dk p-0.5">
+              <button onClick={() => setTool('move')} title="Drag people to reposition them"
+                className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${tool === 'move' ? 'bg-primary-700 text-grove-canvas shadow' : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'}`}>
+                <MousePointer className="h-3 w-3" />
+                Move
+              </button>
+              <button onClick={() => setTool('draw')} title="Drag from one person to another to create an edge"
+                className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${tool === 'draw' ? 'bg-green-600 text-white shadow' : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'}`}>
+                <Pencil className="h-3 w-3" />
+                Draw edges
+              </button>
+            </div>
+            <div className={`flex items-center gap-2 transition ${tool === 'draw' ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+              <span className="text-grove-ink/65 dark:text-grove-ink-dk/65 text-xs">Edge type:</span>
+              <button onClick={() => setEdgeMode('ManagerId')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${edgeMode === 'ManagerId' ? 'bg-primary-700 text-grove-canvas shadow' : 'bg-grove-surface dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-grove-surface-dk'}`}>
+                Manager (solid)
+              </button>
+              <button onClick={() => setEdgeMode('DelegatedApproverId')}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${edgeMode === 'DelegatedApproverId' ? 'bg-sky-600 text-white shadow' : 'bg-grove-surface dark:bg-grove-canvas-dk border border-grove-border dark:border-grove-border-dk text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-grove-surface-dk'}`}>
+                Delegated approver (dashed)
+              </button>
+            </div>
+          </>
+        )}
+        <div className="ml-auto flex items-center gap-3 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
+          <span className="v2-num">
+            Showing {shownCount.toLocaleString('en-GB')} of {people.shown.size.toLocaleString('en-GB')} people
+          </span>
+          {visible.mode === 'collapsed' && expanded.size > 0 && (
+            <button type="button" className="underline underline-offset-2" onClick={() => setExpanded(new Set())}>Collapse all</button>
           )}
         </div>
       </div>
 
-      {/* Three-column layout */}
-      <div className="grid grid-cols-12 gap-4" style={{ height: '650px' }}>
-        {/* Left: user filter / list */}
-        <Card variant="bordered" className="col-span-3 overflow-hidden flex flex-col">
-          <CardHeader>
-            <CardTitle>Users ({graph?.nodes.length ?? 0})</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto p-0">
-            <div className="p-3 sticky top-0 bg-grove-surface dark:bg-grove-canvas-dk z-10 border-b border-grove-border dark:border-grove-border-dk">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Search users or departments…"
-                  className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk"
-                />
-              </div>
-            </div>
-            <div className="p-2 space-y-1">
-              {isLoading ? (
-                <TableSkeleton rows={6} />
+      {focusId && (
+        <nav aria-label="Reporting chain" className="flex flex-wrap items-center gap-1 rounded-lg border border-grove-border bg-grove-surface px-3 py-2 text-sm dark:border-grove-border-dk dark:bg-grove-surface-dk">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55">Focus</span>
+          {chain.length > 0 && people.managerOf.has(chain[0]) && (
+            <span className="mr-1 rounded border border-amber-400 px-1.5 text-[11px] font-medium text-amber-800 dark:border-amber-600 dark:text-amber-200"
+              title="Following managers up comes back round; the chain starts where it repeats.">
+              Manager loop
+            </span>
+          )}
+          {chain.map((id, i) => (
+            <span key={id} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-grove-ink/40 dark:text-grove-ink-dk/40" aria-hidden />}
+              {id === focusId ? (
+                <span className="font-semibold" aria-current="page">{nameOf(id)}</span>
               ) : (
-                filteredNodes.map(n => (
-                  <button
-                    key={n.user_sf_id}
-                    onClick={() => {
-                      setSelectedNodeId(n.user_sf_id)
-                      const cy = cyRef.current
-                      if (cy) {
-                        cy.$(`#${n.user_sf_id}`).select()
-                        cy.center(cy.$(`#${n.user_sf_id}`))
-                      }
-                    }}
-                    className={`w-full text-left px-2 py-1.5 rounded text-sm ${
-                      selectedNodeId === n.user_sf_id
-                        ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-800 dark:text-primary-200'
-                        : 'hover:bg-primary-50 dark:hover:bg-grove-surface-dk'
-                    }`}
-                  >
-                    <div className="font-medium truncate">{n.name}</div>
-                    <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 truncate">
-                      {n.department || '—'}
-                    </div>
-                  </button>
-                ))
+                <button type="button" className="text-primary-700 hover:underline dark:text-primary-300" onClick={() => focusOn(id)}>{nameOf(id)}</button>
               )}
+            </span>
+          ))}
+          <span className="ml-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
+            · {people.reports.get(focusId)?.length ?? 0} direct reports
+          </span>
+          <button type="button" onClick={() => setFocusId(null)}
+            className="ml-auto inline-flex items-center gap-1 rounded border border-grove-border px-2 py-1 text-xs dark:border-grove-border-dk">
+            <XIcon className="h-3 w-3" /> Exit focus
+          </button>
+        </nav>
+      )}
+
+      <div className="grid grid-cols-12 gap-4 lg:h-[680px]">
+        {/* Left: find a person, filters, flags */}
+        <Card variant="bordered" className="col-span-12 lg:col-span-3 overflow-hidden flex flex-col">
+          <CardContent className="flex-1 space-y-4 overflow-y-auto p-3">
+            <div className="relative">
+              <label className={LABEL} htmlFor="people-find">Find a person</label>
+              <div className="relative mt-1">
+                <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
+                <input id="people-find" type="text" value={find} onChange={(e) => setFind(e.target.value)}
+                  placeholder="Name, title or department…"
+                  className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk" />
+              </div>
+              {found.length > 0 && (
+                <ul role="listbox" aria-label="People" className="absolute z-20 mt-1 w-full rounded-md border border-grove-border bg-grove-surface p-1 shadow-grove-lift dark:border-grove-border-dk dark:bg-grove-surface-dk">
+                  {found.map((n) => (
+                    <li key={n.user_sf_id}>
+                      <button type="button" role="option" aria-selected={false} onClick={() => focusOn(n.user_sf_id)}
+                        className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-primary-50 dark:hover:bg-primary-900/20">
+                        <span className="block truncate font-medium">{n.name}</span>
+                        <span className="block truncate text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">{[n.title, n.department].filter(Boolean).join(' · ') || '—'}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-1 text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">Focus shows their chain to the top and their direct reports.</p>
             </div>
+
+            <fieldset className="space-y-2">
+              <legend className={LABEL}>Filters</legend>
+              <select aria-label="Department" className={SELECT} value={filters.department} onChange={(e) => setFilter({ department: e.target.value })}>
+                <option value="">All departments</option>
+                {options.department.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <select aria-label="Role" className={SELECT} value={filters.role} onChange={(e) => setFilter({ role: e.target.value })}>
+                <option value="">All roles</option>
+                {options.role.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <select aria-label="Profile" className={SELECT} value={filters.profile} onChange={(e) => setFilter({ profile: e.target.value })}>
+                <option value="">All profiles</option>
+                {options.profile.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="accent-primary-700" checked={filters.highRisk} onChange={(e) => setFilter({ highRisk: e.target.checked })} />
+                High risk
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="accent-primary-700" checked={filters.inactive} onChange={(e) => setFilter({ inactive: e.target.checked })} />
+                Inactive
+              </label>
+              <input type="text" aria-label="Filter by text" value={filters.text} onChange={(e) => setFilter({ text: e.target.value })}
+                placeholder="Text in name, title, role…" className={SELECT} />
+              {filtered && (
+                <button type="button" className="text-xs font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => setFilters(NO_FILTERS)}>
+                  Clear filters
+                </button>
+              )}
+            </fieldset>
+
+            <div>
+              <p className={LABEL}>Needs a look</p>
+              <ul className="mt-1 space-y-1">
+                {(Object.keys(FLAG_LABELS) as PersonFlag[]).map((f) => (
+                  <li key={f}>
+                    <button type="button" aria-pressed={filters.flag === f}
+                      onClick={() => setFilter({ flag: filters.flag === f ? '' : f })}
+                      className={`flex w-full items-center justify-between rounded border px-2 py-1.5 text-left text-xs ${filters.flag === f ? 'border-amber-500 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/20' : 'border-grove-border hover:bg-primary-50/40 dark:border-grove-border-dk dark:hover:bg-primary-900/15'}`}>
+                      <span className="flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" aria-hidden />{FLAG_LABELS[f]}</span>
+                      <span className="v2-num font-semibold">{counts[f]}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {filtered && (
+              <div>
+                <p className={LABEL}>{visible.matches.length.toLocaleString('en-GB')} {visible.matches.length === 1 ? 'match' : 'matches'}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {visible.matches.slice(0, 100).map((id) => (
+                    <li key={id}>
+                      <button type="button" onClick={() => focusOn(id)} className="w-full truncate rounded px-2 py-1 text-left text-sm hover:bg-primary-50 dark:hover:bg-primary-900/20">
+                        {nameOf(id)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                {visible.matches.length > 100 && <p className="mt-1 text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">The first 100; the {layout === 'graph' ? 'graph' : 'table'} shows them all.</p>}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Middle: Cytoscape canvas */}
-        <Card variant="bordered" className="col-span-6 overflow-hidden">
-          <div
-            ref={containerRef}
-            className="w-full h-full bg-grove-canvas dark:bg-grove-canvas-dk"
-            style={{ minHeight: '650px' }}
-          />
+        {/* Middle: the graph or the tree table */}
+        <Card variant="bordered" className="col-span-12 lg:col-span-6 overflow-hidden">
+          {isLoading ? (
+            <div className="p-4"><TableSkeleton rows={8} /></div>
+          ) : layout === 'graph' ? (
+            <PeopleCanvas
+              people={people}
+              visible={visible}
+              expanded={expanded}
+              pending={pending}
+              selectedId={selectedNodeId}
+              tool={tool}
+              edgeMode={edgeMode}
+              isolated={isolated}
+              onSelect={setSelectedNodeId}
+              onToggle={toggle}
+              onDraw={draw}
+              onRemoveEdge={removeEdge}
+              onDropPending={dropPending}
+              onIsolatedClick={() => setFilter({ ...NO_FILTERS, flag: 'no_manager' })}
+            />
+          ) : (
+            <PeopleTreeTable
+              rows={rows}
+              sort={sort}
+              onSort={(key) => setSort((s) => ({ key, desc: s.key === key ? !s.desc : key === 'direct' || key === 'total' }))}
+              onToggle={(id) => setExpanded((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })}
+              selectedId={selectedNodeId}
+              onSelect={setSelectedNodeId}
+              filtered={filtered}
+            />
+          )}
         </Card>
 
         {/* Right: selected node + pending edits */}
-        <Card variant="bordered" className="col-span-3 overflow-hidden flex flex-col">
+        <Card variant="bordered" className="col-span-12 lg:col-span-3 overflow-hidden flex flex-col">
           <CardHeader>
-            <CardTitle>Selected user</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>Selected user</CardTitle>
+              {selectedNode && (
+                <button
+                  type="button"
+                  onClick={() => focusOn(selectedNode.user_sf_id)}
+                  className="rounded border border-grove-border px-2 py-1 text-xs font-medium hover:bg-primary-50/40 dark:border-grove-border-dk dark:hover:bg-primary-900/15"
+                >
+                  Focus
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
             {!selectedNode ? (
@@ -1000,7 +595,7 @@ function ReportingGraphContent() {
                 <div className="flex items-center gap-2">
                   <span
                     className="inline-block w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: colorForDepth(selectedNode.role_depth) }}
+                    style={{ backgroundColor: roleColor(selectedNode.role_depth) }}
                     title={
                       selectedNode.role_depth == null
                         ? 'No role assigned'
@@ -1040,6 +635,26 @@ function ReportingGraphContent() {
                       {selectedNode.profile_name || <span className="text-grove-ink/50 dark:text-grove-ink-dk/50">—</span>}
                     </dd>
                   </div>
+                  <div className="flex gap-1.5">
+                    <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Reports</dt>
+                    <dd className="font-medium v2-num">
+                      {people.reports.get(selectedNode.user_sf_id)?.length ?? 0} direct · {people.total.get(selectedNode.user_sf_id) ?? 0} total
+                    </dd>
+                  </div>
+                  {selectedNode.risk_level && (
+                    <div className="flex gap-1.5">
+                      <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Risk</dt>
+                      <dd className="font-medium capitalize">{selectedNode.risk_level}</dd>
+                    </div>
+                  )}
+                  {(selectedNode.flags ?? []).length > 0 && (
+                    <div className="flex gap-1.5">
+                      <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Needs a look</dt>
+                      <dd className="font-medium text-amber-700 dark:text-amber-300">
+                        {(selectedNode.flags ?? []).map((f) => FLAG_LABELS[f]).join(', ')}
+                      </dd>
+                    </div>
+                  )}
                   <div className="flex gap-1.5">
                     <dt className="text-grove-ink/55 dark:text-grove-ink-dk/55 w-20 flex-shrink-0">Status</dt>
                     <dd>
