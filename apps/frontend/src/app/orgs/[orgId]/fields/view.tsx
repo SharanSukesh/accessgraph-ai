@@ -17,6 +17,7 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal } from '@/components/v2/motion'
 import { useFields } from '@/lib/api/hooks/useFields'
+import { EncryptionBadge } from '@/components/schema/FieldMetadata'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -40,9 +41,10 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
   })
 
   const fields = data?.fields || []
-  // Field types aren't synced yet; the column appears only when some are known.
+  // Field types come from the synced describe; the column appears only when some are known.
   const showType = fields.some((f: any) => f.dataType)
   const pagination = data?.pagination
+  const schemaNotes = data?.schemaNotes || []
 
   const handleLetterClick = (letter: string) => {
     if (selectedLetter === letter) {
@@ -98,7 +100,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Current Page
+                On this page
               </p>
               <p className="mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
                 {isLoading ? '...' : fields.length}
@@ -198,6 +200,14 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
 
       {/* Fields Table */}
       <Reveal delay={0.15}>
+      {schemaNotes.length > 0 && (
+        <div className="rounded-lg px-4 py-3 text-sm bg-grove-surface dark:bg-grove-surface-dk ring-1 ring-grove-border dark:ring-grove-border-dk text-grove-ink/75 dark:text-grove-ink-dk/75 space-y-1">
+          {schemaNotes.map((n) => (
+            <p key={n}>{n}</p>
+          ))}
+        </div>
+      )}
+
       <Card variant="bordered">
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -277,7 +287,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                           <td className="px-6 py-4 whitespace-nowrap">
                             {field.dataType && (
                               <Badge variant="default" size="sm">
-                                {field.dataType}
+                                {field.typeLabel || field.dataType}
                               </Badge>
                             )}
                           </td>
@@ -289,11 +299,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                                 Sensitive
                               </Badge>
                             )}
-                            {field.isEncrypted && (
-                              <Badge variant="success" size="sm">
-                                Encrypted
-                              </Badge>
-                            )}
+                            <EncryptionBadge encryption={field.encryption} />
                             {field.isCustom && (
                               <Badge variant="info" size="sm">
                                 Custom

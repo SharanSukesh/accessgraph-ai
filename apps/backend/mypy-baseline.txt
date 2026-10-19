@@ -73,8 +73,6 @@ app/api/routes/users.py: Value of type "PermissionSetAssignmentSnapshot" is not 
 app/db/neo4j_client.py: Value of type "Coroutine[Any, Any, None]" must be used  [unused-coroutine]
 app/graph/repository.py: Incompatible return value type (got "list[dict[str, Any]]", expected "dict[Any, Any]")  [return-value]
 app/ingestion/demo_orgs.py: "DemoDataQualityClient" has no attribute "record_visibility"  [attr-defined]
-app/ingestion/orchestrator.py: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "list[Any]")  [assignment]
-app/ingestion/orchestrator.py: Incompatible types in assignment (expression has type "dict[str, Any]", target has type "list[Any]")  [assignment]
 app/ingestion/snapshot.py: "Result[Any]" has no attribute "rowcount"  [attr-defined]
 app/ingestion/snapshot.py: "Result[Any]" has no attribute "rowcount"  [attr-defined]
 app/ingestion/snapshot.py: "list[dict[str, Any]]" has no attribute "items"  [attr-defined]

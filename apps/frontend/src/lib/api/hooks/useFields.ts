@@ -25,8 +25,10 @@ export interface SalesforceField {
   fieldLabel?: string
   apiName: string
   objectName: string
-  // Not synced yet: null means unknown, so the UI hides it.
+  // From the synced describe; null means not synced, so the UI hides it.
   dataType: string | null
+  typeLabel?: string | null
+  encryption?: 'shield' | 'classic' | null
   isCustom: boolean
   isSensitive: boolean
   isEncrypted: boolean | null
@@ -49,6 +51,8 @@ export interface FieldFilters {
 
 export interface PaginatedFieldsResponse {
   fields: SalesforceField[]
+  // What the field metadata read couldn't cover, e.g. fields hidden from the integration user.
+  schemaNotes?: string[]
   pagination: {
     page: number
     limit: number

@@ -2791,6 +2791,7 @@ class SalesforceAPIClient:
         Returns:
             Dictionary containing object metadata including fields
         """
+        await self._settle_version()
         url = f"{self.base_url}/sobjects/{object_name}/describe"
 
         async with httpx.AsyncClient(timeout=30.0) as client:
