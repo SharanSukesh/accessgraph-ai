@@ -85,3 +85,18 @@ async def test_no_manager_skips_the_top_of_a_tree(client, async_db_session):  # 
     nodes = {n["user_sf_id"]: n["flags"] for n in
              (await client.get(f"/orgs/{org.id}/reporting-graph", cookies=_cookie(admin))).json()["nodes"]}
     assert nodes["005T"] == [] and nodes["005L"] == ["no_manager"] and nodes["005B"] == ["no_manager"]
+
+
+@pytest.mark.asyncio
+async def test_lumenvale_has_no_manager_loops(client, async_db_session):  # noqa: F811
+    """Salesforce doesn't allow manager loops, so the demo fixture has none."""
+    import json
+    from pathlib import Path
+    users = json.loads((Path(__file__).resolve().parents[1] / "fixtures/synthetic_mid_market.json").read_text())["users"]
+    manager = {u["Id"]: u["ManagerId"] for u in users if u.get("ManagerId")}
+    for start in manager:
+        seen, cur = set(), start
+        while cur in manager:
+            assert cur not in seen, f"manager loop through {cur}"
+            seen.add(cur)
+            cur = manager[cur]

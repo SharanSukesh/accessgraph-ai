@@ -504,7 +504,8 @@ function ReportingGraphContent() {
             <div>
               <p className={LABEL}>Needs a look</p>
               <ul className="mt-1 space-y-1">
-                {(Object.keys(FLAG_LABELS) as PersonFlag[]).map((f) => (
+                {/* Salesforce doesn't allow manager loops, so that row shows only when the data has one. */}
+                {(Object.keys(FLAG_LABELS) as PersonFlag[]).filter((f) => f !== 'manager_loop' || counts[f] > 0).map((f) => (
                   <li key={f}>
                     <button type="button" aria-pressed={filters.flag === f}
                       onClick={() => setFilter({ flag: filters.flag === f ? '' : f })}

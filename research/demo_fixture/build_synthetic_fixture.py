@@ -417,6 +417,9 @@ def main() -> None:
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args()
     fixture, summary = build(args.seed, args.users, args.prevalence)
+    # Salesforce doesn't allow manager loops; the generated hierarchy can have them.
+    from manager_loops import break_manager_loops
+    summary["manager_loops_broken"] = break_manager_loops(fixture["users"])
     args.out.write_text(json.dumps(fixture, indent=1) + "\n")
     print(json.dumps(summary, indent=2))
     print(f"wrote {args.out} ({args.out.stat().st_size // 1024} KB)")

@@ -244,8 +244,25 @@ section has the detail.
   (backend 443 passed, frontend 83 tests, lint with no warnings, Ruff
   clean, no new mypy errors). The one conflict: #47 with #42 in the People
   page; take #47's version (it no longer has the code #42 changed).
-- **Next:** Sharan reviews #42-#48. Then item 7 with 35c, then phase C.
-  Item 1 phase 2 stays a plan.
+- **18-19 Oct, merged:** after review fixes (#47: "No manager" leaves out
+  people with direct reports; #43: no footer on images unless the org name
+  is asked for), Sharan approved merging, for that round only: #42
+  (d38a18a), #49 (f74099b), #43 (06ae85c), #44 (37dcf93), #45 (2c8bfca),
+  #46 (5eae897), #47 (b5a62a0), #48 (02d8e55). Before #42, a throwaway
+  draft (#50, closed) proved the lint gate: a Ruff violation, a new mypy
+  error and a lint warning turned Backend and Frontend red while tests and
+  the build still ran. #44's rebase was resolved to a tree identical to a
+  plain merge of the reviewed PR; #47 took its own People page, as
+  agreed. After each merge main's CI passed and both Railway deployments
+  succeeded; no PR added a migration. Main is at 02d8e55.
+- **19 Oct (not merged):** Salesforce doesn't allow manager loops (the
+  Manager field prevents "selecting a user that directly or indirectly
+  reports to themselves", Object Reference v68), so the 4 loops are taken
+  out of the Lumenvale fixture; the runbook numbers hold. The tree keeps
+  its loop handling as a safeguard and shows "Manager loop" only when one
+  is found.
+- **Next:** Sharan re-syncs Lumenvale on production and tests. Then item 7
+  with 35c, then phase C. Item 1 phase 2 stays a plan.
 
 ## Build order
 
