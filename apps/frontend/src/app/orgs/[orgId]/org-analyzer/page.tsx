@@ -1,5 +1,6 @@
 'use client'
 
+import { EvidencePanel } from '@/components/evidence/EvidencePanel'
 import Link from 'next/link'
 import { useListState } from '@/lib/list/useListState'
 import { Pagination } from '@/components/shared/Pagination'
@@ -1329,6 +1330,8 @@ function FindingsTab({ orgId }: { orgId: string }) {
                   </div>
                 )}
               </div>
+              {/* Evidence and review (roadmap items 20 and 10). */}
+              <EvidencePanel orgId={orgId} kind="finding" itemId={refreshedSelected.id} />
             </div>
           )}
         </CardContent>

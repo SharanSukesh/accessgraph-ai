@@ -28,6 +28,7 @@ from app.domain.models import (
     DataQualityRun,
     EquitySnapshot,
     InstalledPackage,
+    ItemReview,
     LicenseFitAssessment,
     LicenseFitRun,
     ObjectQualityScore,
@@ -84,6 +85,7 @@ HANDLED_TABLES = {
     "object_quality_scores", "org_analysis_snapshots", "org_findings",
     "installed_packages", "report_inventory_items", "automation_inventory_items",
     "compliance_scorecard_runs", "salesforce_connections", "role_design_drafts", "snapshot_items",
+    "item_reviews",
 }
 UNAFFECTED_TABLES = {
     "audit_logs", "org_users", "org_access_grants", "sync_jobs", "brand_settings",
@@ -294,6 +296,8 @@ class _Purge:
                 UserSnapshot,
             ):
                 await self._delete(model)
+            # Reviews of anomalies go with the anomalies (item 10).
+            await self._delete(ItemReview, ItemReview.item_type == "anomaly")
             # Snapshots (item 21) follow the level in force: people go from every snapshot.
             await self._delete(SnapshotItem, SnapshotItem.entity.in_(sorted(snapshots.USER_ENTITIES)))
 
@@ -509,6 +513,7 @@ class _Purge:
             (RestructurePreservationConstraint, ("reason",)),
             (VIPDesignation, ("note",)),
             (ComplianceScorecardRun, ("results",)),
+            (ItemReview, ("reason", "title")),
         )
         for model, columns in targets:
             for row in await self._rows(model):

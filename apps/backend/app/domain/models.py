@@ -3059,3 +3059,27 @@ class SnapshotItem(Base):
         Index("ix_snapshot_item_org_range", "organization_id", "last_seq", "first_seq"),
         Index("ix_snapshot_item_org_entity_key", "organization_id", "entity", "key"),
     )
+
+
+class ItemReview(Base, TimestampMixin):
+    """A reviewer's verdict on a finding, anomaly or Priority Action (roadmap
+    item 10): useful, not useful, or expected (an approved exception). Keyed
+    so it survives the analysis running again. Reviews on a demo org are
+    marked demo and never count towards validation."""
+    __tablename__ = "item_reviews"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    item_type: Mapped[str] = mapped_column(String(20), nullable=False)  # finding | anomaly | recommendation
+    item_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    module: Mapped[str] = mapped_column(String(40), nullable=False)
+    group: Mapped[Optional[str]] = mapped_column(String(80))  # finding category, anomaly type, action type
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # useful | not_useful | expected
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    reviewer: Mapped[Optional[str]] = mapped_column(String(255))
+    title: Mapped[Optional[str]] = mapped_column(String(500))
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    __table_args__ = (Index("ix_item_review_org_key", "organization_id", "item_key", unique=True),)

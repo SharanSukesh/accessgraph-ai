@@ -1,5 +1,6 @@
 'use client'
 
+import { EvidencePanel } from '@/components/evidence/EvidencePanel'
 import { apiClient } from '@/lib/api/client'
 import { useListState } from '@/lib/list/useListState'
 import { usePaged } from '@/lib/list/usePaged'
@@ -472,6 +473,9 @@ function AnomaliesContent() {
                     </Button>
                   </div>
                 )}
+                <div className="mt-4">
+                  <EvidencePanel orgId={orgId} kind="anomaly" itemId={selectedAnomaly.id} />
+                </div>
               </CardContent>
             </Card>
           ) : (

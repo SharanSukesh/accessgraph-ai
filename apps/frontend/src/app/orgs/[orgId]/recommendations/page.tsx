@@ -1,5 +1,6 @@
 'use client'
 
+import { EvidencePanel } from '@/components/evidence/EvidencePanel'
 import { apiClient } from '@/lib/api/client'
 import { useListState } from '@/lib/list/useListState'
 import { usePaged } from '@/lib/list/usePaged'
@@ -545,6 +546,9 @@ export default function RecommendationsPage() {
                     </Button>
                   </div>
                 )}
+                <div className="mt-4">
+                  <EvidencePanel orgId={orgId} kind="recommendation" itemId={selectedRec.id} />
+                </div>
               </CardContent>
             </Card>
           ) : (
