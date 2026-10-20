@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import { endpoints } from '../endpoints'
+import type { Paged } from '@/lib/list/listState'
 import type { RoleHierarchy, RoleUser } from '@/lib/roleHierarchy'
 
 export function useRoleHierarchy(orgId: string, deepAfter: number, wideAfter: number) {
@@ -16,10 +17,11 @@ export function useRoleHierarchy(orgId: string, deepAfter: number, wideAfter: nu
   })
 }
 
+/** The first page of a role's users, for the role panel's preview (the full list is its own paged page). */
 export function useRoleUsers(orgId: string, roleId: string | null, enabled: boolean) {
   return useQuery({
     queryKey: ['role-users', orgId, roleId],
-    queryFn: () => apiClient.get<RoleUser[]>(endpoints.roleUsers(orgId, roleId as string)),
+    queryFn: () => apiClient.get<Paged<RoleUser>>(endpoints.roleUsers(orgId, roleId as string), { params: { page: 1, page_size: 25 } }),
     enabled: !!orgId && !!roleId && enabled,
   })
 }

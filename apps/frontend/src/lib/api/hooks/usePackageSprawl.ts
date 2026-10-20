@@ -8,7 +8,7 @@
  * to quantify AppExchange waste.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '../client'
 import { endpoints } from '../endpoints'
 
@@ -123,6 +123,10 @@ export interface PackageSprawlSummary {
 export interface PackageListResponse {
   run_id: string | null
   packages: InstalledPackage[]
+  total?: number | null
+  page?: number | null
+  page_size?: number | null
+  pages?: number | null
 }
 
 export interface PackageSprawlRunResponse {
@@ -170,15 +174,23 @@ export function usePackageSprawlLatest(orgId: string) {
 /** Per-package list, ordered Unused → Under-used → Active. */
 export function usePackageSprawlPackages(
   orgId: string,
-  filters?: { tier?: PackageTier },
+  filters?: { tier?: PackageTier; page?: number; page_size?: number; q?: string },
 ) {
-  const qs = filters?.tier ? `?tier=${filters.tier}` : ''
+  const params = new URLSearchParams()
+  if (filters?.tier) params.set('tier', filters.tier)
+  if (filters?.page) {
+    params.set('page', String(filters.page))
+    params.set('page_size', String(filters.page_size ?? 25))
+  }
+  if (filters?.q) params.set('q', filters.q)
+  const qs = params.toString() ? `?${params.toString()}` : ''
   return useQuery<PackageListResponse>({
-    queryKey: packageSprawlKeys.packages(orgId, filters?.tier),
+    queryKey: [...packageSprawlKeys.packages(orgId, filters?.tier), filters?.page, filters?.page_size, filters?.q],
     queryFn: () =>
       apiClient.get(`${endpoints.packageSprawlPackages(orgId)}${qs}`),
     enabled: !!orgId,
     staleTime: 30_000,
+    placeholderData: keepPreviousData,
   })
 }
 

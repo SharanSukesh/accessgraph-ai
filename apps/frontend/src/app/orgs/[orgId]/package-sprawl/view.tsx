@@ -8,6 +8,9 @@
  * consultants can spot uninstall candidates immediately.
  */
 
+import { useListState } from '@/lib/list/useListState'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
@@ -48,7 +51,10 @@ import {
 export function PackageSprawlView({ embedded = false }: { embedded?: boolean } = {}) {
   const params = useParams()
   const orgId = params.orgId as string
-  const [tier, setTier] = useState<PackageTier | undefined>(undefined)
+  // Paged by the server; tier, search, page and size live in the URL (ps.*).
+  const { state: list, update } = useListState('ps', { filters: ['tier'] })
+  const tier = (list.filters.tier || undefined) as PackageTier | undefined
+  const setTier = (v: PackageTier | undefined) => update({ filters: { tier: v ?? '' } })
 
   const {
     data: summary,
@@ -59,7 +65,7 @@ export function PackageSprawlView({ embedded = false }: { embedded?: boolean } =
     data: pkgPage,
     isLoading: pkgLoading,
     error: pkgError,
-  } = usePackageSprawlPackages(orgId, { tier })
+  } = usePackageSprawlPackages(orgId, { tier, page: list.page, page_size: list.pageSize, q: list.q || undefined })
   const runMutation = useRunPackageSprawl(orgId)
 
   if (summaryError) {
@@ -327,6 +333,7 @@ export function PackageSprawlView({ embedded = false }: { embedded?: boolean } =
           </Card>
 
           {/* Package list. */}
+          <ListSearch value={list.q} onChange={(q) => update({ q })} placeholder="Search packages by name or namespace…" />
           {pkgError ? (
             <ErrorState message="Failed to load package list." />
           ) : pkgLoading ? (
@@ -340,6 +347,10 @@ export function PackageSprawlView({ embedded = false }: { embedded?: boolean } =
               {pkgPage.packages.map((pkg) => (
                 <PackageCard key={pkg.id} pkg={pkg} />
               ))}
+              <div className="lg:col-span-2">
+                <Pagination page={pkgPage.page ?? 1} pageSize={pkgPage.page_size ?? list.pageSize} total={pkgPage.total ?? pkgPage.packages.length}
+                  label="packages" onPage={(p) => update({ page: p })} onPageSize={(pageSize) => update({ pageSize })} />
+              </div>
             </div>
           ) : (
             <Card variant="bordered">

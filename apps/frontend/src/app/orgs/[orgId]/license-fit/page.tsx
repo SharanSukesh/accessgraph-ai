@@ -18,6 +18,8 @@
  *   unknown         — insufficient evidence (fail-safe)
  */
 
+import { useListState } from '@/lib/list/useListState'
+import { Pagination } from '@/components/shared/Pagination'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
@@ -57,7 +59,6 @@ import {
   type LicenseFitSourceDiagnostics,
 } from '@/lib/api/hooks/useLicenseFit'
 
-const PAGE_SIZE = 30
 
 export default function LicenseFitPage() {
   return (
@@ -74,14 +75,16 @@ function LicenseFitContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
-  const [category, setCategory] = useState<LicenseFitCategory | undefined>(
-    undefined,
-  )
-  const [persona, setPersona] = useState<LicenseFitPersona | undefined>(
-    undefined,
-  )
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
+  // Paged by the server; filters, search, page and size live in the URL (lf.*).
+  const { state: list, update } = useListState('lf', { filters: ['category', 'persona'] })
+  const category = (list.filters.category || undefined) as LicenseFitCategory | undefined
+  const setCategory = (v: LicenseFitCategory | undefined) => update({ filters: { category: v ?? '' } })
+  const persona = (list.filters.persona || undefined) as LicenseFitPersona | undefined
+  const setPersona = (v: LicenseFitPersona | undefined) => update({ filters: { persona: v ?? '' } })
+  const search = list.q
+  const setSearch = (q: string) => update({ q })
+  const page = list.page - 1
+  const setPage = (p: number) => update({ page: p + 1 })
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const {
@@ -97,15 +100,13 @@ function LicenseFitContent() {
     fit_category: category,
     persona,
     search: search || undefined,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    limit: list.pageSize,
+    offset: page * list.pageSize,
   })
   const runMutation = useRunLicenseFit(orgId)
 
-  const changeFilter = (fn: () => void) => {
-    fn()
-    setPage(0)
-  }
+  // Any filter change returns to page 1 (the URL state does that).
+  const changeFilter = (fn: () => void) => fn()
 
   if (summaryError) {
     if (isPrivacyModeError(summaryError)) {
@@ -407,12 +408,8 @@ function LicenseFitContent() {
                 ))}
               </div>
 
-              <PaginationBar
-                total={itemPage.total}
-                page={page}
-                pageSize={PAGE_SIZE}
-                onChange={setPage}
-              />
+              <Pagination page={list.page} pageSize={list.pageSize} total={itemPage.total} label="items"
+                onPage={(p) => update({ page: p })} onPageSize={(pageSize) => update({ pageSize })} />
             </>
           )}
         </>
@@ -874,52 +871,6 @@ function FitDot({ category }: { category: LicenseFitCategory }) {
 // Pagination
 // ============================================================================
 
-function PaginationBar({
-  total,
-  page,
-  pageSize,
-  onChange,
-}: {
-  total: number
-  page: number
-  pageSize: number
-  onChange: (p: number) => void
-}) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  if (totalPages <= 1) return null
-  const from = page * pageSize + 1
-  const to = Math.min(total, (page + 1) * pageSize)
-  return (
-    <div className="flex items-center justify-between text-xs text-grove-ink/70 dark:text-grove-ink-dk/70">
-      <div>
-        Showing <strong>{from.toLocaleString()}</strong>–
-        <strong>{to.toLocaleString()}</strong> of{' '}
-        <strong>{total.toLocaleString()}</strong>
-      </div>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, page - 1))}
-          disabled={page === 0}
-          className="px-2.5 py-1 rounded-md border border-grove-border dark:border-grove-border-dk disabled:opacity-40 hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
-        >
-          Prev
-        </button>
-        <span className="px-2 tabular-nums">
-          Page {page + 1} / {totalPages.toLocaleString()}
-        </span>
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
-          disabled={page + 1 >= totalPages}
-          className="px-2.5 py-1 rounded-md border border-grove-border dark:border-grove-border-dk disabled:opacity-40 hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ============================================================================
 // Formatters

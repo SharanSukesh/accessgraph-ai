@@ -11,6 +11,9 @@
  * filters, item cards with expandable evidence, pagination.
  */
 
+import { useListState } from '@/lib/list/useListState'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
@@ -50,7 +53,6 @@ import {
   type IntegrationSourceDiagnostics,
 } from '@/lib/api/hooks/useIntegrationSprawl'
 
-const PAGE_SIZE = 30
 
 export function IntegrationSprawlView({
   embedded = false,
@@ -58,10 +60,16 @@ export function IntegrationSprawlView({
   const params = useParams()
   const orgId = params.orgId as string
 
-  const [tier, setTier] = useState<IntegrationTier | undefined>(undefined)
-  const [type, setType] = useState<IntegrationType | undefined>(undefined)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
+  // Paged by the server; filters, search, page and size live in the URL (is.*).
+  const { state: list, update } = useListState('is', { filters: ['tier', 'type'] })
+  const tier = (list.filters.tier || undefined) as IntegrationTier | undefined
+  const setTier = (v: IntegrationTier | undefined) => update({ filters: { tier: v ?? '' } })
+  const type = (list.filters.type || undefined) as IntegrationType | undefined
+  const setType = (v: IntegrationType | undefined) => update({ filters: { type: v ?? '' } })
+  const search = list.q
+  const setSearch = (q: string) => update({ q })
+  const page = list.page - 1
+  const setPage = (p: number) => update({ page: p + 1 })
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const {
@@ -77,15 +85,13 @@ export function IntegrationSprawlView({
     tier,
     integration_type: type,
     search: search || undefined,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    limit: list.pageSize,
+    offset: page * list.pageSize,
   })
   const runMutation = useRunIntegrationSprawl(orgId)
 
-  const changeFilter = (fn: () => void) => {
-    fn()
-    setPage(0)
-  }
+  // Any filter change returns to page 1 (the URL state does that).
+  const changeFilter = (fn: () => void) => fn()
 
   if (summaryError) {
     return (
@@ -260,18 +266,7 @@ export function IntegrationSprawlView({
           {/* Filters */}
           <Card variant="bordered" className="p-4">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/40 dark:text-grove-ink-dk/40" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) =>
-                    changeFilter(() => setSearch(e.target.value))
-                  }
-                  placeholder="Search by name or developer name…"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-grove-border dark:border-grove-border-dk bg-grove-canvas dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                />
-              </div>
+              <ListSearch value={search} onChange={setSearch} placeholder="Search by name or developer name…" />
 
               <div className="flex gap-1 flex-wrap">
                 <TypeChip
@@ -397,12 +392,8 @@ export function IntegrationSprawlView({
                 ))}
               </div>
 
-              <PaginationBar
-                total={itemPage.total}
-                page={page}
-                pageSize={PAGE_SIZE}
-                onChange={setPage}
-              />
+              <Pagination page={list.page} pageSize={list.pageSize} total={itemPage.total} label="items"
+                onPage={(p) => update({ page: p })} onPageSize={(pageSize) => update({ pageSize })} />
             </>
           )}
         </>
@@ -940,52 +931,6 @@ function TierDot({ tier }: { tier: IntegrationTier }) {
 // Pagination
 // ============================================================================
 
-function PaginationBar({
-  total,
-  page,
-  pageSize,
-  onChange,
-}: {
-  total: number
-  page: number
-  pageSize: number
-  onChange: (p: number) => void
-}) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  if (totalPages <= 1) return null
-  const from = page * pageSize + 1
-  const to = Math.min(total, (page + 1) * pageSize)
-  return (
-    <div className="flex items-center justify-between text-xs text-grove-ink/70 dark:text-grove-ink-dk/70">
-      <div>
-        Showing <strong>{from.toLocaleString()}</strong>–
-        <strong>{to.toLocaleString()}</strong> of{' '}
-        <strong>{total.toLocaleString()}</strong>
-      </div>
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, page - 1))}
-          disabled={page === 0}
-          className="px-2.5 py-1 rounded-md border border-grove-border dark:border-grove-border-dk disabled:opacity-40 hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
-        >
-          Prev
-        </button>
-        <span className="px-2 tabular-nums">
-          Page {page + 1} / {totalPages.toLocaleString()}
-        </span>
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
-          disabled={page + 1 >= totalPages}
-          className="px-2.5 py-1 rounded-md border border-grove-border dark:border-grove-border-dk disabled:opacity-40 hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ============================================================================
 // Formatters

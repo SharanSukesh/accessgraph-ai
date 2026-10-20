@@ -581,6 +581,30 @@ section has the detail.
   150", tabs All 150 / Access 135 / Session 15, Session tab CSV 15 rows;
   Priority Actions 130, High → 26; dashboard 600 / 36 / 150 / 130.
   Lumenvale: findings 18, search "license" → 7; API usage apps 6.
+- **#62 (pagination 5 of 5, not merged; stacked on #61):** the rest.
+  Automation, report and integration sprawl: page, size, search, tier and
+  type filters in the URL (as., rs., is.); they were already paged on the
+  server. Package sprawl: paged and searched on the server (it returned
+  every package). License Fit (lf.), Change-Risk Radar (cr.) and
+  Restructure Studio (mv.): URL state; the accepted-moves CSV fetched at
+  most 100 moves and now fetches them all. Org Chart > People: a third
+  layout, List (GET /reporting-graph/people): everyone matching the view's
+  filters, paged, searched and sorted on the server, with manager, direct
+  and total reports by the tree's rules; a direct-reports count opens
+  "Reports to ..."; Export CSV has every match. The view's filters and
+  layout are in the URL (p.department, p.flag..., layout=list). The graph
+  and the tree table still draw from the whole graph in the browser: they
+  are navigation views, opened one manager at a time. Roles: the role
+  panel shows the first 10 users and "View all N users" →
+  /reporting-graph/roles/{id}/users (paged, sorted, status filter).
+  **Test:** List scale org: People list "Showing 1–25 of 565" (557 active,
+  3 inactive managers, 5 inactive delegated approvers), Inactive manager →
+  17, CEO's direct reports → 6, CSV 6 rows; Sales Team role "View all 84
+  users", inactive → 9; synthetic sprawl runs (local only): automation 240,
+  reports 420, integrations 130, packages 90 (search "01" → 11), change
+  events 300. Lumenvale: License Fit 400, Restructure 49 moves. Not
+  covered: the sprawl Analyse buttons and Change-Risk pull need a live org
+  and return an error on demo orgs (as before).
 - **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
   the objects and fields each flow reads or writes, from the Flow metadata
   already read per active flow), the field × layout matrix (#4, Layout
