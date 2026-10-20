@@ -749,9 +749,37 @@ section has the detail.
   **Test (Lumenvale, local):** Change-Risk Radar → Run pull: 60 events, 20
   high-blast, 8 actors, "Showing 1–25 of 60"; workbook Change History 60
   rows.
-- **Next:** matrix #26–28 (security summary, org limits with health
-  status, logins by profile and component counts on Overview), then step 3
-  (21 snapshots, 9 v1 org comparison, 20 evidence with 10, 30 write-up).
+- **#68 (matrix #26–28, not merged; stacked on #67):** one-screen views
+  over what Newton already holds (services/org_overview.py; no new reads).
+  #26 Security summary page (/orgs/{id}/security, in the sidebar under
+  Attention): health score, flagged access anomalies, high-blast setup
+  changes, org limits, users holding Modify All Data, View All Data, Manage
+  Users, Customize Application and Author Apex (profile, sets and groups,
+  muting applied; each count opens a paged list), org-wide defaults that
+  open records, compliance indicators failing; each tile links to its
+  module and says "not read" rather than zero. #27 Org limits page
+  (/orgs/{id}/org-limits, linked from the Health Report): every limit from
+  the latest Health Report run's /limits read, used, max, % used, status
+  (warning from 75%, critical from 90%), paged, searched, status tabs.
+  #28 Overview cards: "Org at a glance" (component counts from the sync,
+  "not read" when it wasn't) and Logins by profile (from each user's last
+  login, no LoginHistory; first 10, View all paged). Lumenvale part
+  14-org-limits.json adds 18 limits (platform events 93% critical; async
+  Apex 81% and workflow emails 76% warning); the three limits the Health
+  Report's findings read are unchanged, so the runbook holds (41 / 18 /
+  $183,180 / $116,220). Also: the demo Change-Risk client answers the
+  component-activity read with nothing instead of failing soft.
+  **Test (Lumenvale, local, after Data Quality, the Health Report and
+  Change-Risk Radar):** Security summary 41 / 18 findings, 8 anomalies,
+  20 high-blast of 60 changes, 4 limits (1 critical, 3 warning) of 21,
+  Modify All Data 9 users ("Showing 1–9 of 9"), org-wide defaults "None of
+  5 objects", HIPAA 2 of 4 and SOC 2 1 of 4 controls failing; Overview:
+  29 objects, 262 fields, 78 custom fields, 26 validation rules, 16 flows
+  (15 active), 81 Apex classes; 337 of 400 active users logged in within
+  30 days; "View all 11 profiles".
+- **Next:** step 3: 21 (versioned snapshots), then 9 v1 (org-to-org
+  comparison), 20 (evidence on every finding) with 10 (reviewer feedback),
+  30 (risk formula write-up).
 
 ## Build order
 

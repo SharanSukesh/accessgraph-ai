@@ -1,5 +1,6 @@
 'use client'
 
+import { OverviewCards } from '@/components/overview/OverviewCards'
 import { apiClient } from '@/lib/api/client'
 
 /**
@@ -426,6 +427,11 @@ export default function DashboardPage() {
           </Card>
         </Reveal>
       </div>
+
+      {/* Parity #28: configuration counts and logins by profile. */}
+      <Reveal>
+        <OverviewCards orgId={orgId} />
+      </Reveal>
     </div>
   )
 }

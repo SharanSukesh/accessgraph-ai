@@ -184,3 +184,7 @@ class DemoChangeRiskClient:
 
         rows = [r for r in self._rows if cutoff <= when(r) <= now]
         return sorted(rows, key=when, reverse=True)[:limit]
+
+    async def extract_recent_metadata_activity(self, since_days: int = 30, top_per_type: int = 5) -> Dict[str, Any]:
+        """The fixture carries no per-component modification dates: nothing to report."""
+        return {}

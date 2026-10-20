@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useListState } from '@/lib/list/useListState'
 import { Pagination } from '@/components/shared/Pagination'
 import { ListSearch } from '@/components/shared/ListSearch'
@@ -195,6 +196,14 @@ export default function OrgAnalyzerPage() {
                 <Download className="h-4 w-4" />
                 Download PDF
               </a>
+            )}
+            {hasRun && (
+              <Link
+                href={`/orgs/${orgId}/org-limits`}
+                className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium border border-grove-border dark:border-grove-border-dk rounded-md hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
+              >
+                Org limits
+              </Link>
             )}
             {hasRun && <VisualDownloadButton orgId={orgId} visual="summary" label="Summary image" large />}
             {hasRun && (
