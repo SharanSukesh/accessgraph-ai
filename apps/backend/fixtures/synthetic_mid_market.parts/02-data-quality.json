@@ -144,6 +144,26 @@
        "aggregatable": false,
        "groupable": false,
        "populated": 1612
+      },
+      {
+       "name": "Old_Score__c",
+       "label": "Old Score",
+       "type": "double",
+       "custom": true,
+       "nillable": true,
+       "aggregatable": true,
+       "groupable": true,
+       "populated": 0
+      },
+      {
+       "name": "Fax_Ext__c",
+       "label": "Fax Ext",
+       "type": "string",
+       "custom": true,
+       "nillable": true,
+       "aggregatable": true,
+       "groupable": true,
+       "populated": 3120
       }
      ],
      "age_buckets": [

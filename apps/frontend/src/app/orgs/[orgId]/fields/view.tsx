@@ -5,6 +5,7 @@
  * Browse Salesforce fields with alphabetical filtering and pagination
  */
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { FileText, Search, Filter, Shield, Database, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -60,7 +61,17 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
         icon={FileText}
         title="Salesforce Fields"
         subtitle="Browse fields and analyze field-level security"
-        actions={<DocumentationDownload orgId={orgId} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <DocumentationDownload orgId={orgId} />
+            <Link
+              href={`/orgs/${orgId}/cleanup`}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-grove-border dark:border-grove-border-dk text-grove-ink dark:text-grove-ink-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
+            >
+              Cleanup candidates
+            </Link>
+          </div>
+        }
       />}
 
       {/* Summary Cards */}

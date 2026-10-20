@@ -42,6 +42,15 @@ in the v68 Object Reference and Tooling API guide:
   list_views            ListView
   field_sets            Tooling FieldSet (the object it belongs to isn't a
                         documented column, so it isn't shown)
+  custom_fields         Tooling CustomField: id -> Object.Field__c (item 13)
+  dependencies          Tooling MetadataComponentDependency (Beta), rows whose
+                        RefMetadataComponentType is CustomField: what uses
+                        each custom field. One query, at most 2,000 rows
+                        (more needs Bulk API 2.0, not used); reports aren't
+                        in Tooling results (item 13)
+  apex_field_tokens     the custom field and object API names (…__c) each
+                        Apex class and trigger body mentions; the body itself
+                        is never kept (item 13)
 """
 from __future__ import annotations
 
@@ -60,6 +69,9 @@ TRIGGER_EVENTS = (("UsageBeforeInsert", "before insert"), ("UsageAfterInsert", "
                   ("UsageAfterUndelete", "after undelete"))
 _SHARING = re.compile(r"\b(with|without|inherited)\s+sharing\b", re.I)
 _CLASS = re.compile(r"\bclass\b", re.I)
+_CUSTOM_NAME = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*__c\b")
+MAX_TOKENS = 500
+MAX_DEPENDENCIES = 2000
 _COMMENTS = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 
 
@@ -74,6 +86,14 @@ def sharing_of(body: Optional[str]) -> Optional[str]:
     head = code[:m.start()] if m else code[:500]
     s = _SHARING.search(head)
     return f"{s.group(1).lower()} sharing" if s else "not declared"
+
+
+def field_tokens(body: Optional[str]) -> List[str]:
+    """Custom field and object API names a class or trigger mentions, outside
+    comments; the names only, never the code."""
+    if not body:
+        return []
+    return sorted({m.group(0) for m in _CUSTOM_NAME.finditer(_COMMENTS.sub(" ", body))})[:MAX_TOKENS]
 
 
 def _name(r: Dict[str, Any]) -> str:
@@ -212,15 +232,18 @@ async def collect_live(client: Any, record_type_objects: Iterable[str] = ()) -> 
     classes = await part("apex classes", lambda: tooling(
         "SELECT Id, Name, NamespacePrefix, ApiVersion, Status, IsValid, LengthWithoutComments, Body FROM ApexClass"),
         "Apex class details couldn't be read.")
+    tokens: Dict[str, List[str]] = {}
     if classes is not None:
+        tokens.update({c.get("Name") or c["Id"]: field_tokens(c.get("Body")) for c in classes})
         out["apex_classes"] = [{"id": c["Id"], "name": c.get("Name"), "namespace": c.get("NamespacePrefix"),
                                 "api_version": c.get("ApiVersion"), "status": c.get("Status"), "valid": c.get("IsValid"),
                                 "length": c.get("LengthWithoutComments"), "sharing": sharing_of(c.get("Body"))}
                                for c in classes]
     triggers = await part("apex triggers", lambda: tooling(
-        "SELECT Id, Name, NamespacePrefix, TableEnumOrId, ApiVersion, Status, IsValid, "
+        "SELECT Id, Name, NamespacePrefix, TableEnumOrId, ApiVersion, Status, IsValid, Body, "
         + ", ".join(f for f, _ in TRIGGER_EVENTS) + " FROM ApexTrigger"), "Apex triggers couldn't be read.")
     if triggers is not None:
+        tokens.update({t.get("Name") or t["Id"]: field_tokens(t.get("Body")) for t in triggers})
         out["apex_triggers"] = [{"id": t["Id"], "name": t.get("Name"), "namespace": t.get("NamespacePrefix"),
                                  "object": obj(t.get("TableEnumOrId")), "api_version": t.get("ApiVersion"),
                                  "status": t.get("Status"), "valid": t.get("IsValid"),
@@ -248,6 +271,33 @@ async def collect_live(client: Any, record_type_objects: Iterable[str] = ()) -> 
         "SELECT Id, DeveloperName, MasterLabel, NamespacePrefix, Description FROM FieldSet"), "Field sets couldn't be read.")
     if sets is not None:
         out["field_sets"] = [{"name": _name(s), "label": s.get("MasterLabel"), "description": s.get("Description")} for s in sets]
+
+    if classes is not None or triggers is not None:
+        out["apex_field_tokens"] = {k: v for k, v in tokens.items() if v}
+
+    # What uses each custom field (item 13): field ids, then the dependency index.
+    fields = await part("custom fields", lambda: tooling(
+        "SELECT Id, DeveloperName, NamespacePrefix, TableEnumOrId FROM CustomField"), "Custom field ids couldn't be read.")
+    if fields is not None:
+        out["custom_fields"] = {
+            f["Id"][:15]: f"{obj(f.get('TableEnumOrId'))}."
+                          + (f"{f['NamespacePrefix']}__" if f.get("NamespacePrefix") else "") + f"{f['DeveloperName']}__c"
+            for f in fields if f.get("Id") and f.get("DeveloperName")}
+    deps = await part("dependencies", lambda: tooling(
+        "SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType, RefMetadataComponentId, "
+        "RefMetadataComponentName FROM MetadataComponentDependency WHERE RefMetadataComponentType = 'CustomField'"),
+        "The dependency index (MetadataComponentDependency) couldn't be read.")
+    if deps is not None:
+        field_of = out.get("custom_fields") or {}
+        out["dependencies"] = [{
+            "component_type": d.get("MetadataComponentType"), "component": d.get("MetadataComponentName"),
+            "component_id": d.get("MetadataComponentId"),
+            "field": field_of.get((d.get("RefMetadataComponentId") or "")[:15]), "field_name": d.get("RefMetadataComponentName"),
+        } for d in deps[:MAX_DEPENDENCIES]]
+        out["dependencies_truncated"] = len(deps) >= MAX_DEPENDENCIES
+        if out["dependencies_truncated"]:
+            out["notes"].append(f"The dependency index returned its {MAX_DEPENDENCIES:,}-row limit; more would need "
+                                "Bulk API 2.0, which Newton doesn't use. Cleanup impact says so for every field.")
 
     out["notes"] = [n for n in out["notes"] if n]
     return out

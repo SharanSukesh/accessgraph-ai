@@ -5,7 +5,8 @@ Synthetic counts only: per-object record counts, per-field populated
 counts, last-modified ages and duplicate cluster sizes. Plants:
   - Legacy_Order__c: 92% of records untouched for two years (stale)
   - Partner_Survey__c: mostly empty (average fill rate about 18%)
-  - Account: three fields never populated, and a long-text field
+  - Account: three fields never populated, and a long-text field (item 13
+    adds Old_Score__c, never populated, and Fax_Ext__c)
     (Strategy_Notes__c) that SOQL can't aggregate
   - Web_Event__c: about 2,000,000 records, so it is sampled
 The three planted custom objects get read access on two permission sets
@@ -53,6 +54,8 @@ OBJECTS = [
         f("Website", 0.61, type_="url"), f("Segment__c", 0.88, type_="picklist"), f("Region__c", 0.93, type_="picklist"),
         f("Legacy_Region__c", 0.0, type_="picklist"), f("DUNS_Override__c", 0.0), f("Secondary_SIC__c", 0.0),
         f("Strategy_Notes__c", 0.31, type_="textarea", aggregatable=False),
+        # Item 13's cleanup candidates: unpopulated but checked by a validation rule; used only by an inactive flow.
+        f("Old_Score__c", 0.0, type_="double"), f("Fax_Ext__c", 0.6),
     ], 0.05, 0.55, [2, 2, 3, 2]),
     ("Contact", "Contact", False, 21400, [
         f("LastName", 1.0, nillable=False), f("Email", 0.86, type_="email"), f("Phone", 0.66, type_="phone"),

@@ -111,6 +111,12 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
       >
         Data model
       </Link>
+      <Link
+        href={`/orgs/${orgId}/cleanup`}
+        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-grove-border dark:border-grove-border-dk text-grove-ink dark:text-grove-ink-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
+      >
+        Cleanup candidates
+      </Link>
       <ScopeToggle
         value={scope}
         onChange={setScope}

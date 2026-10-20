@@ -231,6 +231,15 @@ No new environment variables; leave `NEXT_PUBLIC_ENABLE_V2` unset.
    clean-ups (Legacy Order stale, Partner Survey mostly empty, Account
    fields never populated); SOX control "Flagged access anomalies on high
    base-risk users are triaged" fails with 4.
+   After Data Quality, Schema → Objects → **Cleanup candidates** (item 13):
+   3 strong candidates (Account DUNS_Override__c, Legacy_Region__c,
+   Secondary_SIC__c: no references, no value on any of 5,200 records);
+   Account.Old_Score__c is never populated but the active validation rule
+   Old_Score_Range checks it ("In use"); Account.Fax_Ext__c holds values on
+   3,120 records and only the inactive flow Legacy Fax Sync uses it. The
+   Health Report's never-populated finding now reads "4 never-populated
+   fields on 1 object" (Old_Score__c is the fourth); the score, findings
+   and savings are unchanged.
 8. Dev org: **Sync from Salesforce** first (needed for the group/muting
    graph) and wait for it to finish; it includes the anomaly, risk and
    recommendation analysis, so don't click "Analyze Access" afterwards.

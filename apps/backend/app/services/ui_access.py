@@ -576,19 +576,24 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
     out["apex_classes"] = [{"id": c["Id"], "name": c["Name"], "namespace": c.get("NamespacePrefix")} for c in classes]
 
     flows = await part("flows", lambda: soql(
-        "SELECT DurableId, ApiName, Label, ProcessType, TriggerType, IsActive, ActiveVersionId FROM FlowDefinitionView"),
+        "SELECT DurableId, ApiName, Label, ProcessType, TriggerType, IsActive, ActiveVersionId, LatestVersionId "
+        "FROM FlowDefinitionView"),
         "Flows couldn't be read.") or []
     out["flows"] = []
     for i, f in enumerate(flows):
         restricted = None
-        if f.get("ActiveVersionId") and i < MAX_FLOW_METADATA:
-            rows = await part("flow metadata", lambda vid=f["ActiveVersionId"]: tooling(
+        # The active version; for an inactive flow its latest version (item 13: what it would use if reactivated).
+        version = f.get("ActiveVersionId") or f.get("LatestVersionId")
+        if version and i < MAX_FLOW_METADATA:
+            rows = await part("flow metadata", lambda vid=version: tooling(
                 f"SELECT Metadata FROM Flow WHERE Id = '{vid}'"), "")
             md = ((rows or [{}])[0] or {}).get("Metadata")
             if md is not None:
-                restricted = bool(md.get("isAdditionalPermissionRequiredToRun"))
+                if f.get("ActiveVersionId"):
+                    restricted = bool(md.get("isAdditionalPermissionRequiredToRun"))
                 detail = md_detail.flow_detail(md)
                 if detail is not None:
+                    detail["version"] = "active" if f.get("ActiveVersionId") else "latest (inactive)"
                     out.setdefault("flow_details", {})[f["DurableId"]] = detail
         out["flows"].append({"id": f["DurableId"], "api_name": f.get("ApiName"), "label": f.get("Label"),
                              "process_type": f.get("ProcessType"), "trigger_type": f.get("TriggerType"),
