@@ -203,15 +203,19 @@ async def diff(db: Any, org_id: str, a: OrgSnapshot, b: OrgSnapshot) -> List[Dic
 
 
 async def prune(db: Any, org_id: str, cutoff: datetime) -> Dict[str, int]:
-    """Drop snapshots taken before `cutoff`, except the latest one and
-    baselines, and the item versions no kept snapshot still needs."""
+    """Drop snapshots taken before `cutoff`, except the latest one,
+    baselines and any a what-if draft starts from, and the item versions no
+    kept snapshot still needs."""
     snaps = (await db.execute(select(OrgSnapshot).where(OrgSnapshot.organization_id == org_id)
                               .order_by(OrgSnapshot.seq))).scalars().all()
     if not snaps:
         return {}
     newest = snaps[-1].seq
+    from app.domain.models import AccessDraft
+    in_drafts = set((await db.execute(select(AccessDraft.base_snapshot_id).where(
+        AccessDraft.organization_id == org_id))).scalars())  # a what-if draft's starting state (item 15)
     drop = [s for s in snaps if s.taken_at.replace(tzinfo=s.taken_at.tzinfo or timezone.utc) < cutoff
-            and not s.is_baseline and s.seq != newest]
+            and not s.is_baseline and s.seq != newest and s.id not in in_drafts]
     if not drop:
         return {}
     kept = sorted(s.seq for s in snaps if s not in drop)

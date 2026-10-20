@@ -894,8 +894,33 @@ section has the detail.
   the eight flagged users' scores under each, trade-offs, and a
   recommendation for discussion (option 2 with option 4's ordering). The
   formula is unchanged.
-- **Next:** step 4, item 15 (what-if simulator in Restructure Studio), on
-  snapshots (21) and the comparison engine (9).
+- **#73 (item 15, not merged; stacked on #72; migration d7f9b1c3e5a8):**
+  the what-if simulator. Scenarios (access_drafts) start from a snapshot
+  (21) and stage changes: assign or remove a set or group, delete or merge
+  a set, create a group, add or take a set out of a group, mute object
+  permissions in a group, move a user's role, and sharing-rule changes
+  (listed, not computed). Nothing is sent to Salesforce. Impact, all paged
+  on the server with search: who is affected and why, access gained / lost
+  / kept per user and object or field (system permissions too), by object,
+  remaining paths (what a removal granted that the user still has through
+  a source that was already there), by profile, set or group, and what
+  can't be predicted. New What-if page (sidebar, Optimize); Restructure
+  Studio gets "Simulate accepted moves" on the plan row and "See who gains,
+  loses and keeps access" in each move's drawer (merge and retire moves
+  become changes; other move types are listed as sharing changes). Edits by
+  admins and analysts. Metadata only: the per-user views return 409 and the
+  per-source view remains; user changes are stripped from stored drafts.
+  Retention keeps any snapshot a draft starts from.
+  **Test (Lumenvale, local):** preset "Remove Legacy Integration Admin":
+  2 users affected, 1 loses access, the other keeps Modify All Data and
+  the rest through Profile: System Administrator. Preset "Split Sales
+  Manager Bundle" (228 changes): 103 affected, 53 lose, 55 gain (the
+  bundle's muting set doesn't carry over, so Opportunity widens for 49),
+  412 remaining paths. Migration up, down, up on Postgres.
+  **Questions in the PR:** whether the drawer's percentages should go
+  once the breakdown is trusted (kept for now: the CSV and GAEA use them);
+  "counts by role" at Metadata only (shown by profile, set and group).
+- **Next:** step 5, the priced roadmap builder.
 
 ## Build order
 
@@ -1489,6 +1514,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 These four share one **access-delta engine** built on snapshots (21) and effective access: given a set of proposed or observed changes, it computes access gained, lost and kept per user and per object or field.
 
 ### 15. What-if simulator (extends Restructure Studio)
+**Status: built in #73 (not merged).**
 - **Problem:** clients won't approve permission changes without knowing who breaks. Today Restructure Studio reports one "access preserved %", which hides who loses what.
 - **Approach:**
   - **Staged changes:** assignments, group membership, muting sets, roles and sharing rules, never applied.

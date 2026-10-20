@@ -20,7 +20,8 @@
 import { useListState } from '@/lib/list/useListState'
 import { Pagination } from '@/components/shared/Pagination'
 import { useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { useMutation } from '@tanstack/react-query'
 import {
   Wrench,
   Sparkles,
@@ -44,6 +45,7 @@ import {
   ShieldCheck,
   Pin,
   Filter,
+  Shuffle,
   HelpCircle,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/shared/Card'
@@ -53,7 +55,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
-import { isPrivacyModeError } from '@/lib/api/client'
+import { apiClient, isPrivacyModeError } from '@/lib/api/client'
+import { useAuth } from '@/lib/auth/AuthContext'
 import { Reveal } from '@/components/v2/motion'
 import {
   useRestructureLatest,
@@ -950,6 +953,8 @@ function MoveDrawer({
   const [notes, setNotes] = useState(move.consultant_notes ?? '')
   const meta = MOVE_TYPE_META[move.move_type]
   const deepRan = !!move.impact.deep_analysis_at
+  const simulateMove = useSimulateMoves(orgId)
+  const { canWrite } = useAuth()
 
   return (
     <div
@@ -1054,6 +1059,15 @@ function MoveDrawer({
                 }
               />
             </div>
+            {canWrite && <button
+              type="button"
+              onClick={() => simulateMove.mutate({ name: `Move: ${move.primary_component_name ?? meta.label}`, restructure_moves: [move.id] })}
+              disabled={simulateMove.isPending}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-700 hover:underline disabled:opacity-50 dark:text-primary-300"
+            >
+              <Shuffle className="h-3.5 w-3.5" />
+              See who gains, loses and keeps access, and any remaining paths
+            </button>}
           </section>
 
           {/* Deep analysis */}
@@ -1333,6 +1347,19 @@ function ConstraintsPanel({
 }
 
 // ============================================================================
+// What-if (item 15): open accepted or single moves in the simulator
+// ============================================================================
+
+function useSimulateMoves(orgId: string) {
+  const router = useRouter()
+  return useMutation({
+    mutationFn: (body: { name?: string; restructure_moves: string[] }) =>
+      apiClient.post<{ id: string }>(`/orgs/${orgId}/what-if/drafts`, body),
+    onSuccess: (d) => router.push(`/orgs/${orgId}/what-if?draft=${d.id}`),
+  })
+}
+
+// ============================================================================
 // Plan export row
 // ============================================================================
 
@@ -1356,6 +1383,8 @@ function PlanExportRow({
     limit: 500,
   })
   const count = acceptedMoves.data?.total ?? acceptedMoves.data?.moves.length ?? 0
+  const simulate = useSimulateMoves(orgId)
+  const { canWrite } = useAuth()
 
   const downloadCsv = () => {
     if (!acceptedMoves.data?.moves) return
@@ -1404,9 +1433,19 @@ function PlanExportRow({
           <span className="text-xs text-grove-ink/40 dark:text-grove-ink-dk/40">
             of {summary.moves_generated} proposed
           </span>
-          <Button
+          {canWrite && <Button
             variant="ghost"
             className="ml-auto inline-flex items-center gap-2"
+            disabled={count === 0 || simulate.isPending}
+            onClick={() => simulate.mutate({ restructure_moves: (acceptedMoves.data?.moves ?? []).map((m) => m.id) })}
+            title="Who gains, loses and keeps access if every accepted move is made"
+          >
+            <Shuffle className="h-4 w-4" />
+            Simulate accepted moves
+          </Button>}
+          <Button
+            variant="ghost"
+            className={`${canWrite ? '' : 'ml-auto '}inline-flex items-center gap-2`}
             disabled={count === 0}
             onClick={downloadCsv}
           >

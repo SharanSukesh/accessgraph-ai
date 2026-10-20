@@ -101,6 +101,7 @@ CONFIG_TABLES = {
     "restructure_preservation_constraints",
     "role_design_drafts",
     "item_reviews",
+    "access_drafts",
 }
 
 RETENTION_CLASSES = {
