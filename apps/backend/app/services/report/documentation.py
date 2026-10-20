@@ -11,6 +11,8 @@ Fields on Layouts (#4), Flow Elements and Flow Fields (#9), Approval Steps
 (#18), External Data Sources and record types through permission sets (#11).
 Part c2: Custom Metadata Types and, for the types an admin turned on,
 Custom Metadata Records (#7). Item 13: Cleanup Candidates (#21, #22).
+Item 14: Change History (#25), every Setup Audit Trail event Change-Risk
+Radar has pulled, across pulls.
 
 Configuration sheets work at every privacy level. User counts and the
 per-user sheets (Assignments, Profile Users) need user records, so at
@@ -62,7 +64,7 @@ SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Picklists by Record 
           "List Views", "Field Sets", "Apps", "Flows", "Flow Elements", "Flow Fields", "Approval Processes",
           "Approval Steps", "Apex Classes", "Apex Triggers", "Visualforce", "Lightning Components", "Static Resources",
           "Custom Permissions", "External Data Sources", "Custom Metadata Types", "Custom Metadata Records",
-          "Cleanup Candidates")
+          "Cleanup Candidates", "Change History")
 NOT_SYNCED_DOCS = "Not read yet: sync the org to read this part of its configuration."
 DAY_ABBR = {"monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu", "friday": "Fri",
             "saturday": "Sat", "sunday": "Sun"}
@@ -726,6 +728,36 @@ def _cleanup(ws: Worksheet, index: Any) -> None:
     note.font = Font(italic=True)
 
 
+async def _change_history(ws: Worksheet, db: AsyncSession, org_id: str) -> Optional[str]:
+    """Item 14: every event Change-Risk Radar pulled, newest first, each once
+    however many pulls saw it. Returns the About sheet's line."""
+    from app.domain.models import ChangeAuditEvent, ChangeAuditRun
+    cols = [Column("When (UTC)", 18), Column("Section", 24), Column("Action", 26), Column("Change", 70, wrap=True),
+            Column("Changed by", 24), Column("On behalf of", 26), Column("Blast radius", 11, fmt="0"), Column("Tier", 10)]
+    runs = (await db.execute(select(ChangeAuditRun).where(ChangeAuditRun.organization_id == org_id))).scalars().all()
+    if not runs:
+        _table(ws, cols, [], "Run Change-Risk Radar to pull the Setup Audit Trail.")
+        return None
+    newest_run = {r.id: r.snapshot_at for r in runs}
+    events: Dict[str, Any] = {}
+    for e in (await db.execute(select(ChangeAuditEvent).where(ChangeAuditEvent.organization_id == org_id))).scalars():
+        cur = events.get(e.sf_event_id)
+        if cur is None or (newest_run.get(e.run_id) or datetime.min.replace(tzinfo=timezone.utc)) > (
+                newest_run.get(cur.run_id) or datetime.min.replace(tzinfo=timezone.utc)):
+            events[e.sf_event_id] = e
+    ordered = sorted(events.values(), key=lambda e: e.created_at_sf, reverse=True)
+    rows = [[e.created_at_sf.strftime("%Y-%m-%d %H:%M"), e.section or "", e.action or "", e.display,
+             e.actor_name or "", e.delegate_user or "", e.blast_radius, (e.blast_tier or "").title()] for e in ordered]
+    _table(ws, cols, rows, "The pulls returned no changes.")
+    if not ordered:
+        return None
+    first, last = ordered[-1].created_at_sf, ordered[0].created_at_sf
+    return (f"{len(ordered):,} Setup Audit Trail events from {first:%Y-%m-%d} to {last:%Y-%m-%d}, from {len(runs)} "
+            f"Change-Risk Radar {'pull' if len(runs) == 1 else 'pulls'}. Salesforce keeps the audit trail for at least "
+            "180 days; Newton keeps what it pulled, under its retention settings, so older pulls extend it. The trail "
+            "doesn't record a field's old and new values.")
+
+
 def _docs_list(o: _Org, key: str) -> Optional[List[Dict[str, Any]]]:
     return None if o.docs is None else o.docs.get(key)
 
@@ -1006,6 +1038,12 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
     _cmdt_records(sheets["Custom Metadata Records"], o, on)
     from app.services.cleanup_impact import load_index
     _cleanup(sheets["Cleanup Candidates"], await load_index(db, org.id))
+    history = await _change_history(sheets["Change History"], db, org.id)
+    if history:
+        about = sheets["About"]
+        row = about.max_row + 1
+        about.cell(row=row, column=1, value="Change history").font = Font(bold=True)
+        about.cell(row=row, column=2, value=history).alignment = Alignment(wrap_text=True, vertical="top")
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

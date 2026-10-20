@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker  # no
 from app.db.base import Base  # noqa: E402
 from app.domain.models import Organization, SyncJob, SyncStatus  # noqa: E402
 from app.ingestion.orchestrator import SyncOrchestrator  # noqa: E402
+from app.services.change_risk_radar import ChangeRiskRadarService  # noqa: E402
 from app.services.data_quality import DataQualityService  # noqa: E402
 from app.services.report.documentation import build_documentation_workbook  # noqa: E402
 
@@ -33,6 +34,8 @@ async def main():
         await SyncOrchestrator(db).run_sync(org.id, job.id)
         # Data Quality's per-field counts let the Cleanup Candidates sheet say how many records hold a value.
         await DataQualityService(db, org.id).run(actor_email="sample")
+        # The Change History sheet lists what Change-Risk Radar pulled (the fixture's audit trail on a demo org).
+        await ChangeRiskRadarService(db, org.id).run(actor_email="sample")
         OUT.parent.mkdir(parents=True, exist_ok=True)
         OUT.write_bytes(await build_documentation_workbook(db, org))
         print("wrote", OUT, OUT.stat().st_size)
