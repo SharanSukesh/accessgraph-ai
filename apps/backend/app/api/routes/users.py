@@ -2,7 +2,7 @@
 User Access API Routes
 """
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -1107,15 +1107,86 @@ async def get_field_details(
     }
 
 
+PS_PREVIEW = 10
+
+
+def _ps_field_access_rows(detail: Dict) -> List[Dict]:
+    """One row per object the set grants: its object flags and its explicit
+    field-level security rows (explicit first, then by name)."""
+    fls = {g["objectName"]: g for g in detail["fieldPermissions"]}
+    rows = [{"objectName": op["objectName"], "objectPerm": op, "fieldCount": (fls.get(op["objectName"]) or {}).get("fieldCount", 0),
+             "fields": (fls.get(op["objectName"]) or {}).get("fields", [])} for op in detail["objectPermissions"]]
+    return sorted(rows, key=lambda r: (r["fieldCount"] == 0, r["objectName"].lower()))
+
+
 @router.get("/orgs/{org_id}/permission-sets/{ps_sf_id}")
 async def get_permission_set_detail(
     org_id: str,
     ps_sf_id: str,
+    preview: Optional[int] = Query(None, ge=1, le=50),
     db: AsyncSession = Depends(get_database),
 ):
-    """Permission Set detail: basic info + assigned users + object permissions
-    granted. Powers the deep-link landing page from the AccessGraph Explorer
-    tab in the Salesforce package."""
+    """Permission Set detail: basic info, assigned users, object and field
+    permissions. With `preview`, each list is cut to its first rows (totals
+    stay whole) and `fieldAccess` gives one row per object; the full lists
+    are paged at /permission-sets/{id}/list/{kind}. Powers the deep-link
+    landing page from the AccessGraph Explorer tab in the Salesforce package."""
+    detail = await _permission_set_detail(org_id, ps_sf_id, db)
+    if not preview:
+        return detail
+    rows = _ps_field_access_rows(detail)
+    return {**detail,
+            "users": detail["users"][:preview],
+            "objectPermissions": detail["objectPermissions"][:preview],
+            "fieldPermissions": [],
+            "fieldAccess": [{**r, "fields": r["fields"][:preview]} for r in rows[:preview]],
+            "totalFieldAccessObjects": len(rows),
+            "totalExplicitFieldObjects": sum(1 for r in rows if r["fieldCount"])}
+
+
+@router.get("/orgs/{org_id}/permission-sets/{ps_sf_id}/list/{kind}")
+async def permission_set_list(
+    org_id: str,
+    ps_sf_id: str,
+    kind: str,
+    assignment: Optional[str] = Query(None, pattern="^(direct|via_psg)$"),
+    object_name: Optional[str] = Query(None, alias="object"),
+    params: PageParams = Depends(page_params),
+    db: AsyncSession = Depends(get_database),
+):
+    """A set's users, object permissions or field permissions (one row per
+    field), paged with search, filters and sort (the standing pagination
+    rule). Without `page`, every row."""
+    if kind not in ("users", "objects", "fields"):
+        raise HTTPException(status_code=400, detail="kind must be users, objects or fields")
+    detail = await _permission_set_detail(org_id, ps_sf_id, db)
+    sorts: Dict[str, Any]
+    if kind == "users":
+        rows = [u for u in detail["users"] if not assignment or u["assignmentType"] == assignment]
+        text = lambda r: f"{r['name']} {r.get('username') or ''} {r.get('email') or ''}"  # noqa: E731
+        sorts = {"name": lambda r: r["name"], "assignment": lambda r: r["assignmentType"], "status": lambda r: r["isActive"]}
+        default = "name"
+    elif kind == "objects":
+        rows = detail["objectPermissions"]
+        text = lambda r: r["objectName"]  # noqa: E731
+        sorts = {"object": lambda r: r["objectName"]}
+        for flag in ("read", "create", "edit", "delete", "viewAll", "modifyAll"):
+            sorts[flag] = (lambda f: (lambda r: r[f]))(flag)
+        default = "object"
+    else:
+        rows = [{"objectName": g["objectName"], **f} for g in detail["fieldPermissions"] for f in g["fields"]
+                if not object_name or g["objectName"].lower() == object_name.lower()]
+        text = lambda r: f"{r['objectName']} {r['fieldName']}"  # noqa: E731
+        sorts = {"object": lambda r: (r["objectName"], r["fieldName"]), "field": lambda r: r["fieldName"],
+                 "read": lambda r: r["read"], "edit": lambda r: r["edit"]}
+        default = "object"
+    if not params.paged:
+        return {"items": rows, "total": len(rows)}
+    return paged(rows, params, text=text, sorts=sorts, default_sort=default, kind=kind, label=detail["label"])
+
+
+async def _permission_set_detail(org_id: str, ps_sf_id: str, db: AsyncSession) -> Dict:
+    """Every user, object permission and field permission of a set."""
     from app.domain.models import (
         PermissionSetSnapshot,
         PermissionSetAssignmentSnapshot,
@@ -1933,6 +2004,7 @@ async def get_user_graph(
 async def get_node_details(
     org_id: str,
     node_id: str,
+    preview: Optional[int] = Query(None, ge=1, le=50),
     db: AsyncSession = Depends(get_database),
 ):
     """Get detailed breakdown of what a specific node (permission set, profile) grants access to"""
@@ -2074,8 +2146,9 @@ async def get_node_details(
 
         return {
             "node": node_info,
-            "objectsGranted": objects_granted,
-            "fieldsGranted": fields_granted,
+            # With `preview`, the first rows; totals are in summary, full lists on the set's page.
+            "objectsGranted": objects_granted[:preview] if preview else objects_granted,
+            "fieldsGranted": fields_granted[:preview] if preview else fields_granted,
             "recordsInfo": records_info,
             "otherAccess": other_access,
             "summary": {

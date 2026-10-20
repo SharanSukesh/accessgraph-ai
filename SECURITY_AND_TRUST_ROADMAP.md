@@ -550,6 +550,19 @@ section has the detail.
   browser (2–4 users' object access); paging it needs a server-side
   comparison, which comes with item 6 (profile and permission set
   comparison).
+- **#60 (pagination 3 of 5, not merged; stacked on #59):** permission
+  sets, groups, graph node details, profiles. Permission set page: users,
+  object permissions and field access (one row per object, explicit FLS
+  first) are previews of 10 with View all → /permission-sets/{id}/users,
+  /objects, /fields (paged; assignment filter; per-object field filter;
+  sortable). Apex classes and flows for a set or group: previews with View
+  all → /permission-sets/{id}/automation/{apex|flows}. Graph node side
+  panel: first 10 objects and fields, totals, View all to the set's lists.
+  Profiles list paged, searched and sorted on the server. **Test:** List
+  scale org: System Administrator's own set — Objects 60, "View all 395
+  field rows"; Scale Set 001 users "Showing 1–20 of 20", Direct filter;
+  Lumenvale System Administrator set: Apex "Showing 1–20 of 20"; Profiles
+  sorted by active users desc "Showing 1–11 of 11".
 - **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
   the objects and fields each flow reads or writes, from the Flow metadata
   already read per active flow), the field × layout matrix (#4, Layout
