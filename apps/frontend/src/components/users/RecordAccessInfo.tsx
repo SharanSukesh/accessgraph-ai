@@ -7,7 +7,8 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
-import { AlertCircle, CheckCircle, Users, Share2, Shield, Building2, Database } from 'lucide-react'
+import Link from 'next/link'
+import { AlertCircle, ArrowRight, CheckCircle, Users, Share2, Shield, Building2, Database } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Badge } from '@/components/shared/Badge'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -79,6 +80,8 @@ interface RecordAccessData {
   }
   // Whether share rows cover every record. label is set ("Based on records
   // the integration user can see") whenever coverage isn't complete.
+  /** Full list sizes; the lists above are previews. */
+  counts?: Record<RecordSection, number>
   coverage?: {
     objects: Record<string, 'full' | 'partial' | 'unknown'>
     complete: boolean
@@ -87,11 +90,37 @@ interface RecordAccessData {
   }
 }
 
+export const PREVIEW_ROWS = 10
+export type RecordSection = 'manualShares' | 'apexShares' | 'teamAccess' | 'sharingRules' | 'subordinateRoles'
+export const RECORD_SECTIONS: Record<RecordSection, string> = {
+  subordinateRoles: 'Subordinate roles',
+  manualShares: 'Manual shares',
+  apexShares: 'Granted by Apex',
+  teamAccess: 'Team access',
+  sharingRules: 'Sharing rule grants',
+}
+
+/** "Showing 10 of 1,240 · View all" under a preview list. */
+function More({ orgId, userId, section, shown, total }: { orgId: string; userId: string; section: RecordSection; shown: number; total?: number }) {
+  if (total === undefined || total === 0) return null
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70">
+      <span>Showing {Math.min(shown, total).toLocaleString('en-US')} of {total.toLocaleString('en-US')}</span>
+      {total > shown && (
+        <Link href={`/orgs/${orgId}/users/${userId}/record-access/${section}`} className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline dark:text-primary-300">
+          View all {total.toLocaleString('en-US')} <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      )}
+    </div>
+  )
+}
+
 export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
   const { data, isLoading, error } = useQuery<RecordAccessData>({
-    queryKey: ['record-access', orgId, userId],
+    // Each list comes cut to its first rows, with counts; full lists are paged (View all).
+    queryKey: ['record-access', orgId, userId, 'preview'],
     queryFn: async () => {
-      return await apiClient.get<RecordAccessData>(`/orgs/${orgId}/users/${userId}/record-access`)
+      return await apiClient.get<RecordAccessData>(`/orgs/${orgId}/users/${userId}/record-access?preview=${PREVIEW_ROWS}`)
     },
   })
 
@@ -113,6 +142,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
   }
 
   const { ownedRecords, roleHierarchy, manualShares, teamAccess, sharingRules, organizationWideDefaults, summary } = data
+  const counts = data.counts
   const analyzedTypes = Object.keys(ownedRecords).filter((k) => ownedRecords[k] !== null)
   const notAnalyzedTypes = Object.keys(ownedRecords).filter((k) => ownedRecords[k] === null)
 
@@ -258,7 +288,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
               {roleHierarchy.subordinate_count > 0 ? (
                 <div>
                   <p className="text-sm font-medium text-grove-ink/85 dark:text-grove-ink-dk/85 mb-2">
-                    Subordinate Roles ({roleHierarchy.subordinate_count})
+                    Subordinate Roles ({(counts?.subordinateRoles ?? roleHierarchy.subordinate_count).toLocaleString('en-US')})
                   </p>
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {roleHierarchy.subordinate_roles.map((role) => (
@@ -268,6 +298,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                       </div>
                     ))}
                   </div>
+                  <More orgId={orgId} userId={userId} section="subordinateRoles" shown={roleHierarchy.subordinate_roles.length} total={counts?.subordinateRoles} />
                 </div>
               ) : (
                 <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">No subordinate roles</p>
@@ -322,6 +353,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                   ))}
                 </tbody>
               </table>
+              <More orgId={orgId} userId={userId} section="manualShares" shown={manualShares.length} total={counts?.manualShares} />
             </div>
           )}
         </CardContent>
@@ -365,6 +397,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                   ))}
                 </tbody>
               </table>
+              <More orgId={orgId} userId={userId} section="apexShares" shown={(data.apexShares ?? []).length} total={counts?.apexShares} />
             </div>
           )}
         </CardContent>
@@ -400,6 +433,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                   </div>
                 </div>
               ))}
+              <More orgId={orgId} userId={userId} section="teamAccess" shown={teamAccess.length} total={counts?.teamAccess} />
             </div>
           )}
         </CardContent>
@@ -443,6 +477,7 @@ export function RecordAccessInfo({ userId, orgId }: RecordAccessInfoProps) {
                   ))}
                 </tbody>
               </table>
+              <More orgId={orgId} userId={userId} section="sharingRules" shown={sharingRules.length} total={counts?.sharingRules} />
             </div>
           )}
         </CardContent>

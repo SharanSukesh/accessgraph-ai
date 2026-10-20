@@ -4,10 +4,13 @@ import { apiClient } from '../client'
 import { endpoints } from '../endpoints'
 import type { PagesAndAutomation, ProfileListing, SetAutomation } from '@/lib/pagesAndAutomation'
 
+/** The panel's view: each list cut to its first rows, with `counts` (full lists are paged). */
+export const PREVIEW_ROWS = 10
+
 export function usePagesAndAutomation(orgId: string, userId: string, enabled = true) {
   return useQuery({
-    queryKey: ['pages-and-automation', orgId, userId],
-    queryFn: () => apiClient.get<PagesAndAutomation>(endpoints.pagesAndAutomation(orgId, userId)),
+    queryKey: ['pages-and-automation', orgId, userId, 'preview'],
+    queryFn: () => apiClient.get<PagesAndAutomation>(`${endpoints.pagesAndAutomation(orgId, userId)}?preview=${PREVIEW_ROWS}`),
     enabled: !!orgId && !!userId && enabled,
   })
 }
@@ -15,8 +18,8 @@ export function usePagesAndAutomation(orgId: string, userId: string, enabled = t
 /** What a profile grants on its own; works at every privacy level. */
 export function useProfilePagesAndAutomation(orgId: string, profileId: string) {
   return useQuery({
-    queryKey: ['profile-pages-and-automation', orgId, profileId],
-    queryFn: () => apiClient.get<PagesAndAutomation>(endpoints.profilePagesAndAutomation(orgId, profileId)),
+    queryKey: ['profile-pages-and-automation', orgId, profileId, 'preview'],
+    queryFn: () => apiClient.get<PagesAndAutomation>(`${endpoints.profilePagesAndAutomation(orgId, profileId)}?preview=${PREVIEW_ROWS}`),
     enabled: !!orgId && !!profileId,
   })
 }

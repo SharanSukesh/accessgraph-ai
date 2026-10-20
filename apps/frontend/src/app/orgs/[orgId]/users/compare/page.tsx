@@ -14,7 +14,7 @@ import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { Reveal } from '@/components/v2/motion'
-import { useUsers } from '@/lib/api/hooks/useUsers'
+import { useUserSearch } from '@/lib/api/hooks/useUsers'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { compareObjects, type ObjectPerms } from '@/lib/compare/objectCompare'
@@ -24,31 +24,25 @@ export default function UserComparePage() {
   const router = useRouter()
   const orgId = params.orgId as string
 
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([])
+  // The users picked so far (name and email kept from the search result).
+  const [selectedUsers, setSelectedUsers] = useState<{ salesforceUserId: string; name?: string; email?: string }[]>([])
+  const selectedUserIds = selectedUsers.map((u) => u.salesforceUserId)
   const [searchTerm, setSearchTerm] = useState('')
 
-  const { data: users } = useUsers(orgId)
+  // Server-side search, never the whole user list.
+  const { data: results } = useUserSearch(orgId, searchTerm, 25)
+  const filteredUsers = results?.filter((user) => !selectedUserIds.includes(user.salesforceUserId)).slice(0, 10)
 
-  // Filter users for search
-  const filteredUsers = users?.filter(
-    (user) =>
-      !selectedUserIds.includes(user.salesforceUserId) &&
-      (user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
-
-  const addUser = (userId: string) => {
-    if (selectedUserIds.length < 4) {
-      setSelectedUserIds([...selectedUserIds, userId])
+  const addUser = (user: { salesforceUserId: string; name?: string; email?: string }) => {
+    if (selectedUsers.length < 4 && !selectedUserIds.includes(user.salesforceUserId)) {
+      setSelectedUsers([...selectedUsers, user])
       setSearchTerm('')
     }
   }
 
   const removeUser = (userId: string) => {
-    setSelectedUserIds(selectedUserIds.filter((id) => id !== userId))
+    setSelectedUsers(selectedUsers.filter((u) => u.salesforceUserId !== userId))
   }
-
-  const selectedUsers = users?.filter((u) => selectedUserIds.includes(u.salesforceUserId)) || []
 
   return (
     <div className="space-y-6">
@@ -114,7 +108,7 @@ export default function UserComparePage() {
                   {filteredUsers.slice(0, 10).map((user) => (
                     <button
                       key={user.id}
-                      onClick={() => addUser(user.salesforceUserId)}
+                      onClick={() => addUser(user)}
                       className="w-full px-4 py-3 hover:bg-primary-50/40 dark:hover:bg-primary-900/15 border-b border-grove-border dark:border-grove-border-dk last:border-b-0 text-left"
                     >
                       <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
@@ -178,7 +172,6 @@ function PermBadges({ perms }: { perms: ObjectPerms | null }) {
 }
 
 function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string[] }) {
-  const { data: users } = useUsers(orgId)
   const [objectSearch, setObjectSearch] = useState('')
   const [differencesOnly, setDifferencesOnly] = useState(false)
   const [visible, setVisible] = useState(PAGE_SIZE)
@@ -192,7 +185,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
           const access = await apiClient.get<{ objects: any[] }>(
             `/orgs/${orgId}/users/${userId}/effective-access/objects`
           )
-          const user = users?.find((u) => u.salesforceUserId === userId)
+          const user = await apiClient.get<{ name?: string }>(`/orgs/${orgId}/users/${userId}`).catch(() => null)
           return {
             userId,
             userName: user?.name || userId.slice(0, 8) + '...',
@@ -200,7 +193,7 @@ function UserComparisonView({ orgId, userIds }: { orgId: string; userIds: string
           }
         })
       ),
-    enabled: !!users, // Only run when users data is available
+    enabled: userIds.length > 0,
   })
 
   const data: UserAccessData[] = useMemo(() => comparisonData || [], [comparisonData])

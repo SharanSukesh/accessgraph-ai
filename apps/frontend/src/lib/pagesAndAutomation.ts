@@ -50,6 +50,8 @@ export interface ApexSharing {
 }
 
 export interface PagesAndAutomation {
+  /** Full list sizes when the view is a preview (pages per form factor). */
+  counts?: { layouts: number; apex: number; flows: number; pages_desktop: number; pages_phone: number }
   available: boolean
   profile_api_name?: string | null
   reason?: string

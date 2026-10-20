@@ -1,12 +1,14 @@
 'use client'
 
+import { apiClient } from '@/lib/api/client'
+
 /**
  * Organization Dashboard Page
  * Executive overview of access health
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { Users, AlertTriangle, Shield, Database, Sparkles, Info, LayoutDashboard, ArrowRight } from 'lucide-react'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -24,7 +26,6 @@ import { isSyncActive, syncJustFinished } from '@/lib/syncStatus'
 // prototype. Presentational only.
 import { Reveal, Stagger, StaggerItem, CountUp } from '@/components/v2/motion'
 import { ScoreRing, Sparkline } from '@/components/v2/primitives'
-import { useUsers } from '@/lib/api/hooks/useUsers'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
 import { useSyncJobs, useAnalyzeOrg } from '@/lib/api/hooks/useOrgs'
@@ -41,7 +42,12 @@ export default function DashboardPage() {
   const shouldInitialSync = searchParams.get('initial_sync') === 'true'
 
   // Fetch data
-  const { data: users, isLoading: usersLoading, error: usersError } = useUsers(orgId)
+  // Counts only: one small page with the org-wide summary, not every user.
+  const { data: usersPage, isLoading: usersLoading, error: usersError } = useQuery({
+    queryKey: ['users', orgId, 'summary'],
+    queryFn: () => apiClient.get<any>(`/orgs/${orgId}/users?page=1&page_size=25`),
+    enabled: !!orgId,
+  })
   const { data: anomalies, isLoading: anomaliesLoading, refetch: refetchAnomalies } = useAnomalies(orgId)
   const { data: topAnomalies, isLoading: topAnomaliesLoading, refetch: refetchTopAnomalies } =
     useTopAnomalousUsers(orgId, 5)
@@ -107,10 +113,9 @@ export default function DashboardPage() {
   }
 
   // Calculate metrics
-  const totalUsers = users?.length || 0
-  const highRiskUsers =
-    users?.filter((u: any) => u.riskLevel === 'high' || u.riskLevel === 'critical')
-      .length || 0
+  const byRisk = usersPage?.summary?.byRisk ?? {}
+  const totalUsers = usersPage?.summary?.users ?? 0
+  const highRiskUsers = (byRisk.high ?? 0) + (byRisk.critical ?? 0)
   // Every flagged anomaly: the access detector's top 2% plus session rule hits.
   const flaggedAnomalies = anomalies?.length || 0
   const totalRecommendations = recommendations?.length || 0

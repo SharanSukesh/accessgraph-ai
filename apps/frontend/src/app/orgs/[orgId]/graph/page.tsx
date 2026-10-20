@@ -21,7 +21,7 @@ import { visibleGraph } from '@/components/graph/graphPick'
 import { GraphLegend } from '@/components/graph/GraphLegend'
 import { GraphDetailPanel } from '@/components/graph/GraphDetailPanel'
 import { useUserGraph } from '@/lib/api/hooks/useGraph'
-import { useUsers } from '@/lib/api/hooks/useUsers'
+import { useUser, useUserSearch } from '@/lib/api/hooks/useUsers'
 
 export default function GraphExplorerPage() {
   const params = useParams()
@@ -36,8 +36,9 @@ export default function GraphExplorerPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [selectedNode, setSelectedNode] = useState<any>(null)
 
-  // Fetch user list for search
-  const { data: users } = useUsers(orgId)
+  // Server-side search for the picker; the selected user's details on their own.
+  const { data: searchResults } = useUserSearch(orgId, searchTerm)
+  const { data: selectedUserDetail } = useUser(orgId, selectedUserId)
 
   // Fetch graph data
   const {
@@ -47,13 +48,7 @@ export default function GraphExplorerPage() {
     refetch,
   } = useUserGraph(orgId, selectedUserId, 'pages_and_automation')
 
-  // Filter users by search
-  const filteredUsers = users?.filter(
-    (user) =>
-      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.salesforceUserId?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredUsers = searchResults
 
   const handleUserSelect = (userId: string) => {
     setSelectedUserId(userId)
@@ -87,7 +82,7 @@ export default function GraphExplorerPage() {
   }
 
   // Get selected user name
-  const selectedUser = users?.find(u => u.salesforceUserId === selectedUserId)
+  const selectedUser = selectedUserDetail as any
 
   return (
     <div className="space-y-6">

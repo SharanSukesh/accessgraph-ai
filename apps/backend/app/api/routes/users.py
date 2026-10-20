@@ -145,11 +145,15 @@ async def list_users(
     department: Optional[str] = None,
     search: Optional[str] = None,
     riskLevel: Optional[str] = Query(None, description="critical | high | medium | low"),
-    sort: str = Query("risk", description="risk (highest first) or name"),
-    limit: int = Query(5000, le=5000),
+    status: Optional[str] = Query(None, pattern="^(active|inactive)$"),
+    limit: Optional[int] = Query(None, ge=1, description="without `page`: at most this many rows (default every row)"),
+    params: PageParams = Depends(page_params),
     db: AsyncSession = Depends(get_database),
 ):
-    """List users in organization, highest risk first by default.
+    """Users, highest risk first by default (`sort`: risk, name, profile,
+    role, status, last_login; `dir`). With `page`: one page, search (`q` or
+    `search`) and filters over every user, and `summary` counts for the whole
+    org. Without it: every matching user (exports), as before.
 
     Profiles, roles and each user's latest risk score are loaded in bulk
     rather than per user.
@@ -161,6 +165,9 @@ async def list_users(
         query = query.where(UserSnapshot.is_active == is_active)
     if department:
         query = query.where(UserSnapshot.department == department)
+    search = search or params.q
+    if status:
+        query = query.where(UserSnapshot.is_active == (status == "active"))
     if search and search.strip():
         needle = f"%{search.strip().lower()}%"
         query = query.where(or_(
@@ -219,14 +226,37 @@ async def list_users(
             "lastLoginDate": u.last_login_at.isoformat() if u.last_login_at else None,
         })
 
-    if sort == "name":
-        user_list.sort(key=lambda r: (r["name"] or "").lower())
-    else:
+    def by_risk(rows: List[Dict]) -> List[Dict]:
         # Highest risk first; unscored users last; ties by name.
-        user_list.sort(key=lambda r: (
-            r["riskScore"] is None, -(r["riskScore"] or 0), (r["name"] or "").lower(),
-        ))
-    return user_list[:limit]
+        return sorted(rows, key=lambda r: (r["riskScore"] is None, -(r["riskScore"] or 0), (r["name"] or "").lower()))
+
+    if not params.paged:
+        rows = sorted(user_list, key=lambda r: (r["name"] or "").lower()) if params.sort == "name" else by_risk(user_list)
+        return rows[:limit] if limit else rows
+
+    # Counts for the whole org (not just this page or filter): the dashboard and the cards use them.
+    everyone = (await db.execute(select(UserSnapshot.salesforce_id, UserSnapshot.is_active).where(
+        UserSnapshot.organization_id == org_id))).all()
+    levels: Dict[str, int] = {}
+    for sid, _active in everyone:
+        lvl = risks[sid].risk_level.value if sid in risks else "unscored"
+        levels[lvl] = levels.get(lvl, 0) + 1
+    summary = {"users": len(everyone), "active": sum(1 for _, a in everyone if a), "byRisk": levels}
+    if params.sort in (None, "risk"):
+        rows = by_risk(user_list)
+        if params.dir == "asc" and params.sort == "risk":
+            rows = list(reversed(rows))
+        from app.api.pagination import envelope
+        total = len(rows)
+        pages = max(1, -(-total // params.page_size))
+        page = min(params.page or 1, pages)
+        start = (page - 1) * params.page_size
+        return envelope(rows[start:start + params.page_size], total, params, "risk", summary=summary)
+    return paged(user_list, params,
+                 sorts={"name": lambda r: r["name"], "profile": lambda r: r["profile"], "role": lambda r: r["role"],
+                        "status": lambda r: r["isActive"], "last_login": lambda r: r["lastLoginDate"],
+                        "department": lambda r: r["department"]},
+                 default_sort="name", summary=summary)
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}")
@@ -304,65 +334,81 @@ async def get_user(
     }
 
 
-@router.get("/orgs/{org_id}/users/{user_sf_id}/access/objects")
-async def get_user_object_access(
-    org_id: str,
-    user_sf_id: str,
-    db: AsyncSession = Depends(get_database),
-):
-    """Get effective object access for user"""
+def _object_access_rows(access: Dict) -> List[Dict]:
+    return [{**o, **_object_sensitivity(o["objectName"])} for o in access.get("objects", [])]
+
+
+def _field_access_rows(access: Dict) -> List[Dict]:
+    return [{**f, **_field_sensitivity(f["fieldName"])} for f in access.get("fields", [])]
+
+
+def _paged_access(rows: List[Dict], params: PageParams, kind: str, sensitive: Optional[bool]) -> Dict:
+    if sensitive is not None:
+        rows = [r for r in rows if bool(r.get("isSensitive")) == sensitive]
+    if kind == "objects":
+        sorts = {"object": lambda r: r["objectName"], "read": lambda r: r["access"]["read"],
+                 "create": lambda r: r["access"]["create"], "edit": lambda r: r["access"]["edit"],
+                 "delete": lambda r: r["access"]["delete"], "sensitivity": lambda r: r.get("sensitivity")}
+        text = lambda r: f"{r['objectName']} {r.get('sensitivity') or ''}"  # noqa: E731
+        default = "object"
+    else:
+        sorts = {"object": lambda r: r["objectName"], "field": lambda r: r["fieldName"],
+                 "read": lambda r: r["access"]["read"], "edit": lambda r: r["access"]["edit"],
+                 "sensitivity": lambda r: r.get("sensitivity")}
+        text = lambda r: f"{r['objectName']} {r['fieldName']} {r.get('sensitivity') or ''}"  # noqa: E731
+        default = "object"
+    return paged(rows, params, text=text, sorts=sorts, default_sort=default)
+
+
+async def _user_access(db: AsyncSession, org_id: str, user_sf_id: str, kind: str, params: PageParams,
+                       sensitive: Optional[bool]):
+    """Effective object or field access for a user. With `page`: one page,
+    search (`q`), sensitive filter and sort over every row; without it,
+    every row in the old shape."""
     service = EffectiveAccessService(db)
     try:
-        access = await service.get_user_object_access(org_id, user_sf_id)
-        return access
+        if kind == "objects":
+            access = await service.get_user_object_access(org_id, user_sf_id)
+            rows = _object_access_rows(access)
+        else:
+            access = await service.get_user_field_access(org_id, user_sf_id)
+            rows = _field_access_rows(access)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    if not params.paged:
+        return {kind: rows}
+    return _paged_access(rows, params, kind, sensitive)
+
+
+@router.get("/orgs/{org_id}/users/{user_sf_id}/access/objects")
+async def get_user_object_access(org_id: str, user_sf_id: str, sensitive: Optional[bool] = None,
+                                 params: PageParams = Depends(page_params), db: AsyncSession = Depends(get_database)):
+    """Effective object access for a user."""
+    return await _user_access(db, org_id, user_sf_id, "objects", params, sensitive)
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}/access/fields")
-async def get_user_field_access(
-    org_id: str,
-    user_sf_id: str,
-    db: AsyncSession = Depends(get_database),
-):
-    """Get effective field access for user"""
-    service = EffectiveAccessService(db)
-    try:
-        access = await service.get_user_field_access(org_id, user_sf_id)
-        return access
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+async def get_user_field_access(org_id: str, user_sf_id: str, sensitive: Optional[bool] = None,
+                                params: PageParams = Depends(page_params), db: AsyncSession = Depends(get_database)):
+    """Effective field access for a user."""
+    return await _user_access(db, org_id, user_sf_id, "fields", params, sensitive)
 
 
 # Alias endpoints for backwards compatibility with frontend
 @router.get("/orgs/{org_id}/users/{user_sf_id}/effective-access/objects")
-async def get_user_effective_object_access(
-    org_id: str,
-    user_sf_id: str,
-    db: AsyncSession = Depends(get_database),
-):
-    """Get effective object access for user (alias for /access/objects)"""
-    service = EffectiveAccessService(db)
-    try:
-        access = await service.get_user_object_access(org_id, user_sf_id)
-        return access
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+async def get_user_effective_object_access(org_id: str, user_sf_id: str, sensitive: Optional[bool] = None,
+                                           params: PageParams = Depends(page_params),
+                                           db: AsyncSession = Depends(get_database)):
+    """Effective object access for a user (alias for /access/objects)."""
+    return await _user_access(db, org_id, user_sf_id, "objects", params, sensitive)
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}/effective-access/fields")
-async def get_user_effective_field_access(
-    org_id: str,
-    user_sf_id: str,
-    db: AsyncSession = Depends(get_database),
-):
-    """Get effective field access for user (alias for /access/fields)"""
-    service = EffectiveAccessService(db)
-    try:
-        access = await service.get_user_field_access(org_id, user_sf_id)
-        return access
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+async def get_user_effective_field_access(org_id: str, user_sf_id: str, sensitive: Optional[bool] = None,
+                                          params: PageParams = Depends(page_params),
+                                          db: AsyncSession = Depends(get_database)):
+    """Effective field access for a user (alias for /access/fields)."""
+    return await _user_access(db, org_id, user_sf_id, "fields", params, sensitive)
 
 
 @router.get("/orgs/{org_id}/users/{user_sf_id}/explain/object/{object_name}", response_model=ExplanationResponse)
@@ -743,11 +789,31 @@ async def update_recommendation_status(
     }
 
 
+RECORD_SECTIONS: Dict[str, Dict] = {
+    "manualShares": {"text": lambda r: f"{r.get('record_type')} {r.get('record_id')} {r.get('access_level')} {r.get('row_cause')}",
+                     "sorts": {"record_type": lambda r: r.get("record_type"), "access": lambda r: r.get("access_level"),
+                               "record": lambda r: r.get("record_id")}, "default": "record_type"},
+    "apexShares": {"text": lambda r: f"{r.get('record_type')} {r.get('record_id')} {r.get('sharing_reason') or ''} {r.get('access_level')}",
+                   "sorts": {"record_type": lambda r: r.get("record_type"), "reason": lambda r: r.get("sharing_reason"),
+                             "access": lambda r: r.get("access_level")}, "default": "record_type"},
+    "teamAccess": {"text": lambda r: f"{r.get('team_type')} {r.get('record_id')} {r.get('role') or ''}",
+                   "sorts": {"team": lambda r: r.get("team_type"), "role": lambda r: r.get("role")}, "default": "team"},
+    "sharingRules": {"text": lambda r: f"{r.get('record_type')} {r.get('record_id')} {r.get('row_cause')} {r.get('shared_to')}",
+                     "sorts": {"record_type": lambda r: r.get("record_type"), "access": lambda r: r.get("access_level")},
+                     "default": "record_type"},
+    "subordinateRoles": {"text": lambda r: r.get("role_name") or "",
+                         "sorts": {"name": lambda r: r.get("role_name")}, "default": "name"},
+}
+
+
 @router.get("/orgs/{org_id}/users/{user_sf_id}/record-access")
 async def get_user_record_access(
     org_id: str,
     user_sf_id: str,
     object_name: Optional[str] = None,
+    section: Optional[str] = None,
+    preview: Optional[int] = Query(None, ge=1, le=50),
+    params: PageParams = Depends(page_params),
     db: AsyncSession = Depends(get_database),
 ):
     """
@@ -773,7 +839,7 @@ async def get_user_record_access(
     access_info = await service.get_user_record_access(org_id, user_sf_id)
 
     # Convert to camelCase for frontend
-    return {
+    out = {
         "userId": access_info["user_id"],
         "userName": access_info.get("user_name", "Unknown"),
         "ownedRecords": access_info["owned_records"],
@@ -784,10 +850,28 @@ async def get_user_record_access(
         "shareNotes": access_info.get("share_notes", {}),
         "teamAccess": access_info["team_access"],
         "sharingRules": access_info["sharing_rules"],
+        "organizationWideDefaults": access_info.get("organization_wide_defaults", []),
         "summary": access_info["summary"],
         # Whether share rows cover every record; label shown when not.
         "coverage": await latest_record_coverage(db, org_id),
     }
+    lists = {k: out[k] for k in ("manualShares", "apexShares", "teamAccess", "sharingRules")}
+    lists["subordinateRoles"] = (out["roleHierarchy"] or {}).get("subordinate_roles") or []
+    if section:
+        if section not in RECORD_SECTIONS:
+            raise HTTPException(status_code=400, detail=f"section must be one of {', '.join(RECORD_SECTIONS)}")
+        rows = lists[section]
+        if not params.paged:
+            return {"items": rows, "total": len(rows)}
+        spec = RECORD_SECTIONS[section]
+        return paged(rows, params, text=spec["text"], sorts=spec["sorts"], default_sort=spec["default"], section=section)
+    if preview:
+        out["counts"] = {k: len(v) for k, v in lists.items()}
+        for k in ("manualShares", "apexShares", "teamAccess", "sharingRules"):
+            out[k] = out[k][:preview]
+        if out["roleHierarchy"]:
+            out["roleHierarchy"] = {**out["roleHierarchy"], "subordinate_roles": lists["subordinateRoles"][:preview]}
+    return out
 
 
 @router.get("/orgs/{org_id}/objects")
