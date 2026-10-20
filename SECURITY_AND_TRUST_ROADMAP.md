@@ -643,10 +643,31 @@ section has the detail.
   Runbook unchanged: 41 / 18 / $183,180 / $116,220.
   **UNVERIFIED:** PermissionSet metadata through the Tooling API; ProcessNode
   step order.
-- **Next:** item 11 part c2, stacked on #63: opt-in custom metadata records
-  (#7): the types listed at every sync (names only), records read only for
-  types an engagement admin turns on per org (off by default; values can
-  hold configuration secrets), a sheet per enabled type, trust docs.
+- **#64 (item 11 part c2, not merged; stacked on #63):** custom metadata
+  records, opt-in per type (#7). Every sync lists the types (global
+  describe, names ending __mdt; never records). An engagement admin turns
+  types on in Privacy & Data (Organization.settings["custom_metadata"],
+  audit-logged with who, when and what changed); from the next sync only
+  those types' records are read (describe for the custom fields, then one
+  SELECT per type; at most 25 types and 2,000 records each). Turning a type
+  off deletes its stored records from every past sync straight away, and the
+  workbook shows only types that are on now. GET/PUT
+  /orgs/{id}/custom-metadata (paged, searchable, on/off filter). Privacy &
+  Data card: summary, first 10 types (on first) with toggles for admins,
+  View all → /privacy/custom-metadata. Workbook 35 sheets: Custom Metadata
+  Types (each with "Not read", "N records" or "from the next sync") and
+  Custom Metadata Records (type, record, field, value). Demo: Lumenvale part
+  11-custom-metadata.json, 4 types and 22 records, records filtered by the
+  org's setting at sync like a live org; all off by default. Trust doc
+  updated.
+  **Test (Lumenvale, local):** Privacy & Data "0 of 4 types turned on";
+  turn on Discount_Threshold__mdt → "From the next sync"; after a re-sync
+  "4"; workbook Custom Metadata Records 12 rows (4 records × 3 fields);
+  View all filtered to Off → 3; turned off again → 0 of 4. Runbook
+  unchanged: 41 / 18 / $183,180 / $116,220.
+- **Next:** the rest of step 2: item 12 (ERDs), then 13
+  (cleanup impact), 14 (change-history gaps) and matrix #26–28, then step 3
+  (21 snapshots, 9 v1 org comparison, 20 evidence with 10, 30 write-up).
 
 ## Build order
 
@@ -1180,7 +1201,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 8. **Effort: M.**
 
 ### 11. Documentation export
-**Status: part a built in #55, part b (the new reads) in #56 (merged). Part c1 (flow detail, fields on layouts, approval steps, external data sources, record types per permission set) in #63, not merged. Part c2 next: opt-in custom metadata records.**
+**Status: part a built in #55, part b (the new reads) in #56 (merged). Part c1 (flow detail, fields on layouts, approval steps, external data sources, record types per permission set) in #63 and part c2 (opt-in custom metadata records) in #64, not merged.**
 - **Problem:** clients ask for "the org documented" as a deliverable.
 - **Approach:** add sheets to the existing Excel export:
   - Objects and Fields (from 8);

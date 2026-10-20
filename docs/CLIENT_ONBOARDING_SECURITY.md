@@ -59,6 +59,18 @@ It also documents in more detail, with no new permission:
 - **External data sources:** name, label and type, never the endpoint, plus which profiles and permission sets can use each.
 - **Record types per permission set:** the record types each permission set makes available, read from the set's metadata, one query per set, at most 200. UNVERIFIED: whether that read works with these permissions. Newton stops at the first failure and the workbook says the column wasn't read.
 
+**Custom metadata records are off by default.** Their values can hold
+configuration a client treats as confidential, such as endpoints, the
+credential each integration uses, and thresholds. Every sync lists the
+org's custom metadata types (API name and label, from the global describe),
+never their records. An engagement admin can turn on individual types on
+the org's Privacy & Data page; the change is audit-logged with who made it
+and when. From the next sync Newton reads only those types' records, with
+their custom fields (at most 25 types and 2,000 records per type), and shows
+them in the Org documentation workbook. Turning a type off deletes its
+stored records from Newton straight away. Reading them needs no new
+permission.
+
 Newton changes nothing in Salesforce unless an engagement admin explicitly
 turns on **write-back** for that org (see section 6).
 
