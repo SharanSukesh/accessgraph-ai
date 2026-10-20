@@ -119,6 +119,10 @@ class SyncOrchestrator:
                 docs = data.get("demo_live", {}).get("org_docs")
                 if docs:
                     data["org_docs"] = {**docs, "collected_at": datetime.now(timezone.utc).isoformat()}
+                    # Custom metadata records only of the types turned on, as on a live org.
+                    from app.services import custom_metadata as cmdt
+                    data["org_docs"]["custom_metadata_records"] = cmdt.keep_enabled(
+                        data["demo_live"].get("custom_metadata_records"), cmdt.enabled_types(org))
                 # What the integration user could see, as a live sync records it.
                 data["record_coverage"] = data.get("demo_live", {}).get("record_coverage", {"checked": False})
                 # The org's privacy level applies to demo data exactly as to a
@@ -283,6 +287,18 @@ class SyncOrchestrator:
             }
         except Exception as e:  # noqa: BLE001
             logger.warning("Documentation reads failed: %s", e)
+        # Custom metadata (item 11 part c2): the types always, records only of
+        # the types an engagement admin turned on for this org.
+        try:
+            from app.services import custom_metadata as cmdt
+            found = await cmdt.collect_live(client, cmdt.enabled_types(org))
+            docs = data.setdefault("org_docs", {"collected_at": datetime.now(timezone.utc).isoformat()})
+            if "types" in found:
+                docs["custom_metadata_types"] = found["types"]
+                docs["custom_metadata_records"] = found.get("records", {})
+            docs["notes"] = (docs.get("notes") or []) + found["notes"]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Custom metadata reads failed: %s", e)
         return data
 
     async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:

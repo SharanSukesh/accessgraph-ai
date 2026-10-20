@@ -9,6 +9,8 @@ Access, Assignments, Profile Users, Record Types, Layouts, Unused Layouts,
 Record Pages, Flows, Apex Classes; part b adds the rest of SHEETS. Part c:
 Fields on Layouts (#4), Flow Elements and Flow Fields (#9), Approval Steps
 (#18), External Data Sources and record types through permission sets (#11).
+Part c2: Custom Metadata Types and, for the types an admin turned on,
+Custom Metadata Records (#7).
 
 Configuration sheets work at every privacy level. User counts and the
 per-user sheets (Assignments, Profile Users) need user records, so at
@@ -41,6 +43,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.services import privacy_mode
+from app.services import custom_metadata as cmdt
 from app.services import metadata_detail as md_detail
 from app.services import schema_metadata as sm
 from app.services import ui_access as ua
@@ -58,7 +61,7 @@ SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Picklists by Record 
           "Record Types", "Layouts", "Fields on Layouts", "Unused Layouts", "Record Pages", "Buttons and Links",
           "List Views", "Field Sets", "Apps", "Flows", "Flow Elements", "Flow Fields", "Approval Processes",
           "Approval Steps", "Apex Classes", "Apex Triggers", "Visualforce", "Lightning Components", "Static Resources",
-          "Custom Permissions", "External Data Sources")
+          "Custom Permissions", "External Data Sources", "Custom Metadata Types", "Custom Metadata Records")
 NOT_SYNCED_DOCS = "Not read yet: sync the org to read this part of its configuration."
 DAY_ABBR = {"monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu", "friday": "Fri",
             "saturday": "Sat", "sunday": "Sun"}
@@ -219,8 +222,10 @@ def _about(ws: Worksheet, org: Organization, o: _Org, now: datetime) -> None:
         ("Documentation read", _when((o.docs or {}).get("collected_at"))),
         ("Fields on layouts", "Who gets a layout comes from the profile layout assignments; a field on it shows only "
                               "for those who can read the field, which the last column counts."),
-        ("Not included yet", "Custom metadata records, and approval process entry criteria and approvers (they need "
-                             "the Metadata API, which isn't confirmed to work with Newton's permissions)."),
+        ("Custom metadata", "Records are read only for the types an admin turned on for this org (Privacy & Data); "
+                            "the Custom Metadata Types sheet says which."),
+        ("Not included yet", "Approval process entry criteria and approvers (they need the Metadata API, which isn't "
+                             "confirmed to work with Newton's permissions)."),
     ]
     for note in ((o.schema or {}).get("notes") or []) + ((o.ui or {}).get("notes") or []) + ((o.docs or {}).get("notes") or []):
         rows.append(("Note", note))
@@ -661,6 +666,42 @@ def _approval_steps(ws: Worksheet, o: _Org) -> None:
     _table(ws, cols, rows, "No approval steps.")
 
 
+def _cmdt_types(ws: Worksheet, o: _Org, enabled: Set[str]) -> None:
+    cols = [Column("Type", 34), Column("Label", 30), Column("Records", 44, wrap=True)]
+    types = _docs_list(o, "custom_metadata_types")
+    if types is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    stored = cmdt.keep_enabled((o.docs or {}).get("custom_metadata_records"), enabled)
+    rows = []
+    for t in sorted(types, key=lambda t: (t["name"] not in enabled, t["name"].lower())):
+        if t["name"] not in enabled:
+            what = "Not read: an admin can turn this type on in Privacy & Data."
+        elif t["name"] in stored:
+            n = len(stored[t["name"]]["records"])
+            what = f"{n} {'record' if n == 1 else 'records'} (Custom Metadata Records sheet)"
+        else:
+            what = "Turned on; read from the next sync."
+        rows.append([t["name"], t.get("label") or "", what])
+    _table(ws, cols, rows, "No custom metadata types.")
+
+
+def _cmdt_records(ws: Worksheet, o: _Org, enabled: Set[str]) -> None:
+    """One row per record and field, for the types turned on now."""
+    cols = [Column("Type", 30), Column("Record", 28), Column("Label", 28), Column("Namespace", 12), Column("Field", 28),
+            Column("Value", 50, wrap=True)]
+    stored = cmdt.keep_enabled((o.docs or {}).get("custom_metadata_records"), enabled)
+    rows = []
+    for t in sorted(stored, key=str.lower):
+        for r in sorted(stored[t]["records"], key=lambda r: (r.get("name") or "").lower()):
+            for f in stored[t]["fields"]:
+                v = (r.get("values") or {}).get(f)
+                rows.append([t, r.get("name"), r.get("label"), r.get("namespace") or "", f,
+                             _yes(v) if isinstance(v, bool) else v])
+    _table(ws, cols, rows, "No custom metadata records: no type is turned on, or none was read yet."
+           if not enabled else "No records read yet for the types turned on: sync the org.")
+
+
 def _docs_list(o: _Org, key: str) -> Optional[List[Dict[str, Any]]]:
     return None if o.docs is None else o.docs.get(key)
 
@@ -936,6 +977,9 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
                    [Column("External data source", 30), Column("Label", 30), Column("Type", 18), Column("Namespace", 14)],
                    lambda x: [x.get("name"), x.get("label"), x.get("type"), x.get("namespace") or ""],
                    granted_users["ExternalDataSource"], "No external data sources.")
+    on = cmdt.enabled_types(org)
+    _cmdt_types(sheets["Custom Metadata Types"], o, on)
+    _cmdt_records(sheets["Custom Metadata Records"], o, on)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

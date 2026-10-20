@@ -28,6 +28,7 @@ import { Badge } from '@/components/shared/Badge'
 import { PageSkeleton } from '@/components/shared/LoadingSkeleton'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { PrivacyLevelCard } from '@/components/privacy/PrivacyLevelCard'
+import { CustomMetadataCard } from '@/components/privacy/CustomMetadata'
 import { useAuth } from '@/lib/auth/AuthContext'
 
 // GET /orgs/{id}/privacy/inventory groups every org-scoped table by its
@@ -452,6 +453,17 @@ export default function PrivacyPage() {
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </Reveal>
+
+      <Reveal>
+        <Card variant="bordered">
+          <CardHeader>
+            <CardTitle>Custom metadata records</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CustomMetadataCard orgId={orgId} />
           </CardContent>
         </Card>
       </Reveal>
