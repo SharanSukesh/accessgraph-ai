@@ -45,10 +45,12 @@ from app.domain.models import (
     RiskScore,
     RoleDesignDraft,
     SalesforceConnection,
+    SnapshotItem,
     UserSnapshot,
     VIPDesignation,
 )
 from app.services import privacy_mode as privacy
+from app.services import snapshots
 
 SENIOR_LEADER = "Senior leader"
 UNKNOWN_ALIAS = privacy.user_alias("", None)
@@ -81,7 +83,7 @@ HANDLED_TABLES = {
     "restructure_preservation_constraints", "data_quality_runs",
     "object_quality_scores", "org_analysis_snapshots", "org_findings",
     "installed_packages", "report_inventory_items", "automation_inventory_items",
-    "compliance_scorecard_runs", "salesforce_connections", "role_design_drafts",
+    "compliance_scorecard_runs", "salesforce_connections", "role_design_drafts", "snapshot_items",
 }
 UNAFFECTED_TABLES = {
     "audit_logs", "org_users", "org_access_grants", "sync_jobs", "brand_settings",
@@ -92,7 +94,7 @@ UNAFFECTED_TABLES = {
     "field_permissions_snapshot", "group_snapshots", "group_member_snapshots",
     "organization_wide_default_snapshots", "sharing_rule_snapshots",
     "package_sprawl_runs", "report_sprawl_runs", "automation_sprawl_runs",
-    "integration_sprawl_runs", "integration_inventory_items",
+    "integration_sprawl_runs", "integration_inventory_items", "org_snapshots",
 }
 
 # Shape of a person inside a JSON evidence blob: a Salesforce user id
@@ -140,6 +142,7 @@ class _Purge:
 
         if not keep_identity:
             await self._mask_users()
+            await self._mask_snapshot_users()
             await self._mask_change_audit()
             await self._mask_license_fit()
             await self._mask_inventory_owners()
@@ -175,6 +178,14 @@ class _Purge:
                 changed = True
         if changed:
             self.updated.setdefault(row.__tablename__, set()).add(row.id)
+
+    async def _mask_snapshot_users(self) -> None:
+        """Users in every snapshot (item 21) get the same aliases as users_snapshot."""
+        for item in await self._rows(SnapshotItem, SnapshotItem.entity == "user"):
+            masked = privacy.mask_user_record(self.org_id, {**item.data, "Id": item.key})
+            data = {k: masked[k] for k in snapshots.USER_FIELDS if masked.get(k) is not None}
+            if data != item.data:
+                self._set(item, data=data, hash=snapshots.digest(data))
 
     def _alias(self, sf_user_id: Optional[str]) -> str:
         return privacy.user_alias(self.org_id, sf_user_id)
@@ -283,6 +294,8 @@ class _Purge:
                 UserSnapshot,
             ):
                 await self._delete(model)
+            # Snapshots (item 21) follow the level in force: people go from every snapshot.
+            await self._delete(SnapshotItem, SnapshotItem.entity.in_(sorted(snapshots.USER_ENTITIES)))
 
         if not self.allows(privacy.USER_RECORDS):
             await self._strip_draft_users()

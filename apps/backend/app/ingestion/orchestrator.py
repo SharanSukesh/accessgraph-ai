@@ -158,6 +158,9 @@ class SyncOrchestrator:
             if data.get("org_docs"):
                 sync_job.sync_metadata["org_docs"] = data["org_docs"]
 
+            # Versioned snapshot of what was pulled (roadmap item 21); never fails the sync.
+            await self._take_snapshots(org, data, sync_job_id)
+
             # Mark as modified so SQLAlchemy knows to update the JSON column
             from sqlalchemy.orm import attributes
             attributes.flag_modified(sync_job, 'sync_metadata')
@@ -300,6 +303,31 @@ class SyncOrchestrator:
         except Exception as e:  # noqa: BLE001
             logger.warning("Custom metadata reads failed: %s", e)
         return data
+
+    async def _take_snapshots(self, org: Any, data: Dict, sync_job_id: str) -> None:
+        """Record this sync as the org's next snapshot. A demo org's first
+        snapshot is preceded by the fixture's "kickoff" state, dated before
+        it, so drift and comparison can be shown (item 21)."""
+        if org is None:
+            return
+        from datetime import timedelta
+
+        from app.services import privacy_mode, snapshots
+        try:
+            async with self.db.begin_nested():
+                mode = privacy_mode.mode_of(org)
+                kickoff = (data.get("demo_live") or {}).get("kickoff") if org.is_demo else None
+                first = await snapshots.latest(self.db, org.id) is None
+                if kickoff and first:
+                    await snapshots.take_snapshot(
+                        self.db, org.id, snapshots.apply_kickoff(data, kickoff), source="fixture",
+                        label=kickoff.get("label") or "Kickoff", privacy_mode=mode,
+                        taken_at=datetime.now(timezone.utc) - timedelta(days=int(kickoff.get("days_before") or 14)))
+                await snapshots.take_snapshot(
+                    self.db, org.id, data, source="fixture" if org.is_demo else "live", sync_job_id=sync_job_id,
+                    label="Today" if kickoff and first else None, privacy_mode=mode)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Snapshot for org %s failed: %s", org.id, e)
 
     async def _run_ai_analysis(self, org_id: str, sync_job: SyncJob) -> None:
         """
