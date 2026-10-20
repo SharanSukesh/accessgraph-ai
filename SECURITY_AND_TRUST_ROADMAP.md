@@ -928,7 +928,37 @@ section has the detail.
   Lumenvale it showed 69 users losing access; the two profiles are
   identical, so nobody does); the drawer now says how many users move
   profile.
-- **Next:** step 5, the priced roadmap builder.
+- **#74 (P1 with P2, part 1; not merged; stacked on #73; migration
+  e9a1c3d5f7b2):** the priced roadmap builder. The firm's rate card and
+  playbooks (firm_settings, keyed by the firm, never by a client; admins
+  edit, a new Rate card page under Admin) and each client's roadmaps
+  (engagement_roadmaps). A roadmap is built from the latest Health Report:
+  findings are grouped into work packages by playbook (finding codes),
+  held by a key that survives a rerun, so packages always show the latest
+  findings at the privacy level in force; findings reviewed "not useful"
+  (item 10) start outside the plan. Each package: inferred effort (base
+  plus per-item days times the findings' size, in half days) and, kept
+  apart, the consultant's confirmed range (who and when); price range from
+  the playbook's role mix and the rate card, with per-engagement overrides;
+  estimated savings; dependencies, from which phases follow. Totals split
+  inferred and confirmed effort and list what isn't estimated or priced.
+  Excel export (Summary, Roadmap, Findings, Rate card, Playbooks). A firm
+  starts with no rates and no playbooks: it can copy five example
+  playbooks, marked "example values" until reviewed; rates are never
+  copied. Demo orgs use the demo rate card and playbooks, labelled demo.
+  Package notes are masked with names. Also fixes #71's review key, which
+  gave the two seat findings (Salesforce and Platform) one shared review.
+  **Test (Lumenvale, local):** 5 packages in 2 phases, 18 findings,
+  23–56 days, $29,060–$69,930 at demo rates, $183,180 estimated savings a
+  year (the runbook's figure); confirming 3–4 days on the reclaim splits
+  the totals into inferred 21–51 (4) and confirmed 3–4 (1). Migration up,
+  down, up on Postgres.
+  **Part 2 (next):** the SOW appendix and closing slides through the image
+  pack renderer (3).
+  **Questions in the PR:** demo orgs always use the demo rate card, even
+  when the firm has its own; whether "counts only at Metadata only" needs
+  more than the findings' own titles.
+- **Next:** P1 part 2 (SOW appendix and closing slides), then step 6.
 
 ## Build order
 
@@ -1313,6 +1343,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 ## Phase C2: priced roadmap
 
 ### P1 (+ P2). Priced roadmap builder with remediation playbooks
+**Status: part 1 built in #74 (not merged): builder, rate card, playbooks, Excel. Part 2: SOW appendix and slides.**
 - **Problem:** the positioning promises an assessment that ends in a client-ready, priced roadmap. Today consultants build it by hand after every assessment.
 - **Decision (17 Oct):** build it right after phase C. It depends on the evidence model (20).
 - **Approach:**

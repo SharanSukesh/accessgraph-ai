@@ -213,7 +213,9 @@ def review_key(kind: str, item: Any) -> str:
     """A key that stays the same when the analysis runs again."""
     if kind == "finding":
         ev = item.evidence if isinstance(item.evidence, dict) else {}
-        return f"finding:{item.code}:{ev.get('object') or ev.get('entity') or ''}"
+        # Seat findings come one per licence, under the same code.
+        part = ev.get("object") or ev.get("entity") or ev.get("developer_key") or ev.get("developer_name") or ""
+        return f"finding:{item.code}:{part}"
     if kind == "anomaly":
         kind_of = (item.peer_stats or {}).get("anomaly_type") or item.category or ""
         return f"anomaly:{item.user_id}:{kind_of}"

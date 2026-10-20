@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.models import (
     AccessAnomaly,
     AccessDraft,
+    EngagementRoadmap,
     AccountShareSnapshot,
     AccountTeamMemberSnapshot,
     AutomationInventoryItem,
@@ -86,7 +87,7 @@ HANDLED_TABLES = {
     "object_quality_scores", "org_analysis_snapshots", "org_findings",
     "installed_packages", "report_inventory_items", "automation_inventory_items",
     "compliance_scorecard_runs", "salesforce_connections", "role_design_drafts", "snapshot_items",
-    "item_reviews", "access_drafts",
+    "item_reviews", "access_drafts", "engagement_roadmaps",
 }
 UNAFFECTED_TABLES = {
     "audit_logs", "org_users", "org_access_grants", "sync_jobs", "brand_settings",
@@ -524,6 +525,11 @@ class _Purge:
         for model, columns in targets:
             for row in await self._rows(model):
                 self._set(row, **{c: self._scrub(getattr(row, c)) for c in columns})
+        # Roadmap package notes are the consultant's text and may name people (P1).
+        for roadmap in await self._rows(EngagementRoadmap):
+            packages = [{**p, "notes": self._scrub(p.get("notes") or "")} for p in roadmap.packages or []]
+            if packages != (roadmap.packages or []):
+                self._set(roadmap, packages=packages)
 
     async def _drop_audit_text(self) -> None:
         for e in await self._rows(ChangeAuditEvent):
