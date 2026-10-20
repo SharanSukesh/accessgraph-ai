@@ -67,6 +67,8 @@ For cleanup impact ("can this field be deleted?"), Newton reads more, with no ne
 
 Field population comes from Data Quality's existing aggregate counts, which are now kept per inspected field; they are counts, never values.
 
+For comparing orgs, each sync also records the installed managed packages: name, namespace and version, the same read Package Sprawl makes. No new permission is needed.
+
 **Custom metadata records are off by default.** Their values can hold
 configuration a client treats as confidential, such as endpoints, the
 credential each integration uses, and thresholds. Every sync lists the

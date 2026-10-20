@@ -34,6 +34,9 @@ class DemoFixture:
     # login, last test run, API usage days, record ages) stays the same, and
     # so do the numbers a runbook quotes. See shift_dates().
     anchor: Optional[str] = None
+    # When set, a function in demo_variants.py turns the loaded fixture into
+    # another org (e.g. a sandbox with planted differences).
+    variant: Optional[str] = None
 
 
 DEMO_FIXTURES: Dict[str, DemoFixture] = {
@@ -43,6 +46,13 @@ DEMO_FIXTURES: Dict[str, DemoFixture] = {
         description="Synthetic mid-market org: 400 users, planted access risks, licence data.",
         # Health 41, 18 findings, $183,180; License Fit $116,220 held at this moment.
         anchor="2026-10-19T22:00:00+00:00",
+    ),
+    "lumenvale_uat": DemoFixture(
+        file="synthetic_mid_market.json",
+        org_name="Lumenvale UAT (Demo sandbox)",
+        description="A sandbox of Lumenvale with 20 planted differences, for comparing orgs.",
+        anchor="2026-10-19T22:00:00+00:00",
+        variant="lumenvale_uat",
     ),
     "acme": DemoFixture(
         file="demo_org.json",
@@ -141,6 +151,10 @@ def load_fixture(key: str) -> Dict[str, Any]:
             part = json.load(f)
         part.pop("_source", None)  # provenance note, not data
         merge_fixture_part(data, part)
+    variant = DEMO_FIXTURES[key].variant
+    if variant:
+        from app.ingestion.demo_variants import VARIANTS
+        data = VARIANTS[variant](data)
     return data
 
 

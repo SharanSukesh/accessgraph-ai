@@ -815,8 +815,49 @@ section has the detail.
   Territory Mgmt removed, Mina Tanaka → Finance Director Access added...);
   Legacy Integration Admin "System permissions: + ModifyAllData"; baseline
   toggled. Migration up, down and up on Postgres.
-- **Next:** item 9 v1 (org-to-org comparison) on snapshots, then 20 with
-  10, 30.
+- **#70 (item 9 v1, not merged; stacked on #69):** org-to-org comparison
+  on snapshots, and the comparison engine item 6 will reuse
+  (services/org_compare.py). Two snapshots: this org against another org
+  the caller can open (a sandbox, any org), or itself on another date.
+  Matched by API name and namespace, never Salesforce id: permission sets
+  by API name, a profile's set as "Profile: <name>", groups by developer
+  name, users by username without the sandbox suffix (detected: the
+  trailing segment whose removal matches the other side's usernames; by id
+  when usernames are masked), objects and fields by API name, packages by
+  namespace. 21 categories: users, profiles, permission sets, groups and
+  components, assignments, object and field permissions, roles, objects,
+  fields, record types, fields on layouts, validation rules, flows,
+  approval processes, Apex classes and triggers, custom permissions,
+  packages, org-wide defaults. Mapping per org pair (namespaces; renamed
+  items, a field rename carrying to its field permissions and layout
+  placements) and approved differences ("expected"; the rest is drift),
+  stored in the left org's settings, org admin only, audit-logged.
+  Consequences: users matched on both sides who gain or lose object or
+  field access (effective access computed from each snapshot: profile,
+  sets, groups, muting); and what references, on this org, the fields
+  missing, renamed or different on the other side (item 13's index). The
+  stricter privacy level of the two orgs applies: users, assignments and
+  access consequences are left out when either is at Metadata only. New
+  read: installed packages (name, namespace, version) with the
+  documentation reads (trust doc updated). Demo: a new demo fixture,
+  "Lumenvale UAT (Demo sandbox)" (demo_variants.lumenvale_uat: Lumenvale
+  plus 20 planted differences, usernames with ".uat"), creatable from
+  Admin › Demo orgs; Lumenvale part 16-packages.json (Conga Composer,
+  DocuSign, Lumenvale Extensions). UI: Compare Orgs page
+  (/orgs/{id}/org-compare, sidebar under Explore): side pickers, totals,
+  tabs (Differences with per-category chips, status filter, unexpected
+  only, Map and Approve; Who gains or loses access; What depends on
+  changed fields; Mapping), paged on the server, URL state, Export CSV.
+  **Test (local):** Lumenvale against Lumenvale UAT: 27 differences
+  (Packages 3, Fields 2, Users 2, Assignments 4...); mapping lvx to lvxdev
+  leaves 25 (both mappings in the tests: 23); access: 112 users, 141
+  gains, 10 losses; dependencies: Account.Region__c referenced by Update
+  Territory, AccountService, TerritoryService. Lumenvale against itself:
+  Kickoff vs Today. Runbook unchanged.
+  **Not in v1:** integrations (Integration Sprawl reads live only);
+  field-level "who sees it" for renamed fields beyond the mapping.
+- **Next:** item 20 with 10 (evidence on every finding, reviewer feedback
+  and validation), then 30.
 
 ## Build order
 
@@ -1323,6 +1364,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Salesforce product ✓. Its vendor documents an Excel documentation export, object ERDs, impact analysis and a dependency explorer, an audit trail explorer with risk scoring, and org and profile comparators. **Updated 19 Oct:** the Salesforce practice lead wants Newton to replace Config Workbook in engagements, so every Config Workbook feature we can rebuild well is in scope (docs/config-workbook-parity.md: 29 of its 33 features, none needing a new permission). The order is the build order in the progress log.
 
 ### 9 (v1). Org-to-org comparison
+**Status: built in #70 (not merged), with the comparison engine.**
 - **Problem:** before a release, a merge or a sandbox refresh, consultants need to know what differs between two orgs, or within one org between two dates, and **what that difference means**: who gains or loses access, and what depends on it.
 - **Approach:** reuse the comparison engine (6) on two snapshots (21): production vs sandbox, any two orgs, or the same org on different dates.
   - **v1 compares:** permissions and assignments, objects and fields, automations, packages and integrations, all from data we already sync.

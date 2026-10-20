@@ -93,7 +93,7 @@ async def test_only_admins_create_demo_orgs(client, async_db_session):
 
     listing = (await client.get("/admin/demo-orgs", cookies=_cookie(admin))).json()
     assert [o["id"] for o in listing["orgs"]] == [org.id]
-    assert {f["key"] for f in listing["fixtures"]} == {"synthetic_mid_market", "acme"}
+    assert {f["key"] for f in listing["fixtures"]} == {"synthetic_mid_market", "lumenvale_uat", "acme"}
 
 
 @pytest.mark.asyncio

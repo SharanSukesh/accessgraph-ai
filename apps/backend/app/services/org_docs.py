@@ -48,6 +48,8 @@ in the v68 Object Reference and Tooling API guide:
                         each custom field. One query, at most 2,000 rows
                         (more needs Bulk API 2.0, not used); reports aren't
                         in Tooling results (item 13)
+  installed_packages    Tooling InstalledSubscriberPackage: name, namespace,
+                        version (item 9: compared between orgs)
   apex_field_tokens     the custom field and object API names (…__c) each
                         Apex class and trigger body mentions; the body itself
                         is never kept (item 13)
@@ -274,6 +276,19 @@ async def collect_live(client: Any, record_type_objects: Iterable[str] = ()) -> 
 
     if classes is not None or triggers is not None:
         out["apex_field_tokens"] = {k: v for k, v in tokens.items() if v}
+
+    packages = await part("installed packages", lambda: tooling(
+        "SELECT SubscriberPackage.Name, SubscriberPackage.NamespacePrefix, SubscriberPackageVersion.MajorVersion, "
+        "SubscriberPackageVersion.MinorVersion, SubscriberPackageVersion.PatchVersion, SubscriberPackageVersion.IsBeta "
+        "FROM InstalledSubscriberPackage"), "Installed packages couldn't be read.")
+    if packages is not None:
+        out["installed_packages"] = []
+        for p in packages:
+            pkg, ver = p.get("SubscriberPackage") or {}, p.get("SubscriberPackageVersion") or {}
+            parts = [ver.get(k) for k in ("MajorVersion", "MinorVersion", "PatchVersion")]
+            out["installed_packages"].append({
+                "name": pkg.get("Name"), "namespace": pkg.get("NamespacePrefix"), "beta": bool(ver.get("IsBeta")),
+                "version": ".".join(str(v) for v in parts if v is not None) or None})
 
     # What uses each custom field (item 13): field ids, then the dependency index.
     fields = await part("custom fields", lambda: tooling(
