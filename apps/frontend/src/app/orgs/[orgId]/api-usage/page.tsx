@@ -122,8 +122,8 @@ export default function ApiUsagePage() {
             <TabsTrigger value="daily">Daily</TabsTrigger>
           </TabsList>
           <TabsContent value="overview"><Overview usage={usage} /></TabsContent>
-          <TabsContent value="callers"><Callers usage={usage} /></TabsContent>
-          <TabsContent value="called"><WhatsCalled usage={usage} /></TabsContent>
+          <TabsContent value="callers"><Callers usage={usage} orgId={orgId} /></TabsContent>
+          <TabsContent value="called"><WhatsCalled usage={usage} orgId={orgId} /></TabsContent>
           <TabsContent value="daily"><Daily usage={usage} /></TabsContent>
         </Tabs>
       )}
@@ -164,10 +164,11 @@ function sourceColumns(dates: string[]): Column<UsageSource | UsageShare>[] {
   return [
     {
       head: 'Name',
+      sortKey: 'name',
       cell: (r) => <span className="font-medium text-grove-ink dark:text-grove-ink-dk">{r.name}</span>,
     },
-    { head: 'Share', cell: (r) => <ShareBar pct={r.share_pct} other={r.other} /> },
-    { head: 'Requests', align: 'right', cell: (r) => r.requests.toLocaleString('en-GB') },
+    { head: 'Share', sortKey: 'share', cell: (r) => <ShareBar pct={r.share_pct} other={r.other} /> },
+    { head: 'Requests', align: 'right', sortKey: 'requests', cell: (r) => r.requests.toLocaleString('en-GB') },
     {
       head: 'Trend',
       cell: (r) => ('series' in r ? <Sparkline series={r.series} dates={dates} /> : <span className={MUTED}>—</span>),
@@ -175,19 +176,19 @@ function sourceColumns(dates: string[]): Column<UsageSource | UsageShare>[] {
   ]
 }
 
-function Callers({ usage }: { usage: ApiUsage }) {
+function Callers({ usage, orgId }: { usage: ApiUsage; orgId: string }) {
   const dates = (usage.trend ?? []).map((t) => t.date)
   const cols = sourceColumns(dates)
   // Health Reports run before this page carry only the top 8 plus "Other".
-  const apps = usage.apps ?? usage.by_app ?? []
   const users = usage.users ?? usage.by_user
   return (
     <div className="space-y-5">
-      <UsageTable title="Connected apps" rows={apps} columns={cols} rowKey={(r) => r.id ?? r.name} />
+      <UsageTable orgId={orgId} table="apps" title="Connected apps" columns={cols} rowKey={(r) => r.id ?? r.name} />
       {users ? (
         <UsageTable
+          orgId={orgId}
+          table="users"
           title="Integration users"
-          rows={users}
           columns={cols}
           rowKey={(r) => r.id ?? r.name}
           note="Names follow this client’s privacy level."
@@ -201,9 +202,8 @@ function Callers({ usage }: { usage: ApiUsage }) {
   )
 }
 
-function WhatsCalled({ usage }: { usage: ApiUsage }) {
+function WhatsCalled({ usage, orgId }: { usage: ApiUsage; orgId: string }) {
   const dates = (usage.trend ?? []).map((t) => t.date)
-  const families = usage.families ?? usage.by_family ?? []
   const detail = usage.detail_days ?? 0
   const partial =
     detail > 0 && detail < usage.days_collected
@@ -213,11 +213,11 @@ function WhatsCalled({ usage }: { usage: ApiUsage }) {
     { head: 'Resource', cell: (r) => <code className="text-xs">{r.resource}</code> },
     { head: 'API family', cell: (r) => r.api_family ?? '—' },
     { head: 'Share', cell: (r) => <ShareBar pct={r.share_pct} other={r.resource === 'Other'} /> },
-    { head: 'Requests', align: 'right', cell: (r) => r.requests.toLocaleString('en-GB') },
+    { head: 'Requests', align: 'right', sortKey: 'requests', cell: (r) => r.requests.toLocaleString('en-GB') },
   ]
   const objectCols: Column<ObjectRow>[] = [
-    { head: 'Object', cell: (r) => <span className="font-medium">{r.name}</span> },
-    { head: 'Requests', align: 'right', cell: (r) => r.requests.toLocaleString('en-GB') },
+    { head: 'Object', sortKey: 'name', cell: (r) => <span className="font-medium">{r.name}</span> },
+    { head: 'Requests', align: 'right', sortKey: 'requests', cell: (r) => r.requests.toLocaleString('en-GB') },
   ]
   const apexCols: Column<ApexEndpoint>[] = [
     {
@@ -229,7 +229,7 @@ function WhatsCalled({ usage }: { usage: ApiUsage }) {
   ]
   return (
     <div className="space-y-5">
-      <UsageTable title="API family" rows={families} columns={sourceColumns(dates)} rowKey={(r) => r.name} />
+      <UsageTable orgId={orgId} table="families" title="API family" columns={sourceColumns(dates)} rowKey={(r) => r.name} />
       {detail === 0 ? (
         <p className={`rounded-md border border-grove-border px-4 py-3 text-xs dark:border-grove-border-dk ${MUTED}`}>
           Resources, objects and Apex REST endpoints appear after the next Health Report run reads the log.
@@ -238,23 +238,26 @@ function WhatsCalled({ usage }: { usage: ApiUsage }) {
         <>
           {partial && <p className={`text-xs ${MUTED}`}>{partial}</p>}
           <UsageTable
+            orgId={orgId}
+            table="resources"
             title="Resources requested"
-            rows={usage.by_resource ?? []}
             columns={resourceCols}
             rowKey={(r) => `${r.api_family}:${r.resource}`}
             note="Without query strings, record ids or values."
           />
           <div className="grid gap-5 lg:grid-cols-2">
             <UsageTable
+              orgId={orgId}
+              table="objects"
               title="Objects requested"
-              rows={usage.by_object ?? []}
               columns={objectCols}
               rowKey={(r) => r.name}
               note={usage.objects_note}
             />
             <UsageTable
+              orgId={orgId}
+              table="apex_rest"
               title="Apex REST endpoints"
-              rows={usage.apex_rest ?? []}
               columns={apexCols}
               rowKey={(r) => `${r.namespace}:${r.url_mapping}:${r.apex_class}`}
               empty={usage.apex_rest_read ? 'No Apex REST classes or requests.' : 'Newton couldn’t read the org’s Apex classes, so endpoints aren’t matched to classes.'}

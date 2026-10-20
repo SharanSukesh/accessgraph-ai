@@ -7,6 +7,11 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { Pagination } from '@/components/shared/Pagination'
+import { SortHeader } from '@/components/shared/SortHeader'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
 import { AlertTriangle, Info } from 'lucide-react'
 import {
   type ApiUsage,
@@ -133,48 +138,68 @@ export interface Column<T> {
   align?: 'left' | 'right'
   cell: (row: T) => React.ReactNode
   className?: string
+  /** Server sort key for this column (requests, name, share). */
+  sortKey?: string
 }
 
-/** A card-style table: clear row dividers, a sticky header, the top `limit` rows and "Show all". */
+/**
+ * A card-style table of one API usage list, paged, searched and sorted by the
+ * server (the standing pagination rule). Each table keeps its own page,
+ * size, sort and search in the URL under its own prefix.
+ */
 export function UsageTable<T>({
+  orgId,
+  table,
   title,
-  rows,
   columns,
   rowKey,
-  limit = 10,
   empty,
   note,
 }: {
+  orgId: string
+  table: 'apps' | 'users' | 'families' | 'resources' | 'objects' | 'apex_rest'
   title: string
-  rows: T[]
   columns: Column<T>[]
   rowKey: (row: T) => string
-  limit?: number
   empty?: string
   note?: React.ReactNode
 }) {
-  const [all, setAll] = useState(false)
-  const shown = all ? rows : rows.slice(0, limit)
+  const { state, update } = useListState(table)
+  const { data, isLoading } = usePaged<T, { hidden_reason?: string | null }>(
+    ['api-usage-table', orgId, table], `/orgs/${orgId}/org-analyzer/api-usage/${table}`, state)
+  const total = data?.total ?? 0
   return (
     <section className="overflow-hidden rounded-lg border border-grove-border bg-grove-surface dark:border-grove-border-dk dark:bg-grove-surface-dk">
-      <header className="flex items-center justify-between gap-2 border-b border-grove-border px-4 py-2.5 dark:border-grove-border-dk">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-grove-border px-4 py-2.5 dark:border-grove-border-dk">
         <h3 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk">{title}</h3>
-        <span className={`v2-num text-xs ${MUTED}`}>{rows.length.toLocaleString('en-GB')}</span>
+        <span className={`v2-num text-xs ${MUTED}`}>{total.toLocaleString('en-GB')}</span>
       </header>
-      {rows.length === 0 ? (
-        <p className={`px-4 py-3 text-xs ${MUTED}`}>{empty ?? 'Nothing recorded.'}</p>
+      {(total > 10 || state.q) && (
+        <div className="border-b border-grove-border px-4 py-2 dark:border-grove-border-dk">
+          <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder={`Search ${title.toLowerCase()}...`} />
+        </div>
+      )}
+      {isLoading || !data ? (
+        <p className={`px-4 py-3 text-xs ${MUTED}`}>Loading…</p>
+      ) : total === 0 ? (
+        <p className={`px-4 py-3 text-xs ${MUTED}`}>{state.q ? `Nothing matches “${state.q}”.` : data.hidden_reason ?? empty ?? 'Nothing recorded.'}</p>
       ) : (
-        <div className="max-h-[32rem] overflow-auto">
+        <div className="overflow-auto">
           <table className="w-full text-sm">
-            <thead className={`sticky top-0 z-[1] bg-grove-surface text-xs dark:bg-grove-surface-dk ${MUTED}`}>
+            <thead className={`bg-grove-surface text-xs dark:bg-grove-surface-dk ${MUTED}`}>
               <tr className="border-b border-grove-border dark:border-grove-border-dk">
-                {columns.map((c) => (
-                  <th key={c.head} className={`px-4 py-2 font-medium ${c.align === 'right' ? 'text-right' : 'text-left'}`}>{c.head}</th>
-                ))}
+                {columns.map((c) =>
+                  c.sortKey ? (
+                    <SortHeader key={c.head} label={c.head} column={c.sortKey} align={c.align ?? 'left'} sort={state.sort} dir={state.dir}
+                      onSort={(col, d) => update({ sort: col, dir: d })} className="!normal-case" />
+                  ) : (
+                    <th key={c.head} className={`px-4 py-2 font-medium ${c.align === 'right' ? 'text-right' : 'text-left'}`}>{c.head}</th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-grove-border dark:divide-grove-border-dk">
-              {shown.map((r) => (
+              {data.items.map((r) => (
                 <tr key={rowKey(r)} className="hover:bg-primary-50/30 dark:hover:bg-primary-900/10">
                   {columns.map((c) => (
                     <td key={c.head} className={`px-4 py-2 align-middle ${c.align === 'right' ? 'v2-num text-right' : ''} ${c.className ?? ''}`}>
@@ -187,14 +212,15 @@ export function UsageTable<T>({
           </table>
         </div>
       )}
-      {(rows.length > limit || note) && (
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-grove-border px-4 py-2 text-xs dark:border-grove-border-dk">
+      {data && total > 0 && (
+        <div className="border-t border-grove-border px-4 dark:border-grove-border-dk">
+          <Pagination page={data.page} pageSize={data.page_size} total={total} label={title.toLowerCase()}
+            onPage={(page) => update({ page })} onPageSize={(pageSize) => update({ pageSize })} />
+        </div>
+      )}
+      {note && (
+        <footer className="border-t border-grove-border px-4 py-2 text-xs dark:border-grove-border-dk">
           <span className={MUTED}>{note}</span>
-          {rows.length > limit && (
-            <button type="button" className="font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => setAll((v) => !v)}>
-              {all ? `Show top ${limit}` : `Show all ${rows.length.toLocaleString('en-GB')}`}
-            </button>
-          )}
         </footer>
       )}
     </section>

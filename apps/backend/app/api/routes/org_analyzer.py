@@ -37,6 +37,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.api.pagination import PageParams, page_params
 from app.auth.deps import (
     Principal,
     get_current_actor_email,
@@ -158,6 +159,10 @@ class SnapshotSummary(BaseModel):
 
 
 class FindingsPage(BaseModel):
+    # Set when the request asked for a page (page, page_size); otherwise limit/offset.
+    page: Optional[int] = None
+    page_size: Optional[int] = None
+    pages: Optional[int] = None
     total: int
     snapshot_id: Optional[str]
     findings: List[FindingResponse]
@@ -342,11 +347,16 @@ async def list_findings(
         default=False,
         description="Include findings the admin has marked as ignored.",
     ),
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=100, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
+    params: PageParams = Depends(page_params),
     _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> FindingsPage:
+    """Findings of the latest run, severity then savings first. With `page`
+    (the standing pagination rule): search (`q` over title, description and
+    code), sort (severity, savings, affected, title, category) and one page;
+    otherwise `limit` and `offset`."""
     snap = await _latest_snapshot(db, org_id)
     if snap is None:
         return FindingsPage(total=0, snapshot_id=None, findings=[])
@@ -381,12 +391,73 @@ async def list_findings(
             -(f.estimated_annual_savings_cents or 0),
         )
     )
-    paged = all_rows[offset : offset + limit]
+    if params.q:
+        words = params.q.lower().split()
+        all_rows = [f for f in all_rows
+                    if all(w in f"{f.title} {f.description} {f.code}".lower() for w in words)]
+    if params.sort in ("savings", "affected", "title", "category"):
+        key = {"savings": lambda f: f.estimated_annual_savings_cents or 0, "affected": lambda f: f.affected_count or 0,
+               "title": lambda f: (f.title or "").lower(), "category": lambda f: str(f.category)}[params.sort]
+        all_rows.sort(key=key, reverse=params.dir == "desc")
+    elif params.sort == "severity" and params.dir == "desc":
+        all_rows.reverse()
+    if params.paged:
+        pages = max(1, -(-len(all_rows) // params.page_size))
+        page = min(params.page or 1, pages)
+        offset, limit = (page - 1) * params.page_size, params.page_size
+        return FindingsPage(total=len(all_rows), snapshot_id=snap.id,
+                            findings=[FindingResponse.from_orm(f) for f in all_rows[offset:offset + limit]],
+                            page=page, page_size=params.page_size, pages=pages)
+    window = all_rows[offset : offset + limit]
     return FindingsPage(
         total=len(all_rows),
         snapshot_id=snap.id,
-        findings=[FindingResponse.from_orm(f) for f in paged],
+        findings=[FindingResponse.from_orm(f) for f in window],
     )
+
+
+API_USAGE_TABLES = {  # table -> keys in metrics["api_usage"], newest first (older runs used by_*)
+    "apps": ("apps", "by_app"), "users": ("users", "by_user"), "families": ("families", "by_family"),
+    "resources": ("by_resource",), "objects": ("by_object",), "apex_rest": ("apex_rest",),
+}
+
+
+@router.get("/orgs/{org_id}/org-analyzer/api-usage/{table}")
+async def api_usage_table(
+    org_id: str,
+    table: str,
+    params: PageParams = Depends(page_params),
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+) -> Dict[str, Any]:
+    """One API usage table from the latest Health Report run, paged, searched
+    and sorted on the server (the standing pagination rule). Without `page`,
+    every row."""
+    from app.api.pagination import paged
+
+    if table not in API_USAGE_TABLES:
+        raise HTTPException(status_code=400, detail=f"table must be one of {', '.join(API_USAGE_TABLES)}")
+    snap = await _latest_snapshot(db, org_id)
+    usage = ((snap.metrics or {}) if snap else {}).get("api_usage") or {}
+    rows: Optional[List[Dict[str, Any]]] = None
+    for key in API_USAGE_TABLES[table]:
+        if usage.get(key) is not None:
+            rows = usage[key]
+            break
+    hidden = usage.get("users_hidden_reason") if table == "users" and rows is None else None
+    rows = rows or []
+    if not params.paged:
+        return {"items": rows, "total": len(rows), "hidden_reason": hidden}
+
+    def name(r: Dict[str, Any]) -> str:
+        return str(r.get("name") or r.get("resource") or r.get("url_mapping") or "")
+
+    return paged(rows, params,
+                 text=lambda r: " ".join(str(v) for v in (r.get("name"), r.get("resource"), r.get("api_family"),
+                                                          r.get("url_mapping"), r.get("apex_class")) if v),
+                 sorts={"requests": lambda r: r.get("requests") or 0, "name": name,
+                        "share": lambda r: r.get("share_pct") or 0},
+                 default_sort=None, table=table, hidden_reason=hidden)
 
 
 @router.get("/orgs/{org_id}/org-analyzer/findings.csv")

@@ -1,5 +1,9 @@
 'use client'
 
+import { useListState } from '@/lib/list/useListState'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+
 /**
  * Org Analyzer Page — consulting-grade org-health dashboard.
  *
@@ -892,10 +896,14 @@ function FindingsTab({ orgId }: { orgId: string }) {
   // Org My Domain host — needed to absolutize the relative Setup
   // deeplinks the backend stores on findings.
   const { currentOrg } = useAuth()
-  const [category, setCategory] = useState<FindingCategory | null>(null)
-  const [severity, setSeverity] = useState<FindingSeverity | null>(null)
-  const [search, setSearch] = useState('')
-  const [includeIgnored, setIncludeIgnored] = useState(false)
+  // Paged by the server; filters, search, page and size live in the URL (fd.*).
+  const { state: list, update } = useListState('fd', { filters: ['category', 'severity', 'ignored'] })
+  const category = (list.filters.category || null) as FindingCategory | null
+  const severity = (list.filters.severity || null) as FindingSeverity | null
+  const includeIgnored = list.filters.ignored === 'true'
+  const setCategory = (c: FindingCategory | null) => update({ filters: { category: c ?? '' } })
+  const setSeverity = (v: FindingSeverity | null) => update({ filters: { severity: v ?? '' } })
+  const setIncludeIgnored = (v: boolean) => update({ filters: { ignored: v ? 'true' : '' } })
   const [selected, setSelected] = useState<OrgFinding | null>(null)
   const [ignoreReason, setIgnoreReason] = useState('')
 
@@ -903,7 +911,11 @@ function FindingsTab({ orgId }: { orgId: string }) {
     category,
     severity,
     include_ignored: includeIgnored,
-    limit: 500,
+    page: list.page,
+    page_size: list.pageSize,
+    q: list.q || undefined,
+    sort: list.sort ?? undefined,
+    dir: list.dir,
   })
   const ignore = useIgnoreFinding(orgId)
   const unignore = useUnignoreFinding(orgId)
@@ -968,17 +980,8 @@ function FindingsTab({ orgId }: { orgId: string }) {
     }
   }
 
-  const filtered = useMemo(() => {
-    const rows = findings.data?.findings ?? []
-    const q = search.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter(
-      r =>
-        r.title.toLowerCase().includes(q) ||
-        r.description.toLowerCase().includes(q) ||
-        r.code.toLowerCase().includes(q),
-    )
-  }, [findings.data, search])
+  // Search, filters and paging happen on the server.
+  const filtered = findings.data?.findings ?? []
 
   return (
     <div className="grid grid-cols-12 gap-4">
@@ -986,24 +989,12 @@ function FindingsTab({ orgId }: { orgId: string }) {
       <Card variant="bordered" className="col-span-12 lg:col-span-7">
         <CardHeader>
           <CardTitle>
-            Findings ({filtered.length}
-            {findings.data && filtered.length !== findings.data.findings.length
-              ? ` of ${findings.data.findings.length}`
-              : ''}
-            )
+            Findings ({(findings.data?.total ?? 0).toLocaleString('en-US')})
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-2 mb-3">
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-2.5 top-2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search findings…"
-                className="w-full pl-8 pr-2 py-1.5 text-sm rounded border border-grove-border dark:border-grove-border-dk bg-grove-surface dark:bg-grove-surface-dk"
-              />
-            </div>
+            <div className="flex-1 min-w-[180px]"><ListSearch value={list.q} onChange={(q) => update({ q })} placeholder="Search findings…" /></div>
             <select
               value={category ?? ''}
               onChange={e =>
@@ -1062,6 +1053,7 @@ function FindingsTab({ orgId }: { orgId: string }) {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 italic">No findings match.</p>
           ) : (
+            <>
             <ul className="divide-y divide-gray-200 dark:divide-gray-800">
               {filtered.map(f => (
                 <li
@@ -1114,6 +1106,11 @@ function FindingsTab({ orgId }: { orgId: string }) {
                 </li>
               ))}
             </ul>
+            {findings.data?.page && (
+              <Pagination page={findings.data.page} pageSize={findings.data.page_size ?? list.pageSize} total={findings.data.total}
+                label="findings" onPage={(page) => update({ page })} onPageSize={(pageSize) => update({ pageSize })} />
+            )}
+            </>
           )}
         </CardContent>
       </Card>
