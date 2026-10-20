@@ -886,8 +886,16 @@ section has the detail.
   **Not yet:** "not measured" vs "nothing found" on every module screen
   (the evidence block carries it; module screens follow as they're
   touched).
-- **Next:** item 30 (write up the risk-score options with Lumenvale's
-  numbers; the formula stays as it is).
+- **#72 (item 30, not merged; stacked on #71):** docs/risk-score-options.md,
+  the decision paper: the four options, their effect on Lumenvale
+  recomputed by apps/backend/scripts/risk_options.py (today 5 / 35 / 197 /
+  163; without peer deviation 5 / 31 / 201 / 163; at 0.15, newly computed,
+  5 / 32 / 200 / 163, with Jun Jovanovic High only because of the flag),
+  the eight flagged users' scores under each, trade-offs, and a
+  recommendation for discussion (option 2 with option 4's ordering). The
+  formula is unchanged.
+- **Next:** step 4, item 15 (what-if simulator in Restructure Studio), on
+  snapshots (21) and the comparison engine (9).
 
 ## Build order
 
@@ -1255,6 +1263,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - **Depends on:** 21 (evidence points at a snapshot). **Effort: L.**
 
 ### 30. Should the anomaly flag feed the risk score?
+**Status: options written up in #72 (docs/risk-score-options.md), awaiting a decision. Formula unchanged.**
 - **Problem:** the risk score includes a peer-deviation factor (weight 0.35) that is driven by the anomaly flag. A flagged user's risk level therefore partly restates the flag, so "rank" and "risk" aren't independent. Phase A works around it with **base risk** next to every rank (23); the formula is unchanged until this is decided.
 - **Options:**
   1. **Keep the flag in the score and show both** overall risk and base risk everywhere a user's risk appears. No score changes; two numbers on every screen.
