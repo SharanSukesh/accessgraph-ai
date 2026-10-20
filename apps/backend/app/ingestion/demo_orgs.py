@@ -165,6 +165,16 @@ async def demo_data_quality_client(db: AsyncSession, org_id: str):
     return client
 
 
+async def demo_change_risk_client(db: AsyncSession, org_id: str):
+    """For a demo org, a client serving the fixture's Setup Audit Trail
+    (demo_live.setup_audit_trail); None for a real org."""
+    org = await db.get(Organization, org_id)
+    if org is None or not org.is_demo:
+        return None
+    from app.salesforce.demo_client import DemoChangeRiskClient
+    return DemoChangeRiskClient(load_demo_data(fixture_key(org)).get("demo_live", {}).get("setup_audit_trail", []))
+
+
 async def ensure_live_org(db: AsyncSession, org_id: str, module: str) -> None:
     """Refuse a demo org for modules that need a live Salesforce connection."""
     org = await db.get(Organization, org_id)

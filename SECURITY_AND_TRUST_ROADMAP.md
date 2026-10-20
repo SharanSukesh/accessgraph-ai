@@ -729,9 +729,29 @@ section has the detail.
   78", Strong candidates 3, page 2 "26–50 of 78", CSV 78 rows.
   **UNVERIFIED:** which metadata types the dependency index covers (no
   official list); the shape of RefMetadataComponentName.
-- **Next:** the rest of step 2: item 14 (change-history gaps) and matrix
-  #26–28, then step 3 (21 snapshots, 9 v1 org comparison, 20 evidence with
-  10, 30 write-up).
+- **#67 (item 14, not merged; stacked on #66):** change history (parity
+  #25). Gap 3 built: the workbook's Change History sheet (37 sheets) has
+  every Setup Audit Trail event Change-Risk Radar has pulled, each once
+  across pulls, newest first, with blast radius and tier; the About sheet
+  says the range, how many pulls, that Salesforce keeps the trail at least
+  180 days and Newton keeps pulls under its retention, and that the trail
+  has no old and new values. Gaps 1 and 2 (history beyond 180 days through
+  kept snapshots, field-level old and new values) stay with items 21 and 9.
+  Change-Risk Radar now runs on demo orgs from the fixture's Setup Audit
+  Trail (DemoChangeRiskClient, like Data Quality's), and its page is no
+  longer greyed out for them. Lumenvale part 13-change-history.json
+  (generator build_change_history_part.py): 60 changes over the 30 days
+  before the date anchor by the eight System Administrators, with a
+  Connected App installed at 23:40 on a Saturday, a sharing default changed
+  on behalf of another admin, a burst of eight permission set assignments
+  in one afternoon, and the changes behind item 13's plants. Change-Risk
+  Radar isn't part of the runbook, so its numbers are unchanged.
+  **Test (Lumenvale, local):** Change-Risk Radar → Run pull: 60 events, 20
+  high-blast, 8 actors, "Showing 1–25 of 60"; workbook Change History 60
+  rows.
+- **Next:** matrix #26–28 (security summary, org limits with health
+  status, logins by profile and component counts on Overview), then step 3
+  (21 snapshots, 9 v1 org comparison, 20 evidence with 10, 30 write-up).
 
 ## Build order
 
@@ -1307,6 +1327,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 2, 8, 1. **Effort: L.**
 
 ### 14. Change history: Change Risk Radar gaps against Config Workbook
+**Status: the export sheet (gap 3) built in #67, not merged; gaps 1 and 2 follow items 21 and 9.**
 - **Status:** Change Risk Radar already ingests the Setup Audit Trail with blast-radius scoring. Salesforce keeps it **at least 180 days** ✓; `Section` and `Display` can't be filtered in SOQL ✓.
 - **Gaps:**
   1. **History beyond 180 days** needs Newton to keep pulled rows. Only snapshots taken while connected (21) extend it, and it's subject to our retention.

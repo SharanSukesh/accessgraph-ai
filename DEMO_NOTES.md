@@ -173,8 +173,9 @@ Still worth knowing live:
 - Mina Tanaka, Oskar Holloway and Freya Castellan (planted over-privileged /
   role mismatch) are typed Permission accumulation: their strongest signal
   in the data is 5-6 permission sets against a median of 1.
-- Sprawl, Data Quality, Change Risk, Equity and Record Access are greyed out
-  for the demo org; show them on the dev org.
+- Sprawl, Equity and Record Access are greyed out for the demo org; show
+  them on the dev org. Data Quality and Change Risk run on Lumenvale from the
+  fixture (Change Risk since item 14: 60 synthetic audit trail events).
 
 ## Thursday runbook
 

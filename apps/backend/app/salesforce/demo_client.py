@@ -161,3 +161,26 @@ class DemoDataQualityClient:
 
     async def aggregate_duplicate_record_sets_by_rule(self) -> Dict[str, int]:
         return {}
+
+
+class DemoChangeRiskClient:
+    """Serves Change-Risk Radar's one read for a demo org: the fixture's
+    Setup Audit Trail (demo_live.setup_audit_trail, dates already moved with
+    the demo anchor), newest first, within the window asked for. Read-only,
+    never reaches the network."""
+
+    instance_url = "https://demo.invalid"
+
+    def __init__(self, rows: List[Dict[str, Any]]):
+        self._rows = rows or []
+
+    async def extract_setup_audit_trail(self, since_days: int = 30, limit: int = 5000) -> List[Dict[str, Any]]:
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=since_days)
+
+        def when(r: Dict[str, Any]) -> datetime:
+            return datetime.strptime(r["CreatedDate"], "%Y-%m-%dT%H:%M:%S.%f%z")
+
+        rows = [r for r in self._rows if cutoff <= when(r) <= now]
+        return sorted(rows, key=when, reverse=True)[:limit]

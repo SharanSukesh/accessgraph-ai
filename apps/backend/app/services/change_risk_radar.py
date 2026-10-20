@@ -57,7 +57,7 @@ from app.domain.models import (
 )
 from app.salesforce.client import SalesforceAPIClient
 from app.services import privacy_mode
-from app.ingestion.demo_orgs import ensure_live_org
+from app.ingestion.demo_orgs import demo_change_risk_client, ensure_live_org
 
 
 logger = logging.getLogger(__name__)
@@ -752,7 +752,11 @@ class ChangeRiskRadarService:
     # Support
     # ------------------------------------------------------------------
 
-    async def _client(self) -> SalesforceAPIClient:
+    async def _client(self) -> Any:
+        # A demo org reads the fixture's Setup Audit Trail (item 14), never Salesforce.
+        demo = await demo_change_risk_client(self.db, self.org_id)
+        if demo is not None:
+            return demo
         await ensure_live_org(self.db, self.org_id, "Change Risk Radar")
         row = await self.db.execute(
             select(SalesforceConnection)
