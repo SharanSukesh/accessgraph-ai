@@ -528,6 +528,28 @@ section has the detail.
   1, Users 557, 10 rows; View all → "Showing 1–25 of 557"; jump to page 5 →
   "101–125"; back twice → the filtered list; Fields: "Showing 1–25 of
   2,400". Lumenvale Account: 17 fields, View all → "Showing 1–17 of 17".
+- **#59 (pagination 2 of 5, not merged; stacked on #58):** users.
+  Users list paged, sorted (risk, name, profile, role, status) and filtered
+  (search, risk level, status) on the server, with org-wide `summary`
+  counts; the 5,000-user cap is gone; Export CSV fetches every matching
+  user. The dashboard's user KPIs come from the summary; the graph and
+  compare pickers search on the server. User detail: the open tab is in
+  the URL (?tab=); Object and Field access paged with search, a sensitive
+  filter (real classification instead of the old hard-coded "Standard")
+  and sortable columns; Pages & automation and Record access show each list
+  as a preview (count, first 10, View all → /users/{id}/pages-and-automation/{section},
+  /profiles/{id}/pages-and-automation/{section}, /users/{id}/record-access/{section},
+  paged). Record access now returns the org-wide defaults the screen
+  expected. **Test:** List scale org: Users "Showing 1–25 of 600"; High →
+  30; sort by profile; Export CSV has 600 rows; user 005000000000002PSC
+  Fields tab "Showing 1–25 of 695", search "field_0" → 163; CEO
+  005000000000001PSC record access: Subordinate roles 24, View all
+  "Showing 1–24 of 24"; dashboard 600 users, 36 high-risk. Lumenvale Jun
+  Jovanovic Pages & automation: Apex 12 (View all 12), flows 15.
+  **Not covered:** the Compare users matrix still builds its rows in the
+  browser (2–4 users' object access); paging it needs a server-side
+  comparison, which comes with item 6 (profile and permission set
+  comparison).
 - **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
   the objects and fields each flow reads or writes, from the Flow metadata
   already read per active flow), the field × layout matrix (#4, Layout

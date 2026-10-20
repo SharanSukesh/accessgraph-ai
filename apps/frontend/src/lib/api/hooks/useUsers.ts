@@ -2,7 +2,8 @@
  * Users API Hooks
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useDebounce } from '@/lib/hooks/useDebounce'
 import { apiClient, ApiError } from '../client'
 import { endpoints } from '../endpoints'
 import type { ObjectAccess, FieldAccess, AccessExplanation } from '@/lib/types/salesforce'
@@ -115,7 +116,7 @@ export const userKeys = {
 /**
  * Normalize user data from API (handles both snake_case and camelCase)
  */
-function normalizeUser(user: any): User {
+export function normalizeUser(user: any): User {
   return {
     id: user.id,
     salesforceUserId: user.salesforceUserId || user.salesforce_id,
@@ -296,5 +297,23 @@ export function useUserRecommendations(orgId: string, userId: string) {
     },
     enabled: !!orgId && !!userId,
     retry: false,
+  })
+}
+
+/**
+ * Server-side user search for pickers (the standing pagination rule):
+ * the first matches by name, never the whole user list.
+ */
+export function useUserSearch(orgId: string, term: string, limit = 10) {
+  const q = useDebounce(term.trim(), 250)
+  return useQuery({
+    queryKey: [...userKeys.all, orgId, 'search', q, limit],
+    queryFn: async () => {
+      const params = new URLSearchParams({ page: '1', page_size: '25', sort: 'name', q })
+      const data = await apiClient.get<{ items: any[] }>(`${endpoints.users(orgId)}?${params.toString()}`)
+      return data.items.slice(0, limit).map(normalizeUser)
+    },
+    enabled: !!orgId && q.length > 0,
+    placeholderData: keepPreviousData,
   })
 }

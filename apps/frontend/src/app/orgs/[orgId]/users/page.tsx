@@ -22,7 +22,13 @@ import { isPrivacyModeError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { privacyModeOf } from '@/lib/privacy'
 import { Reveal } from '@/components/v2/motion'
-import { useUsers } from '@/lib/api/hooks/useUsers'
+import { normalizeUser } from '@/lib/api/hooks/useUsers'
+import { apiClient } from '@/lib/api/client'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { SortHeader } from '@/components/shared/SortHeader'
 
 export default function UsersPage() {
   return (
@@ -40,16 +46,29 @@ function UsersContent() {
   const router = useRouter()
   const orgId = params.orgId as string
 
-  const [search, setSearch] = useState('')
-  const [riskFilter, setRiskFilter] = useState<string>('')
-  const [sort, setSort] = useState<'risk' | 'name'>('risk')
   const masked = privacyModeOf(useAuth().currentOrg) === 'masked'
+  // Paged by the server; page, size, sort, search and filters live in the URL.
+  const { state, update } = useListState('', { sort: 'risk', dir: 'desc', filters: ['riskLevel', 'status'] })
+  const { data, isLoading, error } = usePaged<any>(['users', orgId], `/orgs/${orgId}/users`, state)
+  const users: any[] | undefined = data?.items?.map(normalizeUser)
+  const [exporting, setExporting] = useState(false)
+  const sortProps = { sort: state.sort, dir: state.dir, onSort: (c: string, d: 'asc' | 'desc') => update({ sort: c, dir: d }), className: 'px-6 py-3' }
 
-  const { data: users, isLoading, error } = useUsers(orgId, {
-    search,
-    riskLevel: riskFilter || undefined,
-    sort,
-  })
+  // Exports include every user matching the filters, not just this page.
+  const exportAll = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams()
+      if (state.q) p.set('search', state.q)
+      if (state.filters.riskLevel) p.set('riskLevel', state.filters.riskLevel)
+      if (state.filters.status) p.set('status', state.filters.status)
+      p.set('sort', state.sort === 'name' ? 'name' : 'risk')
+      const all = await apiClient.get<any[]>(`/orgs/${orgId}/users?${p.toString()}`)
+      exportUsersToCSV(all.map(normalizeUser), `users-${exportStamp()}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (error) {
     if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
@@ -74,11 +93,12 @@ function UsersContent() {
             <VisualDownloadButton orgId={orgId} visual="risk_distribution" />
             <Button
               variant="secondary"
-              disabled={!users?.length}
-              onClick={() => exportUsersToCSV(users ?? [], `users-${exportStamp()}`)}
+              disabled={!data?.total || exporting}
+              onClick={exportAll}
+              title="Every user matching the search and filters, not just this page"
             >
               <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              {exporting ? 'Exporting…' : 'Export CSV'}
             </Button>
             <Button
               variant="primary"
@@ -99,22 +119,11 @@ function UsersContent() {
       <Card variant="bordered">
         <CardContent className="py-4">
           <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Risk Filter */}
+            <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder="Search users..." />
             <select
-              value={riskFilter}
-              onChange={(e) => setRiskFilter(e.target.value)}
+              aria-label="Risk level"
+              value={state.filters.riskLevel || ''}
+              onChange={(e) => update({ filters: { riskLevel: e.target.value } })}
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Risk Levels</option>
@@ -123,16 +132,15 @@ function UsersContent() {
               <option value="medium">Medium</option>
               <option value="low">Low</option>
             </select>
-
-            {/* Sort */}
             <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as 'risk' | 'name')}
-              aria-label="Sort users"
+              aria-label="Status"
+              value={state.filters.status || ''}
+              onChange={(e) => update({ filters: { status: e.target.value } })}
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
-              <option value="risk">Highest risk first</option>
-              <option value="name">Name A–Z</option>
+              <option value="">Active and inactive</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
             </select>
           </div>
         </CardContent>
@@ -144,7 +152,7 @@ function UsersContent() {
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>
-            {users ? `${users.length} Users` : 'Users'}
+            {data ? `${data.total.toLocaleString('en-US')} Users` : 'Users'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -155,21 +163,11 @@ function UsersContent() {
               <table className="w-full">
                 <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      User
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Role
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Profile
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Risk
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Status
-                    </th>
+                    <SortHeader label="User" column="name" {...sortProps} />
+                    <SortHeader label="Role" column="role" {...sortProps} />
+                    <SortHeader label="Profile" column="profile" {...sortProps} />
+                    <SortHeader label="Risk" column="risk" {...sortProps} />
+                    <SortHeader label="Status" column="status" {...sortProps} />
                     <th className="px-6 py-3 text-right v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Actions
                     </th>
@@ -250,6 +248,14 @@ function UsersContent() {
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                page={data!.page}
+                pageSize={data!.page_size}
+                total={data!.total}
+                label="users"
+                onPage={(page) => update({ page })}
+                onPageSize={(pageSize) => update({ pageSize })}
+              />
             </div>
           ) : (
             <EmptyState

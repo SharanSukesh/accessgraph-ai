@@ -7,11 +7,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.api.pagination import PageParams, page_params, paged
 from app.domain.models import (
     PermissionSetAssignmentSnapshot,
     PermissionSetGroupComponentSnapshot,
@@ -59,14 +60,75 @@ async def user_context(db: AsyncSession, org_id: str, user_sf_id: str):
     return user, profiles, ps_rows, assignments, components, groups
 
 
+SECTIONS = ("layouts", "pages", "apex", "flows")
+
+
+def _via_text(r: Dict[str, Any]) -> str:
+    return " ".join(" ".join(p) for p in r.get("via") or [])
+
+
+SECTION_TEXT = {
+    "layouts": lambda r: f"{r['object']} {r['record_type']} {r['layout']}",
+    "pages": lambda r: f"{r['object']} {r.get('app') or 'Any other app'} {r['record_type']} {r['page']} {r['rule']}",
+    "apex": lambda r: f"{r['name']} {r.get('namespace') or ''} {_via_text(r)}",
+    "flows": lambda r: f"{r.get('label') or ''} {r.get('api_name') or ''} {r.get('why') or ''} {_via_text(r)}",
+}
+SECTION_SORTS: Dict[str, Dict[str, Any]] = {
+    "layouts": {"object": lambda r: (r["object"], r["record_type"]), "layout": lambda r: r["layout"],
+                "record_type": lambda r: r["record_type"]},
+    "pages": {"object": lambda r: (r["object"], r.get("app") or "~", r["record_type"]), "page": lambda r: r["page"],
+              "rule": lambda r: r["rule"]},
+    "apex": {"name": lambda r: r["name"].lower(), "paths": lambda r: len(r.get("via") or [])},
+    "flows": {"label": lambda r: (r.get("label") or r.get("api_name") or "").lower(),
+              "can_run": lambda r: {True: 0, None: 1, False: 2}[r.get("can_run")],
+              "type": lambda r: r.get("trigger_type") or r.get("process_type")},
+}
+SECTION_DEFAULT = {"layouts": "object", "pages": "object", "apex": "name", "flows": "can_run"}
+
+
+def _shape(out: Dict[str, Any], section: Optional[str], form_factor: Optional[str], preview: Optional[int],
+           params: PageParams) -> Dict[str, Any]:
+    """The whole view; or with `preview`, every list cut to its first rows and
+    `counts` for each; or with `section` and `page`, one paged list
+    (search, sort and the pages' form factor over every row)."""
+    if not out.get("available"):
+        return out
+    if section:
+        if section not in SECTIONS:
+            raise HTTPException(status_code=400, detail=f"section must be one of {', '.join(SECTIONS)}")
+        rows = out.get(section) or []
+        if section == "pages":
+            rows = [r for r in rows if r.get("form_factor") == (form_factor or "Desktop")]
+        if not params.paged:
+            return {"items": rows, "total": len(rows)}
+        return paged(rows, params, text=SECTION_TEXT[section], sorts=SECTION_SORTS[section],
+                     default_sort=SECTION_DEFAULT[section], section=section, profile=out.get("profile"))
+    if preview:
+        counts = {k: len(out.get(k) or []) for k in ("layouts", "apex", "flows")}
+        for ff in ("Desktop", "Phone"):
+            counts[f"pages_{ff.lower()}"] = sum(1 for p in out.get("pages") or [] if p.get("form_factor") == ff)
+        out = {**out, "counts": counts,
+               "layouts": sorted(out.get("layouts") or [], key=SECTION_SORTS["layouts"]["object"])[:preview],
+               "pages": [p for ff in ("Desktop", "Phone") for p in sorted(
+                   (p for p in out.get("pages") or [] if p.get("form_factor") == ff),
+                   key=SECTION_SORTS["pages"]["object"])[:preview]],
+               "apex": (out.get("apex") or [])[:preview], "flows": (out.get("flows") or [])[:preview]}
+    return out
+
+
 @router.get("/orgs/{org_id}/users/{user_sf_id}/pages-and-automation")
-async def pages_and_automation(org_id: str, user_sf_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+async def pages_and_automation(org_id: str, user_sf_id: str, section: Optional[str] = None,
+                               form_factor: Optional[str] = Query(None, pattern="^(Desktop|Phone)$"),
+                               preview: Optional[int] = Query(None, ge=1, le=50),
+                               params: PageParams = Depends(page_params),
+                               db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
     await privacy_mode.require_feature(db, org_id, "users")
     ui = await latest_ui_access(db, org_id)
     user, profiles, ps_rows, assignments, components, groups = await user_context(db, org_id, user_sf_id)
     out = ui_access.for_user(ui, user, profiles, ps_rows, assignments, components, groups)
-    out["apex_sharing"] = await apex_sharing(db, org_id, user_sf_id, (ui or {}).get("share_reasons") or {})
-    return out
+    if not section:
+        out["apex_sharing"] = await apex_sharing(db, org_id, user_sf_id, (ui or {}).get("share_reasons") or {})
+    return _shape(out, section, form_factor, preview, params)
 
 
 async def apex_sharing(db: AsyncSession, org_id: str, user_sf_id: str, labels: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
@@ -131,13 +193,18 @@ async def list_profiles(org_id: str, db: AsyncSession = Depends(get_database)) -
 
 
 @router.get("/orgs/{org_id}/profiles/{profile_id}/pages-and-automation")
-async def profile_pages_and_automation(org_id: str, profile_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+async def profile_pages_and_automation(org_id: str, profile_id: str, section: Optional[str] = None,
+                                       form_factor: Optional[str] = Query(None, pattern="^(Desktop|Phone)$"),
+                                       preview: Optional[int] = Query(None, ge=1, le=50),
+                                       params: PageParams = Depends(page_params),
+                                       db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
     profile = (await db.execute(select(ProfileSnapshot).where(
         ProfileSnapshot.organization_id == org_id, ProfileSnapshot.salesforce_id == profile_id))).scalar_one_or_none()
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     ps_rows, _, _ = await _ps_context(db, org_id)
-    return ui_access.for_profile(await latest_ui_access(db, org_id), profile_id, profile.name, ps_rows)
+    out = ui_access.for_profile(await latest_ui_access(db, org_id), profile_id, profile.name, ps_rows)
+    return _shape(out, section, form_factor, preview, params)
 
 
 @router.get("/orgs/{org_id}/permission-sets/{ps_id}/automation")
