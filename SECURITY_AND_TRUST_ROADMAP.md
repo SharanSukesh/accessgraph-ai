@@ -856,8 +856,38 @@ section has the detail.
   Kickoff vs Today. Runbook unchanged.
   **Not in v1:** integrations (Integration Sprawl reads live only);
   field-level "who sees it" for renamed fields beyond the mapping.
-- **Next:** item 20 with 10 (evidence on every finding, reviewer feedback
-  and validation), then 30.
+- **#71 (items 20 and 10, not merged; stacked on #70; migration
+  c5e7a9b2d4f6):** evidence, reviews and validation. Evidence
+  (services/evidence.py) is worked out when an item is read, for every
+  Health Report finding, anomaly and Priority Action: source (the
+  Salesforce objects or API, per finding code, falling back to its
+  category), when it was collected and the snapshot (item 21) it
+  reflects, coverage ("400 of 400 active users scored", a Data Quality
+  estimate's sample, partial record visibility), confidence (confirmed /
+  inferred / sampled / unknown), the permission it needs and that Newton
+  had it, and a methodology version per module. Reviews (item_reviews):
+  useful / not useful / expected with a reason, by admins and analysts
+  (viewers and auditors get 403), audit-logged, keyed so they survive the
+  analysis running again (finding code and object; anomaly user and type;
+  action type and target); reviews on a demo org are marked demo. Privacy:
+  reasons and titles are masked with the people; anomaly reviews go at
+  Metadata only; kept until the org is deleted (config retention class).
+  Validation report (/orgs/{id}/validation, sidebar under Attention):
+  title with org and period, reviewed / useful / not useful / expected
+  and precision (useful ÷ judged) overall, by module and by type, always
+  with the counts; demo reviews are labelled and never count. UI: an
+  Evidence panel with Review on the detail of every finding, anomaly and
+  Priority Action.
+  **Test (Lumenvale, local):** a license finding: UserLicense, Confirmed,
+  Snapshot 3, 400 of 400 users, method "Health Report rules 2026.10";
+  reviewed Useful ("demo: not counted"); an anomaly: Inferred, peers;
+  an action: Apex code coverage; Validation: "2 reviews are labelled demo
+  and don't count", Not measured. Migration up, down, up on Postgres.
+  **Not yet:** "not measured" vs "nothing found" on every module screen
+  (the evidence block carries it; module screens follow as they're
+  touched).
+- **Next:** item 30 (write up the risk-score options with Lumenvale's
+  numbers; the formula stays as it is).
 
 ## Build order
 
@@ -1203,6 +1233,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - **Depends on:** nothing, but it touches most services. **Effort: XL.** It's the largest foundation item; do it before 15-17 so they never build their own history.
 
 ### 20 + 10. Evidence on every finding, reviewer feedback and validation
+**Status: built in #71 (not merged; migration c5e7a9b2d4f6).**
 - **Problem:**
   - Consultants need to defend every finding in front of a client: where it came from, when, how complete the data was, and how sure we are.
   - "No observed usage", "no access" and "no issue" are different claims and must never be merged.
