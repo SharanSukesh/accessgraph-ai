@@ -107,6 +107,8 @@ export interface ProfileListing {
 }
 
 export interface SetAutomation {
+  /** Full list sizes when apex and flows are previews. */
+  counts?: { apex: number; flows: number }
   available: boolean
   reason?: string
   apex?: ApexRow[]

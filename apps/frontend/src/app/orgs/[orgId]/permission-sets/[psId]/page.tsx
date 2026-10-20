@@ -13,7 +13,7 @@
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { ChevronLeft, Shield, Users, Database, AlertTriangle, FileText, Settings, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Database, FileText, Settings, Shield, Users } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs'
@@ -312,6 +312,7 @@ export default function PermissionSetDetailPage() {
                   ))}
                 </tbody>
               </table>
+              <ViewAll shown={ps.users.length} total={ps.totalUsers} href={`/orgs/${orgId}/permission-sets/${psId}/users`} />
             </div>
           )}
         </CardContent>
@@ -360,6 +361,7 @@ export default function PermissionSetDetailPage() {
                   ))}
                 </tbody>
               </table>
+              <ViewAll shown={ps.objectPermissions.length} total={ps.totalObjectsGranted} href={`/orgs/${orgId}/permission-sets/${psId}/objects`} />
             </div>
           )}
         </CardContent>
@@ -373,12 +375,12 @@ export default function PermissionSetDetailPage() {
             <FileText className="h-5 w-5" />
             Field Access
             <Badge variant="default" size="sm">
-              {ps.fieldPermissions.length} explicit · {ps.objectPermissions.length - ps.fieldPermissions.length} inherited
+              {(ps.totalExplicitFieldObjects ?? 0).toLocaleString('en-US')} objects with explicit FLS · {((ps.totalFieldAccessObjects ?? 0) - (ps.totalExplicitFieldObjects ?? 0)).toLocaleString('en-US')} inherited · {ps.totalFieldsGranted.toLocaleString('en-US')} field rows
             </Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {ps.objectPermissions.length === 0 ? (
+          {(ps.totalFieldAccessObjects ?? 0) === 0 ? (
             <p className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55 py-4 text-center">
               This permission set grants no object-level access, so it provides no field access.
             </p>
@@ -388,24 +390,12 @@ export default function PermissionSetDetailPage() {
                 {/* Build a unified row per object: merge object-level perms
                     with any explicit FLS overrides for that object. */}
                 {(() => {
-                  const flsByObject = new Map(
-                    ps.fieldPermissions.map(g => [g.objectName, g])
-                  )
-                  // One row per object that has any access (object-level OR FLS).
-                  // Sort: explicit FLS objects first (so they're visually
-                  // grouped at the top), then inherited.
-                  const rows = ps.objectPermissions
-                    .map(op => ({
-                      objectName: op.objectName,
-                      objectPerm: op,
-                      fls: flsByObject.get(op.objectName) || null,
-                    }))
-                    .sort((a, b) => {
-                      const aHasFLS = a.fls != null ? 0 : 1
-                      const bHasFLS = b.fls != null ? 0 : 1
-                      if (aHasFLS !== bHasFLS) return aHasFLS - bHasFLS
-                      return a.objectName.localeCompare(b.objectName)
-                    })
+                  // One row per object the set grants, explicit FLS first (from the server, first 10).
+                  const rows = (ps.fieldAccess ?? []).map((r) => ({
+                    objectName: r.objectName,
+                    objectPerm: r.objectPerm,
+                    fls: r.fieldCount > 0 ? r : null,
+                  }))
 
                   return rows.map(({ objectName, objectPerm, fls }) => {
                     const isExpanded = !!expandedFieldGroups[objectName]
@@ -488,6 +478,14 @@ export default function PermissionSetDetailPage() {
                                     ))}
                                   </tbody>
                                 </table>
+                                {fls!.fieldCount > fls!.fields.length && (
+                                  <div className="px-3 py-2 text-xs border-t border-grove-border dark:border-grove-border-dk">
+                                    <Link href={`/orgs/${orgId}/permission-sets/${psId}/fields?object=${encodeURIComponent(objectName)}`}
+                                      className="font-medium text-primary-700 hover:underline dark:text-primary-300">
+                                      View all {fls!.fieldCount.toLocaleString('en-US')} fields on {objectName}
+                                    </Link>
+                                  </div>
+                                )}
                                 <p className="px-3 py-2 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 border-t border-grove-border dark:border-grove-border-dk">
                                   These are explicit FLS rows. Other fields on{' '}
                                   <span className="font-mono">{objectName}</span> still inherit{' '}
@@ -502,6 +500,8 @@ export default function PermissionSetDetailPage() {
                   })
                 })()}
               </div>
+              <ViewAll shown={(ps.fieldAccess ?? []).length} total={ps.totalFieldAccessObjects ?? 0} noun="objects"
+                href={`/orgs/${orgId}/permission-sets/${psId}/fields`} label={`View all ${ps.totalFieldsGranted.toLocaleString('en-US')} field rows`} />
               <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-3">
                 <strong>Explicit FLS</strong> = an admin set field-level security on that field.
                 {' '}<strong>Inherited</strong> = field has no FLS row, so access follows the object's
@@ -513,6 +513,21 @@ export default function PermissionSetDetailPage() {
       </Card>
       </Reveal>
       <SetAutomationCard orgId={orgId} psId={psId} />
+    </div>
+  )
+}
+
+/** "Showing 10 of 1,240 · View all" under a preview list (the standing pagination rule). */
+function ViewAll({ shown, total, href, noun = '', label }: { shown: number; total: number; href: string; noun?: string; label?: string }) {
+  if (total === 0) return null
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70">
+      <span>Showing {Math.min(shown, total).toLocaleString('en-US')} of {total.toLocaleString('en-US')}{noun ? ` ${noun}` : ''}</span>
+      {(total > shown || label) && (
+        <Link href={href} className="inline-flex items-center gap-1 font-medium text-primary-700 hover:underline dark:text-primary-300">
+          {label ?? `View all ${total.toLocaleString('en-US')}`} <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      )}
     </div>
   )
 }

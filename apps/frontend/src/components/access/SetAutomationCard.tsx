@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Settings } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/Card'
@@ -27,7 +28,7 @@ export function SetAutomationCard({ orgId, psId, data: given }: { orgId: string;
         ) : (
           <>
             <div>
-              <p className="mb-1 text-xs font-semibold">Apex classes ({data.apex?.length ?? 0})</p>
+              <p className="mb-1 text-xs font-semibold">Apex classes ({(data.counts?.apex ?? data.apex?.length ?? 0).toLocaleString('en-US')})</p>
               {data.apex?.length ? (
                 <ul className="grid gap-x-6 gap-y-0.5 font-mono text-xs sm:grid-cols-2">
                   {data.apex.map((c) => (
@@ -39,9 +40,10 @@ export function SetAutomationCard({ orgId, psId, data: given }: { orgId: string;
                   ))}
                 </ul>
               ) : <p className={muted}>None.</p>}
+              <More orgId={orgId} psId={psId} section="apex" shown={data.apex?.length ?? 0} total={data.counts?.apex} />
             </div>
             <div>
-              <p className="mb-1 text-xs font-semibold">Flows ({data.flows?.length ?? 0})</p>
+              <p className="mb-1 text-xs font-semibold">Flows ({(data.counts?.flows ?? data.flows?.length ?? 0).toLocaleString('en-US')})</p>
               {data.flows?.length ? (
                 <ul className="space-y-0.5 text-xs">
                   {data.flows.map((f) => (
@@ -53,6 +55,7 @@ export function SetAutomationCard({ orgId, psId, data: given }: { orgId: string;
                   ))}
                 </ul>
               ) : <p className={muted}>None.</p>}
+              <More orgId={orgId} psId={psId} section="flows" shown={data.flows?.length ?? 0} total={data.counts?.flows} />
             </div>
             <p className="text-xs">Run Flows permission: <strong>{data.run_flows == null ? 'not read' : data.run_flows ? 'yes' : 'no'}</strong></p>
             {data.apex_note && <p className={`text-xs ${muted}`}>{data.apex_note}</p>}
@@ -61,5 +64,18 @@ export function SetAutomationCard({ orgId, psId, data: given }: { orgId: string;
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** "Showing 10 of 240 · View all" under a preview list. */
+function More({ orgId, psId, section, shown, total }: { orgId: string; psId: string; section: 'apex' | 'flows'; shown: number; total?: number }) {
+  if (!total || total <= shown) return null
+  return (
+    <p className="mt-1 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+      Showing {shown} of {total.toLocaleString('en-US')} ·{' '}
+      <Link href={`/orgs/${orgId}/permission-sets/${psId}/automation/${section}`} className="font-medium text-primary-700 hover:underline dark:text-primary-300">
+        View all
+      </Link>
+    </p>
   )
 }

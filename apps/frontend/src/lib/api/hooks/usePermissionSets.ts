@@ -48,6 +48,15 @@ export interface PermissionSetDetail {
     }>
   }>
   totalFieldsGranted: number
+  /** One row per object the set grants, explicit field-level security first (a preview: first 10, each with its first 10 fields). */
+  fieldAccess?: Array<{
+    objectName: string
+    objectPerm: { read: boolean; create: boolean; edit: boolean; delete: boolean; viewAll: boolean; modifyAll: boolean }
+    fieldCount: number
+    fields: Array<{ fieldName: string; qualifiedId: string; read: boolean; edit: boolean }>
+  }>
+  totalFieldAccessObjects?: number
+  totalExplicitFieldObjects?: number
   // Keys are categories (e.g., "Data Access"); values are arrays of granted
   // system permissions in that category. Categories with zero granted perms
   // are omitted, so the UI can iterate Object.entries() safely.
@@ -64,9 +73,10 @@ export const permissionSetKeys = {
 
 export function usePermissionSetDetail(orgId: string, psId: string) {
   return useQuery<PermissionSetDetail>({
-    queryKey: permissionSetKeys.detail(orgId, psId),
+    queryKey: [...permissionSetKeys.detail(orgId, psId), 'preview'],
+    // Each list cut to its first 10 rows (totals stay whole); full lists are paged on their own pages.
     queryFn: () =>
-      apiClient.get<PermissionSetDetail>(`/orgs/${orgId}/permission-sets/${psId}`),
+      apiClient.get<PermissionSetDetail>(`/orgs/${orgId}/permission-sets/${psId}?preview=10`),
     enabled: !!orgId && !!psId,
   })
 }
