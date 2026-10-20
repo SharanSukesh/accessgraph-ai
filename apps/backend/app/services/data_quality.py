@@ -772,6 +772,9 @@ class DataQualityService:
         evidence.update(coverage_note)
         evidence["staleness_checked"] = stale_checked is not None
         evidence["never_populated"] = never_populated
+        # Per-field counts (aggregates, no values), for cleanup impact (item 13).
+        evidence["populated"] = {f: int(populated_counts.get(f, 0)) for f in required_names}
+        evidence["records_counted"] = total_records
         if text_counts:
             evidence["text_fields"] = text_counts
         evidence["critical"] = {
@@ -888,6 +891,9 @@ class DataQualityService:
             # Empty in the sample doesn't prove a field is never used.
             "not_populated_in_sample": not_in_sample,
             "never_populated": [],
+            # Per-field counts in the sample (aggregates, no values), for cleanup impact (item 13).
+            "populated": {f: int(counts.get(f, 0)) for f in required_names},
+            "records_counted": n,
             **coverage_note,
         }
         text_counts = self._uncounted_text_fields(text_fields)

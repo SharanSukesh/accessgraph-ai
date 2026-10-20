@@ -75,6 +75,18 @@
       "permissionable": true
      },
      {
+      "name": "Fax_Ext__c",
+      "label": "Fax Ext",
+      "type": "string",
+      "custom": true,
+      "nillable": true,
+      "createable": true,
+      "defaultedOnCreate": false,
+      "calculated": false,
+      "length": 255,
+      "permissionable": true
+     },
+     {
       "name": "Industry",
       "label": "Industry",
       "type": "picklist",
@@ -128,6 +140,19 @@
       "defaultedOnCreate": false,
       "calculated": false,
       "length": 255,
+      "permissionable": true
+     },
+     {
+      "name": "Old_Score__c",
+      "label": "Old Score",
+      "type": "double",
+      "custom": true,
+      "nillable": true,
+      "createable": true,
+      "defaultedOnCreate": false,
+      "calculated": false,
+      "precision": 18,
+      "scale": 2,
       "permissionable": true
      },
      {

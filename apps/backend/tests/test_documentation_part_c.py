@@ -141,7 +141,7 @@ async def test_part_c_sheets_on_lumenvale(client, async_db_session, lumenvale): 
 
     # Flow elements and the fields each flow reads or writes.
     head, elements = _rows(wb["Flow Elements"])
-    assert len(elements) == 15 and len(head) == len(set(head))
+    assert len(elements) == 16 and len(head) == len(set(head))  # 16th: item 13's inactive Legacy Fax Sync
     discount = next(r for r in elements if r["API name"] == "Discount_Approval_Request")
     assert (discount["Screens"], discount["Get records"], discount["Update records"]) == (2, 1, 1)
     assert discount["Actions called"] == "submit (submit)"

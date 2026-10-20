@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { useFieldDetails } from '@/lib/api/hooks/useFields'
 import { EncryptionBadge, FieldDetailsCard } from '@/components/schema/FieldMetadata'
 import { AccessCard } from '@/components/schema/AccessLists'
+import { CleanupImpactCard } from '@/components/schema/CleanupImpact'
 
 export default function FieldDetailPage() {
   const params = useParams()
@@ -140,6 +141,9 @@ export default function FieldDetailPage() {
 
       {/* Who can access it: counts per kind, the first 10, and View all (paged). */}
       <AccessCard orgId={orgId} target="fields" targetId={fieldId} summary={field.access} title="Who can access this field" />
+
+      {/* Cleanup impact (roadmap item 13): what references it and how many records hold a value. */}
+      <CleanupImpactCard orgId={orgId} fieldId={fieldId} />
     </div>
   )
 }

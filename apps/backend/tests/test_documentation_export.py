@@ -55,7 +55,7 @@ async def test_documentation_workbook_on_lumenvale(client, lumenvale):  # noqa: 
 
     _, fields = _rows(wb["Fields"])
     f = {(x["Object"], x["Field"]): x for x in fields}
-    assert len(fields) == 260
+    assert len(fields) == 262  # with item 13's Account.Old_Score__c and Fax_Ext__c
     assert f[("Employee__c", "National_ID__c")]["Encryption"] == "Shield"
     assert f[("Compensation__c", "Salary_Band__c")]["Encryption"] == "Shield"
     assert f[("Treasury_Account__c", "Account_Number__c")]["Type"] == "Text (Encrypted)(32)"
@@ -102,9 +102,9 @@ async def test_metadata_only_leaves_out_people(async_db_session):
     head, objects = _rows(wb["Objects"])
     assert "Users with Read" not in head and len(objects) == 29
     _, fields = _rows(wb["Fields"])
-    assert len(fields) == 260  # configuration is the same at every level
+    assert len(fields) == 262  # configuration is the same at every level
     head, rules = _rows(wb["Validation Rules"])
-    assert len(rules) == 25 and next(r for r in rules if r["Rule"] == "Industry_Required")[
+    assert len(rules) == 26 and next(r for r in rules if r["Rule"] == "Industry_Required")[
         "Custom permissions it checks"] == "Bypass_Validation"
     head, perms = _rows(wb["Custom Permissions"])
     assert "Active users granted it" not in head and len(perms) == 3
@@ -182,7 +182,7 @@ async def test_part_b_sheets_on_lumenvale(client, lumenvale):  # noqa: F811
     org_id, cookie = lumenvale
     wb = load_workbook(io.BytesIO((await client.get(f"/orgs/{org_id}/documentation.xlsx", cookies=cookie)).content))
     _, rules = _rows(wb["Validation Rules"])
-    assert len(rules) == 25 and sum(r["Active"] == "No" for r in rules) == 3
+    assert len(rules) == 26 and sum(r["Active"] == "No" for r in rules) == 3  # 26th: item 13's Old_Score_Range
     industry = next(r for r in rules if r["Rule"] == "Industry_Required")
     assert industry["Custom permissions it checks"] == "Bypass_Validation (9 active users hold it)"
     _, rt = _rows(wb["Picklists by Record Type"])

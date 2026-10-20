@@ -10,7 +10,7 @@ Record Pages, Flows, Apex Classes; part b adds the rest of SHEETS. Part c:
 Fields on Layouts (#4), Flow Elements and Flow Fields (#9), Approval Steps
 (#18), External Data Sources and record types through permission sets (#11).
 Part c2: Custom Metadata Types and, for the types an admin turned on,
-Custom Metadata Records (#7).
+Custom Metadata Records (#7). Item 13: Cleanup Candidates (#21, #22).
 
 Configuration sheets work at every privacy level. User counts and the
 per-user sheets (Assignments, Profile Users) need user records, so at
@@ -61,7 +61,8 @@ SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Picklists by Record 
           "Record Types", "Layouts", "Fields on Layouts", "Unused Layouts", "Record Pages", "Buttons and Links",
           "List Views", "Field Sets", "Apps", "Flows", "Flow Elements", "Flow Fields", "Approval Processes",
           "Approval Steps", "Apex Classes", "Apex Triggers", "Visualforce", "Lightning Components", "Static Resources",
-          "Custom Permissions", "External Data Sources", "Custom Metadata Types", "Custom Metadata Records")
+          "Custom Permissions", "External Data Sources", "Custom Metadata Types", "Custom Metadata Records",
+          "Cleanup Candidates")
 NOT_SYNCED_DOCS = "Not read yet: sync the org to read this part of its configuration."
 DAY_ABBR = {"monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu", "friday": "Fri",
             "saturday": "Sat", "sunday": "Sun"}
@@ -702,6 +703,29 @@ def _cmdt_records(ws: Worksheet, o: _Org, enabled: Set[str]) -> None:
            if not enabled else "No records read yet for the types turned on: sync the org.")
 
 
+def _cleanup(ws: Worksheet, index: Any) -> None:
+    """Item 13: every custom field, what references it and how many records hold a value."""
+    from app.services.cleanup_impact import ORDER
+    cols = [Column("Object", 22), Column("Field", 28), Column("Verdict", 30), Column("Confidence", 11),
+            Column("References", 11), Column("Where", 60, wrap=True), Column("Records with a value", 14, fmt="#,##0"),
+            Column("Records", 12, fmt="#,##0"), Column("Population", 14)]
+    if index.schema is None:
+        _table(ws, cols, [], NOT_SYNCED_SCHEMA)
+        return
+    rows = []
+    for r in sorted(index.candidates(), key=lambda r: (ORDER.index(r["level"]), r["object"], r["field"])):
+        refs = index.impact(r["object"], r["field"])["references"]
+        where = "; ".join(f"{x['kind']}: {x['name']}" + (" (inactive)" if x.get("active") is False else "") for x in refs[:12])
+        if len(refs) > 12:
+            where += f"; and {len(refs) - 12} more"
+        rows.append([r["object"], r["field"], r["verdict"], r["confidence"], r["references"], where, r["populated"],
+                     r["records"], "Not measured" if r["populated"] is None else "Estimate" if r["estimated"] else "Exact"])
+    _table(ws, cols, rows, "No custom fields.")
+    note = ws.cell(row=len(rows) + 3, column=1, value="Never a promise that deleting is safe. Not checkable: " +
+                   " ".join(index.impact("", "")["notCheckable"]))
+    note.font = Font(italic=True)
+
+
 def _docs_list(o: _Org, key: str) -> Optional[List[Dict[str, Any]]]:
     return None if o.docs is None else o.docs.get(key)
 
@@ -980,6 +1004,8 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
     on = cmdt.enabled_types(org)
     _cmdt_types(sheets["Custom Metadata Types"], o, on)
     _cmdt_records(sheets["Custom Metadata Records"], o, on)
+    from app.services.cleanup_impact import load_index
+    _cleanup(sheets["Cleanup Candidates"], await load_index(db, org.id))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

@@ -37,7 +37,9 @@ async def test_data_quality_runs_on_the_demo_org_and_flags_the_plants(async_db_s
     assert "92% of 18,400 records" in s["Legacy_Order__c"].evidence["critical"]["flags"][0]["reason"]
     assert _codes(s["Partner_Survey__c"]) == {"mostly_empty"}
     assert _codes(s["Account"]) == {"never_populated"}
-    assert sorted(s["Account"].evidence["never_populated"]) == ["DUNS_Override__c", "Legacy_Region__c", "Secondary_SIC__c"]
+    # Old_Score__c is item 13's "unpopulated but referenced" cleanup candidate.
+    assert sorted(s["Account"].evidence["never_populated"]) == ["DUNS_Override__c", "Legacy_Region__c", "Old_Score__c",
+                                                                "Secondary_SIC__c"]
     # Every other object is clean.
     flagged = {name for name, r in s.items() if _codes(r)}
     assert flagged == {"Legacy_Order__c", "Partner_Survey__c", "Account"}
@@ -78,7 +80,7 @@ async def test_health_report_and_priority_actions_follow_the_run(async_db_sessio
         select(OrgFinding).where(OrgFinding.snapshot_id == snap.id))).scalars().all()}
 
     assert codes["CRITICAL_OBJECT_STALE"].title == "Mostly stale records on 1 object"
-    assert codes["FIELDS_NEVER_POPULATED"].title == "3 never-populated fields on 1 object"
+    assert codes["FIELDS_NEVER_POPULATED"].title == "4 never-populated fields on 1 object"
     assert codes["CRITICAL_OBJECT_MOSTLY_EMPTY"].title == "1 mostly empty object"
     assert "Legacy Order" in str(codes["CRITICAL_OBJECT_STALE"].evidence["objects"])
 

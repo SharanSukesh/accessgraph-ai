@@ -688,9 +688,50 @@ section has the detail.
   can read; Account depth 3 with system lookups: 31 objects, 82
   relationships; SVG demo-data-model-Invoice__c-depth2.svg; CSV 12 rows;
   image pack Data model slide centred on Account. Runbook unchanged.
-- **Next:** the rest of step 2: item 13 (cleanup impact), 14
-  (change-history gaps) and matrix #26–28, then step 3 (21 snapshots, 9 v1
-  org comparison, 20 evidence with 10, 30 write-up).
+- **#66 (item 13, not merged; stacked on #65):** cleanup impact (parity
+  #21, #22). services/cleanup_impact.py: for a field, the references found
+  by Salesforce's dependency index (MetadataComponentDependency, Beta, one
+  Tooling query of at most 2,000 rows, custom fields only; reports aren't
+  in Tooling results) and by Newton's own scans of what the sync read
+  (validation rule formulas, formula fields including other objects'
+  relationship paths, flows' record elements and trigger conditions with
+  inactive flows' latest version, page layouts, and the custom field names
+  each Apex class and trigger mentions), merged by place with who found it;
+  population from Data Quality (per-field counts now kept in its evidence,
+  aggregates only). Verdict, never "safe to delete": In use / Referenced
+  only by inactive configuration / No references found but it holds values
+  / Strong cleanup candidate / No references found, population not
+  measured / Standard field, with a confidence (High when the index was
+  read in full, every scan ran and population is exact), the sources
+  checked and the standing list of what can't be checked. New reads (trust
+  doc updated, no new permission): CustomField ids, the dependency index,
+  Apex trigger bodies (names only kept), FlowDefinitionView.LatestVersionId.
+  UI: "Can this field be deleted?" card on every field page (first 10
+  references, View all → /fields/{id}/impact, paged), Cleanup candidates
+  page (/orgs/{id}/cleanup: every custom field, tabs per verdict with
+  counts, search, object filter, sort, Export CSV of every row; linked from
+  Objects and Fields). Workbook: Cleanup Candidates sheet (36 sheets).
+  Lumenvale: Account.Old_Score__c (never populated) and Fax_Ext__c (60%
+  populated) added to the Data Quality and field metadata parts; part
+  12-cleanup-impact.json (generator build_cleanup_impact_part.py) adds the
+  validation rule Old_Score_Range, the inactive flow Legacy Fax Sync,
+  custom field ids, 10 dependency index rows and Apex field names.
+  Runbook checked: 41 / 18 / $183,180 / $116,220, 11 Priority Actions (3
+  High, 6 Medium, 2 Low), SOX 4; the never-populated finding's title reads
+  4 fields instead of 3 (DEMO_NOTES updated). A first try with Fax_Ext__c
+  at 4% pushed Account under the 50% fill threshold and turned its data
+  action Medium; 60% keeps it Low.
+  **Test (Lumenvale after a re-sync and Data Quality):** Legacy_Region__c
+  "Strong cleanup candidate", High, 0 of 5,200; Old_Score__c "In use"
+  (Validation rule Account.Old_Score_Range, found by the index and the
+  scan); Fax_Ext__c "Referenced only by inactive configuration" (Legacy
+  Fax Sync, inactive), 3,120 of 5,200; Cleanup candidates "Showing 1–25 of
+  78", Strong candidates 3, page 2 "26–50 of 78", CSV 78 rows.
+  **UNVERIFIED:** which metadata types the dependency index covers (no
+  official list); the shape of RefMetadataComponentName.
+- **Next:** the rest of step 2: item 14 (change-history gaps) and matrix
+  #26–28, then step 3 (21 snapshots, 9 v1 org comparison, 20 evidence with
+  10, 30 write-up).
 
 ## Build order
 
@@ -1248,6 +1289,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 8, 1. **Effort: M.**
 
 ### 13. Impact analysis for cleanup
+**Status: built in #66 (not merged).**
 - **Problem:** "Can we delete this field?" is a frequent, billable question, and the wrong answer breaks production.
 - **Approach:** combine
   1. **Salesforce's dependency data** (`MetadataComponentDependency`): Beta ✓, 2,000 rows per Tooling query ✓, 100,000 via Bulk API 2.0 ✓, no ORDER BY / COUNT / OFFSET ✓, reports excluded from Tooling queries ✓. There's no official list of supported types ✓, so coverage is **UNVERIFIED** by type.

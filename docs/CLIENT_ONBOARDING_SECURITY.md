@@ -59,6 +59,14 @@ It also documents in more detail, with no new permission:
 - **External data sources:** name, label and type, never the endpoint, plus which profiles and permission sets can use each.
 - **Record types per permission set:** the record types each permission set makes available, read from the set's metadata, one query per set, at most 200. UNVERIFIED: whether that read works with these permissions. Newton stops at the first failure and the workbook says the column wasn't read.
 
+For cleanup impact ("can this field be deleted?"), Newton reads more, with no new permission:
+- **Dependency index:** Salesforce's `MetadataComponentDependency` rows that point at custom fields. This is one query of at most 2,000 rows; Newton doesn't use Bulk API 2.0 for more, and says when the limit was reached.
+- **Custom field ids:** to name each field in the index.
+- **Inactive flows:** the latest version of each one, so what it would use if reactivated is known.
+- **Field names in Apex:** Apex trigger bodies are now read as well as class bodies. From both, Newton keeps only the custom field and object API names the code mentions (names ending `__c`, outside comments), never the code.
+
+Field population comes from Data Quality's existing aggregate counts, which are now kept per inspected field; they are counts, never values.
+
 **Custom metadata records are off by default.** Their values can hold
 configuration a client treats as confidential, such as endpoints, the
 credential each integration uses, and thresholds. Every sync lists the
