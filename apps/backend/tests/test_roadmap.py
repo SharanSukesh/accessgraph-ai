@@ -221,3 +221,39 @@ async def test_demo_previews_firm_rates_on_screen_only(client, async_db_session,
     x = await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}/export.xlsx?rates=firm", cookies=cookie)
     rates = [row for row in load_workbook(io.BytesIO(x.content))["Rate card"].iter_rows(min_row=2, values_only=True)]
     assert all(src == "Demo rate card" for _, _, src in rates) and 950 not in [rate for _, rate, _ in rates]
+
+
+@pytest.mark.asyncio
+async def test_slides_and_sow_appendix(client, async_db_session, lumenvale):  # noqa: F811
+    from app.services.report import roadmap_deliverables as rd
+    from tests.test_image_pack import _can_render
+
+    db = async_db_session
+    org_id, cookie = lumenvale
+    r = await _build(client, db, org_id, cookie)
+    pk = r["packages"]
+    next(p for p in pk if p["playbook"] == "licence-reclaim")["confirmed"] = {"low": 3, "high": 4}
+    next(p for p in pk if p["playbook"] == "data-storage")["included"] = False
+    d = (await client.put(f"/orgs/{org_id}/roadmaps/{r['id']}", json={"packages": pk}, cookies=cookie)).json()
+
+    # The content, without rendering: overview, packages table, one slide per package in the plan, assumptions.
+    s = rd.slides(d)
+    assert [t for t, _, _ in s][:2] == ["Roadmap", "Work packages"] and s[-1][0] == "Assumptions" and len(s) == 7
+    reclaim = next(b for t, _, b in s if t == "Dormant licence reclaim")
+    assert "3–4 days, confirmed" in reclaim and "Confirm each user" in reclaim
+    assert "Data storage and field cleanup" not in "".join(b for _, _, b in s)
+    assert any("example playbooks" in a for a in rd.assumptions(d)) and any("Demo roadmap" in a for a in rd.assumptions(d))
+    html = rd.sow_html(d, "Lumenvale Systems (Demo)", "Acme Consulting", "#123456")
+    assert "Appendix: scope, effort and pricing" in html and "prepared by Acme Consulting" in html
+    assert "Inferred: 2–5 days (sized by 27 users)" in html and "Confirmed: 3–4 days" in html
+    assert "Out of scope for now: Data storage and field cleanup" in html and "Demo roadmap" in html
+
+    if not _can_render():
+        pytest.skip("WeasyPrint system libraries not installed")
+    x = await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}/slides.pptx", cookies=cookie)
+    assert x.status_code == 200 and 'filename="lumenvale-systems-demo-roadmap-slides.pptx"' in x.headers["content-disposition"]
+    from pptx import Presentation
+    deck = Presentation(io.BytesIO(x.content))
+    assert len(deck.slides) == 7 and "Demo data" in deck.slides[0].notes_slide.notes_text_frame.text
+    pdf = await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}/sow.pdf", cookies=cookie)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")

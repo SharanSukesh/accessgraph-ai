@@ -17,6 +17,8 @@ Per client org:
   PUT    /orgs/{org_id}/roadmaps/{id}            {name, packages, rate_overrides}
   DELETE /orgs/{org_id}/roadmaps/{id}
   GET    /orgs/{org_id}/roadmaps/{id}/export.xlsx
+  GET    /orgs/{org_id}/roadmaps/{id}/slides.pptx    closing slides (image pack renderer)
+  GET    /orgs/{org_id}/roadmaps/{id}/sow.pdf        SOW appendix
 
 Admins and analysts edit roadmaps; everyone with access reads them. Demo
 orgs use the demo rate card and playbooks and are labelled demo. The firm's
@@ -316,6 +318,56 @@ async def export_roadmap(org_id: str, rid: str, request: Request, db: AsyncSessi
     data = await _full(db, org, r, request.state.principal.home_org_id)
     pbs, _ = await _inputs(db, org, request.state.principal.home_org_id)
     body = build_roadmap_workbook(org, data, pbs)
-    name = "".join(c if c.isalnum() else "-" for c in r.name).strip("-").lower() or "roadmap"
-    return StreamingResponse(io.BytesIO(body), headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'},
+    return StreamingResponse(io.BytesIO(body), headers={
+        "Content-Disposition": f'attachment; filename="{_file_name(r, bool(org.is_demo), "xlsx")}"'},
                              media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def _file_name(r: EngagementRoadmap, is_demo: bool, ext: str, suffix: str = "") -> str:
+    import re
+    base = re.sub(r"-+", "-", "".join(c if c.isalnum() else "-" for c in r.name)).strip("-").lower() or "roadmap"
+    return f"{'demo-' if is_demo and 'demo' not in base else ''}{base}{'-' + suffix if suffix else ''}.{ext}"
+
+
+async def _deliverable_inputs(db: AsyncSession, org_id: str, rid: str, request: Request) -> Tuple[EngagementRoadmap, Organization, Dict[str, Any], Any]:
+    from app.api.routes.org_analyzer import _report_brand
+
+    r = await _roadmap(db, org_id, rid)
+    org = await db.get(Organization, org_id)
+    assert org is not None
+    data = await _full(db, org, r, request.state.principal.home_org_id)
+    return r, org, data, await _report_brand(db, org_id, request)
+
+
+def _unavailable(e: OSError) -> HTTPException:
+    import logging
+    logging.getLogger(__name__).exception("Rendering libraries missing: %s", e)
+    return HTTPException(status_code=503, detail="Rendering unavailable. Check server logs.")
+
+
+@router.get("/orgs/{org_id}/roadmaps/{rid}/slides.pptx")
+async def roadmap_slides(org_id: str, rid: str, request: Request, db: AsyncSession = Depends(get_database)) -> StreamingResponse:
+    from app.services.report.roadmap_deliverables import build_slides_pptx
+
+    r, org, data, brand = await _deliverable_inputs(db, org_id, rid, request)
+    try:
+        body = build_slides_pptx(data, brand.accent_hex, org.name, bool(org.is_demo))
+    except OSError as e:
+        raise _unavailable(e) from None
+    return StreamingResponse(io.BytesIO(body), headers={
+        "Content-Disposition": f'attachment; filename="{_file_name(r, bool(org.is_demo), "pptx", "slides")}"'},
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+
+
+@router.get("/orgs/{org_id}/roadmaps/{rid}/sow.pdf")
+async def roadmap_sow(org_id: str, rid: str, request: Request, db: AsyncSession = Depends(get_database)) -> StreamingResponse:
+    from app.services.report.roadmap_deliverables import build_sow_pdf
+
+    r, org, data, brand = await _deliverable_inputs(db, org_id, rid, request)
+    try:
+        body = build_sow_pdf(data, org.name, brand.firm_name, brand.accent_hex)
+    except OSError as e:
+        raise _unavailable(e) from None
+    return StreamingResponse(io.BytesIO(body), headers={
+        "Content-Disposition": f'attachment; filename="{_file_name(r, bool(org.is_demo), "pdf", "sow-appendix")}"'},
+        media_type="application/pdf")

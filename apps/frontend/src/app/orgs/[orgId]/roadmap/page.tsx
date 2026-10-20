@@ -4,14 +4,15 @@
  * Priced roadmap (P1): the Health Report's findings grouped into work
  * packages, each with an effort range (inferred from the firm's playbook,
  * or confirmed by a consultant, never merged), a price range from the rate
- * card, estimated savings and dependencies, in phases. Exported as Excel.
+ * card, estimated savings and dependencies, in phases. Exported as Excel,
+ * closing slides (PowerPoint) and an SOW appendix (PDF).
  */
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileSpreadsheet, Route, Trash2 } from 'lucide-react'
+import { FileSpreadsheet, FileText, Presentation, Route, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/shared/Card'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
@@ -130,8 +131,13 @@ export default function RoadmapPage() {
               {canWrite ? <input aria-label="Roadmap name" key={r.id} defaultValue={r.name} onBlur={(e) => e.target.value !== r.name && save.mutate({ name: e.target.value })}
                 className="min-w-0 flex-1 rounded-md bg-transparent px-2 py-1 text-xl font-semibold ring-1 ring-transparent hover:ring-grove-border focus:ring-grove-border" />
                 : <h2 className="flex-1 text-xl font-semibold">{r.name}</h2>}
-              <a href={`${API_BASE}/orgs/${orgId}/roadmaps/${r.id}/export.xlsx`} className="inline-flex items-center gap-2 rounded-md border border-grove-border px-3 py-1.5 text-sm font-medium dark:border-grove-border-dk">
-                <FileSpreadsheet className="h-4 w-4" aria-hidden />Excel</a>
+              {([['export.xlsx', 'Excel', FileSpreadsheet, 'Every package, finding, rate and playbook'],
+                 ['slides.pptx', 'Closing slides', Presentation, 'The roadmap, the packages by phase, one slide per package and the assumptions'],
+                 ['sow.pdf', 'SOW appendix', FileText, 'Scope, approach, prerequisites, risks, effort and price per package']] as const).map(([file, label, Icon, title]) => (
+                <a key={file} href={`${API_BASE}/orgs/${orgId}/roadmaps/${r.id}/${file}`} title={title}
+                  className="inline-flex items-center gap-2 rounded-md border border-grove-border px-3 py-1.5 text-sm font-medium dark:border-grove-border-dk">
+                  <Icon className="h-4 w-4" aria-hidden />{label}</a>
+              ))}
               {canWrite && <button type="button" aria-label="Delete roadmap" onClick={() => remove.mutate()} className={`rounded p-1 ${MUTED} hover:text-red-700`}><Trash2 className="h-4 w-4" /></button>}
             </div>
             {r.labels.demo && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">{r.labels.demo}</p>}

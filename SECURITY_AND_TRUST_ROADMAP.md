@@ -960,7 +960,26 @@ section has the detail.
   demo roadmap with the firm's rate card on screen only. A demo org's
   exports and images always use the demo rate card, and demo roadmaps
   take no per-engagement rates, so real rates never leave in a demo file.
-- **Next:** P1 part 2 (SOW appendix and closing slides), then step 6.
+- **#75 (P1 part 2; not merged; stacked on #74; no migration):** the
+  roadmap's deliverables, from the same computed roadmap as the page and
+  the Excel. Closing slides (PowerPoint, rendered with the image pack's
+  renderer and styles, item 3): the roadmap at a glance (effort split
+  inferred / confirmed, price, estimated savings, packages by phase), the
+  packages table, one slide per package in the plan (what was found, the
+  playbook's steps, effort with its basis, price, estimated savings) and
+  the assumptions; no logos, demo decks say so in the notes and the file
+  name. SOW appendix (A4 PDF under the firm's name and accent): summary
+  with totals, then per package the findings addressed, approach,
+  prerequisites, risks, inferred and confirmed effort and the one used,
+  price and notes; packages left out are listed as out of scope; day rates
+  and assumptions. Download buttons on the Roadmap page.
+  **Test (Lumenvale, local):** 8 slides (5 packages); the SOW is 4 pages;
+  package savings add up to $183,180.
+  **Question in the PR:** the SOW appendix is a PDF; a Word version needs
+  python-docx, a new dependency.
+- **Next:** step 6: record access for Cases, Contacts and Leads (7), the
+  full role impact preview (35c), the daily API usage collector (P3) and
+  profile and permission set comparison (6).
 
 ## Build order
 
@@ -1345,7 +1364,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 ## Phase C2: priced roadmap
 
 ### P1 (+ P2). Priced roadmap builder with remediation playbooks
-**Status: part 1 built in #74 (not merged): builder, rate card, playbooks, Excel. Part 2: SOW appendix and slides.**
+**Status: built in #74 (builder, rate card, playbooks, Excel) and #75 (closing slides, SOW appendix); not merged.**
 - **Problem:** the positioning promises an assessment that ends in a client-ready, priced roadmap. Today consultants build it by hand after every assessment.
 - **Decision (17 Oct):** build it right after phase C. It depends on the evidence model (20).
 - **Approach:**
