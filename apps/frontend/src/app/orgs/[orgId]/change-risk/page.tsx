@@ -14,6 +14,8 @@
  * palette + typography + SVG conventions).
  */
 
+import { useListState } from '@/lib/list/useListState'
+import { Pagination } from '@/components/shared/Pagination'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
@@ -83,23 +85,22 @@ function ChangeRiskContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
-  // Filter state — kept URL-independent for v1.
-  const [tier, setTier] = useState<BlastTier | undefined>(undefined)
-  const [section, setSection] = useState<string | undefined>(undefined)
-  const [actor, setActor] = useState<string | undefined>(undefined)
-
-  // Pagination state — 30 events per page, offset advances by 30.
-  const PAGE_SIZE = 30
-  const [page, setPage] = useState(0)
+  // Paged by the server; filters, page and size live in the URL (cr.*).
+  const { state: list, update } = useListState('cr', { filters: ['tier', 'section', 'actor'] })
+  const tier = (list.filters.tier || undefined) as BlastTier | undefined
+  const setTier = (v: BlastTier | undefined) => update({ filters: { tier: v ?? '' } })
+  const section = list.filters.section || undefined
+  const setSection = (v: string | undefined) => update({ filters: { section: v ?? '' } })
+  const actor = list.filters.actor || undefined
+  const setActor = (v: string | undefined) => update({ filters: { actor: v ?? '' } })
+  const page = list.page - 1
+  const setPage = (p: number) => update({ page: p + 1 })
 
   // Business hours config — persisted per-org in localStorage so
   // returning users see their preferred timeframe pre-filled. Any
   // filter change resets pagination so the user doesn't land on an
   // out-of-range page after narrowing the result set.
   const [businessConfig, setBusinessConfig] = useBusinessHoursConfig(orgId)
-  useEffect(() => {
-    setPage(0)
-  }, [tier, section, actor])
 
   const {
     data: summary,
@@ -114,8 +115,8 @@ function ChangeRiskContent() {
     tier,
     section,
     actor,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    limit: list.pageSize,
+    offset: page * list.pageSize,
   })
   const runMutation = useRunChangeRisk(orgId)
 
@@ -469,7 +470,7 @@ function ChangeRiskContent() {
                   <HorizontalBarChart
                     items={topSections}
                     onSelect={(name) =>
-                      setSection((s) => (s === name ? undefined : name))
+                      setSection(section === name ? undefined : name)
                     }
                     activeSelection={section}
                   />
@@ -494,7 +495,7 @@ function ChangeRiskContent() {
                   actors={actorTable}
                   activeSelection={actor}
                   onSelect={(name) =>
-                    setActor((a) => (a === name ? undefined : name))
+                    setActor(actor === name ? undefined : name)
                   }
                   newActors={newActorsSet}
                 />
@@ -601,12 +602,8 @@ function ChangeRiskContent() {
                       <TimelineEvent key={e.id} event={e} orgId={orgId} />
                     ))}
                   </ul>
-                  <PaginationBar
-                    total={eventPage.total}
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    onChange={setPage}
-                  />
+                  <Pagination page={list.page} pageSize={list.pageSize} total={eventPage.total} label="items"
+                onPage={(p) => update({ page: p })} onPageSize={(pageSize) => update({ pageSize })} />
                 </div>
               ) : (
                 <EmptyState
@@ -1930,62 +1927,3 @@ function BusinessHoursConfigButton({
 // PaginationBar — 30-events-per-page controls
 // ============================================================================
 
-function PaginationBar({
-  total,
-  page,
-  pageSize,
-  onChange,
-}: {
-  total: number
-  page: number
-  pageSize: number
-  onChange: (next: number) => void
-}) {
-  if (total <= pageSize) {
-    // Single-page result — omit controls but still show a small
-    // "N events" caption so the counter is always visible.
-    return (
-      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-3">
-        {total.toLocaleString()} matching event{total === 1 ? '' : 's'}
-      </p>
-    )
-  }
-  const totalPages = Math.ceil(total / pageSize)
-  const currentPage = page + 1
-  const firstOnPage = page * pageSize + 1
-  const lastOnPage = Math.min(total, (page + 1) * pageSize)
-  return (
-    <div className="flex items-center justify-between gap-3 py-3 border-t border-grove-border dark:border-grove-border-dk">
-      <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-        Showing{' '}
-        <span className="tabular-nums text-grove-ink dark:text-grove-ink-dk">
-          {firstOnPage.toLocaleString()}–{lastOnPage.toLocaleString()}
-        </span>{' '}
-        of {total.toLocaleString()}
-      </p>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, page - 1))}
-          disabled={page === 0}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          Prev
-        </button>
-        <span className="text-xs tabular-nums text-grove-ink/60 dark:text-grove-ink-dk/60">
-          Page {currentPage} / {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
-          disabled={currentPage >= totalPages}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Next
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  )
-}

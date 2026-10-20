@@ -26,6 +26,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import {
   AlertCircle,
   ChevronRight,
+  List,
   ListTree,
   Network,
   Users2,
@@ -58,6 +59,9 @@ import {
 } from '@/lib/api/hooks/useReportingGraph'
 import { PeopleCanvas, roleColor } from '@/components/people/PeopleCanvas'
 import { PeopleTreeTable } from '@/components/people/PeopleTreeTable'
+import { PeopleList } from '@/components/people/PeopleList'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { useListState } from '@/lib/list/useListState'
 import {
   FLAG_LABELS,
   type Filters,
@@ -80,6 +84,9 @@ type PendingEdit = RelationshipEdit & {
 }
 
 type OrgChartView = 'roles' | 'design' | 'people'
+type Layout = 'graph' | 'table' | 'list'
+/** The People view's filters, in the URL as p.department, p.role... (p.manager: the List's "Reports to"). */
+const PEOPLE_FILTERS = ['department', 'role', 'profile', 'highRisk', 'inactive', 'flag', 'manager']
 
 /** Roles (the role hierarchy, read-only), Design (role hierarchy drafts,
  * never sent to Salesforce) or People (managers and delegated approvers,
@@ -171,10 +178,38 @@ function ReportingGraphContent() {
   // Move = drag nodes to reposition; Draw = drag from a person to another to set a relationship.
   const [tool, setTool] = useState<'move' | 'draw'>('move')
   // At scale: graph or tree table; which managers are open; focus on one person; filters.
-  const [layout, setLayout] = useState<'graph' | 'table'>('graph')
+  // Layout and filters live in the URL, so a link (and the back button) opens the same view.
+  const router = useRouter()
+  const pathname = usePathname()
+  const search = useSearchParams()
+  const requestedLayout = search?.get('layout')
+  const layout: Layout = requestedLayout === 'table' || requestedLayout === 'list' ? requestedLayout : 'graph'
+  const setLayout = (l: Layout) => {
+    const next = new URLSearchParams(search?.toString() || '')
+    if (l === 'graph') next.delete('layout')
+    else next.set('layout', l)
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false })
+  }
+  const { state: listState, update: updateList } = useListState('p', { filters: PEOPLE_FILTERS })
+  const filters: Filters = useMemo(() => ({
+    department: listState.filters.department ?? '',
+    role: listState.filters.role ?? '',
+    profile: listState.filters.profile ?? '',
+    highRisk: listState.filters.highRisk === 'true',
+    inactive: listState.filters.inactive === 'true',
+    flag: (listState.filters.flag ?? '') as Filters['flag'],
+    text: listState.q,
+  }), [listState])
+  const setFilters = (f: Filters) => updateList({
+    q: f.text,
+    filters: {
+      department: f.department, role: f.role, profile: f.profile, flag: f.flag,
+      highRisk: f.highRisk ? 'true' : '', inactive: f.inactive ? 'true' : '',
+      ...(hasFilters(f) ? {} : { manager: '' }),
+    },
+  })
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [focusId, setFocusId] = useState<string | null>(null)
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [find, setFind] = useState('')
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'total', desc: true })
 
@@ -222,7 +257,7 @@ function ReportingGraphContent() {
   }
   const setFilter = (patch: Partial<Filters>) => {
     setFocusId(null)
-    setFilters((f) => ({ ...f, ...patch }))
+    setFilters({ ...filters, ...patch })
   }
 
   // Pending edits are state; the canvas draws them (pending adds, committed edges marked for removal).
@@ -315,6 +350,11 @@ function ReportingGraphContent() {
   const LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-grove-ink/55 dark:text-grove-ink-dk/55'
   const chain = focusId ? chainTo(people, focusId) : []
   const shownCount = layout === 'table' ? rows.length : visible.ids.size
+  const LAYOUTS: { key: Layout; label: string; icon: typeof Network }[] = [
+    { key: 'graph', label: 'Graph', icon: Network },
+    { key: 'table', label: 'Tree table', icon: ListTree },
+    { key: 'list', label: 'List', icon: List },
+  ]
 
   return (
     <div className="space-y-4">
@@ -368,11 +408,11 @@ function ReportingGraphContent() {
       {/* Layout, canvas tool and edge type. Editing happens in the graph. */}
       <div className="flex items-center gap-3 text-sm flex-wrap p-3 rounded-lg bg-primary-50/40 dark:bg-primary-900/10 border border-grove-border dark:border-grove-border-dk">
         <div role="tablist" aria-label="Layout" className="flex items-center gap-1 bg-grove-surface dark:bg-grove-canvas-dk rounded-md border border-grove-border dark:border-grove-border-dk p-0.5">
-          {(['graph', 'table'] as const).map((l) => (
+          {LAYOUTS.map(({ key: l, label, icon: Icon }) => (
             <button key={l} role="tab" aria-selected={layout === l} onClick={() => setLayout(l)}
               className={`px-3 py-1.5 rounded text-xs font-medium transition flex items-center gap-1.5 ${layout === l ? 'bg-primary-700 text-grove-canvas shadow' : 'text-grove-ink/65 dark:text-grove-ink-dk/65 hover:bg-primary-50 dark:hover:bg-primary-900/20'}`}>
-              {l === 'graph' ? <Network className="h-3 w-3" /> : <ListTree className="h-3 w-3" />}
-              {l === 'graph' ? 'Graph' : 'Tree table'}
+              <Icon className="h-3 w-3" />
+              {label}
             </button>
           ))}
         </div>
@@ -404,10 +444,10 @@ function ReportingGraphContent() {
           </>
         )}
         <div className="ml-auto flex items-center gap-3 text-xs text-grove-ink/60 dark:text-grove-ink-dk/60">
-          <span className="v2-num">
+          {layout !== 'list' && <span className="v2-num">
             Showing {shownCount.toLocaleString('en-GB')} of {people.shown.size.toLocaleString('en-GB')} people
-          </span>
-          {visible.mode === 'collapsed' && expanded.size > 0 && (
+          </span>}
+          {layout !== 'list' && visible.mode === 'collapsed' && expanded.size > 0 && (
             <button type="button" className="underline underline-offset-2" onClick={() => setExpanded(new Set())}>Collapse all</button>
           )}
         </div>
@@ -492,8 +532,8 @@ function ReportingGraphContent() {
                 <input type="checkbox" className="accent-primary-700" checked={filters.inactive} onChange={(e) => setFilter({ inactive: e.target.checked })} />
                 Inactive
               </label>
-              <input type="text" aria-label="Filter by text" value={filters.text} onChange={(e) => setFilter({ text: e.target.value })}
-                placeholder="Text in name, title, role…" className={SELECT} />
+              <ListSearch value={filters.text} onChange={(text) => setFilter({ text })}
+                placeholder="Text in name, title, role…" label="Filter by text" />
               {filtered && (
                 <button type="button" className="text-xs font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => setFilters(NO_FILTERS)}>
                   Clear filters
@@ -530,7 +570,7 @@ function ReportingGraphContent() {
                     </li>
                   ))}
                 </ul>
-                {visible.matches.length > 100 && <p className="mt-1 text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">The first 100; the {layout === 'graph' ? 'graph' : 'table'} shows them all.</p>}
+                {visible.matches.length > 100 && <p className="mt-1 text-[11px] text-grove-ink/55 dark:text-grove-ink-dk/55">The first 100; the {layout === 'graph' ? 'graph' : layout === 'list' ? 'list' : 'table'} shows them all.</p>}
               </div>
             )}
           </CardContent>
@@ -540,6 +580,9 @@ function ReportingGraphContent() {
         <Card variant="bordered" className="col-span-12 lg:col-span-6 overflow-hidden">
           {isLoading ? (
             <div className="p-4"><TableSkeleton rows={8} /></div>
+          ) : layout === 'list' ? (
+            <PeopleList orgId={orgId} state={listState} update={updateList} selectedId={selectedNodeId}
+              onSelect={setSelectedNodeId} nameOf={nameOf} />
           ) : layout === 'graph' ? (
             <PeopleCanvas
               people={people}
