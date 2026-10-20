@@ -63,6 +63,7 @@ VISUALS: List[Visual] = [
     Visual("critical_objects", "Critical objects"),
     Visual("code_coverage", "Code coverage"),
     Visual("api_usage", "API usage"),
+    Visual("data_model", "Data model"),
 ]
 VISUAL_BY_KEY = {v.key: v for v in VISUALS}
 
@@ -78,6 +79,7 @@ class PackSource:
     ctx: ReportContext = field(default_factory=ReportContext)
     critical_objects: List[Dict[str, Any]] = field(default_factory=list)
     data_quality_run: bool = False
+    schema: Optional[Dict[str, Any]] = None
 
     @property
     def metrics(self) -> Dict[str, Any]:
@@ -456,6 +458,21 @@ def _api_usage(src: PackSource):
     return head or f"{period}, {u['total_requests']:,} requests.", body
 
 
+def _data_model(src: PackSource):
+    """Item 12: the most connected object and the objects one step from it."""
+    from app.services import erd
+
+    focus = erd.default_focus(src.schema)
+    if focus is None:
+        return "Sync the org to read its objects' relationships (field metadata)."
+    diagram = erd.build(src.schema, focus, 1)
+    # Inline, scaled to the space under the slide's title.
+    picture = erd.svg(diagram, transparent=True, fit=(720, 330))
+    more = f" {diagram['leftOut']} more objects aren't drawn." if diagram["leftOut"] else ""
+    return (f"{focus} and the objects related to it, from the synced field metadata; owner and audit lookups "
+            f"left out.{more}", f'<div style="text-align:center">{picture}</div>')
+
+
 BUILDERS: Dict[str, Callable[[PackSource], Any]] = {
     "summary": _summary,
     "health_score": _health_score,
@@ -467,6 +484,7 @@ BUILDERS: Dict[str, Callable[[PackSource], Any]] = {
     "critical_objects": _critical_objects,
     "code_coverage": _code_coverage,
     "api_usage": _api_usage,
+    "data_model": _data_model,
 }
 
 
@@ -677,6 +695,7 @@ async def gather_pack_source(db: Any, org_id: str) -> PackSource:
     from app.services import privacy_mode
     from app.services.org_analyzer import OrgAnalyzerService
     from app.services.report.context import gather_report_context
+    from app.services.schema_metadata import latest_schema
 
     org = await db.get(Organization, org_id)
     snap = (await db.execute(
@@ -701,4 +720,5 @@ async def gather_pack_source(db: Any, org_id: str) -> PackSource:
         ctx=ctx,
         critical_objects=await OrgAnalyzerService(db, org_id)._latest_critical_objects() if dq_run else [],
         data_quality_run=dq_run is not None,
+        schema=await latest_schema(db, org_id),
     )

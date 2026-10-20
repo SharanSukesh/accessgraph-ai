@@ -665,9 +665,32 @@ section has the detail.
   "4"; workbook Custom Metadata Records 12 rows (4 records × 3 fields);
   View all filtered to Off → 3; turned off again → 0 of 4. Runbook
   unchanged: 41 / 18 / $183,180 / $116,220.
-- **Next:** the rest of step 2: item 12 (ERDs), then 13
-  (cleanup impact), 14 (change-history gaps) and matrix #26–28, then step 3
-  (21 snapshots, 9 v1 org comparison, 20 evidence with 10, 30 write-up).
+- **#65 (item 12, not merged; stacked on #64):** entity relationship
+  diagrams (parity #20). services/erd.py builds the diagram from item 8's
+  synced describe: a focus object and depth 1 to 3; the objects an object
+  looks up to sit left, the ones looking up to it right; lookups thin,
+  master-detail bold, a bar at the parent end, a dot where the child is
+  deleted with the parent; referenced objects that weren't described drawn
+  dashed ("not synced"). "Hide owner, audit and system lookups" (on by
+  default) leaves out OwnerId, CreatedById, LastModifiedById and Setup
+  objects such as User and Group. At most 60 objects, nearest first, with
+  the rest counted. GET /orgs/{id}/erd (optional overlay: active users who
+  can read each object, left out at Metadata only) and /erd.svg (the same
+  drawing, no user counts). New Data model page (/orgs/{id}/data-model,
+  from Objects and from each object page): cytoscape with the server's
+  columns and rows, focus, depth, system lookups and overlay in the URL,
+  click an object for its relationships, "Centre here", PNG, SVG and
+  Relationships CSV. Image pack: a "Data model" visual (the most connected
+  object, depth 1), inline SVG. No new reads, permissions or fixture
+  (covered by item 8).
+  **Test (Lumenvale, local):** Invoice__c depth 2: 11 objects, 12
+  relationships, Payment__c master-detail with cascade delete, Account 376
+  can read; Account depth 3 with system lookups: 31 objects, 82
+  relationships; SVG demo-data-model-Invoice__c-depth2.svg; CSV 12 rows;
+  image pack Data model slide centred on Account. Runbook unchanged.
+- **Next:** the rest of step 2: item 13 (cleanup impact), 14
+  (change-history gaps) and matrix #26–28, then step 3 (21 snapshots, 9 v1
+  org comparison, 20 evidence with 10, 30 write-up).
 
 ## Build order
 
@@ -1192,6 +1215,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 21, 6, 8; 13 for dependency consequences. **Effort: XL.**
 
 ### 12. ERDs from object relationships
+**Status: built in #65 (not merged).**
 - **Problem:** consultants draw data-model diagrams by hand for discovery and design.
 - **Approach:** an interactive ERD reusing the access-graph renderer (chips, layered layout). Lookups are drawn as plain edges and master-detail as bold. Each diagram has a chosen focus object and depth (1-3). Options: hide system objects; export to PNG or SVG and into the image pack.
 - **Salesforce sources:** from 8 (referenceTo, relationshipName, child relationships) ✓.

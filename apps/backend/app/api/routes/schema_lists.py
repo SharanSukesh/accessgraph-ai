@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
@@ -76,3 +76,61 @@ async def object_schema(org_id: str, object_name: str, kind: str = Query("fields
     if not params.paged:
         return {"items": rows, "total": len(rows)}
     return paged(rows, params, text=text, sorts=sorts, default_sort=default, kind=kind)
+
+
+@router.get("/orgs/{org_id}/erd")
+async def entity_relationship_diagram(
+    org_id: str,
+    focus: str = Query(..., description="the object at the centre"),
+    depth: int = Query(1, ge=1, le=3),
+    hide_system: bool = Query(True, alias="hideSystem"),
+    readers: bool = Query(False, description="add active users who can read each object"),
+    db: AsyncSession = Depends(get_database),
+) -> Dict[str, Any]:
+    """Item 12: the objects around `focus` and their lookups and master-detail
+    relationships, from the synced describe. `readers` overlays how many
+    active users can read each object (left out at Metadata only)."""
+    from app.domain.models import Organization
+    from app.services import erd, privacy_mode
+    from app.services.access_index import access_index
+
+    schema = await latest_schema(db, org_id)
+    if schema is None:
+        raise HTTPException(status_code=404, detail="Field metadata isn't synced yet: sync the org first.")
+    counts = None
+    note = None
+    if readers:
+        org = await db.get(Organization, org_id)
+        if org is not None and privacy_mode.allows(org, privacy_mode.USER_RECORDS):
+            counts = {k: v.get("read", 0) for k, v in (await access_index(db, org_id)).counts("objects").items()}
+        else:
+            note = "Who can read each object isn't shown at this org's privacy level (metadata only)."
+    out = erd.build(schema, focus, depth, hide_system, counts)
+    if note:
+        out["note"] = note
+    return out
+
+
+@router.get("/orgs/{org_id}/erd.svg")
+async def entity_relationship_svg(
+    org_id: str,
+    focus: str = Query(...),
+    depth: int = Query(1, ge=1, le=3),
+    hide_system: bool = Query(True, alias="hideSystem"),
+    theme: str = Query("light", pattern="^(light|dark)$"),
+    transparent: bool = Query(False),
+    db: AsyncSession = Depends(get_database),
+) -> Response:
+    """The same diagram as an SVG file (no user counts), for slides and documents."""
+    from app.domain.models import Organization
+    from app.services import erd
+
+    schema = await latest_schema(db, org_id)
+    if schema is None:
+        raise HTTPException(status_code=404, detail="Field metadata isn't synced yet: sync the org first.")
+    org = await db.get(Organization, org_id)
+    picture = erd.svg(erd.build(schema, focus, depth, hide_system), theme, transparent)
+    safe = "".join(c if c.isalnum() or c in "_-" else "-" for c in focus)
+    name = f"{'demo-' if org is not None and org.is_demo else ''}data-model-{safe}-depth{depth}.svg"
+    return Response(content=picture, media_type="image/svg+xml",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
