@@ -6,7 +6,9 @@ rules, tabs, Visualforce and the other new reads follow in part b.
 
 Sheets: About, Objects, Fields, Picklist Values, Object Access, Field
 Access, Assignments, Profile Users, Record Types, Layouts, Unused Layouts,
-Record Pages, Flows, Apex Classes.
+Record Pages, Flows, Apex Classes; part b adds the rest of SHEETS. Part c:
+Fields on Layouts (#4), Flow Elements and Flow Fields (#9), Approval Steps
+(#18), External Data Sources and record types through permission sets (#11).
 
 Configuration sheets work at every privacy level. User counts and the
 per-user sheets (Assignments, Profile Users) need user records, so at
@@ -39,6 +41,7 @@ from app.domain.models import (
     UserSnapshot,
 )
 from app.services import privacy_mode
+from app.services import metadata_detail as md_detail
 from app.services import schema_metadata as sm
 from app.services import ui_access as ua
 from app.services.org_docs import latest_org_docs
@@ -52,9 +55,10 @@ NOT_SYNCED_SCHEMA = "Field metadata isn't synced yet: sync the org to read field
 NOT_SYNCED_UI = "Not read yet: sync the org to read page layouts, record pages, Apex and flows."
 SHEETS = ("About", "Objects", "Fields", "Picklist Values", "Picklists by Record Type", "Validation Rules",
           "Object Access", "Field Access", "Tab Visibility", "Assignments", "Profile Users", "Login Restrictions",
-          "Record Types", "Layouts", "Unused Layouts", "Record Pages", "Buttons and Links", "List Views", "Field Sets",
-          "Apps", "Flows", "Approval Processes", "Apex Classes", "Apex Triggers", "Visualforce",
-          "Lightning Components", "Static Resources", "Custom Permissions")
+          "Record Types", "Layouts", "Fields on Layouts", "Unused Layouts", "Record Pages", "Buttons and Links",
+          "List Views", "Field Sets", "Apps", "Flows", "Flow Elements", "Flow Fields", "Approval Processes",
+          "Approval Steps", "Apex Classes", "Apex Triggers", "Visualforce", "Lightning Components", "Static Resources",
+          "Custom Permissions", "External Data Sources")
 NOT_SYNCED_DOCS = "Not read yet: sync the org to read this part of its configuration."
 DAY_ABBR = {"monday": "Mon", "tuesday": "Tue", "wednesday": "Wed", "thursday": "Thu", "friday": "Fri",
             "saturday": "Sat", "sunday": "Sun"}
@@ -213,8 +217,10 @@ def _about(ws: Worksheet, org: Organization, o: _Org, now: datetime) -> None:
         ("Tab visibility", "Default On or Default Off per profile and permission set; a blank cell means no "
                            "tab setting was returned for it."),
         ("Documentation read", _when((o.docs or {}).get("collected_at"))),
-        ("Not included yet", "Flow detail (elements, and the objects and fields each flow uses), which fields sit "
-                             "on which layout, custom metadata records, and approval process steps."),
+        ("Fields on layouts", "Who gets a layout comes from the profile layout assignments; a field on it shows only "
+                              "for those who can read the field, which the last column counts."),
+        ("Not included yet", "Custom metadata records, and approval process entry criteria and approvers (they need "
+                             "the Metadata API, which isn't confirmed to work with Newton's permissions)."),
     ]
     for note in ((o.schema or {}).get("notes") or []) + ((o.ui or {}).get("notes") or []) + ((o.docs or {}).get("notes") or []):
         rows.append(("Note", note))
@@ -375,7 +381,8 @@ def _profile_users(ws: Worksheet, o: _Org) -> None:
 
 def _record_types(ws: Worksheet, o: _Org) -> None:
     cols = [Column("Object", 24), Column("Record type", 26), Column("API name", 26), Column("Active", 9),
-            Column("Available to profiles", 50, wrap=True), Column("Default for profiles", 40, wrap=True)]
+            Column("Available to profiles", 50, wrap=True), Column("Default for profiles", 40, wrap=True),
+            Column("Available through permission sets", 44, wrap=True)]
     if not o.ui:
         _table(ws, cols, [], NOT_SYNCED_UI)
         return
@@ -390,8 +397,19 @@ def _record_types(ws: Worksheet, o: _Org) -> None:
                                      if key in (objs.get(rt["object"]) or {}).get("available", [])))
             default = ", ".join(sorted(o.profiles.get(pid, pid) for pid, objs in vis.items()
                                        if (objs.get(rt["object"]) or {}).get("default") == key))
-        rows.append([rt["object"], rt["name"], rt["developer_name"], _yes(rt.get("active", True)), avail, default])
+        set_rts = o.ui.get("set_record_types")
+        through = "Not read" if set_rts is None else ", ".join(sorted(
+            _set_label(o, ps_id) for ps_id, objs in set_rts.items() if key in (objs.get(rt["object"]) or [])))
+        rows.append([rt["object"], rt["name"], rt["developer_name"], _yes(rt.get("active", True)), avail, default, through])
     _table(ws, cols, rows, "No record types.")
+
+
+def _set_label(o: _Org, ps_id: str) -> str:
+    """A permission set's label, with the groups it sits in."""
+    ps = o.ps_rows.get(ps_id)
+    name = (ps.label or ps.name) if ps else ps_id
+    groups = sorted(o.group_names.get(gid, gid) for gid, comps in o.components_by_group.items() if ps_id in comps)
+    return name + (f" (in {', '.join(groups)})" if groups else "")
 
 
 def _active_by_profile(o: _Org) -> Dict[str, int]:
@@ -421,6 +439,45 @@ def _layouts(ws: Worksheet, o: _Org) -> None:
         rows.append(row)
     rows.sort(key=lambda r: (r[0], r[1].lower(), r[2].lower(), r[3]))
     _table(ws, cols, rows, "No layout assignments.")
+
+
+def _layout_fields(ws: Worksheet, o: _Org) -> None:
+    """The field x layout matrix (parity #4): every field on every layout, the
+    profiles that get the layout, and how many of their active users can read
+    the field (a field on a layout shows only to those who can read it)."""
+    cols = [Column("Object", 22), Column("Field", 28), Column("Label", 24), Column("Layout", 34), Column("Section", 22),
+            Column("Behavior", 11), Column("Layout assigned to profiles", 44, wrap=True)]
+    if o.users_allowed:
+        cols += [Column("Active users who get the layout", 14), Column("Of them, can read the field", 14)]
+    if not o.ui:
+        _table(ws, cols, [], NOT_SYNCED_UI)
+        return
+    placed = o.ui.get("layout_fields")
+    if placed is None:
+        _table(ws, cols, [], "The fields on each layout weren't read: sync the org again to read them.")
+        return
+    described = _described_objects(o)
+    profiles_of: Dict[str, Set[str]] = defaultdict(set)
+    for pl in o.ui.get("profile_layouts", []):
+        profiles_of[pl["layout_id"]].add(pl["profile_id"])
+    users_by_profile: Dict[str, List[str]] = defaultdict(list)
+    for uid, u in o.users.items():
+        users_by_profile[u.profile_id or ""].append(uid)
+    rows = []
+    for lay in sorted(o.ui.get("layouts", []), key=lambda x: ((x.get("object") or ""), x["name"].lower())):
+        obj = lay.get("object") or ""
+        profs = profiles_of.get(lay["id"], set())
+        users = [uid for pid in profs for uid in users_by_profile.get(pid, [])]
+        for item in placed.get(lay["id"], []):
+            meta = ((described.get(obj) or {}).get("fields") or {}).get(item["field"]) or {}
+            row = [obj, item["field"], meta.get("label") or "", lay["name"], item.get("section") or "",
+                   item.get("behavior") or "", ", ".join(sorted(o.profiles.get(p, p) for p in profs)) or "Not assigned"]
+            if o.users_allowed:
+                follows_object = meta.get("permissionable") is False
+                key, kind = (obj, "objects") if follows_object else (f"{obj}.{item['field']}", "fields")
+                row += [len(users), sum(1 for uid in users if ((o.access.get(uid) or {}).get(kind, {}).get(key) or {}).get("read"))]
+            rows.append(row)
+    _table(ws, cols, rows, "No fields read from any layout.")
 
 
 def _unused_layouts(ws: Worksheet, o: _Org) -> None:
@@ -478,7 +535,7 @@ def _grant_names(o: _Org, kind: str) -> Dict[str, List[str]]:
     return out
 
 
-GRANT_KINDS = ("ApexClass", "ApexPage", "CustomPermission", "TabSet")
+GRANT_KINDS = ("ApexClass", "ApexPage", "CustomPermission", "TabSet", "ExternalDataSource")
 
 
 def _per_user_runs(o: _Org) -> Tuple[Dict[str, int], Dict[str, Dict[str, int]]]:
@@ -532,6 +589,76 @@ def _flows(ws: Worksheet, o: _Org, runs: Dict[str, int]) -> None:
         row.append(note)
         rows.append(row)
     _table(ws, cols, rows, "No flows.")
+
+
+def _flow_rows(o: _Org) -> List[Tuple[Dict[str, Any], Optional[Dict[str, Any]]]]:
+    details = (o.ui or {}).get("flow_details") or {}
+    return [(f, details.get(f["id"])) for f in sorted((o.ui or {}).get("flows", []),
+                                                       key=lambda f: (f.get("label") or f["api_name"]).lower())]
+
+
+def _flow_elements(ws: Worksheet, o: _Org) -> None:
+    """Element counts per flow (parity #9), from the active version."""
+    flows = _flow_rows(o)
+    used = [(k, label) for k, label in md_detail.FLOW_ELEMENTS if any((d or {}).get("elements", {}).get(k) for _, d in flows)]
+    cols = [Column("Flow", 32), Column("API name", 30), Column("Start object", 18), Column("Runs when", 16)]
+    cols += [Column(label, 10) for _, label in used]
+    cols += [Column("Subflows called", 30, wrap=True), Column("Actions called", 40, wrap=True)]
+    if not o.ui:
+        _table(ws, cols, [], NOT_SYNCED_UI)
+        return
+    rows = []
+    for f, d in flows:
+        if d is None:
+            rows.append([f.get("label") or f["api_name"], f["api_name"], "", "Not read (no active version, or not read)"]
+                        + [None] * len(used) + ["", ""])
+            continue
+        rows.append([f.get("label") or f["api_name"], f["api_name"], d.get("start_object") or "",
+                     {"Create": "Created", "Update": "Updated", "CreateAndUpdate": "Created or updated",
+                      "Delete": "Deleted"}.get(d.get("record_trigger") or "", d.get("record_trigger") or f.get("trigger_type") or "")]
+                    + [d["elements"].get(k, 0) for k, _ in used]
+                    + [", ".join(d.get("subflows") or []),
+                       ", ".join(f"{a['name']} ({a['type']})" if a.get("type") else a["name"] for a in d.get("actions") or [])])
+    _table(ws, cols, rows, "No flows.")
+
+
+def _flow_fields(ws: Worksheet, o: _Org) -> None:
+    """The objects and fields each flow reads or writes (parity #9; feeds
+    cleanup impact, item 13)."""
+    cols = [Column("Flow", 32), Column("Element", 30), Column("Operation", 16), Column("Object", 22), Column("Field", 28),
+            Column("Used as", 14), Column("Note", 44, wrap=True)]
+    if not o.ui:
+        _table(ws, cols, [], NOT_SYNCED_UI)
+        return
+    rows = []
+    for f, d in _flow_rows(o):
+        name = f.get("label") or f["api_name"]
+        for op in (d or {}).get("operations", []):
+            obj = op.get("object") or ""
+            note = f"Whole record from the variable {op['from_variable']}" if op.get("from_variable") else ""
+            written = op["operation"] in ("Create", "Update")
+            uses = [(fld, "Written" if written else "Read") for fld in op.get("fields", [])]
+            uses += [(fld, "Condition") for fld in op.get("filter_fields", [])]
+            if not uses:
+                rows.append([name, op.get("element") or "", op["operation"], obj, "", "", note])
+            for fld, use in uses:
+                rows.append([name, op.get("element") or "", op["operation"], obj, fld, use, note])
+    _table(ws, cols, rows, "No record operations read from any flow.")
+
+
+def _approval_steps(ws: Worksheet, o: _Org) -> None:
+    cols = [Column("Approval process", 30), Column("Object", 20), Column("State", 10), Column("Step", 30),
+            Column("API name", 28), Column("Description", 40, wrap=True), Column("Entry criteria and approvers", 44, wrap=True)]
+    steps = _docs_list(o, "approval_steps")
+    if steps is None:
+        _table(ws, cols, [], NOT_SYNCED_DOCS)
+        return
+    procs = {p.get("api_name"): p for p in _docs_list(o, "approval_processes") or []}
+    not_read = "Not read: they need the Metadata API, which isn't confirmed to work with Newton's permissions."
+    rows = [[(procs.get(s.get("process")) or {}).get("name") or s.get("process"), (procs.get(s.get("process")) or {}).get("object"),
+             (procs.get(s.get("process")) or {}).get("state"), s.get("name"), s.get("api_name"), s.get("description") or "",
+             not_read] for s in steps]
+    _table(ws, cols, rows, "No approval steps.")
 
 
 def _docs_list(o: _Org, key: str) -> Optional[List[Dict[str, Any]]]:
@@ -747,6 +874,7 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
     _profile_users(sheets["Profile Users"], o)
     _record_types(sheets["Record Types"], o)
     _layouts(sheets["Layouts"], o)
+    _layout_fields(sheets["Fields on Layouts"], o)
     _unused_layouts(sheets["Unused Layouts"], o)
     _record_pages(sheets["Record Pages"], o)
     _rt_picklists(sheets["Picklists by Record Type"], o)
@@ -770,6 +898,9 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
                    lambda a: [a.get("label"), a.get("name"), a.get("namespace") or "", a.get("description") or ""],
                    granted_users["TabSet"], "No apps.")
     _flows(sheets["Flows"], o, flow_runs)
+    _flow_elements(sheets["Flow Elements"], o)
+    _flow_fields(sheets["Flow Fields"], o)
+    _approval_steps(sheets["Approval Steps"], o)
     _simple(sheets["Approval Processes"], o, "approval_processes",
             [Column("Approval process", 32), Column("API name", 30), Column("Object", 22), Column("State", 10),
              Column("Record lock", 12), Column("Description", 50, wrap=True)],
@@ -801,6 +932,10 @@ async def build_documentation_workbook(db: AsyncSession, org: Organization, now:
                     Column("Description", 44, wrap=True)],
                    lambda p: [p.get("name"), p.get("label"), p.get("namespace") or "", p.get("description") or ""],
                    granted_users["CustomPermission"], "No custom permissions.")
+    _granted_sheet(sheets["External Data Sources"], o, "external_data_sources", "ExternalDataSource",
+                   [Column("External data source", 30), Column("Label", 30), Column("Type", 18), Column("Namespace", 14)],
+                   lambda x: [x.get("name"), x.get("label"), x.get("type"), x.get("namespace") or ""],
+                   granted_users["ExternalDataSource"], "No external data sources.")
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()

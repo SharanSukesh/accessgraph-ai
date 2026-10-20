@@ -24,9 +24,14 @@ in the v68 Object Reference and Tooling API guide:
   apps                  AppMenuItem of Type TabSet (who sees an app comes from
                         SetupEntityAccess TabSet, read with the rest of
                         SetupEntityAccess in ui_access)
-  approval_processes    ProcessDefinition of Type Approval (inventory; steps
-                        and approvers need the Metadata API, UNVERIFIED with
-                        our permissions)
+  approval_processes    ProcessDefinition of Type Approval (inventory)
+  approval_steps        ProcessNode: each process's steps by name (item 11c).
+                        Entry criteria and approvers need the Metadata API,
+                        UNVERIFIED with our permissions, so they aren't read;
+                        step order isn't a documented field (UNVERIFIED)
+  external_data_sources ExternalDataSource: name, label, type (no endpoint);
+                        who can use each comes from SetupEntityAccess
+                        ExternalDataSource in ui_access (item 11c)
   apex_classes          ApexClass: API version, status, size, and the sharing
                         keyword of the class declaration; the Body is read
                         to find that keyword and never stored
@@ -187,6 +192,22 @@ async def collect_live(client: Any, record_type_objects: Iterable[str] = ()) -> 
         out["approval_processes"] = [{"name": p.get("Name"), "api_name": p.get("DeveloperName"), "object": obj(p.get("TableEnumOrId")),
                                       "state": p.get("State"), "lock_type": p.get("LockType"),
                                       "description": p.get("Description")} for p in procs]
+        process_of = {(p.get("Id") or "")[:15]: p.get("DeveloperName") for p in procs}
+        steps = await part("approval steps", lambda: soql(
+            "SELECT Id, Name, DeveloperName, ProcessDefinitionId, Description FROM ProcessNode"),
+            "Approval process steps couldn't be read.")
+        if steps is not None:
+            out["approval_steps"] = [{"process": process_of.get((s.get("ProcessDefinitionId") or "")[:15]),
+                                      "name": s.get("Name"), "api_name": s.get("DeveloperName"),
+                                      "description": s.get("Description")}
+                                     for s in steps if (s.get("ProcessDefinitionId") or "")[:15] in process_of]
+
+    sources = await part("external data sources", lambda: soql(
+        "SELECT Id, DeveloperName, MasterLabel, NamespacePrefix, Type FROM ExternalDataSource"),
+        "External data sources couldn't be read.")
+    if sources is not None:
+        out["external_data_sources"] = [{"id": x["Id"], "name": _name(x), "label": x.get("MasterLabel"),
+                                         "namespace": x.get("NamespacePrefix"), "type": x.get("Type")} for x in sources]
 
     classes = await part("apex classes", lambda: tooling(
         "SELECT Id, Name, NamespacePrefix, ApiVersion, Status, IsValid, LengthWithoutComments, Body FROM ApexClass"),

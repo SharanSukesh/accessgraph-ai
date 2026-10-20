@@ -13,8 +13,16 @@ demo_live.ui_access) and stored with the sync job (sync_metadata["ui_access"]):
   apex_classes        ApexClass: name, namespace
   flows               FlowDefinitionView + Flow.Metadata
                       (isAdditionalPermissionRequiredToRun)
+  flow_details        from the same Flow.Metadata: element counts and the
+                      objects and fields each flow reads or writes
+                      (metadata_detail.flow_detail; item 11 part c)
+  layout_fields       Tooling Layout.Metadata, one layout per query: the
+                      fields on each layout and their behavior (item 11c)
+  set_record_types    PermissionSet.Metadata recordTypeVisibilities, one set
+                      per query (UNVERIFIED read path; item 11c)
   setup_entity_access SetupEntityAccess: permission set (incl. a profile's own
-                      set) -> ApexClass / FlowDefinition ids
+                      set) -> ApexClass / FlowDefinition / ApexPage /
+                      CustomPermission / TabSet / ExternalDataSource ids
   run_flows           PermissionSet.PermissionsRunFlow per set
 
 Per user, everything is resolved through the same grant paths as object
@@ -27,6 +35,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+from app.services import metadata_detail as md_detail
 
 FORM_FACTORS = (("Large", "Desktop"), ("Small", "Phone"))
 SYSTEM_DEFAULT = "Salesforce's default record page"
@@ -380,6 +390,8 @@ def graph_extras(ui: Optional[Dict[str, Any]], user: Any, profile_names: Dict[st
 MAX_PROFILE_METADATA = 150   # Profile.Metadata is one record per query
 MAX_APP_METADATA = 60        # one query per app
 MAX_FLOW_METADATA = 150      # Flow.Metadata is one record per query
+MAX_LAYOUT_METADATA = 300    # Layout.Metadata is one record per query
+MAX_SET_METADATA = 200       # PermissionSet.Metadata, one record per query
 MAX_DESCRIBES = 40
 
 
@@ -453,6 +465,16 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
                      "Profile layout assignments couldn't be read.") or []
     out["profile_layouts"] = [{"profile_id": p["ProfileId"], "layout_id": p["LayoutId"], "record_type_id": p.get("RecordTypeId"),
                                "object": name_of(p.get("TableEnumOrId"))} for p in pls]
+    # The fields on each layout (the field x layout matrix): Layout.Metadata, one layout per query.
+    layout_fields: Dict[str, Any] = {}
+    for lay in layouts[:MAX_LAYOUT_METADATA]:
+        rows = await part("layout metadata", lambda lid=lay["Id"]: tooling(f"SELECT Metadata FROM Layout WHERE Id = '{lid}'"), "")
+        placed = md_detail.layout_fields(((rows or [{}])[0] or {}).get("Metadata"))
+        if placed is not None:
+            layout_fields[lay["Id"]] = placed
+    out["layout_fields"] = layout_fields
+    if len(layouts) > MAX_LAYOUT_METADATA:
+        out["notes"].append(f"The fields on each layout were read for the first {MAX_LAYOUT_METADATA} of {len(layouts)} layouts.")
 
     # Record type visibility per profile: Profile.Metadata, one profile per query.
     profiles = await part("profiles", lambda: soql("SELECT Id, Name FROM Profile"), "Profiles couldn't be listed.") or []
@@ -476,6 +498,29 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
                 slot["available"].append(v.get("recordType"))
             if v.get("default"):
                 slot["default"] = v.get("recordType")
+    # Record types granted by permission sets: PermissionSet.Metadata, one set per query.
+    # UNVERIFIED read path: stop at the first failure rather than repeat it for every set.
+    sets = await part("permission sets", lambda: soql("SELECT Id FROM PermissionSet WHERE IsOwnedByProfile = false"), "") or []
+    set_rts: Dict[str, Dict[str, List[str]]] = {}
+    set_rts_read = bool(sets)
+    for ps in sets[:MAX_SET_METADATA]:
+        try:
+            rows = await tooling(f"SELECT Metadata FROM PermissionSet WHERE Id = '{ps['Id']}'")
+        except Exception as e:  # noqa: BLE001
+            log.info("ui_access permission set metadata failed: %s", e)
+            set_rts_read = False
+            break
+        rts_of = md_detail.set_record_types(((rows or [{}])[0] or {}).get("Metadata"))
+        if rts_of:
+            set_rts[ps["Id"]] = rts_of
+    # Shown in the documentation workbook only; user and profile pages still list a profile's record types.
+    if set_rts_read:
+        out["set_record_types"] = set_rts
+        if len(sets) > MAX_SET_METADATA:
+            out["notes"].append(f"Record types granted by permission sets were read for the first {MAX_SET_METADATA} "
+                                f"of {len(sets)} permission sets.")
+    elif sets:
+        out["notes"].append("Record types granted by permission sets couldn't be read (PermissionSet metadata).")
     out["notes"] = [n for n in out["notes"] if n]
     out["profile_api_names"] = api_names
     out["profile_logins"] = logins
@@ -542,16 +587,21 @@ async def collect_live(client: Any, include_users: bool = True) -> Dict[str, Any
             md = ((rows or [{}])[0] or {}).get("Metadata")
             if md is not None:
                 restricted = bool(md.get("isAdditionalPermissionRequiredToRun"))
+                detail = md_detail.flow_detail(md)
+                if detail is not None:
+                    out.setdefault("flow_details", {})[f["DurableId"]] = detail
         out["flows"].append({"id": f["DurableId"], "api_name": f.get("ApiName"), "label": f.get("Label"),
                              "process_type": f.get("ProcessType"), "trigger_type": f.get("TriggerType"),
                              "active": bool(f.get("IsActive")), "restricted": restricted})
     if len(flows) > MAX_FLOW_METADATA:
-        out["notes"].append(f"Whether a flow requires explicit access was read for the first {MAX_FLOW_METADATA} flows only.")
+        out["notes"].append(f"Whether a flow requires explicit access, and its elements, were read for the first "
+                            f"{MAX_FLOW_METADATA} flows only.")
 
     sea = await part("setup entity access", lambda: soql(
         "SELECT ParentId, SetupEntityId, SetupEntityType FROM SetupEntityAccess "
-        "WHERE SetupEntityType IN ('ApexClass', 'FlowDefinition', 'ApexPage', 'CustomPermission', 'TabSet')"),
-        "Apex class, flow, Visualforce page, custom permission and app access couldn't be read.") or []
+        "WHERE SetupEntityType IN ('ApexClass', 'FlowDefinition', 'ApexPage', 'CustomPermission', 'TabSet', "
+        "'ExternalDataSource')"),
+        "Apex class, flow, Visualforce page, custom permission, app and external data source access couldn't be read.") or []
     grants: Dict[str, Dict[str, List[str]]] = {}
     for r in sea:
         grants.setdefault(r["ParentId"], {}).setdefault(r["SetupEntityType"], []).append(r["SetupEntityId"])
