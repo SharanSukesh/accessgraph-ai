@@ -18,7 +18,11 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { DocumentationDownload } from '@/components/schema/DocumentationDownload'
 import { Stagger, StaggerItem } from '@/components/v2/motion'
 import { PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
-import { useObjects } from '@/lib/api/hooks/useObjects'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { SortHeader } from '@/components/shared/SortHeader'
 import { isPrivacyModeError } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { isFeatureAvailable, privacyModeOf, unavailableMessage } from '@/lib/privacy'
@@ -36,13 +40,11 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter()
   const orgId = params.orgId as string
 
-  const [search, setSearch] = useState('')
-  const [sensitiveFilter, setSensitiveFilter] = useState<string>('')
-
-  const { data: objects, isLoading, error } = useObjects(orgId, {
-    search,
-    sensitive: sensitiveFilter || undefined,
-  })
+  // Paged by the server; page, size, sort, search and type filter live in the URL (o.*).
+  const { state, update } = useListState('o', { sort: 'label', filters: ['kind'] })
+  const { data, isLoading, error } = usePaged<any>(['objects', orgId], `/orgs/${orgId}/objects`, state)
+  const objects = data?.items
+  const summary = data?.summary
 
   // Data-quality overlay — worst-first scores plus the org-wide KPI.
   // Hydrates on first paint; no-op if the engine has never run.
@@ -193,7 +195,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                 Total Objects
               </p>
               <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                {isLoading ? '...' : objects?.length || 0}
+                {isLoading ? '...' : (summary?.objects ?? 0).toLocaleString('en-US')}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
@@ -211,9 +213,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                 Sensitive
               </p>
               <p className="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
-                {isLoading
-                  ? '...'
-                  : objects?.filter((o: any) => o.isSensitive).length || 0}
+                {isLoading ? '...' : (summary?.sensitive ?? 0).toLocaleString('en-US')}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-orange-100 dark:bg-orange-900">
@@ -231,36 +231,14 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                 Custom
               </p>
               <p className="mt-2 text-3xl font-bold text-primary-700 dark:text-primary-400">
-                {isLoading
-                  ? '...'
-                  : objects?.filter((o: any) => o.isCustom).length || 0}
+                {isLoading ? '...' : (summary?.custom ?? 0).toLocaleString('en-US')}
               </p>
             </div>
           </div>
         </Card>
         </StaggerItem>
 
-        <StaggerItem>
-        <Card variant="bordered" className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-grove-ink/65 dark:text-grove-ink-dk/65">
-                With Anomalies
-              </p>
-              <p className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
-                {isLoading
-                  ? '...'
-                  : objects?.filter((o: any) => o.anomalyCount > 0).length || 0}
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900">
-              <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-            </div>
-          </div>
-        </Card>
-        </StaggerItem>
-
-        {/* Data quality KPI — an aggregate view of the per-object scores.
+                {/* Data quality KPI — an aggregate view of the per-object scores.
             "Not analysed" state points the user at the Analyse quality button. */}
         <StaggerItem>
         <Card variant="bordered" className="p-6">
@@ -351,22 +329,11 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
       <Card variant="bordered">
         <CardContent className="py-4">
           <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <input
-                type="text"
-                placeholder="Search objects..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Sensitive Filter */}
+            <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder="Search objects..." />
             <select
-              value={sensitiveFilter}
-              onChange={(e) => setSensitiveFilter(e.target.value)}
+              aria-label="Object type"
+              value={state.filters.kind || ''}
+              onChange={(e) => update({ filters: { kind: e.target.value } })}
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Objects</option>
@@ -382,7 +349,7 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
       <Card variant="bordered">
         <CardHeader>
           <CardTitle>
-            {objects ? `${objects.length} Objects` : 'Objects'}
+            {data ? `${data.total.toLocaleString('en-US')} Objects` : 'Objects'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -393,26 +360,13 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
               <table className="w-full">
                 <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                   <tr>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Object
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      API Name
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Sensitivity
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Users with Access
-                    </th>
+                    <SortHeader label="Object" column="label" sort={state.sort} dir={state.dir} onSort={(c, d) => update({ sort: c, dir: d })} className="px-6 py-3" />
+                    <SortHeader label="API Name" column="apiName" sort={state.sort} dir={state.dir} onSort={(c, d) => update({ sort: c, dir: d })} className="px-6 py-3" />
+                    <SortHeader label="Type" column="type" sort={state.sort} dir={state.dir} onSort={(c, d) => update({ sort: c, dir: d })} className="px-6 py-3" />
+                    <SortHeader label="Sensitivity" column="sensitivity" sort={state.sort} dir={state.dir} onSort={(c, d) => update({ sort: c, dir: d })} className="px-6 py-3" />
+                    <SortHeader label="Users with Access" column="users" sort={state.sort} dir={state.dir} onSort={(c, d) => update({ sort: c, dir: d })} className="px-6 py-3" />
                     <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                       Quality
-                    </th>
-                    <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                      Anomalies
                     </th>
                   </tr>
                 </thead>
@@ -455,24 +409,23 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-grove-ink dark:text-grove-ink-dk">
-                        {obj.userCount || 0}
+                        {obj.userCount === null ? '—' : obj.userCount.toLocaleString('en-US')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <QualityCell score={scoresByApiName.get(obj.apiName)} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {obj.anomalyCount > 0 ? (
-                          <Badge variant="danger" size="sm">
-                            {obj.anomalyCount}
-                          </Badge>
-                        ) : (
-                          <span className="text-sm text-grove-ink/50 dark:text-grove-ink-dk/50">-</span>
-                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <Pagination
+                page={data!.page}
+                pageSize={data!.page_size}
+                total={data!.total}
+                label="objects"
+                onPage={(page) => update({ page })}
+                onPageSize={(pageSize) => update({ pageSize })}
+              />
             </div>
           ) : (
             <EmptyState

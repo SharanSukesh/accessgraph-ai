@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Field metadata (roadmap item 8), from the synced describe: what a field
  * is, an object's fields, and its relationships. Shown only when synced;
@@ -5,10 +7,15 @@
  */
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
-import { GitBranch, Lock, ListTree } from 'lucide-react'
+import { ArrowRight, GitBranch, Lock, ListTree } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/shared/Card'
 import { Badge } from '@/components/shared/Badge'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { Pagination } from '@/components/shared/Pagination'
+import { SortHeader } from '@/components/shared/SortHeader'
+import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
 
 export type Encryption = 'shield' | 'classic' | null | undefined
 
@@ -165,109 +172,140 @@ export function FieldDetailsCard({ orgId, attributes }: { orgId: string; attribu
 const th = 'px-4 py-2 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase'
 const td = 'px-4 py-2 text-sm text-grove-ink dark:text-grove-ink-dk'
 
-/** The object page's field list, every field the describe returned. */
+type SortProps = { sort: string | null; dir: 'asc' | 'desc'; onSort: (c: string, d: 'asc' | 'desc') => void }
+
+function Head({ label, column, sort }: { label: string; column?: string; sort?: SortProps }) {
+  if (sort && column) return <SortHeader label={label} column={column} {...sort} />
+  return <th className={th}>{label}</th>
+}
+
+/** Field rows, shared by the object page preview and the full list. */
+export function FieldRowsTable({ orgId, objectName, fields, sort }: {
+  orgId: string
+  objectName: string
+  fields: FieldAttributes[]
+  sort?: SortProps
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
+          <tr>
+            <Head label="Label" column="label" sort={sort} />
+            <Head label="API name" column="apiName" sort={sort} />
+            <Head label="Type" column="type" sort={sort} />
+            <Head label="Required" column="required" sort={sort} />
+            <th className={th}>Notes</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          {fields.map((f) => (
+            <tr key={f.apiName} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
+              <td className={td}>
+                <Link
+                  href={`/orgs/${orgId}/fields/${encodeURIComponent(`${objectName}.${f.apiName}`)}`}
+                  className="text-primary-700 dark:text-primary-300 hover:underline"
+                >
+                  {f.label}
+                </Link>
+              </td>
+              <td className={`${td} font-mono text-xs`}>{f.apiName}</td>
+              <td className={`${td} whitespace-nowrap`}>{f.typeLabel}</td>
+              <td className={td}>
+                {f.fromFieldDefinition ? (
+                  <span className="text-grove-ink/55 dark:text-grove-ink-dk/55">Not known</span>
+                ) : f.required ? (
+                  'Yes'
+                ) : (
+                  ''
+                )}
+              </td>
+              <td className={td}>
+                <div className="flex flex-wrap gap-1">
+                  <EncryptionBadge encryption={f.encryption} />
+                  {f.isSensitive && <Badge variant="warning" size="sm">Sensitive</Badge>}
+                  {f.externalId && <Badge variant="default" size="sm">External ID</Badge>}
+                  {f.custom && <Badge variant="info" size="sm">Custom</Badge>}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+export interface SchemaSummary {
+  fields: { count: number; preview: FieldAttributes[]; custom: number; formula: number; encrypted: number }
+  parents: { count: number; preview: Relationships['parents'] }
+  children: { count: number; preview: Relationships['children'] }
+}
+
+function hiddenNote(hiddenCount: number, describeFailed: boolean) {
+  if (!describeFailed && hiddenCount === 0) return null
+  return (
+    <p className="mb-3 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
+      {describeFailed
+        ? 'Salesforce wouldn’t describe this object for the integration user, so every field here comes from FieldDefinition: '
+        : `${hiddenCount} field${hiddenCount === 1 ? '' : 's'} can’t be seen by the integration user (field-level security), so they come from FieldDefinition: `}
+      encryption, formula text, picklist values and whether a field is required aren&apos;t known for{' '}
+      {describeFailed ? 'them' : 'those'}.
+    </p>
+  )
+}
+
+function ViewAll({ shown, count, href, noun }: { shown: number; count: number; href: string; noun: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 pt-3 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70">
+      <span>
+        Showing {Math.min(shown, count).toLocaleString('en-US')} of {count.toLocaleString('en-US')} {noun}
+      </span>
+      {count > shown && (
+        <Link href={href} className="inline-flex items-center gap-1 font-medium text-primary-700 dark:text-primary-300 hover:underline">
+          View all {count.toLocaleString('en-US')} <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      )}
+    </div>
+  )
+}
+
+/** The object page's field preview: counts, the first 10 fields, and View all. */
 export function ObjectFieldsCard({
   orgId,
   objectName,
-  fields,
+  summary,
   hiddenCount = 0,
   describeFailed = false,
 }: {
   orgId: string
   objectName: string
-  fields: FieldAttributes[]
+  summary: SchemaSummary['fields']
   hiddenCount?: number
   describeFailed?: boolean
 }) {
-  const [filter, setFilter] = useState('')
-  const shown = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    return q ? fields.filter((f) => `${f.apiName} ${f.label} ${f.typeLabel}`.toLowerCase().includes(q)) : fields
-  }, [fields, filter])
-  const counts = {
-    custom: fields.filter((f) => f.custom).length,
-    formula: fields.filter((f) => f.formula).length,
-    encrypted: fields.filter((f) => f.encryption).length,
-  }
+  const base = `/orgs/${orgId}/objects/${encodeURIComponent(objectName)}/fields`
   return (
     <Card variant="bordered">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <ListTree className="h-5 w-5" />
-            Fields ({fields.length})
+            Fields ({summary.count.toLocaleString('en-US')})
           </CardTitle>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-            <span>{counts.custom} custom</span>·<span>{counts.formula} formula</span>·<span>{counts.encrypted} encrypted</span>
-            <input
-              aria-label="Filter fields"
-              placeholder="Filter fields"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="ml-2 rounded-md px-2 py-1 text-sm bg-grove-surface dark:bg-grove-canvas-dk ring-1 ring-grove-border dark:ring-grove-border-dk text-grove-ink dark:text-grove-ink-dk"
-            />
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            {(['custom', 'formula', 'encrypted'] as const).map((k) => (
+              <Link key={k} href={`${base}?kind=fields&filter=${k}`} className="text-primary-700 dark:text-primary-300 hover:underline">
+                {summary[k].toLocaleString('en-US')} {k}
+              </Link>
+            ))}
           </div>
         </div>
       </CardHeader>
       <CardContent>
-        {(describeFailed || hiddenCount > 0) && (
-          <p className="mb-3 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-            {describeFailed
-              ? 'Salesforce wouldn’t describe this object for the integration user, so every field here comes from FieldDefinition: '
-              : `${hiddenCount} field${hiddenCount === 1 ? '' : 's'} can’t be seen by the integration user (field-level security), so they come from FieldDefinition: `}
-            encryption, formula text, picklist values and whether a field is required aren&apos;t known for{' '}
-            {describeFailed ? 'them' : 'those'}.
-          </p>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
-              <tr>
-                <th className={th}>Label</th>
-                <th className={th}>API name</th>
-                <th className={th}>Type</th>
-                <th className={th}>Required</th>
-                <th className={th}>Notes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-              {shown.map((f) => (
-                <tr key={f.apiName} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
-                  <td className={td}>
-                    <Link
-                      href={`/orgs/${orgId}/fields/${encodeURIComponent(`${objectName}.${f.apiName}`)}`}
-                      className="text-primary-700 dark:text-primary-300 hover:underline"
-                    >
-                      {f.label}
-                    </Link>
-                  </td>
-                  <td className={`${td} font-mono text-xs`}>{f.apiName}</td>
-                  <td className={`${td} whitespace-nowrap`}>{f.typeLabel}</td>
-                  <td className={td}>
-                    {f.fromFieldDefinition ? (
-                      <span className="text-grove-ink/55 dark:text-grove-ink-dk/55">Not known</span>
-                    ) : f.required ? (
-                      'Yes'
-                    ) : (
-                      ''
-                    )}
-                  </td>
-                  <td className={td}>
-                    <div className="flex flex-wrap gap-1">
-                      <EncryptionBadge encryption={f.encryption} />
-                      {f.isSensitive && <Badge variant="warning" size="sm">Sensitive</Badge>}
-                      {f.externalId && <Badge variant="default" size="sm">External ID</Badge>}
-                      {f.custom && <Badge variant="info" size="sm">Custom</Badge>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {shown.length === 0 && (
-            <p className="py-4 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">No field matches “{filter}”.</p>
-          )}
-        </div>
+        {hiddenNote(hiddenCount, describeFailed)}
+        <FieldRowsTable orgId={orgId} objectName={objectName} fields={summary.preview} />
+        <ViewAll shown={summary.preview.length} count={summary.count} href={`${base}?kind=fields`} noun="fields" />
       </CardContent>
     </Card>
   )
@@ -275,14 +313,54 @@ export function ObjectFieldsCard({
 
 const KIND = { master_detail: 'Master-detail', lookup: 'Lookup' } as Record<string, string>
 
-/** Parents (this object's lookup and master-detail fields) and children (synced objects pointing here). */
-export function RelationshipsCard({ orgId, relationships }: { orgId: string; relationships: Relationships }) {
-  const { parents, children } = relationships
-  const objLink = (name: string) => (
+function objLink(orgId: string, name: string) {
+  return (
     <Link key={name} href={`/orgs/${orgId}/objects/${name}`} className="font-mono text-xs text-primary-700 dark:text-primary-300 hover:underline">
       {name}
     </Link>
   )
+}
+
+export function ParentRows({ orgId, rows }: { orgId: string; rows: Relationships['parents'] }) {
+  return (
+    <ul className="space-y-1.5">
+      {rows.map((p) => (
+        <li key={p.field} className="text-sm text-grove-ink dark:text-grove-ink-dk flex flex-wrap items-center gap-2">
+          <span className="font-mono text-xs">{p.field}</span>
+          <span aria-hidden>→</span>
+          <span>
+            {p.to.map((t, i) => (
+              <span key={t}>{i > 0 && ', '}{objLink(orgId, t)}</span>
+            ))}
+          </span>
+          <Badge variant={p.kind === 'master_detail' ? 'info' : 'default'} size="sm">{KIND[p.kind || ''] || 'Reference'}</Badge>
+          {p.required && p.kind !== 'master_detail' && <Badge variant="default" size="sm">Required</Badge>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export function ChildRows({ orgId, rows }: { orgId: string; rows: Relationships['children'] }) {
+  return (
+    <ul className="space-y-1.5">
+      {rows.map((c) => (
+        <li key={`${c.object}.${c.field}`} className="text-sm text-grove-ink dark:text-grove-ink-dk flex flex-wrap items-center gap-2">
+          <span>
+            {objLink(orgId, c.object)}
+            <span className="font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">.{c.field}</span>
+          </span>
+          <Badge variant={c.kind === 'master_detail' ? 'info' : 'default'} size="sm">{KIND[c.kind || ''] || 'Reference'}</Badge>
+          {c.cascadeDelete && <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">deleted with this record</span>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Parents and children: counts, the first 10 of each, and View all. */
+export function RelationshipsCard({ orgId, objectName, summary }: { orgId: string; objectName: string; summary: SchemaSummary }) {
+  const base = `/orgs/${orgId}/objects/${encodeURIComponent(objectName)}/fields`
   return (
     <Card variant="bordered">
       <CardHeader>
@@ -294,49 +372,102 @@ export function RelationshipsCard({ orgId, relationships }: { orgId: string; rel
       <CardContent>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            <h4 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">Looks up to ({parents.length})</h4>
-            {parents.length === 0 ? (
+            <h4 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+              Looks up to ({summary.parents.count.toLocaleString('en-US')})
+            </h4>
+            {summary.parents.count === 0 ? (
               <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">No lookup or master-detail fields.</p>
             ) : (
-              <ul className="space-y-1.5">
-                {parents.map((p) => (
-                  <li key={p.field} className="text-sm text-grove-ink dark:text-grove-ink-dk flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs">{p.field}</span>
-                    <span aria-hidden>→</span>
-                    <span>
-                      {p.to.map((t, i) => (
-                        <span key={t}>{i > 0 && ', '}{objLink(t)}</span>
-                      ))}
-                    </span>
-                    <Badge variant={p.kind === 'master_detail' ? 'info' : 'default'} size="sm">{KIND[p.kind || ''] || 'Reference'}</Badge>
-                    {p.required && p.kind !== 'master_detail' && <Badge variant="default" size="sm">Required</Badge>}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ParentRows orgId={orgId} rows={summary.parents.preview} />
+                <ViewAll shown={summary.parents.preview.length} count={summary.parents.count} href={`${base}?kind=parents`} noun="" />
+              </>
             )}
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">Referenced by ({children.length})</h4>
-            {children.length === 0 ? (
+            <h4 className="text-sm font-semibold text-grove-ink dark:text-grove-ink-dk mb-2">
+              Referenced by ({summary.children.count.toLocaleString('en-US')})
+            </h4>
+            {summary.children.count === 0 ? (
               <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">No synced object points here.</p>
             ) : (
-              <ul className="space-y-1.5">
-                {children.map((c) => (
-                  <li key={`${c.object}.${c.field}`} className="text-sm text-grove-ink dark:text-grove-ink-dk flex flex-wrap items-center gap-2">
-                    <span>
-                      {objLink(c.object)}
-                      <span className="font-mono text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">.{c.field}</span>
-                    </span>
-                    <Badge variant={c.kind === 'master_detail' ? 'info' : 'default'} size="sm">{KIND[c.kind || ''] || 'Reference'}</Badge>
-                    {c.cascadeDelete && (
-                      <span className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">deleted with this record</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ChildRows orgId={orgId} rows={summary.children.preview} />
+                <ViewAll shown={summary.children.preview.length} count={summary.children.count} href={`${base}?kind=children`} noun="" />
+              </>
             )}
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const SCHEMA_TABS = [
+  { key: 'fields', label: 'Fields' },
+  { key: 'parents', label: 'Looks up to' },
+  { key: 'children', label: 'Referenced by' },
+] as const
+
+/** The full list of an object's fields or relationships: paged, searchable, sortable, in the URL. */
+export function ObjectSchemaList({ orgId, objectName }: { orgId: string; objectName: string }) {
+  const { state, update } = useListState('', { filters: ['kind', 'filter'] })
+  const kind = (SCHEMA_TABS.some((t) => t.key === state.filters.kind) ? state.filters.kind : 'fields') as 'fields' | 'parents' | 'children'
+  const filters: Record<string, string> = { kind }
+  if (kind === 'fields' && state.filters.filter) filters.filter = state.filters.filter
+  const { data, isLoading, error } = usePaged<any>(
+    ['object-schema', orgId, objectName],
+    `/orgs/${orgId}/objects/${encodeURIComponent(objectName)}/schema`,
+    { ...state, filters },
+  )
+  const sort = { sort: state.sort, dir: state.dir, onSort: (c: string, d: 'asc' | 'desc') => update({ sort: c, dir: d }) }
+  const pill = (active: boolean) =>
+    'rounded-full px-3 py-1 text-sm font-medium ring-1 ' +
+    (active
+      ? 'bg-primary-700 text-white ring-primary-700 dark:bg-primary-500 dark:text-grove-canvas-dk dark:ring-primary-500'
+      : 'text-grove-ink dark:text-grove-ink-dk ring-grove-border dark:ring-grove-border-dk hover:bg-primary-50/50 dark:hover:bg-primary-900/20')
+  return (
+    <Card variant="bordered">
+      <CardContent className="pt-6">
+        <div role="tablist" className="flex flex-wrap gap-2 mb-3">
+          {SCHEMA_TABS.map((t) => (
+            <button key={t.key} role="tab" type="button" aria-selected={t.key === kind} className={pill(t.key === kind)}
+              onClick={() => update({ filters: { kind: t.key, filter: '' }, sort: null })}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="mb-3 flex flex-wrap gap-3">
+          <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder={kind === 'fields' ? 'Search fields...' : 'Search relationships...'} />
+          {kind === 'fields' && (
+            <select
+              aria-label="Show"
+              value={state.filters.filter || ''}
+              onChange={(e) => update({ filters: { filter: e.target.value } })}
+              className="rounded-md px-3 py-2 text-sm bg-grove-surface dark:bg-grove-canvas-dk ring-1 ring-grove-border dark:ring-grove-border-dk text-grove-ink dark:text-grove-ink-dk"
+            >
+              <option value="">All fields</option>
+              <option value="custom">Custom</option>
+              <option value="formula">Formula</option>
+              <option value="encrypted">Encrypted</option>
+            </select>
+          )}
+        </div>
+        {error ? (
+          <p className="py-4 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70">{(error as Error).message}</p>
+        ) : isLoading || !data ? (
+          <TableSkeleton rows={10} />
+        ) : data.total === 0 ? (
+          <p className="py-4 text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">{state.q ? `Nothing matches “${state.q}”.` : 'None.'}</p>
+        ) : (
+          <>
+            {kind === 'fields' && <FieldRowsTable orgId={orgId} objectName={objectName} fields={data.items} sort={sort} />}
+            {kind === 'parents' && <ParentRows orgId={orgId} rows={data.items} />}
+            {kind === 'children' && <ChildRows orgId={orgId} rows={data.items} />}
+            <Pagination page={data.page} pageSize={data.page_size} total={data.total} label={kind}
+              onPage={(page) => update({ page })} onPageSize={(pageSize) => update({ pageSize })} />
+          </>
+        )}
       </CardContent>
     </Card>
   )
