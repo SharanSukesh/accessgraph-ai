@@ -2,9 +2,8 @@
 for renames and namespaces, approvals, access and dependency consequences,
 the stricter privacy level, and one org against itself over time."""
 import pytest
-from sqlalchemy import select
 
-from app.domain.models import Organization, OrgAccessGrant, OrgUser, SyncJob, SyncStatus
+from app.domain.models import Organization, OrgAccessGrant, SyncJob, SyncStatus
 from app.ingestion.orchestrator import SyncOrchestrator
 from app.services import org_compare as oc
 from app.services import privacy_mode
