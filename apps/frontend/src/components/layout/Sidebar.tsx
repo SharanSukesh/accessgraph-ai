@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   UserPlus,
   FlaskConical,
+  ShieldAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { DEMO_UNAVAILABLE_MESSAGE, unavailableForDemo } from '@/lib/demoOrg'
@@ -106,6 +107,7 @@ export const navigationSections: {
   {
     label: 'ATTENTION',
     items: [
+      { name: 'Security Summary', path: 'security', icon: ShieldAlert },
       { name: 'Priority Actions', path: 'recommendations', icon: ListChecks },
       { name: 'Anomalies', path: 'anomalies', icon: AlertTriangle, privacyFeature: 'anomalies' },
       { name: 'Change Risk', path: 'change-risk', icon: Radar, privacyFeature: 'change_risk' },
