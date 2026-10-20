@@ -34,6 +34,7 @@ import {
   FlaskConical,
   ShieldAlert,
   History,
+  GitCompare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { DEMO_UNAVAILABLE_MESSAGE, unavailableForDemo } from '@/lib/demoOrg'
@@ -104,6 +105,7 @@ export const navigationSections: {
       // { name: 'Permission Sets', path: 'permission-sets', icon: KeyRound },
       { name: 'Graph Explorer', path: 'graph', icon: Network },
       { name: 'History', path: 'snapshots', icon: History },
+      { name: 'Compare Orgs', path: 'org-compare', icon: GitCompare },
     ],
   },
   {
