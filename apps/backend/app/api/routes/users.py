@@ -10,10 +10,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.api.pagination import PageParams, page_params, paged
 from app.auth.deps import PACKAGE_KEY_HEADER, authorize_org, require_credentials
-from app.services.grant_sources import KIND_PROFILE, resolve_grant_sources
+from app.services.grant_sources import resolve_grant_sources
 from app.services.schema_metadata import field as schema_field
-from app.services.schema_metadata import field_details, field_payload, latest_schema, relationships
+from app.services.schema_metadata import field_details, field_payload, latest_schema
+from app.services import privacy_mode
 from app.services.risk_scoring import base_risk, classify_sensitive_field, classify_sensitive_object, latest_user_risks
 from app.domain.models import AccessAnomaly, Recommendation, RiskScore, UserSnapshot
 from app.services.effective_access import EffectiveAccessService
@@ -793,89 +795,65 @@ async def list_objects(
     org_id: str,
     search: Optional[str] = None,
     limit: int = Query(500, le=10000),
+    kind: Optional[str] = Query(None, pattern="^(sensitive|standard|custom)$"),
+    params: PageParams = Depends(page_params),
     db: AsyncSession = Depends(get_database),
 ):
-    """List unique Salesforce objects from permissions data"""
+    """Objects with permission grants. Users with access are active users who
+    can read the object, by the same rules as the user pages (profile, sets,
+    groups with muting; services/access_index.py); null at Metadata only.
+    With `page`: one page (search, kind filter and sort over every object)
+    and totals for the summary cards. Without it: every object, as before."""
+    import re
     from sqlalchemy import func, distinct
-    from app.domain.models import (
-        ObjectPermissionSnapshot,
-        UserSnapshot,
-        PermissionSetAssignmentSnapshot
-    )
+    from app.domain.models import ObjectPermissionSnapshot
+    from app.services.access_index import access_index
 
-    # Get distinct object types with permission count
-    query = select(
+    rows_q = select(
         ObjectPermissionSnapshot.sobject_type,
         func.count(distinct(ObjectPermissionSnapshot.parent_id)).label('permission_set_count')
-    ).where(
-        ObjectPermissionSnapshot.organization_id == org_id
-    ).group_by(
-        ObjectPermissionSnapshot.sobject_type
-    )
-
-    if search:
-        query = query.where(ObjectPermissionSnapshot.sobject_type.ilike(f'%{search}%'))
-
-    query = query.order_by(ObjectPermissionSnapshot.sobject_type).limit(limit)
-
-    result = await db.execute(query)
-    objects = result.all()
+    ).where(ObjectPermissionSnapshot.organization_id == org_id).group_by(ObjectPermissionSnapshot.sobject_type)
+    objects = (await db.execute(rows_q)).all()
     described = ((await latest_schema(db, org_id)) or {}).get("objects") or {}
+    org = await privacy_mode.load_org(db, org_id)
+    users_allowed = privacy_mode.allows(org, privacy_mode.USER_RECORDS)
+    counts = (await access_index(db, org_id)).counts("objects") if users_allowed else {}
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
         if api_name.endswith('__c'):
             api_name = api_name[:-3]
-        import re
         label = re.sub(r'([a-z])([A-Z])', r'\1 \2', api_name)
-        label = label.replace('_', ' ')
-        return label
+        return label.replace('_', ' ')
 
-    # For each object, calculate actual user count with proper deduplication
-    object_list = []
-    for obj in objects:
-        # Get all parent_ids (profiles and permission sets) for this object
-        perms_query = select(ObjectPermissionSnapshot.parent_id).where(
-            ObjectPermissionSnapshot.organization_id == org_id,
-            ObjectPermissionSnapshot.sobject_type == obj.sobject_type
-        )
-        perms_result = await db.execute(perms_query)
-        parent_ids = [p[0] for p in perms_result.all()]
+    object_list = [{
+        "id": o.sobject_type,
+        "name": o.sobject_type,
+        "apiName": o.sobject_type,
+        "label": (described.get(o.sobject_type) or {}).get("label") or create_label(o.sobject_type),
+        "isCustom": o.sobject_type.endswith('__c'),
+        **_object_sensitivity(o.sobject_type),
+        # From the synced describe; null when field metadata isn't synced.
+        "fieldCount": len(described[o.sobject_type]["fields"]) if o.sobject_type in described else None,
+        "userCount": (counts.get(o.sobject_type) or {}).get("read", 0) if users_allowed else None,
+        "permissionSetCount": o.permission_set_count,
+    } for o in objects]
 
-        # Get unique user IDs through profiles
-        users_from_profiles_query = select(distinct(UserSnapshot.salesforce_id)).where(
-            UserSnapshot.organization_id == org_id,
-            UserSnapshot.profile_id.in_(parent_ids)
-        )
-        users_from_profiles_result = await db.execute(users_from_profiles_query)
-        users_from_profiles = set(row[0] for row in users_from_profiles_result.all())
+    def keep(o: Dict) -> bool:
+        return (kind is None or (kind == "sensitive" and o["isSensitive"]) or (kind == "custom" and o["isCustom"])
+                or (kind == "standard" and not o["isCustom"]))
 
-        # Get unique user IDs through permission sets
-        users_from_ps_query = select(distinct(PermissionSetAssignmentSnapshot.assignee_id)).where(
-            PermissionSetAssignmentSnapshot.organization_id == org_id,
-            PermissionSetAssignmentSnapshot.permission_set_id.in_(parent_ids)
-        )
-        users_from_ps_result = await db.execute(users_from_ps_query)
-        users_from_ps = set(row[0] for row in users_from_ps_result.all())
-
-        # Union the sets to get truly unique user count
-        all_users = users_from_profiles.union(users_from_ps)
-        total_users = len(all_users)
-
-        object_list.append({
-            "id": obj.sobject_type,
-            "name": obj.sobject_type,
-            "apiName": obj.sobject_type,
-            "label": (described.get(obj.sobject_type) or {}).get("label") or create_label(obj.sobject_type),
-            "isCustom": obj.sobject_type.endswith('__c'),
-            **_object_sensitivity(obj.sobject_type),
-            # From the synced describe; null when field metadata isn't synced.
-            "fieldCount": len(described[obj.sobject_type]["fields"]) if obj.sobject_type in described else None,
-            "userCount": total_users,
-            "permissionSetCount": obj.permission_set_count,
-        })
-
-    return object_list
+    if not params.paged:
+        rows = [o for o in object_list if keep(o) and (not search or search.lower() in o["apiName"].lower())]
+        return sorted(rows, key=lambda o: o["apiName"])[:limit]
+    summary = {"objects": len(object_list), "sensitive": sum(o["isSensitive"] for o in object_list),
+               "custom": sum(o["isCustom"] for o in object_list), "usersAvailable": users_allowed}
+    return paged([o for o in object_list if keep(o)], params,
+                 text=lambda o: f"{o['apiName']} {o['label']} {o.get('sensitivity') or ''}",
+                 sorts={"label": lambda o: o["label"], "apiName": lambda o: o["apiName"],
+                        "type": lambda o: o["isCustom"], "sensitivity": lambda o: o.get("sensitivity"),
+                        "users": lambda o: o["userCount"], "fields": lambda o: o["fieldCount"]},
+                 default_sort="label", summary=summary)
 
 
 @router.get("/orgs/{org_id}/objects/{object_name}")
@@ -884,128 +862,25 @@ async def get_object_details(
     object_name: str,
     db: AsyncSession = Depends(get_database),
 ):
-    """Get detailed information about a Salesforce object"""
-    from app.domain.models import (
-        ObjectPermissionSnapshot,
-        PermissionSetAssignmentSnapshot,
-        UserSnapshot
-    )
-
-    # Get all permissions for this object
-    perms_query = select(ObjectPermissionSnapshot).where(
-        ObjectPermissionSnapshot.organization_id == org_id,
-        ObjectPermissionSnapshot.sobject_type == object_name
-    )
-    perms_result = await db.execute(perms_query)
-    permissions = perms_result.scalars().all()
-
-    # Get profiles and permission sets that grant access (deduplicate by ID)
-    profiles_dict = {}
-    permission_sets_dict = {}
-
-    sources = await resolve_grant_sources(db, org_id, {p.parent_id for p in permissions})
-    for perm in permissions:
-        source = sources.get(perm.parent_id)
-        if source is None:
-            continue
-        grants = {
-            "read": perm.permissions_read,
-            "create": perm.permissions_create,
-            "edit": perm.permissions_edit,
-            "delete": perm.permissions_delete,
-            "viewAll": perm.permissions_view_all_records,
-            "modifyAll": perm.permissions_modify_all_records,
-        }
-        bucket = profiles_dict if source.kind == KIND_PROFILE else permission_sets_dict
-        entry = bucket.setdefault(source.id, {
-            "id": source.id,
-            "name": source.name,
-            "label": source.label,
-            "type": source.kind,
-            **{k: False for k in grants},
-        })
-        for flag, granted in grants.items():
-            entry[flag] = entry[flag] or bool(granted)
-
-    profiles_with_access = list(profiles_dict.values())
-    permission_sets_with_access = list(permission_sets_dict.values())
-
-    # Get users with access (through profiles or permission sets)
-    # Use a dict to group access methods by user to avoid double-counting
-    users_dict = {}
-
-    # Users through profiles
-    for profile in profiles_with_access:
-        users_query = select(UserSnapshot).where(
-            UserSnapshot.organization_id == org_id,
-            UserSnapshot.profile_id == profile["id"]
-        )
-        users_result = await db.execute(users_query)
-        users = users_result.scalars().all()
-        for user in users:
-            if user.salesforce_id not in users_dict:
-                users_dict[user.salesforce_id] = {
-                    "id": user.salesforce_id,
-                    "name": user.name,
-                    "email": user.email,
-                    "access_methods": []
-                }
-            users_dict[user.salesforce_id]["access_methods"].append("Profile: " + profile["name"])
-
-    # Users through permission sets
-    for ps in permission_sets_with_access:
-        assignments_query = select(PermissionSetAssignmentSnapshot).where(
-            PermissionSetAssignmentSnapshot.organization_id == org_id,
-            PermissionSetAssignmentSnapshot.permission_set_id == ps["id"]
-        )
-        assignments_result = await db.execute(assignments_query)
-        assignments = assignments_result.scalars().all()
-
-        for assignment in assignments:
-            user_query = select(UserSnapshot).where(
-                UserSnapshot.organization_id == org_id,
-                UserSnapshot.salesforce_id == assignment.assignee_id
-            )
-            user_result = await db.execute(user_query)
-            user = user_result.scalar_one_or_none()
-            if user:
-                if user.salesforce_id not in users_dict:
-                    users_dict[user.salesforce_id] = {
-                        "id": user.salesforce_id,
-                        "name": user.name,
-                        "email": user.email,
-                        "access_methods": []
-                    }
-                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["label"])
-
-    # Convert to list and format access via
-    users_with_access = [
-        {
-            "salesforceUserId": user_info["id"],
-            "name": user_info["name"],
-            "email": user_info["email"],
-            "accessVia": ", ".join(user_info["access_methods"][:2]) + (" and more..." if len(user_info["access_methods"]) > 2 else "")
-        }
-        for user_info in sorted(users_dict.values(), key=lambda x: x["name"])
-    ]
+    """An object: label, field metadata, and who can access it. Access is a
+    summary (count and first rows per kind); the full lists are paged at
+    /objects/{name}/access (routes/access_lists.py)."""
+    import re
+    from app.api.routes.access_lists import access_summary, target_for_object
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
         if api_name.endswith('__c'):
             api_name = api_name[:-3]
-        import re
         label = re.sub(r'([a-z])([A-Z])', r'\1 \2', api_name)
-        label = label.replace('_', ' ')
-        return label
+        return label.replace('_', ' ')
+
+    from app.api.routes.schema_lists import summary as schema_summary
 
     schema = await latest_schema(db, org_id)
     described = ((schema or {}).get("objects") or {}).get(object_name)
-    fields = None
-    if described:
-        fields = [
-            {"apiName": name, **(field_details(f) or {}), **_field_sensitivity(name)}
-            for name, f in described["fields"].items()
-        ]
+    access = await access_summary(db, org_id, target_for_object(object_name))
+    kinds = access["kinds"]
 
     return {
         "name": object_name,
@@ -1016,129 +891,82 @@ async def get_object_details(
         # Field metadata from the synced describe (roadmap item 8); null
         # when it isn't synced.
         "schemaSynced": described is not None,
-        "fields": fields,
-        # Fields the describe left out (field-level security), typed from FieldDefinition.
+        # Counts and first rows; full lists at /objects/{name}/schema (routes/schema_lists.py).
+        "schema": schema_summary(schema, object_name),
         "fieldsFromFieldDefinition": (described or {}).get("fields_from_field_definition", 0),
         "describeFailed": bool((described or {}).get("describe_failed")),
-        "relationships": relationships(schema, object_name) if described else None,
-        "profilesWithAccess": profiles_with_access,
-        "permissionSetsWithAccess": permission_sets_with_access,
-        "usersWithAccess": users_with_access,
-        "totalUsers": len(users_with_access),
-        "totalProfiles": len(profiles_with_access),
-        "totalPermissionSets": len(permission_sets_with_access),
+        "access": access,
+        "totalUsers": kinds["users"]["count"],
+        "totalProfiles": kinds["profiles"]["count"],
+        "totalPermissionSets": kinds["permission_sets"]["count"],
+        "totalGroups": kinds["groups"]["count"],
     }
 
 
 @router.get("/orgs/{org_id}/fields")
 async def list_fields(
     org_id: str,
-    search: Optional[str] = None,
     object_type: Optional[str] = None,
-    starts_with: Optional[str] = None,  # Letter filter (A-Z)
-    page: int = Query(1, ge=1),
-    limit: int = Query(100, ge=1, le=500),
+    starts_with: Optional[str] = Query(None, max_length=1),
+    params: PageParams = Depends(page_params),
     db: AsyncSession = Depends(get_database),
 ):
-    """
-    List unique Salesforce fields from permissions data
-
-    Supports alphabetical filtering and pagination:
-    - starts_with: Filter fields starting with a specific letter (A-Z)
-    - page: Page number (1-indexed)
-    - limit: Items per page (default 100, max 500)
-    """
+    """Fields that field-level security names, with type and encryption from
+    the synced describe, and the active users who can read each (same rules
+    as the user pages; null at Metadata only). Search (q), object and first
+    letter filter every field before the page is cut; without `page`, every
+    field comes back."""
     from sqlalchemy import func
     from app.domain.models import FieldPermissionSnapshot
+    from app.services.access_index import access_index
 
-    # Get distinct fields with counts
-    query = select(
+    stmt = select(
         FieldPermissionSnapshot.sobject_type,
         FieldPermissionSnapshot.field,
-        func.count(FieldPermissionSnapshot.id).label('permission_count')
-    ).where(
-        FieldPermissionSnapshot.organization_id == org_id
-    ).group_by(
-        FieldPermissionSnapshot.sobject_type,
-        FieldPermissionSnapshot.field
-    )
-
-    # Apply filters
-    if search:
-        query = query.where(FieldPermissionSnapshot.field.ilike(f'%{search}%'))
-
+        func.count(FieldPermissionSnapshot.id).label('permission_count'),
+    ).where(FieldPermissionSnapshot.organization_id == org_id).group_by(
+        FieldPermissionSnapshot.sobject_type, FieldPermissionSnapshot.field)
     if object_type:
-        query = query.where(FieldPermissionSnapshot.sobject_type == object_type)
-
-    # Alphabetical filter - match fields starting with the specified letter
-    if starts_with:
-        letter = starts_with.upper()
-        if letter.isalpha() and len(letter) == 1:
-            # Match fields starting with the letter (case-insensitive)
-            query = query.where(FieldPermissionSnapshot.field.ilike(f'{letter}%'))
-
-    # Order by field name alphabetically
-    query = query.order_by(
-        FieldPermissionSnapshot.field,
-        FieldPermissionSnapshot.sobject_type
-    )
-
-    # Get total count for pagination
-    count_query = select(func.count()).select_from(
-        query.alias('subquery')
-    )
-    count_result = await db.execute(count_query)
-    total_count = count_result.scalar() or 0
-
-    # Apply pagination
-    offset = (page - 1) * limit
-    query = query.offset(offset).limit(limit)
-
-    result = await db.execute(query)
-    fields = result.all()
+        stmt = stmt.where(FieldPermissionSnapshot.sobject_type.ilike(f"%{object_type.strip()}%"))
+    rows = (await db.execute(stmt)).all()
     schema = await latest_schema(db, org_id)
+    org = await privacy_mode.load_org(db, org_id)
+    users_allowed = privacy_mode.allows(org, privacy_mode.USER_RECORDS)
+    counts = (await access_index(db, org_id)).counts("fields") if users_allowed else {}
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
-        # Remove object prefix (e.g., Account.Name -> Name)
-        if '.' in api_name:
-            api_name = api_name.split('.')[-1]
-        # Remove __c suffix for custom fields
+        api_name = api_name.split('.')[-1]
         if api_name.endswith('__c'):
             api_name = api_name[:-3]
-        # Replace underscores with spaces and title case
         return ' '.join(word.capitalize() for word in api_name.replace('_', ' ').split())
 
-    # Calculate pagination metadata
-    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
-
-    return {
-        "fields": [
-            {
-                "id": f"{field.sobject_type}.{field.field}",
-                "objectName": field.sobject_type,
-                "apiName": field.field,
-                "label": (schema_field(schema, field.sobject_type, field.field.split('.')[-1]) or {}).get("label")
-                or create_label(field.field),
-                **_field_sensitivity(field.field),
-                # Type and encryption from the synced describe; null when not synced.
-                **field_payload(schema_field(schema, field.sobject_type, field.field.split('.')[-1])),
-                "isCustom": field.field.endswith('__c'),
-                "userCount": field.permission_count,
-                "permissionCount": field.permission_count,
-            }
-            for field in fields
-        ],
-        # What the field metadata read couldn't cover (services/schema_metadata.py).
-        "schemaNotes": (schema or {}).get("notes") or [],
-        "pagination": {
-            "page": page,
-            "limit": limit,
-            "total": total_count,
-            "totalPages": total_pages,
-            "hasMore": page < total_pages,
-        }
-    }
+    items = []
+    for r in rows:
+        bare = r.field.split('.')[-1]
+        if starts_with and starts_with.isalpha() and not bare.upper().startswith(starts_with.upper()):
+            continue
+        described = schema_field(schema, r.sobject_type, bare)
+        key = r.field if '.' in r.field else f"{r.sobject_type}.{r.field}"
+        items.append({
+            "id": f"{r.sobject_type}.{r.field}",
+            "objectName": r.sobject_type,
+            "apiName": r.field,
+            "label": (described or {}).get("label") or create_label(r.field),
+            **_field_sensitivity(r.field),
+            # Type and encryption from the synced describe; null when not synced.
+            **field_payload(described),
+            "isCustom": r.field.endswith('__c'),
+            "userCount": (counts.get(key) or {}).get("read", 0) if users_allowed else None,
+            "permissionCount": r.permission_count,
+        })
+    return paged(items, params if params.paged else PageParams(1, 10**9, params.sort, params.dir, params.q),
+                 text=lambda f: f"{f['apiName']} {f['label']} {f['objectName']} {f.get('typeLabel') or ''}",
+                 sorts={"label": lambda f: f["label"], "object": lambda f: f["objectName"],
+                        "apiName": lambda f: f["apiName"], "type": lambda f: f.get("typeLabel"),
+                        "users": lambda f: f["userCount"], "grants": lambda f: f["permissionCount"]},
+                 default_sort="apiName", schemaNotes=(schema or {}).get("notes") or [],
+                 usersAvailable=users_allowed)
 
 
 @router.get("/orgs/{org_id}/fields/{field_id}")
@@ -1147,159 +975,24 @@ async def get_field_details(
     field_id: str,
     db: AsyncSession = Depends(get_database),
 ):
-    """Get detailed information about a Salesforce field"""
-    from app.domain.models import (
-        FieldPermissionSnapshot,
-        PermissionSetAssignmentSnapshot,
-        UserSnapshot
-    )
+    """A field: what it is (synced describe) and who can access it, as a
+    summary (count and first rows per kind); full lists are paged at
+    /fields/{id}/access. A field without field-level security rows follows
+    its object's access."""
+    from app.api.routes.access_lists import access_summary, target_for_field
 
-    # Parse field_id format "ObjectName.FieldName"
     if '.' not in field_id:
         raise HTTPException(status_code=400, detail="Invalid field_id format. Expected 'ObjectName.FieldName'")
-
     object_name, field_name = field_id.split('.', 1)
     # FieldPermissions name a field "Object.Field"; the describe, just "Field".
     bare_name = field_name.split('.')[-1]
 
-    # Get all permissions for this field
-    perms_query = select(FieldPermissionSnapshot).where(
-        FieldPermissionSnapshot.organization_id == org_id,
-        FieldPermissionSnapshot.sobject_type == object_name,
-        FieldPermissionSnapshot.field.in_({field_name, f"{object_name}.{bare_name}"})
-    )
-    perms_result = await db.execute(perms_query)
-    permissions = perms_result.scalars().all()
-
-    inherited_from_object = False
-    if not permissions:
-        # No explicit FieldPermission rows. For mandatory standard fields
-        # (Id, Name, AccountNumber, etc.) Salesforce doesn't allow FLS to
-        # restrict them — access is inherited from object permissions. For
-        # other fields without explicit FLS, the field is accessible to
-        # anyone with the parent object's Read permission by default.
-        # Either way, fall back to ObjectPermissionSnapshot to compute who
-        # actually has access. This is the SAME logic Salesforce uses to
-        # render fields on a record page.
-        from app.domain.models import ObjectPermissionSnapshot
-        obj_perms_query = select(ObjectPermissionSnapshot).where(
-            ObjectPermissionSnapshot.organization_id == org_id,
-            ObjectPermissionSnapshot.sobject_type == object_name,
-            ObjectPermissionSnapshot.permissions_read == True,  # noqa: E712
-        )
-        obj_perms_result = await db.execute(obj_perms_query)
-        obj_permissions = obj_perms_result.scalars().all()
-        if not obj_permissions:
-            # Object isn't synced or genuinely nobody has access. 404 is
-            # the right answer here — there's no inherited access to show.
-            raise HTTPException(status_code=404, detail="Field not found")
-
-        # Reshape ObjectPermission rows into FieldPermission-like shape so
-        # the iteration below works unchanged. Read inherits from object
-        # Read; Edit on field inherits from object Edit (subject to
-        # Salesforce's actual semantics, but that's a reasonable default
-        # for the inheritance case).
-        class _SyntheticFieldPerm:
-            def __init__(self, parent_id, p_read, p_edit):
-                self.parent_id = parent_id
-                self.permissions_read = p_read
-                self.permissions_edit = p_edit
-
-        permissions = [
-            _SyntheticFieldPerm(
-                p.parent_id,
-                p.permissions_read,
-                p.permissions_edit,
-            )
-            for p in obj_permissions
-        ]
-        inherited_from_object = True
-
-    # Get profiles and permission sets that grant access (deduplicate by ID)
-    profiles_dict = {}
-    permission_sets_dict = {}
-
-    sources = await resolve_grant_sources(db, org_id, {p.parent_id for p in permissions})
-    for perm in permissions:
-        source = sources.get(perm.parent_id)
-        if source is None:
-            continue
-        grants = {
-            "read": perm.permissions_read,
-            "edit": perm.permissions_edit,
-        }
-        bucket = profiles_dict if source.kind == KIND_PROFILE else permission_sets_dict
-        entry = bucket.setdefault(source.id, {
-            "id": source.id,
-            "name": source.name,
-            "label": source.label,
-            "type": source.kind,
-            **{k: False for k in grants},
-        })
-        for flag, granted in grants.items():
-            entry[flag] = entry[flag] or bool(granted)
-
-    profiles_with_access = list(profiles_dict.values())
-    permission_sets_with_access = list(permission_sets_dict.values())
-
-    # Get users with access (through profiles or permission sets)
-    # Use a dict to group access methods by user to avoid double-counting
-    users_dict = {}
-
-    # Users through profiles
-    for profile in profiles_with_access:
-        users_query = select(UserSnapshot).where(
-            UserSnapshot.organization_id == org_id,
-            UserSnapshot.profile_id == profile["id"]
-        )
-        users_result = await db.execute(users_query)
-        users = users_result.scalars().all()
-        for user in users:
-            if user.salesforce_id not in users_dict:
-                users_dict[user.salesforce_id] = {
-                    "id": user.salesforce_id,
-                    "name": user.name,
-                    "email": user.email,
-                    "access_methods": []
-                }
-            users_dict[user.salesforce_id]["access_methods"].append("Profile: " + profile["name"])
-
-    # Users through permission sets
-    for ps in permission_sets_with_access:
-        assignments_query = select(PermissionSetAssignmentSnapshot).where(
-            PermissionSetAssignmentSnapshot.organization_id == org_id,
-            PermissionSetAssignmentSnapshot.permission_set_id == ps["id"]
-        )
-        assignments_result = await db.execute(assignments_query)
-        assignments = assignments_result.scalars().all()
-
-        for assignment in assignments:
-            user_query = select(UserSnapshot).where(
-                UserSnapshot.organization_id == org_id,
-                UserSnapshot.salesforce_id == assignment.assignee_id
-            )
-            user_result = await db.execute(user_query)
-            user = user_result.scalar_one_or_none()
-            if user:
-                if user.salesforce_id not in users_dict:
-                    users_dict[user.salesforce_id] = {
-                        "id": user.salesforce_id,
-                        "name": user.name,
-                        "email": user.email,
-                        "access_methods": []
-                    }
-                users_dict[user.salesforce_id]["access_methods"].append("Permission Set: " + ps["label"])
-
-    # Convert to list and format access via
-    users_with_access = [
-        {
-            "salesforceUserId": user_info["id"],
-            "name": user_info["name"],
-            "email": user_info["email"],
-            "accessVia": ", ".join(user_info["access_methods"][:2]) + (" and more..." if len(user_info["access_methods"]) > 2 else "")
-        }
-        for user_info in sorted(users_dict.values(), key=lambda x: x["name"])
-    ]
+    target = await target_for_field(db, org_id, field_id)
+    access = await access_summary(db, org_id, target)
+    kinds = access["kinds"]
+    described = schema_field(await latest_schema(db, org_id), object_name, bare_name)
+    if described is None and not any(k["count"] for k in kinds.values()):
+        raise HTTPException(status_code=404, detail="Field not found")
 
     def create_label(api_name: str) -> str:
         """Create a human-readable label from API name"""
@@ -1309,7 +1002,6 @@ async def get_field_details(
             api_name = api_name[:-3]
         return ' '.join(word.capitalize() for word in api_name.replace('_', ' ').split())
 
-    described = schema_field(await latest_schema(db, org_id), object_name, bare_name)
     return {
         "id": field_id,
         "objectName": object_name,
@@ -1320,17 +1012,14 @@ async def get_field_details(
         # Type, encryption and the rest from the synced describe; null when not synced.
         **field_payload(described),
         "attributes": field_details(described),
-        "profilesWithAccess": profiles_with_access,
-        "permissionSetsWithAccess": permission_sets_with_access,
-        "usersWithAccess": users_with_access,
-        "totalUsers": len(users_with_access),
-        "totalProfiles": len(profiles_with_access),
-        "totalPermissionSets": len(permission_sets_with_access),
-        # True when the access list was derived from object-level CRUD
-        # rather than explicit FLS rows. Lets the UI surface "access
-        # inherited from {object}" context instead of pretending these are
-        # explicit field grants.
-        "inheritedFromObject": inherited_from_object,
+        "access": access,
+        "totalUsers": kinds["users"]["count"],
+        "totalProfiles": kinds["profiles"]["count"],
+        "totalPermissionSets": kinds["permission_sets"]["count"],
+        "totalGroups": kinds["groups"]["count"],
+        # True when access follows the object (no field-level security rows
+        # name this field), so the UI says so instead of implying field grants.
+        "inheritedFromObject": target.follows_object,
     }
 
 

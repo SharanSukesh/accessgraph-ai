@@ -331,7 +331,20 @@ section has the detail.
     org, no production config or environment changes, no push to main
     except merging after approval, never invent numbers; check Salesforce
     API details against Salesforce's documentation and mark anything
-    unconfirmed UNVERIFIED.
+    unconfirmed UNVERIFIED;
+  - **pagination (standing rule from 20 Oct; every new feature follows
+    it):** any list that can exceed about 50 rows is paged by the server
+    (app/api/pagination.py: page, page_size 25/50/100, sort, dir, q), never
+    by slicing in the browser. The screen shows "Showing 1–25 of 403",
+    previous and next, jump to page and a page size of 25, 50 or 100
+    (components/shared/Pagination.tsx). Search, filters and sorting apply
+    to all rows; changing any of them returns to page 1. Page, page size,
+    sort and filters live in the URL (lib/list/useListState.ts), so the
+    back button and shared links return to the same view. Exports and
+    image downloads always include every row. A list inside a card shows a
+    summary first (a count per tab, e.g. profiles, permission sets, groups,
+    users), the first 10 rows of the selected tab, and "View all" for the
+    full paged, searchable list.
 - **Stacking (19 Oct):** every item PR updates this log, so PRs form one
   ordered stack until "merge approved": #52 (parity matrix) <- #53 (v68)
   <- each next item. Stacked PRs don't get GitHub CI until they're
@@ -479,6 +492,42 @@ section has the detail.
   (tests/test_demo_dates.py checks 1, 30 and 200 days later, and that the
   numbers do drift without the anchor). Production keeps the numbers of its
   last run until this is merged and Lumenvale is re-synced.
+- **Pagination (20 Oct, before continuing the roadmap; standing rule
+  above).** Audit of every list (inventory in #58's description): long lists
+  with no paging (users, object/field access, permission set detail, the
+  user field-access tab, record access, pages and automation, people
+  table), silent caps that make counts wrong on a large org (objects 500,
+  users 5,000, anomalies 100, Priority Actions 100, findings 500, accepted
+  moves CSV 100), filters sent but ignored (objects `sensitive`;
+  recommendations `search`, `severity`), browser-side CSV exports of only the
+  loaded rows. Plan, one stacked PR each: (1) foundation and Schema pages;
+  (2) users; (3) permission sets, profiles, groups, graph node details;
+  (4) anomalies, Priority Actions, findings, API usage, exports of every row;
+  (5) lists already paged by the server (sprawl, License Fit, change history,
+  Restructure moves) onto the standard control, plus people and role users.
+- **#58 (pagination 1 of 5, not merged; stacked on #57):** foundation —
+  app/api/pagination.py (page_params, paged, paged_query; without `page` an
+  endpoint returns every row), services/access_index.py (who can reach each
+  object and field by the user-page rules, each source evaluated once,
+  cached per sync; tested equal to the per-user rules for every object,
+  field and flag on Lumenvale and a 600-user, 6,000-assignment,
+  2,400-field data set), frontend lib/list (URL state, usePaged),
+  Pagination, ListSearch, SortHeader, CardListPreview. Schema pages:
+  Objects (paged, sortable, search and type filter on the server, totals
+  for the cards; the "With Anomalies" card and column, which nothing ever
+  filled, are removed; users with access now include groups),
+  Fields (standard paging, sort, users with Read now a real count instead
+  of the number of permission rows), object and field detail ("Who can
+  access" card: counts for profiles, permission sets, groups and users, 10
+  rows, View all → /objects/{name}/access and /fields/{id}/access, paged),
+  object fields and relationships (preview card, View all →
+  /objects/{name}/fields). **Test (local "List scale" org from
+  tests/list_scale.py, or Lumenvale):** Objects page 2 sorted by users:
+  "Showing 26–50 of 60"; page size 50 → "Showing 1–50 of 60"; search "07" →
+  1; open Scale_Object_07__c → tabs Profiles 5, Permission sets 25, Groups
+  1, Users 557, 10 rows; View all → "Showing 1–25 of 557"; jump to page 5 →
+  "101–125"; back twice → the filtered list; Fields: "Showing 1–25 of
+  2,400". Lumenvale Account: 17 fields, View all → "Showing 1–17 of 17".
 - **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
   the objects and fields each flow reads or writes, from the Flow metadata
   already read per active flow), the field × layout matrix (#4, Layout

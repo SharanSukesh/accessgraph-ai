@@ -16,7 +16,7 @@ from app.api.routes import (
     equity, reporting_graph, org_analyzer, data_quality,
     change_risk_radar, package_sprawl, restructure, report_sprawl,
     automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs, roles, role_design,
-    ui_access, documentation,
+    ui_access, documentation, access_lists, schema_lists,
 )
 from app.auth.deps import require_org_access
 from app.core.config import settings
@@ -189,6 +189,8 @@ app.include_router(license_fit.router, tags=["license-fit"])
 app.include_router(integration_sprawl.router, tags=["integration-sprawl"])
 app.include_router(ui_access.router, tags=["ui-access"], dependencies=_org_guard)
 app.include_router(documentation.router, tags=["documentation"], dependencies=_org_guard)
+app.include_router(access_lists.router, tags=["access-lists"], dependencies=_org_guard)
+app.include_router(schema_lists.router, tags=["schema-lists"], dependencies=_org_guard)
 app.include_router(compliance.router, tags=["compliance"], dependencies=_org_guard)
 app.include_router(roles.router, tags=["roles"], dependencies=_org_guard)
 app.include_router(role_design.router, tags=["role-design"], dependencies=_org_guard)

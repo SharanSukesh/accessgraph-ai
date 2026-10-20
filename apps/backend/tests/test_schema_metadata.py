@@ -136,7 +136,7 @@ def test_lumenvale_part_has_the_planted_fields():
 async def test_schema_pages_on_lumenvale(client, async_db_session, lumenvale):  # noqa: F811
     org_id, cookie = lumenvale
     page = (await client.get(f"/orgs/{org_id}/fields", params={"object_type": "Employee__c"}, cookies=cookie)).json()
-    by_name = {f["apiName"].split(".")[-1]: f for f in page["fields"]}
+    by_name = {f["apiName"].split(".")[-1]: f for f in page["items"]}
     assert by_name["National_ID__c"]["isEncrypted"] is True and by_name["National_ID__c"]["encryption"] == "shield"
     assert by_name["Department__c"]["dataType"] == "picklist" and by_name["Department__c"]["isEncrypted"] is False
 
@@ -147,10 +147,21 @@ async def test_schema_pages_on_lumenvale(client, async_db_session, lumenvale):  
     assert f["attributes"]["calculatedFormula"].startswith("IF(ISBLANK(Due_Date__c)") and f["inheritedFromObject"]
 
     o = (await client.get(f"/orgs/{org_id}/objects/Invoice__c", cookies=cookie)).json()
-    assert o["schemaSynced"] and o["label"] == "Invoice" and len(o["fields"]) == 11
-    assert o["relationships"]["children"] == [{"object": "Payment__c", "field": "Invoice__c", "relationshipName": "Payments__r",
-                                               "kind": "master_detail", "cascadeDelete": True}]
-    assert [p["to"] for p in o["relationships"]["parents"]] == [["Account"], ["Group", "User"]]
+    assert o["schemaSynced"] and o["label"] == "Invoice" and o["schema"]["fields"]["count"] == 11
+    assert len(o["schema"]["fields"]["preview"]) == 10 and o["schema"]["fields"]["formula"] == 1
+    assert o["schema"]["children"]["preview"] == [{"object": "Payment__c", "field": "Invoice__c", "relationshipName": "Payments__r",
+                                                   "kind": "master_detail", "cascadeDelete": True}]
+    assert [p["to"] for p in o["schema"]["parents"]["preview"]] == [["Account"], ["Group", "User"]]
+    # The full lists, paged and searchable.
+    page2 = (await client.get(f"/orgs/{org_id}/objects/Invoice__c/schema",
+                              params={"kind": "fields", "page": 2, "page_size": 25}, cookies=cookie)).json()
+    assert (page2["total"], page2["page"], len(page2["items"])) == (11, 1, 11)  # past the end: the last page
+    formula = (await client.get(f"/orgs/{org_id}/objects/Invoice__c/schema",
+                                params={"kind": "fields", "filter": "formula", "page": 1}, cookies=cookie)).json()
+    assert [r["apiName"] for r in formula["items"]] == ["Days_Overdue__c"]
+    found = (await client.get(f"/orgs/{org_id}/objects/Invoice__c/schema",
+                              params={"kind": "fields", "q": "due", "page": 1, "sort": "apiName"}, cookies=cookie)).json()
+    assert [r["apiName"] for r in found["items"]] == ["Days_Overdue__c", "Due_Date__c"]
     comp = (await client.get(f"/orgs/{org_id}/objects/Compensation__c", cookies=cookie)).json()
     assert (comp["fieldsFromFieldDefinition"], comp["describeFailed"]) == (2, False)
     bonus = (await client.get(f"/orgs/{org_id}/fields/Compensation__c.Bonus__c", cookies=cookie)).json()
@@ -164,7 +175,8 @@ async def test_schema_pages_on_lumenvale(client, async_db_session, lumenvale):  
     privacy_mode.set_privacy(org, privacy_mode.METADATA_ONLY, False, "test")
     await async_db_session.commit()
     o = (await client.get(f"/orgs/{org_id}/objects/Invoice__c", cookies=cookie)).json()
-    assert o["schemaSynced"] and len(o["fields"]) == 11
+    assert o["schemaSynced"] and o["schema"]["fields"]["count"] == 11
+    assert o["access"]["kinds"]["users"]["count"] is None and o["totalUsers"] is None  # no users at Metadata only
 
 
 @pytest.mark.asyncio
@@ -180,6 +192,6 @@ async def test_without_a_synced_describe_everything_stays_null(client, async_db_
     f = (await client.get(f"/orgs/{org_id}/fields/Employee__c.National_ID__c", cookies=cookie)).json()
     assert (f["dataType"], f["isEncrypted"], f["attributes"]) == (None, None, None)
     o = (await client.get(f"/orgs/{org_id}/objects/Invoice__c", cookies=cookie)).json()
-    assert (o["schemaSynced"], o["fields"], o["relationships"]) == (False, None, None)
+    assert (o["schemaSynced"], o["schema"]) == (False, None)
     objects = {x["name"]: x for x in (await client.get(f"/orgs/{org_id}/objects", cookies=cookie)).json()}
     assert objects["Invoice__c"]["fieldCount"] is None
