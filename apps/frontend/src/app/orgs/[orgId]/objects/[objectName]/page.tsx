@@ -5,6 +5,7 @@
  * Shows detailed information about a Salesforce object including permissions and user access
  */
 
+import Link from 'next/link'
 import { use} from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Database, Shield, Users, ChevronLeft, Check, X, Sparkles, AlertTriangle, Copy } from 'lucide-react'
@@ -138,11 +139,19 @@ export default function ObjectDetailPage() {
           <span className="font-mono text-xs">{objectDetail.apiName}</span>
         }
         actions={
-          objectDetail.isCustom && (
-            <Badge variant="info" size="sm">
-              Custom
-            </Badge>
-          )
+          <div className="flex items-center gap-2">
+            {objectDetail.isCustom && (
+              <Badge variant="info" size="sm">
+                Custom
+              </Badge>
+            )}
+            <Link
+              href={`/orgs/${orgId}/data-model?focus=${encodeURIComponent(objectDetail.apiName)}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-grove-border px-3 py-1.5 text-sm font-medium hover:bg-primary-50/40 dark:border-grove-border-dk dark:hover:bg-primary-900/15"
+            >
+              Data model
+            </Link>
+          </div>
         }
       />
 

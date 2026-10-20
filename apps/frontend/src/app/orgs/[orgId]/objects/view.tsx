@@ -5,6 +5,7 @@
  * Browse Salesforce objects and their access patterns
  */
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Database, Search, Filter, Shield, AlertTriangle, Sparkles, Loader2 } from 'lucide-react'
@@ -104,6 +105,12 @@ export function ObjectsView({ embedded = false }: { embedded?: boolean } = {}) {
   const dqActions = (
     <div className="flex items-center gap-2">
       <DocumentationDownload orgId={orgId} />
+      <Link
+        href={`/orgs/${orgId}/data-model`}
+        className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-grove-border dark:border-grove-border-dk text-grove-ink dark:text-grove-ink-dk hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
+      >
+        Data model
+      </Link>
       <ScopeToggle
         value={scope}
         onChange={setScope}

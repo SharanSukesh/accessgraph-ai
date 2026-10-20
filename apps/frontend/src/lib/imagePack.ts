@@ -16,6 +16,7 @@ export type VisualKey =
   | 'critical_objects'
   | 'code_coverage'
   | 'api_usage'
+  | 'data_model'
 
 export interface VisualAvailability {
   key: VisualKey
