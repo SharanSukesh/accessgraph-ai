@@ -557,14 +557,15 @@ async def get_user_recommendations(
     ]
 
 
-@router.get("/orgs/{org_id}/anomalies", response_model=List[AnomalyResponse])
+@router.get("/orgs/{org_id}/anomalies")
 async def list_anomalies(
     org_id: str,
     severity: Optional[str] = None,
     category: Optional[str] = None,
     type: Optional[str] = None,
     search: Optional[str] = None,
-    limit: int = Query(100, le=1000),
+    limit: Optional[int] = Query(None, ge=1, description="without `page`: at most this many (default every anomaly)"),
+    params: PageParams = Depends(page_params),
     db: AsyncSession = Depends(get_database),
 ):
     """List anomalies for organization.
@@ -583,12 +584,7 @@ async def list_anomalies(
         )
     )
 
-    if severity:
-        # Severity exists for session anomalies only.
-        query = query.where(AccessAnomaly.category == "session", AccessAnomaly.severity == severity)
-    if category:
-        query = query.where(AccessAnomaly.category == category)
-
+    # Filters apply in Python after the summary is counted over every anomaly.
     query = query.order_by(AccessAnomaly.anomaly_score.desc(), AccessAnomaly.user_id)
 
     result = await db.execute(query)
@@ -621,13 +617,36 @@ async def list_anomalies(
         for a, user_name in anomaly_user_pairs
     ]
     rows.sort(key=_anomaly_sort_key)
+    access_rows = [r for r in rows if (r.get("category") or "access") == "access"]
+    summary = {
+        "all": len(rows),
+        "access": len(access_rows),
+        "session": sum(1 for r in rows if r.get("category") == "session"),
+        "highBaseRisk": sum(1 for r in access_rows if r.get("baseRiskLevel") in ("high", "critical")),
+        "usersScored": next((r["usersScored"] for r in access_rows if r.get("usersScored")), None),
+        "usersAffected": len({r["userId"] for r in rows}),
+    }
+    if severity:
+        # Severity exists for session anomalies only.
+        rows = [r for r in rows if r.get("category") == "session" and r.get("severity") == severity]
+    if category:
+        rows = [r for r in rows if (r.get("category") or "access") == category]
     if type:
         rows = [r for r in rows if r["type"] == type]
+    search = search or params.q
     if search and search.strip():
         needle = search.strip().lower()
         rows = [r for r in rows if needle in (r["userName"] or "").lower()
                 or any(needle in reason.lower() for reason in r["reasons"] or [])]
-    return rows[:limit]
+    if not params.paged:
+        return rows[:limit] if limit else rows
+    keep_q = PageParams(params.page, params.page_size, params.sort, params.dir, None)  # search done above
+    return paged(rows, keep_q,
+                 sorts={"rank": lambda r: (r.get("rank") is None, r.get("rank") or 0),
+                        "score": lambda r: r.get("score"), "user": lambda r: r.get("userName"),
+                        "detected": lambda r: r.get("detectedAt"), "base_risk": lambda r: r.get("baseRiskScore")},
+                 default_sort=None, summary=summary) if params.sort else {
+        **paged(rows, keep_q), "sort": "rank", "summary": summary}
 
 
 class TopAnomalousUserResponse(BaseModel):
@@ -695,50 +714,77 @@ async def get_top_anomalous_users(
     return out[:limit]
 
 
-@router.get("/orgs/{org_id}/recommendations", response_model=List[RecommendationResponse])
+SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+
+
+@router.get("/orgs/{org_id}/recommendations")
 async def list_recommendations(
     org_id: str,
     rec_type: Optional[str] = None,
     status: Optional[str] = None,
     track: Optional[str] = None,
-    limit: int = Query(100, le=1000),
+    severity: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: Optional[int] = Query(None, ge=1, description="without `page`: at most this many (default every one)"),
+    params: PageParams = Depends(page_params),
     db: AsyncSession = Depends(get_database),
 ):
-    """List recommendations for organization.
+    """Recommendations (Priority Actions), newest first.
 
     Filters: rec_type (enum value), status (enum value), track ('security'
-    or 'equity'). Track is the high-level UI grouping introduced for the
-    GAEA equity recommendations track — see RecommendationTrack.
+    or 'equity'), severity, and search (`q` or `search`, over title and
+    description). Track is the high-level UI grouping introduced for the
+    GAEA equity recommendations track — see RecommendationTrack. With
+    `page`: one page (sort: generated, severity, title, status) and
+    `summary` counts by status and severity for the track; without it,
+    every matching recommendation.
     """
     query = select(Recommendation).where(Recommendation.organization_id == org_id)
-
-    if rec_type:
-        query = query.where(Recommendation.rec_type == rec_type)
-    if status:
-        query = query.where(Recommendation.status == status)
     if track:
         query = query.where(Recommendation.track == track)
+    query = query.order_by(Recommendation.generated_at.desc())
+    recs = (await db.execute(query)).scalars().all()
 
-    query = query.order_by(Recommendation.generated_at.desc()).limit(limit)
+    def val(x):
+        return x.value if hasattr(x, "value") else x
 
-    result = await db.execute(query)
-    recs = result.scalars().all()
-
-    return [
+    rows = [
         {
             "id": r.id,
-            "rec_type": r.rec_type.value if hasattr(r.rec_type, "value") else r.rec_type,
-            "track": r.track.value if hasattr(r.track, "value") else (r.track or "security"),
-            "severity": r.severity.value if hasattr(r.severity, "value") else r.severity,
+            "rec_type": val(r.rec_type),
+            "track": val(r.track) or "security",
+            "severity": val(r.severity),
             "target_entity_id": r.target_entity_id,
             "title": r.title,
             "description": r.description,
             "rationale": r.rationale,
-            "status": r.status.value if hasattr(r.status, "value") else r.status,
+            "status": val(r.status),
             "affected_access": r.affected_access,
+            "generated_at": r.generated_at.isoformat() if r.generated_at else None,
         }
         for r in recs
     ]
+    by_status: Dict[str, int] = {}
+    by_severity: Dict[str, int] = {}
+    for r in rows:
+        by_status[r["status"]] = by_status.get(r["status"], 0) + 1
+        by_severity[r["severity"]] = by_severity.get(r["severity"], 0) + 1
+    summary = {"all": len(rows), "byStatus": by_status, "bySeverity": by_severity}
+    if rec_type:
+        rows = [r for r in rows if r["rec_type"] == rec_type]
+    if status:
+        rows = [r for r in rows if r["status"] == status]
+    if severity:
+        rows = [r for r in rows if r["severity"] == severity]
+    needle = (search or params.q or "").strip().lower()
+    if needle:
+        rows = [r for r in rows if all(w in f"{r['title']} {r['description'] or ''}".lower() for w in needle.split())]
+    if not params.paged:
+        return rows[:limit] if limit else rows
+    return paged(rows, PageParams(params.page, params.page_size, params.sort, params.dir, None),
+                 sorts={"generated": lambda r: r["generated_at"], "severity": lambda r: SEVERITY_RANK.get(r["severity"], 9),
+                        "title": lambda r: r["title"], "status": lambda r: r["status"]},
+                 default_sort=None, summary=summary)
 
 
 @recommendations_router.patch(

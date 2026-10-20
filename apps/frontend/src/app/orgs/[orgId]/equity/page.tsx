@@ -32,7 +32,9 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PrivacyGate, PrivacyUnavailable } from '@/components/shared/PrivacyNotice'
-import { isPrivacyModeError } from '@/lib/api/client'
+import { apiClient, isPrivacyModeError } from '@/lib/api/client'
+import { useQuery } from '@tanstack/react-query'
+import Link from 'next/link'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
   useEquityDiagnostic,
@@ -332,10 +334,14 @@ function EquityContent() {
     error: diagnosticError,
   } = useEquityDiagnostic(orgId)
 
-  const {
-    data: equityRecs,
-    isLoading: recsLoading,
-  } = useRecommendations(orgId, { track: 'equity' })
+  // The first 10 suggested grants and the total; the rest are paged on Priority Actions (equity track).
+  const { data: equityPage, isLoading: recsLoading } = useQuery({
+    queryKey: ['recommendations', 'list', orgId, 'equity-preview'],
+    queryFn: () => apiClient.get<any>(`/orgs/${orgId}/recommendations?track=equity&page=1&page_size=25`),
+    enabled: !!orgId,
+  })
+  const equityRecs: any[] | undefined = equityPage?.items?.slice(0, 10)
+  const equityTotal: number = equityPage?.total ?? 0
 
   const { data: history } = useEquityHistory(orgId, 30)
   const generateMutation = useGenerateEquityRecommendations(orgId)
@@ -750,7 +756,7 @@ function EquityContent() {
               Suggested grants{' '}
               {equityRecs && (
                 <span className="text-sm font-normal text-grove-ink/55 dark:text-grove-ink-dk/55">
-                  ({equityRecs.length})
+                  ({equityTotal.toLocaleString('en-US')})
                 </span>
               )}
             </CardTitle>
@@ -880,6 +886,14 @@ function EquityContent() {
                   </div>
                 )
               })}
+              {equityTotal > (equityRecs?.length ?? 0) && (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-sm text-grove-ink/70 dark:text-grove-ink-dk/70">
+                  <span>Showing {equityRecs?.length ?? 0} of {equityTotal.toLocaleString('en-US')}</span>
+                  <Link href={`/orgs/${orgId}/recommendations?track=equity`} className="font-medium text-primary-700 hover:underline dark:text-primary-300">
+                    View all {equityTotal.toLocaleString('en-US')} in Priority Actions
+                  </Link>
+                </div>
+              )}
             </div>
           ) : (
             <EmptyState

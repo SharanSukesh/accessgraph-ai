@@ -1,5 +1,11 @@
 'use client'
 
+import { apiClient } from '@/lib/api/client'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+
 /**
  * Anomalies Page
  * Browse and investigate detected anomalies
@@ -24,6 +30,15 @@ import { isPrivacyModeError } from '@/lib/api/client'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 
+interface AnomalySummary {
+  all: number
+  access: number
+  session: number
+  highBaseRisk: number
+  usersScored: number | null
+  usersAffected: number
+}
+
 export default function AnomaliesPage() {
   return (
     <PrivacyGate
@@ -40,33 +55,32 @@ function AnomaliesContent() {
   const router = useRouter()
   const orgId = params.orgId as string
 
-  const [search, setSearch] = useState('')
-  const [severityFilter, setSeverityFilter] = useState<string>('')
-  const [typeFilter, setTypeFilter] = useState<string>('')
-  const [categoryFilter, setCategoryFilter] = useState<'' | 'access' | 'session'>('')
   const [selectedAnomaly, setSelectedAnomaly] = useState<any>(null)
-
-  const {
-    data: anomalies,
-    isLoading,
-    error,
-  } = useAnomalies(orgId, {
-    search,
-    severity: severityFilter || undefined,
-    type: typeFilter || undefined,
-    category: categoryFilter || undefined,
-  })
-
+  // Paged by the server; tab, filters, search, page and size live in the URL.
+  const { state, update } = useListState('', { filters: ['category', 'severity', 'type'] })
+  const categoryFilter = (state.filters.category || '') as '' | 'access' | 'session'
+  const severityFilter = state.filters.severity || ''
+  const typeFilter = state.filters.type || ''
+  const { data: page, isLoading, error } = usePaged<any, { summary: AnomalySummary }>(['anomalies', orgId], `/orgs/${orgId}/anomalies`, state)
+  const anomalies = page?.items
   const { data: topUsers } = useTopAnomalousUsers(orgId, 10)
-  // Unfiltered counts for the summary cards.
-  const { data: allAnomalies, isLoading: allLoading } = useAnomalies(orgId)
-  const flagged = allAnomalies?.filter((a) => (a.category ?? 'access') === 'access') ?? []
-  const sessions = allAnomalies?.filter((a) => a.category === 'session') ?? []
-  // Base risk, so no user counts just for being flagged.
-  const highRisk = flagged.filter((a) => a.baseRiskLevel === 'high' || a.baseRiskLevel === 'critical')
-  const usersScored = flagged.find((a) => a.usersScored)?.usersScored
-  const affected = new Set(allAnomalies?.map((a) => a.userId) ?? []).size
-  const count = (n: number) => (allLoading ? '...' : n)
+  // Counts for the cards and tabs: the whole org, whatever the filters.
+  const summary = page?.summary
+  const allLoading = !summary
+  const count = (n: number | undefined) => (allLoading ? '...' : (n ?? 0).toLocaleString('en-US'))
+  const [exporting, setExporting] = useState(false)
+  const exportAll = async () => {
+    setExporting(true)
+    try {
+      const p = new URLSearchParams()
+      if (state.q) p.set('search', state.q)
+      for (const k of ['category', 'severity', 'type'] as const) if (state.filters[k]) p.set(k, state.filters[k])
+      const all = await apiClient.get<any[]>(`/orgs/${orgId}/anomalies?${p.toString()}`)
+      exportAnomaliesToCSV(all, `anomalies-${exportStamp()}`)
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (error) {
     if (isPrivacyModeError(error)) return <PrivacyUnavailable message={error.message} />
@@ -92,11 +106,12 @@ function AnomaliesContent() {
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={!anomalies?.length}
-                onClick={() => exportAnomaliesToCSV(anomalies ?? [], `anomalies-${exportStamp()}`)}
+                disabled={!page?.total || exporting}
+                onClick={exportAll}
+                title="Every anomaly matching the tab, filters and search, not just this page"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Export CSV
+                {exporting ? 'Exporting…' : 'Export CSV'}
               </Button>
             </>
           }
@@ -114,11 +129,11 @@ function AnomaliesContent() {
                   Flagged access anomalies
                 </p>
                 <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                  {count(flagged.length)}
+                  {count(summary?.access)}
                 </p>
-                {usersScored ? (
+                {summary?.usersScored ? (
                   <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">
-                    Top 2% of {usersScored.toLocaleString('en-US')} users
+                    Top 2% of {summary.usersScored.toLocaleString('en-US')} users
                   </p>
                 ) : null}
               </div>
@@ -138,7 +153,7 @@ function AnomaliesContent() {
                 </span>
               </p>
               <p className="v2-num mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
-                {count(highRisk.length)}
+                {count(summary?.highBaseRisk)}
               </p>
               <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Triage these first</p>
             </div>
@@ -152,7 +167,7 @@ function AnomaliesContent() {
                 Session anomalies
               </p>
               <p className="v2-num mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">
-                {count(sessions.length)}
+                {count(summary?.session)}
               </p>
               <p className="mt-1 text-xs text-grove-ink/55 dark:text-grove-ink-dk/55">Sign-in rules, with severity</p>
             </div>
@@ -167,7 +182,7 @@ function AnomaliesContent() {
                   Affected Users
                 </p>
                 <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                  {count(affected)}
+                  {count(summary?.usersAffected)}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
@@ -199,14 +214,13 @@ function AnomaliesContent() {
           const active = categoryFilter === tab.key
           // Counts come from the unfiltered list so they don't change with the active tab.
           const tabCount =
-            tab.key === '' ? allAnomalies?.length ?? 0 : tab.key === 'access' ? flagged.length : sessions.length
+            tab.key === '' ? summary?.all ?? 0 : tab.key === 'access' ? summary?.access ?? 0 : summary?.session ?? 0
           return (
             <button
               key={tab.key || 'all'}
               onClick={() => {
-                setCategoryFilter(tab.key as any)
                 // Severity applies to session anomalies only.
-                if (tab.key !== 'session') setSeverityFilter('')
+                update({ filters: { category: tab.key, ...(tab.key !== 'session' ? { severity: '' } : {}) } })
               }}
               title={tab.desc ?? undefined}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border ${
@@ -226,23 +240,13 @@ function AnomaliesContent() {
       <Card variant="bordered">
         <CardContent className="py-4">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <input
-                type="text"
-                placeholder="Search anomalies..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
+            <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder="Search anomalies..." />
 
             {/* Severity Filter: session anomalies only (access anomalies have no severity). */}
             {categoryFilter === 'session' && (
               <select
                 value={severityFilter}
-                onChange={(e) => setSeverityFilter(e.target.value)}
+                onChange={(e) => update({ filters: { severity: e.target.value } })}
                 aria-label="Session severity"
                 className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
@@ -258,7 +262,8 @@ function AnomaliesContent() {
                 Session case; kept as a manual filter for Access sub-types. */}
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              aria-label="Anomaly type"
+              onChange={(e) => update({ filters: { type: e.target.value } })}
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Types</option>
@@ -279,7 +284,7 @@ function AnomaliesContent() {
           <Card variant="bordered">
             <CardHeader>
               <CardTitle>
-                {anomalies ? `${anomalies.length} Anomalies` : 'Anomalies'}
+                {page ? `${page.total.toLocaleString('en-US')} Anomalies` : 'Anomalies'}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -357,6 +362,8 @@ function AnomaliesContent() {
                       </div>
                     </div>
                   ))}
+                  <Pagination page={page!.page} pageSize={page!.page_size} total={page!.total} label="anomalies"
+                    onPage={(p) => update({ page: p })} onPageSize={(pageSize) => update({ pageSize })} />
                 </div>
               ) : (
                 <EmptyState

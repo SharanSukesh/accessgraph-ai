@@ -26,8 +26,7 @@ import { isSyncActive, syncJustFinished } from '@/lib/syncStatus'
 // prototype. Presentational only.
 import { Reveal, Stagger, StaggerItem, CountUp } from '@/components/v2/motion'
 import { ScoreRing, Sparkline } from '@/components/v2/primitives'
-import { useAnomalies, useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
-import { useRecommendations } from '@/lib/api/hooks/useRecommendations'
+import { useTopAnomalousUsers } from '@/lib/api/hooks/useAnomalies'
 import { useSyncJobs, useAnalyzeOrg } from '@/lib/api/hooks/useOrgs'
 import { useOrgAnalyzerLatest, useOrgAnalyzerHistory } from '@/lib/api/hooks/useOrgAnalyzer'
 
@@ -48,11 +47,20 @@ export default function DashboardPage() {
     queryFn: () => apiClient.get<any>(`/orgs/${orgId}/users?page=1&page_size=25`),
     enabled: !!orgId,
   })
-  const { data: anomalies, isLoading: anomaliesLoading, refetch: refetchAnomalies } = useAnomalies(orgId)
+  // Counts from the whole-org summaries (never capped), not every row.
+  const { data: anomalyPage, isLoading: anomaliesLoading, refetch: refetchAnomalies } = useQuery({
+    queryKey: ['anomalies', orgId, 'summary'],
+    queryFn: () => apiClient.get<any>(`/orgs/${orgId}/anomalies?page=1&page_size=25`),
+    enabled: !!orgId,
+  })
   const { data: topAnomalies, isLoading: topAnomaliesLoading, refetch: refetchTopAnomalies } =
     useTopAnomalousUsers(orgId, 5)
-  const { data: recommendations, isLoading: recommendationsLoading, refetch: refetchRecommendations } =
-    useRecommendations(orgId)
+  const { data: recPage, isLoading: recommendationsLoading, refetch: refetchRecommendations } = useQuery({
+    queryKey: ['recommendations', 'list', orgId, 'summary'],
+    queryFn: () => apiClient.get<any>(`/orgs/${orgId}/recommendations?page=1&page_size=25`),
+    enabled: !!orgId,
+  })
+  const recommendations: any[] | undefined = recPage?.items
   const { data: syncJobs } = useSyncJobs(orgId)
 
   // Grove Refined hero — health score + savings from the latest Health
@@ -117,8 +125,8 @@ export default function DashboardPage() {
   const totalUsers = usersPage?.summary?.users ?? 0
   const highRiskUsers = (byRisk.high ?? 0) + (byRisk.critical ?? 0)
   // Every flagged anomaly: the access detector's top 2% plus session rule hits.
-  const flaggedAnomalies = anomalies?.length || 0
-  const totalRecommendations = recommendations?.length || 0
+  const flaggedAnomalies = anomalyPage?.summary?.all ?? 0
+  const totalRecommendations = recPage?.summary?.all ?? 0
 
   const latestSync = syncJobs?.[0]
   const aiAnalysis = latestSync?.metadata?.ai_analysis
@@ -152,7 +160,7 @@ export default function DashboardPage() {
           title="Overview"
           subtitle="Access health overview for your organization"
           actions={
-            (!anomalies?.length && !recommendations?.length && !syncRunning) && (
+            (!flaggedAnomalies && !totalRecommendations && !syncRunning) && (
               <Button
                 variant="primary"
                 onClick={handleAnalyze}

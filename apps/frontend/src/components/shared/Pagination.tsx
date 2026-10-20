@@ -32,12 +32,15 @@ export function Pagination({ page, pageSize, total, onPage, onPageSize, label = 
   useEffect(() => setJump(String(page)), [page])
   const go = (p: number) => onPage(Math.min(pages, Math.max(1, p)))
 
+  // Everything fits on one page at the smallest size: just say how many.
+  const compact = total <= PAGE_SIZES[0] && page === 1
   return (
     <nav
       aria-label={`Pages of ${label}`}
       className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm text-grove-ink/75 dark:text-grove-ink-dk/75"
     >
       <span aria-live="polite">{rangeLabel(page, pageSize, total)}</span>
+      {!compact && (
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5">
           <span>Rows per page</span>
@@ -84,6 +87,7 @@ export function Pagination({ page, pageSize, total, onPage, onPageSize, label = 
           Next <ChevronRight className="h-4 w-4" aria-hidden />
         </button>
       </div>
+      )}
     </nav>
   )
 }

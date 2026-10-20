@@ -563,6 +563,24 @@ section has the detail.
   field rows"; Scale Set 001 users "Showing 1–20 of 20", Direct filter;
   Lumenvale System Administrator set: Apex "Showing 1–20 of 20"; Profiles
   sorted by active users desc "Showing 1–11 of 11".
+- **#61 (pagination 4 of 5, not merged; stacked on #60):** anomalies,
+  Priority Actions, findings, API usage, exports. The silent caps are gone
+  (anomalies and recommendations returned at most 100 rows, so the
+  dashboard and the cards undercounted). Anomalies: paged, filtered (tab,
+  severity, type) and searched on the server; cards and tab counts from an
+  org-wide `summary`; Export CSV fetches every match. Priority Actions:
+  paged; `search` and `severity`, which the page sent but the server
+  ignored, now filter; status cards from `summary`; Export CSV fetches every
+  match. Dashboard counts from the summaries. Equity page: first 10
+  suggested grants, View all in Priority Actions (equity track). Health
+  Report findings tab: server search, sort and paging (limit/offset callers
+  unchanged; cap raised to 5,000). API usage: each table paged, searched
+  and sorted on the server (GET /org-analyzer/api-usage/{table}). Lists
+  that fit on one page show only "Showing 1–6 of 6". **Test:** List scale
+  org seeded with 150 anomalies and 130 actions: Anomalies "Showing 1–25 of
+  150", tabs All 150 / Access 135 / Session 15, Session tab CSV 15 rows;
+  Priority Actions 130, High → 26; dashboard 600 / 36 / 150 / 130.
+  Lumenvale: findings 18, search "license" → 7; API usage apps 6.
 - **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
   the objects and fields each flow reads or writes, from the Flow metadata
   already read per active flow), the field × layout matrix (#4, Layout
