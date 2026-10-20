@@ -605,13 +605,48 @@ section has the detail.
   events 300. Lumenvale: License Fit 400, Restructure 49 moves. Not
   covered: the sprawl Analyse buttons and Change-Risk pull need a live org
   and return an error on demo orgs (as before).
-- **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
-  the objects and fields each flow reads or writes, from the Flow metadata
-  already read per active flow), the field × layout matrix (#4, Layout
-  Metadata one per query), opt-in custom metadata records (#7, off by
-  default, trust docs), approval process steps (#18, UNVERIFIED read path),
-  external data sources and record types per permission set (#11,
-  UNVERIFIED source).
+- **#63 (item 11 part c1, not merged; stacked on #62):** item 11 part c
+  is split: c1 here, c2 (opt-in custom metadata records, #7) next. New
+  reads, read-only, no new permission (trust doc updated):
+  - flow detail from the Flow metadata already read per active flow (at
+    most 150): element counts, start object and trigger, the objects and
+    fields each record element reads, writes or filters on, subflows and
+    actions (services/metadata_detail.py);
+  - Layout metadata, one per layout (at most 300): the fields on each
+    layout with section and behavior;
+  - ProcessNode: approval steps by name; entry criteria and approvers need
+    the Metadata API (UNVERIFIED with our permissions), so they're marked
+    not read;
+  - ExternalDataSource (no endpoint) and SetupEntityAccess
+    ExternalDataSource;
+  - PermissionSet metadata recordTypeVisibilities, one per set (at most
+    200; UNVERIFIED read path, stops at the first failure and says so).
+  Workbook: 33 sheets. New: Fields on Layouts (profiles that get the layout,
+  active users who get it, and how many of them can read the field), Flow
+  Elements, Flow Fields, Approval Steps, External Data Sources; Record
+  Types gains "Available through permission sets". User and profile pages
+  still list a profile's record types only. Matrix rows: #4, #9, #11
+  (external data sources, record types; the permission set page follows
+  in item 6), #18 (steps). New Lumenvale part 10-config-detail.json
+  (generator research/demo_fixture/build_config_detail_part.py); layout
+  fields are ones the fixture has access data for; Legacy_Region__c stays
+  unreferenced for item 13. Sample workbook regenerated.
+  **Test (Lumenvale after a re-sync; Org documentation):** 33 sheets;
+  Fields on Layouts 47 rows: Tax_ID__c only on "Account - Sales Layout"
+  (Sales Director, Sales Manager, Sales Rep), Case Layout goes to every
+  profile but few can read Case.Status; Flow Elements 15 (Discount
+  Approval Request: 2 screens, 1 get, 1 update, action submit); Flow
+  Fields 78 (Opportunity Stage Sync triggers on StageName); Approval Steps
+  4; External Data Sources 2 (ERP Orders: Finance Director and System
+  Administrator profiles, Finance Reporting in Finance Ops Bundle);
+  Partner Deal through Opportunity Approvals (in Sales Manager Bundle).
+  Runbook unchanged: 41 / 18 / $183,180 / $116,220.
+  **UNVERIFIED:** PermissionSet metadata through the Tooling API; ProcessNode
+  step order.
+- **Next:** item 11 part c2, stacked on #63: opt-in custom metadata records
+  (#7): the types listed at every sync (names only), records read only for
+  types an engagement admin turns on per org (off by default; values can
+  hold configuration secrets), a sheet per enabled type, trust docs.
 
 ## Build order
 
@@ -1145,7 +1180,7 @@ Config Workbook is a third-party AppExchange app (CWB Software Tools), not a Sal
 - **Depends on:** 8. **Effort: M.**
 
 ### 11. Documentation export
-**Status: part a built in #55, part b (the new reads) in #56 (not merged). Part c next: flow detail, field × layout matrix, custom metadata records.**
+**Status: part a built in #55, part b (the new reads) in #56 (merged). Part c1 (flow detail, fields on layouts, approval steps, external data sources, record types per permission set) in #63, not merged. Part c2 next: opt-in custom metadata records.**
 - **Problem:** clients ask for "the org documented" as a deliverable.
 - **Approach:** add sheets to the existing Excel export:
   - Objects and Fields (from 8);
