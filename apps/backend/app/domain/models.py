@@ -3007,3 +3007,55 @@ class RoleDesignDraft(Base, TimestampMixin):
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     __table_args__ = (Index("ix_role_design_draft_org", "organization_id"),)
+
+
+class OrgSnapshot(Base, TimestampMixin):
+    """One sync's configuration, immutable (roadmap item 21). `seq` orders an
+    org's snapshots; SnapshotItem rows say which versions were valid in it.
+    A baseline (items 9 and 17) is kept past retention."""
+    __tablename__ = "org_snapshots"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    taken_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)  # live | fixture
+    label: Mapped[Optional[str]] = mapped_column(String(120))
+    sync_job_id: Mapped[Optional[str]] = mapped_column(String(36))
+    privacy_mode: Mapped[Optional[str]] = mapped_column(String(20))
+    counts: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    changes: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # vs the previous snapshot
+    coverage: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    is_baseline: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    baseline_note: Mapped[Optional[str]] = mapped_column(String(500))
+    baseline_by: Mapped[Optional[str]] = mapped_column(String(255))
+
+    __table_args__ = (
+        Index("ix_org_snapshot_org_seq", "organization_id", "seq", unique=True),
+    )
+
+
+class SnapshotItem(Base):
+    """One version of one configuration row (an assignment, an object
+    permission, a user...), valid in the org's snapshots first_seq to
+    last_seq. A row that doesn't change across syncs is one item whose
+    last_seq moves on (copy-on-change)."""
+    __tablename__ = "snapshot_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    entity: Mapped[str] = mapped_column(String(40), nullable=False)
+    key: Mapped[str] = mapped_column(String(255), nullable=False)
+    hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    data: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    first_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_seq: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        Index("ix_snapshot_item_org_range", "organization_id", "last_seq", "first_seq"),
+        Index("ix_snapshot_item_org_entity_key", "organization_id", "entity", "key"),
+    )

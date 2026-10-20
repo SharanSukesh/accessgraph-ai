@@ -777,9 +777,46 @@ section has the detail.
   29 objects, 262 fields, 78 custom fields, 26 validation rules, 16 flows
   (15 active), 81 Apex classes; 337 of 400 active users logged in within
   30 days; "View all 11 profiles".
-- **Next:** step 3: 21 (versioned snapshots), then 9 v1 (org-to-org
-  comparison), 20 (evidence on every finding) with 10 (reviewer feedback),
-  30 (risk formula write-up).
+- **#69 (item 21, not merged; stacked on #68; has a migration,
+  b3d6f8a1c4e7):** versioned snapshots. Every sync ends by taking an
+  immutable snapshot (org_snapshots: seq, taken_at, source live or fixture,
+  label, privacy level, counts, changes against the previous one, baseline
+  flag). Configuration rows become snapshot_items: entity, stable key,
+  fields, hash and the range of snapshots the version was valid in, so an
+  unchanged row is one item whose range grows (copy-on-change; a re-sync of
+  Lumenvale adds no rows). Versioned: users (not last login), roles,
+  profiles, permission sets with their system permissions, assignments,
+  groups and components, object and field permissions, public groups and
+  members, sharing rules, org-wide defaults, field metadata per object and
+  the layouts/automation and documentation sections. Not versioned:
+  record-level shares and team members (data, large, daily churn). Existing
+  modules keep reading the live tables (the latest sync); comparison (9),
+  drift (17) and simulation (15) will read any snapshot through
+  services/snapshots.py (load_state, diff). Retention: a "snapshots"
+  class prunes snapshots past the window except the latest and baselines,
+  and item versions no kept snapshot needs; erasure deletes them with the
+  org (the deletion counts list both tables). Privacy: tightening the level
+  aliases users in every snapshot (masked) or removes users, assignments
+  and group members from every snapshot (Metadata only). Demo: Lumenvale's
+  first sync records "Kickoff" (14 days earlier, from part 15-kickoff.json,
+  generator build_kickoff_part.py) and "Today", 14 changes apart: 3
+  assignments added and 2 removed, a muting set added to Support Lead
+  Bundle (set and component), Standard User's Invoice read removed, a new
+  permission set, Modify All Data granted to Legacy Integration Admin, a
+  field edit granted, and a profile, role and manager change. The
+  roadmap's "new connected app" isn't among them: connected apps aren't
+  synced yet. UI: History page (/orgs/{id}/snapshots, sidebar under
+  Explore): snapshots, changes against the previous one or any other, tabs
+  per kind with counts, added/removed/changed filter, search, paged, Export
+  CSV; admins keep a snapshot as a baseline (audit-logged). Trust doc
+  updated. Runbook unchanged (snapshots don't feed any analysis yet).
+  **Test (Lumenvale, local):** History: Today 14 changes, Kickoff;
+  "Showing 1–14 of 14"; Permission set assignments 5 (Cyrus Foxglove → Old
+  Territory Mgmt removed, Mina Tanaka → Finance Director Access added...);
+  Legacy Integration Admin "System permissions: + ModifyAllData"; baseline
+  toggled. Migration up, down and up on Postgres.
+- **Next:** item 9 v1 (org-to-org comparison) on snapshots, then 20 with
+  10, 30.
 
 ## Build order
 
@@ -1106,6 +1143,7 @@ Requested by the Salesforce lead (17 Oct): turn the org chart tab into a role hi
 - **Depends on:** nothing. **Effort: M.**
 
 ### 21. Shared, versioned data model with snapshots
+**Status: built in #69 (not merged; migration b3d6f8a1c4e7). Modules still read the live tables for "latest"; snapshots are read through services/snapshots.py.**
 - **Problem:** comparison (6, 9), simulation (15), verification (17), drift and reports each need "the org as it was at time T". Today a sync overwrites the previous one.
 - **Approach:** each sync becomes an immutable **snapshot** (id, org, taken_at, source = live / fixture, coverage). Permission, assignment, share and metadata rows get a `snapshot_id`; only changed rows are written as new versions (copy-on-change), so storage stays proportional to change.
   - Every module reads "latest" by default and can read any snapshot.

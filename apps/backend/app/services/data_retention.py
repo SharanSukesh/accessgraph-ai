@@ -18,6 +18,7 @@ from sqlalchemy import Table, and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import Base
+from app.services import snapshots
 from app.domain.models import (
     Organization,
     OrgUser,
@@ -80,6 +81,10 @@ ANALYSIS_TABLES = {
     "deeplink_redemptions",
 }
 
+# Versioned snapshots (item 21): pruned by the snapshot's date, never the
+# latest one or a baseline; item versions go when no kept snapshot needs them.
+SNAPSHOT_TABLES = {"org_snapshots", "snapshot_items"}
+
 AUDIT_TABLES = {"audit_logs"}
 SYNC_TABLES = {"sync_jobs"}
 
@@ -100,6 +105,7 @@ CONFIG_TABLES = {
 RETENTION_CLASSES = {
     "salesforce_mirror": SALESFORCE_MIRROR_TABLES,
     "analysis": ANALYSIS_TABLES,
+    "snapshots": SNAPSHOT_TABLES,
     "audit": AUDIT_TABLES,
     "sync": SYNC_TABLES,
     "config": CONFIG_TABLES,
@@ -195,6 +201,9 @@ class DataRetentionService:
             ),
             "sync_jobs": await self._delete_old_sync_jobs(
                 org_id, now - timedelta(days=self.DEFAULT_SYNC_JOB_RETENTION_DAYS)
+            ),
+            "snapshots": await snapshots.prune(
+                self.db, org_id, now - timedelta(days=self.DEFAULT_SNAPSHOT_RETENTION_DAYS)
             ),
         }
         await self.db.commit()

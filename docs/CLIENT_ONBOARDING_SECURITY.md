@@ -171,6 +171,12 @@ Profiles and Permission Sets) or without an integration licence.
   auditors are read-only; only Newton admins can delete data or change
   write-back.
 - Every sign-in, sync, export, write-back and deletion is audit-logged.
+- Each sync keeps a snapshot of the org's configuration, so changes over
+  time can be shown (*History*). A snapshot holds the same configuration
+  and users the sync pulled, at the privacy level in force. Tightening the
+  level masks or removes people in every snapshot too. Snapshots older than
+  the retention window are deleted, except the latest one and any an admin
+  keeps as a baseline. Record-level shares aren't kept in snapshots.
 
 ## 6. Write-back (off by default)
 
