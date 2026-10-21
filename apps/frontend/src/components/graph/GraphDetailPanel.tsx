@@ -164,7 +164,8 @@ function NodeDetailPanel({
   const { data: nodeDetails, isLoading: detailsLoading, error: detailsError } = useQuery<NodeDetailsResponse>({
     queryKey: ['node-details', orgId, node.id],
     queryFn: async (): Promise<NodeDetailsResponse> => {
-      const response = await apiClient.get(`/orgs/${orgId}/graph/node/${node.id}/details`)
+      // First 10 of each list; the totals come in summary and the full lists are on the set's page.
+      const response = await apiClient.get(`/orgs/${orgId}/graph/node/${node.id}/details?preview=10`)
       return response as NodeDetailsResponse
     },
     enabled: shouldFetchDetails,
@@ -385,7 +386,7 @@ function NodeDetailPanel({
                 >
                   <span className="flex items-center gap-2">
                     <Database className="h-4 w-4" />
-                    Objects ({nodeDetails.objectsGranted.length})
+                    Objects ({(nodeDetails.summary?.totalObjects ?? nodeDetails.objectsGranted.length).toLocaleString('en-US')})
                   </span>
                   {showObjects ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
@@ -408,6 +409,8 @@ function NodeDetailPanel({
                         </div>
                       </div>
                     ))}
+                    <PanelViewAll orgId={orgId} node={nodeDetails.node} kind="objects" shown={nodeDetails.objectsGranted.length}
+                      total={nodeDetails.summary?.totalObjects ?? nodeDetails.objectsGranted.length} />
                   </div>
                 )}
               </div>
@@ -422,7 +425,7 @@ function NodeDetailPanel({
                 >
                   <span className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    Fields ({nodeDetails.fieldsGranted.length})
+                    Fields ({(nodeDetails.summary?.totalFields ?? nodeDetails.fieldsGranted.length).toLocaleString('en-US')})
                   </span>
                   {showFields ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                 </button>
@@ -448,6 +451,8 @@ function NodeDetailPanel({
                         </div>
                       </div>
                     ))}
+                    <PanelViewAll orgId={orgId} node={nodeDetails.node} kind="fields" shown={nodeDetails.fieldsGranted.length}
+                      total={nodeDetails.summary?.totalFields ?? nodeDetails.fieldsGranted.length} />
                   </div>
                 )}
               </div>
@@ -628,5 +633,25 @@ function EdgeDetailPanel({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** "Showing 10 of 2,400 · View all": the full list is on the permission set's (or profile's) page. */
+function PanelViewAll({ orgId, node, kind, shown, total }: {
+  orgId: string
+  node: { id: string; type: string } | undefined
+  kind: 'objects' | 'fields'
+  shown: number
+  total: number
+}) {
+  if (!node || total <= shown) return null
+  const href = node.type === 'permission_set'
+    ? `/orgs/${orgId}/permission-sets/${node.id}/${kind}`
+    : `/orgs/${orgId}/profiles/${node.id}`
+  return (
+    <div className="flex items-center justify-between pt-1 text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
+      <span>Showing {shown} of {total.toLocaleString('en-US')}</span>
+      <a href={href} className="font-medium text-primary-700 hover:underline dark:text-primary-300">View all</a>
+    </div>
   )
 }

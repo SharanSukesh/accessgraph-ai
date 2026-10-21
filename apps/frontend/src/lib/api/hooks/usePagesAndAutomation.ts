@@ -35,8 +35,8 @@ export function useProfiles(orgId: string) {
 /** Apex classes and flows a permission set (or group) grants. */
 export function useSetAutomation(orgId: string, psId: string, enabled = true) {
   return useQuery({
-    queryKey: ['set-automation', orgId, psId],
-    queryFn: () => apiClient.get<SetAutomation>(endpoints.setAutomation(orgId, psId)),
+    queryKey: ['set-automation', orgId, psId, 'preview'],
+    queryFn: () => apiClient.get<SetAutomation>(`${endpoints.setAutomation(orgId, psId)}?preview=${PREVIEW_ROWS}`),
     enabled: !!orgId && !!psId && enabled,
   })
 }

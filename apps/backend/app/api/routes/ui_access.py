@@ -173,8 +173,11 @@ async def _ps_context(db: AsyncSession, org_id: str):
 
 
 @router.get("/orgs/{org_id}/profiles")
-async def list_profiles(org_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
-    """Profiles with their user counts when user records are allowed."""
+async def list_profiles(org_id: str, params: PageParams = Depends(page_params),
+                        db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+    """Profiles with their user counts when user records are allowed. With
+    `page`: one page, searched (name or API name) and sorted (name, api_name,
+    users) on the server."""
     from collections import Counter
     org = await privacy_mode.load_org(db, org_id)
     users_allowed = privacy_mode.allows(org, privacy_mode.USER_RECORDS)
@@ -186,10 +189,16 @@ async def list_profiles(org_id: str, db: AsyncSession = Depends(get_database)) -
     rows = (await db.execute(select(ProfileSnapshot).where(ProfileSnapshot.organization_id == org_id))).scalars().all()
     ui = await latest_ui_access(db, org_id)
     api = (ui or {}).get("profile_api_names") or {}
-    return {"users_allowed": users_allowed, "profiles": sorted(
+    profiles = sorted(
         ({"id": p.salesforce_id, "name": p.name, "api_name": api.get(p.salesforce_id),
           "active_users": counts.get(p.salesforce_id, 0) if users_allowed else None} for p in rows),
-        key=lambda r: r["name"].lower())}
+        key=lambda r: str(r["name"]).lower())
+    if not params.paged:
+        return {"users_allowed": users_allowed, "profiles": profiles}
+    return paged(profiles, params, text=lambda r: f"{r['name']} {r.get('api_name') or ''}",
+                 sorts={"name": lambda r: r["name"], "api_name": lambda r: r.get("api_name"),
+                        "users": lambda r: r.get("active_users")},
+                 default_sort="name", users_allowed=users_allowed)
 
 
 @router.get("/orgs/{org_id}/profiles/{profile_id}/pages-and-automation")
@@ -207,12 +216,33 @@ async def profile_pages_and_automation(org_id: str, profile_id: str, section: Op
     return _shape(out, section, form_factor, preview, params)
 
 
+def _set_shape(out: Dict[str, Any], section: Optional[str], preview: Optional[int], params: PageParams) -> Dict[str, Any]:
+    """A set's Apex and flows: whole, previewed (first rows and `counts`), or one paged section."""
+    if not out.get("available"):
+        return out
+    if section:
+        if section not in ("apex", "flows"):
+            raise HTTPException(status_code=400, detail="section must be apex or flows")
+        rows = out.get(section) or []
+        if not params.paged:
+            return {"items": rows, "total": len(rows)}
+        return paged(rows, params, text=SECTION_TEXT[section], sorts=SECTION_SORTS[section],
+                     default_sort="name" if section == "apex" else "label", section=section)
+    if preview:
+        return {**out, "counts": {"apex": len(out.get("apex") or []), "flows": len(out.get("flows") or [])},
+                "apex": (out.get("apex") or [])[:preview], "flows": (out.get("flows") or [])[:preview]}
+    return out
+
+
 @router.get("/orgs/{org_id}/permission-sets/{ps_id}/automation")
-async def set_automation(org_id: str, ps_id: str, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+async def set_automation(org_id: str, ps_id: str, section: Optional[str] = None,
+                         preview: Optional[int] = Query(None, ge=1, le=50), params: PageParams = Depends(page_params),
+                         db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
     ps_rows, components, groups = await _ps_context(db, org_id)
     if ps_id not in ps_rows and ps_id not in groups:
         raise HTTPException(status_code=404, detail="Permission set not found")
-    return ui_access.for_set(await latest_ui_access(db, org_id), ps_id, ps_rows, components, groups)
+    out = ui_access.for_set(await latest_ui_access(db, org_id), ps_id, ps_rows, components, groups)
+    return _set_shape(out, section, preview, params)
 
 
 MUTING_NOTE = (
@@ -261,5 +291,7 @@ async def permission_set_group(org_id: str, group_id: str, db: AsyncSession = De
         "permission_sets": sorted(sets, key=lambda r: (r["label"] or r["id"]).lower()),
         "muting_sets": muting,
         "users": users,
-        "automation": {**automation, "muting_note": MUTING_NOTE if muting else None},
+        # Previewed (first 10 and counts); the full lists are paged at /permission-sets/{id}/automation?section=.
+        "automation": {**_set_shape(automation, None, 10, page_params(None, 25, None, "asc", None)),
+                       "muting_note": MUTING_NOTE if muting else None},
     }
