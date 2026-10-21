@@ -36,6 +36,7 @@ interface Roadmap {
   id: string; name: string; isDemo: boolean; packages: Pkg[]; notInRoadmap: Finding[]; currency: string
   rates: { role: string; dayRate: number; override: boolean }[]; rateOverrides: Record<string, number>; rateCardSet: boolean
   playbooks: { key: string; title: string; example: boolean }[]; healthReport: { at: string } | null
+  rateSource: 'demo' | 'firm-preview' | 'firm'; firmRatesAvailable: boolean | null
   totals: { packages: number; excluded: number; phases: number; effort: Range; inferred: Range & { packages: number }
     confirmed: Range & { packages: number }; price: Range; savingsCents: number; unestimated: string[]; unpriced: string[] }
   labels: { effort: string; savings: string; demo: string | null }
@@ -84,10 +85,12 @@ export default function RoadmapPage() {
   const { canWrite, isAdmin } = useAuth()
   const qc = useQueryClient()
   const rid = search?.get('roadmap') || ''
-  const pick = (id: string | null) => router.replace(id ? `${pathname}?roadmap=${id}` : pathname, { scroll: false })
+  const firmRates = search?.get('rates') === 'firm'
+  const pick = (id: string | null, rates = false) => router.replace(id ? `${pathname}?roadmap=${id}${rates ? '&rates=firm' : ''}` : pathname, { scroll: false })
   const list = useQuery({ queryKey: ['roadmaps', orgId], queryFn: () => apiClient.get<{ roadmaps: { id: string; name: string; packages: number }[] }>(`/orgs/${orgId}/roadmaps`) })
-  const one = useQuery({ queryKey: ['roadmap', orgId, rid], queryFn: () => apiClient.get<Roadmap>(`/orgs/${orgId}/roadmaps/${rid}`), enabled: !!rid })
-  const done = (d: Roadmap) => { qc.setQueryData(['roadmap', orgId, d.id], d); qc.invalidateQueries({ queryKey: ['roadmaps', orgId] }) }
+  const one = useQuery({ queryKey: ['roadmap', orgId, rid, firmRates], queryFn: () => apiClient.get<Roadmap>(`/orgs/${orgId}/roadmaps/${rid}${firmRates ? '?rates=firm' : ''}`), enabled: !!rid })
+  // Edits come back priced with the demo rate card; refetch so a preview stays a preview.
+  const done = (d: Roadmap) => { qc.setQueryData(['roadmap', orgId, d.id, false], d); qc.invalidateQueries({ queryKey: ['roadmaps', orgId] }); if (firmRates) qc.invalidateQueries({ queryKey: ['roadmap', orgId, d.id, true] }) }
   const create = useMutation({ mutationFn: () => apiClient.post<Roadmap>(`/orgs/${orgId}/roadmaps`, {}), onSuccess: (d) => { done(d); pick(d.id) } })
   const save = useMutation({ mutationFn: (body: Record<string, any>) => apiClient.put<Roadmap>(`/orgs/${orgId}/roadmaps/${rid}`, body), onSuccess: done })
   const remove = useMutation({ mutationFn: () => apiClient.delete(`/orgs/${orgId}/roadmaps/${rid}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['roadmaps', orgId] }); pick(null) } })
@@ -132,6 +135,16 @@ export default function RoadmapPage() {
               {canWrite && <button type="button" aria-label="Delete roadmap" onClick={() => remove.mutate()} className={`rounded p-1 ${MUTED} hover:text-red-700`}><Trash2 className="h-4 w-4" /></button>}
             </div>
             {r.labels.demo && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">{r.labels.demo}</p>}
+            {r.isDemo && (
+              <div className="flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="Rates shown">
+                <span className={MUTED}>Rates shown:</span>
+                {([[false, 'Demo rate card'], [true, "Preview my firm's rates"]] as const).map(([v, label]) => (
+                  <button key={label} type="button" aria-pressed={firmRates === v} disabled={v && !r.firmRatesAvailable && !firmRates} onClick={() => pick(r.id, v)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium ring-1 disabled:opacity-50 ${firmRates === v ? 'bg-primary-700 text-grove-canvas ring-primary-700' : 'ring-grove-border dark:ring-grove-border-dk'}`}>{label}</button>
+                ))}
+                <span className={`text-xs ${MUTED}`}>{r.firmRatesAvailable === false && !firmRates ? 'Your firm has no rate card yet. ' : ''}Exports and images of a demo org always use the demo rate card.</span>
+              </div>
+            )}
             {save.error && <p className="text-sm text-red-700 dark:text-red-300">{(save.error as Error).message}</p>}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat label="Effort" value={days(r.totals.effort)} sub={[r.totals.inferred.packages && `Inferred ${days(r.totals.inferred)} (${r.totals.inferred.packages})`, r.totals.confirmed.packages ? `confirmed ${days(r.totals.confirmed)} (${r.totals.confirmed.packages})` : 'none confirmed yet'].filter(Boolean).join(' · ')} />
@@ -228,8 +241,8 @@ export default function RoadmapPage() {
                 {r.rates.map((x) => (
                   <div key={x.role} className="flex flex-wrap items-center gap-3">
                     <span className="w-56">{x.role}</span><span className="v2-num w-24">{money(x.dayRate, r.currency)}</span>
-                    <span className={`text-xs ${MUTED}`}>{x.override ? 'this engagement' : r.isDemo ? 'demo rate card' : 'firm rate card'}</span>
-                    {canWrite && <input aria-label={`Engagement rate for ${x.role}`} type="number" min={1} placeholder="Override" defaultValue={r.rateOverrides[x.role] ?? ''} className={`w-28 ${INPUT}`}
+                    <span className={`text-xs ${MUTED}`}>{x.override ? 'this engagement' : r.rateSource === 'demo' ? 'demo rate card' : r.rateSource === 'firm-preview' ? 'firm rate card (preview)' : 'firm rate card'}</span>
+                    {canWrite && !r.isDemo && <input aria-label={`Engagement rate for ${x.role}`} type="number" min={1} placeholder="Override" defaultValue={r.rateOverrides[x.role] ?? ''} className={`w-28 ${INPUT}`}
                       onBlur={(e) => { const o = { ...r.rateOverrides }; if (e.target.value) o[x.role] = Number(e.target.value); else delete o[x.role]; save.mutate({ rate_overrides: o }) }} />}
                   </div>
                 ))}

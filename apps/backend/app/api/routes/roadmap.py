@@ -11,13 +11,18 @@ Firm data (the signed-in user's firm, never a client's):
 Per client org:
   GET    /orgs/{org_id}/roadmaps                 the org's roadmaps
   POST   /orgs/{org_id}/roadmaps                 build one from the latest Health Report
-  GET    /orgs/{org_id}/roadmaps/{id}            packages, effort, prices, phases, totals
+  GET    /orgs/{org_id}/roadmaps/{id}            packages, effort, prices, phases, totals;
+                                                 ?rates=firm previews a demo org's roadmap
+                                                 with the firm's own rate card (on screen only)
   PUT    /orgs/{org_id}/roadmaps/{id}            {name, packages, rate_overrides}
   DELETE /orgs/{org_id}/roadmaps/{id}
   GET    /orgs/{org_id}/roadmaps/{id}/export.xlsx
 
 Admins and analysts edit roadmaps; everyone with access reads them. Demo
-orgs use the demo rate card and playbooks and are labelled demo.
+orgs use the demo rate card and playbooks and are labelled demo. The firm's
+own rates can be previewed on a demo roadmap's screen, but a demo org's
+exports and images always use the demo rate card, and demo roadmaps take
+no per-engagement rates, so real rates never leave in a demo file.
 """
 from __future__ import annotations
 
@@ -140,12 +145,19 @@ async def copy_examples(p: Principal = Depends(get_principal), db: AsyncSession 
 
 # ---------------------------------------------------------------- roadmaps
 
-async def _inputs(db: AsyncSession, org: Organization, firm_id: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Playbooks and rate card: the demo set for demo orgs, else the firm's."""
+async def _firm_card(db: AsyncSession, firm_id: str) -> Dict[str, Any]:
+    card = await _setting(db, firm_id, "rate_card")
+    return (card.value or {}) if card else {"roles": []}
+
+
+async def _inputs(db: AsyncSession, org: Organization, firm_id: str,
+                  firm_rates: bool = False) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Playbooks and rate card: the demo set for demo orgs (the firm's rate
+    card only when previewing on screen), else the firm's."""
     if org.is_demo:
-        return rm.demo_playbooks(), dict(rm.DEMO_RATE_CARD)
-    pbs, card = await _setting(db, firm_id, "playbooks"), await _setting(db, firm_id, "rate_card")
-    return ((pbs.value or {}).get("playbooks") or [] if pbs else []), ((card.value or {}) if card else {"roles": []})
+        return rm.demo_playbooks(), (await _firm_card(db, firm_id) if firm_rates else dict(rm.DEMO_RATE_CARD))
+    pbs = await _setting(db, firm_id, "playbooks")
+    return ((pbs.value or {}).get("playbooks") or [] if pbs else []), await _firm_card(db, firm_id)
 
 
 async def _findings(db: AsyncSession, org_id: str) -> Tuple[Optional[OrgAnalysisSnapshot], Dict[str, Dict[str, Any]]]:
@@ -183,11 +195,23 @@ def _summary(r: EngagementRoadmap) -> Dict[str, Any]:
             "updatedAt": (r.updated_at or r.created_at).isoformat() if (r.updated_at or r.created_at) else None}
 
 
-async def _full(db: AsyncSession, org: Organization, r: EngagementRoadmap, firm_id: str) -> Dict[str, Any]:
-    pbs, card = await _inputs(db, org, firm_id)
+async def _full(db: AsyncSession, org: Organization, r: EngagementRoadmap, firm_id: str,
+                firm_rates: bool = False) -> Dict[str, Any]:
+    """The computed roadmap. `firm_rates` previews a demo org with the firm's
+    rate card; exports never pass it."""
+    preview = bool(org.is_demo and firm_rates)
+    pbs, card = await _inputs(db, org, firm_id, preview)
     snap, findings = await _findings(db, org.id)
-    result = rm.compute(r.packages or [], findings, pbs, card, r.rate_overrides or {}, await _reviews(db, org.id))
-    return {**_summary(r), **result, "isDemo": bool(org.is_demo), "rateOverrides": r.rate_overrides or {},
+    overrides = {} if org.is_demo else (r.rate_overrides or {})
+    result = rm.compute(r.packages or [], findings, pbs, card, overrides, await _reviews(db, org.id))
+    demo_label = None
+    if org.is_demo:
+        demo_label = ("Demo roadmap previewed with your firm's rate card, on this screen only. Exports and images of a "
+                      "demo org always use the demo rate card." if preview else
+                      "Demo roadmap: synthetic org, demo rate card and example playbooks.")
+    return {**_summary(r), **result, "isDemo": bool(org.is_demo), "rateOverrides": overrides,
+            "rateSource": "firm-preview" if preview else ("demo" if org.is_demo else "firm"),
+            "firmRatesAvailable": bool((await _firm_card(db, firm_id)).get("roles")) if org.is_demo else None,
             "healthReport": {"id": snap.id, "at": snap.snapshot_at.isoformat()} if snap else None,
             "playbooks": [{"key": p["key"], "title": p["title"], "example": bool(p.get("example"))} for p in pbs],
             "rateCardSet": bool(card.get("roles")),
@@ -195,7 +219,7 @@ async def _full(db: AsyncSession, org: Organization, r: EngagementRoadmap, firm_
                                  "confirmed effort was entered by a consultant.",
                        "savings": "Savings are estimated from the Health Report's findings (Salesforce list prices "
                                   "unless negotiated rates were entered).",
-                       "demo": "Demo roadmap: synthetic org, demo rate card and example playbooks." if org.is_demo else None}}
+                       "demo": demo_label}}
 
 
 @router.get("/orgs/{org_id}/roadmaps")
@@ -231,11 +255,12 @@ async def create_roadmap(org_id: str, body: NewRoadmap, request: Request,
 
 
 @router.get("/orgs/{org_id}/roadmaps/{rid}")
-async def get_roadmap(org_id: str, rid: str, request: Request, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+async def get_roadmap(org_id: str, rid: str, request: Request, rates: Optional[str] = None,
+                      db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
     r = await _roadmap(db, org_id, rid)
     org = await db.get(Organization, org_id)
     assert org is not None
-    return await _full(db, org, r, request.state.principal.home_org_id)
+    return await _full(db, org, r, request.state.principal.home_org_id, firm_rates=rates == "firm")
 
 
 class RoadmapUpdate(BaseModel):
@@ -258,6 +283,10 @@ async def update_roadmap(org_id: str, rid: str, body: RoadmapUpdate, request: Re
             raise HTTPException(status_code=400, detail=err)
         r.packages = packages
     if body.rate_overrides is not None:
+        org = await db.get(Organization, org_id)
+        if org is not None and org.is_demo and body.rate_overrides:
+            raise HTTPException(status_code=400, detail="A demo org's roadmap uses the demo rate card; it takes no "
+                                                        "per-engagement rates.")
         if any(not isinstance(v, (int, float)) or v <= 0 for v in body.rate_overrides.values()):
             raise HTTPException(status_code=400, detail="Day rates must be positive numbers.")
         r.rate_overrides = {str(k): float(v) for k, v in body.rate_overrides.items()}

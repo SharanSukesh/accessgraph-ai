@@ -62,19 +62,24 @@ async def test_confirmed_effort_stays_apart(client, async_db_session, lumenvale)
     storage = next(p for p in pk if p["playbook"] == "data-storage")
     storage["included"] = False
     extra = rm.new_package("Client training", len(pk))
-    out = await client.put(f"/orgs/{org_id}/roadmaps/{r['id']}", json={"packages": pk + [extra],
-                                                                       "rate_overrides": {"Salesforce consultant": 1000}},
-                           cookies=cookie)
+    out = await client.put(f"/orgs/{org_id}/roadmaps/{r['id']}", json={"packages": pk + [extra]}, cookies=cookie)
     assert out.status_code == 200, out.text
     d = out.json()
     got = next(p for p in d["packages"] if p["playbook"] == "licence-reclaim")
     assert got["basis"] == "confirmed" and got["confirmed"]["by"] == "admin@firm.test" and got["inferred"]["low"] == 2.0
-    assert got["price"] == {"low": 3000, "high": 4000}  # the engagement's override
+    assert got["price"] == {"low": 3600, "high": 4800}  # demo rate card, 1,200 a day
     t = d["totals"]
     assert t["confirmed"] == {"low": 3.0, "high": 4.0, "packages": 1} and t["excluded"] == 1
     assert t["unestimated"] == ["Client training"]
-    assert next(x for x in d["rates"] if x["role"] == "Salesforce consultant") == {
+    # A demo roadmap takes no per-engagement rates.
+    assert (await client.put(f"/orgs/{org_id}/roadmaps/{r['id']}", json={"rate_overrides": {"Salesforce consultant": 1000}},
+                             cookies=cookie)).status_code == 400
+    # Overrides apply over the rate card (a client org's roadmap).
+    card = {"roles": [{"role": "Salesforce consultant", "dayRate": 1200}]}
+    over = rm.compute(d["packages"], {}, rm.demo_playbooks(), card, {"Salesforce consultant": 1000}, {})
+    assert next(x for x in over["rates"] if x["role"] == "Salesforce consultant") == {
         "role": "Salesforce consultant", "dayRate": 1000.0, "override": True}
+    assert next(p for p in over["packages"] if p["playbook"] == "licence-reclaim")["price"] == {"low": 3000, "high": 4000}
     bad = await client.put(f"/orgs/{org_id}/roadmaps/{r['id']}",
                            json={"packages": [{**pk[0], "confirmed": {"low": 5, "high": 2}}]}, cookies=cookie)
     assert bad.status_code == 400
@@ -194,3 +199,25 @@ def test_phases_break_cycles_and_skip_excluded():
     assert ph[a["id"]] == 2 and ph[b["id"]] == 1 and ph[c["id"]] == 2
     b["included"] = False
     assert rm.phases([a, b, c])[c["id"]] == 1
+
+
+@pytest.mark.asyncio
+async def test_demo_previews_firm_rates_on_screen_only(client, async_db_session, lumenvale):  # noqa: F811
+    db = async_db_session
+    org_id, cookie = lumenvale
+    r = await _build(client, db, org_id, cookie)
+    assert r["rateSource"] == "demo" and r["firmRatesAvailable"] is False
+    db.add(FirmSetting(firm_id="system-org", key="rate_card", value={"currency": "USD", "roles": [
+        {"role": "Salesforce consultant", "dayRate": 950}]}))
+    await db.commit()
+    pv = (await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}?rates=firm", cookies=cookie)).json()
+    assert pv["rateSource"] == "firm-preview" and "on this screen only" in pv["labels"]["demo"]
+    reclaim = next(p for p in pv["packages"] if p["playbook"] == "licence-reclaim")
+    assert reclaim["blendedRate"] == 950 and reclaim["price"] == {"low": 1900, "high": 4750}
+    assert next(p for p in pv["packages"] if p["playbook"] == "apex-coverage")["missingRates"]  # the firm has no developer rate
+    plain = (await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}", cookies=cookie)).json()
+    assert plain["rateSource"] == "demo" and plain["firmRatesAvailable"] is True
+    # Exports ignore the preview: the demo rate card only.
+    x = await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}/export.xlsx?rates=firm", cookies=cookie)
+    rates = [row for row in load_workbook(io.BytesIO(x.content))["Rate card"].iter_rows(min_row=2, values_only=True)]
+    assert all(src == "Demo rate card" for _, _, src in rates) and 950 not in [rate for _, rate, _ in rates]

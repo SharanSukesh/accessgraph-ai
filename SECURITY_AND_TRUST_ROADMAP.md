@@ -955,9 +955,11 @@ section has the detail.
   down, up on Postgres.
   **Part 2 (next):** the SOW appendix and closing slides through the image
   pack renderer (3).
-  **Questions in the PR:** demo orgs always use the demo rate card, even
-  when the firm has its own; whether "counts only at Metadata only" needs
-  more than the findings' own titles.
+  **Answered (20 Oct):** demo orgs use the demo rate card by default; a
+  labelled switch ("Preview my firm's rates", ?rates=firm) prices the
+  demo roadmap with the firm's rate card on screen only. A demo org's
+  exports and images always use the demo rate card, and demo roadmaps
+  take no per-engagement rates, so real rates never leave in a demo file.
 - **Next:** P1 part 2 (SOW appendix and closing slides), then step 6.
 
 ## Build order
