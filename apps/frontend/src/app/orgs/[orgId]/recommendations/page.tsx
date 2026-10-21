@@ -1,5 +1,11 @@
 'use client'
 
+import { apiClient } from '@/lib/api/client'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+
 /**
  * Recommendations Page
  * Review and manage security recommendations
@@ -33,7 +39,7 @@ import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal, Stagger, StaggerItem } from '@/components/v2/motion'
 import {
-  useRecommendations,
+  recommendationKeys,
   useUpdateRecommendationStatus,
   type RecommendationStatus,
 } from '@/lib/api/hooks/useRecommendations'
@@ -67,26 +73,23 @@ export default function RecommendationsPage() {
   const [bulkPending, setBulkPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const [search, setSearch] = useState('')
-  const [severityFilter, setSeverityFilter] = useState<string>('')
-  const [statusFilter, setStatusFilter] = useState<string>('')
-  // 'all' | 'security' | 'equity' — distinguishes anomaly-driven recs from
-  // the new GAEA equity-driven track. Default 'all' so existing users see
-  // the familiar full list, but the chip row above makes the split obvious.
-  const [trackFilter, setTrackFilter] = useState<'all' | 'security' | 'equity' | 'deployment' | 'data_quality'>('all')
+  // Paged by the server; track, filters, search, page and size live in the URL.
+  const { state, update } = useListState('', { filters: ['track', 'severity', 'status'] })
+  const trackFilter = (state.filters.track || 'all') as 'all' | 'security' | 'equity' | 'deployment' | 'data_quality'
+  const setTrackFilter = (t: string) => update({ filters: { track: t === 'all' ? '' : t } })
+  const severityFilter = state.filters.severity || ''
+  const statusFilter = state.filters.status || ''
   const [selectedRec, setSelectedRec] = useState<any>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   const {
-    data: recommendations,
+    data: recPage,
     isLoading,
     error,
-  } = useRecommendations(orgId, {
-    search,
-    severity: severityFilter || undefined,
-    status: statusFilter || undefined,
-    track: trackFilter === 'all' ? undefined : trackFilter,
-  })
+  } = usePaged<any, { summary: { all: number; byStatus: Record<string, number>; bySeverity: Record<string, number> } }>(
+    [...recommendationKeys.lists(), orgId, 'paged'], `/orgs/${orgId}/recommendations`, state)
+  const recommendations: any[] | undefined = recPage?.items
+  const summary = recPage?.summary
 
   const handleSelectAll = () => {
     if (selectedIds.size === recommendations?.length) {
@@ -136,9 +139,13 @@ export default function RecommendationsPage() {
     }
   }
 
-  const handleExport = () => {
-    if (!recommendations?.length) return
-    exportRecommendationsToCSV(recommendations, `priority-actions-${exportStamp()}`)
+  // Exports include every action matching the track, filters and search, not just this page.
+  const handleExport = async () => {
+    const p = new URLSearchParams()
+    if (state.q) p.set('search', state.q)
+    for (const k of ['track', 'severity', 'status'] as const) if (state.filters[k]) p.set(k, state.filters[k])
+    const all = await apiClient.get<any[]>(`/orgs/${orgId}/recommendations?${p.toString()}`)
+    if (all.length) exportRecommendationsToCSV(all, `priority-actions-${exportStamp()}`)
   }
 
   if (error) {
@@ -150,9 +157,10 @@ export default function RecommendationsPage() {
     )
   }
 
-  const pendingCount = recommendations?.filter((r: any) => r.status === 'pending').length || 0
-  const inProgressCount = recommendations?.filter((r: any) => r.status === 'accepted').length || 0
-  const completedCount = recommendations?.filter((r: any) => r.status === 'applied').length || 0
+  // Counts for the whole track, whatever the filters and page.
+  const pendingCount = summary?.byStatus?.pending ?? 0
+  const inProgressCount = summary?.byStatus?.accepted ?? 0
+  const completedCount = summary?.byStatus?.applied ?? 0
 
   return (
     <div className="space-y-6">
@@ -188,7 +196,7 @@ export default function RecommendationsPage() {
                   Total
                 </p>
                 <p className="v2-num mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                  {isLoading ? '...' : recommendations?.length || 0}
+                  {isLoading ? '...' : (summary?.all ?? 0).toLocaleString('en-US')}
                 </p>
               </div>
               <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
@@ -290,21 +298,12 @@ export default function RecommendationsPage() {
         <CardContent className="py-4">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <input
-                type="text"
-                placeholder="Search recommendations..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
+            <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder="Search recommendations..." />
 
             {/* Severity Filter */}
             <select
               value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
+              onChange={(e) => update({ filters: { severity: e.target.value } })}
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Severities</option>
@@ -317,7 +316,7 @@ export default function RecommendationsPage() {
             {/* Status Filter */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => update({ filters: { status: e.target.value } })}
               className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">All Statuses</option>
@@ -339,7 +338,7 @@ export default function RecommendationsPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>
-                  {recommendations ? `${recommendations.length} Recommendations` : 'Recommendations'}
+                  {recPage ? `${recPage.total.toLocaleString('en-US')} Recommendations` : 'Recommendations'}
                 </CardTitle>
                 {canWrite && recommendations && recommendations.length > 0 && (
                   <button
@@ -424,6 +423,8 @@ export default function RecommendationsPage() {
                       </div>
                     </div>
                   ))}
+                  <Pagination page={recPage!.page} pageSize={recPage!.page_size} total={recPage!.total} label="actions"
+                    onPage={(page) => update({ page })} onPageSize={(pageSize) => update({ pageSize })} />
                 </div>
               ) : (
                 <EmptyState

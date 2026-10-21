@@ -108,6 +108,9 @@ export interface ApplyFixResponse {
 }
 
 export interface FindingsPage {
+  page?: number | null
+  page_size?: number | null
+  pages?: number | null
   total: number
   snapshot_id: string | null
   findings: OrgFinding[]
@@ -175,6 +178,12 @@ export function useOrgAnalyzerLatest(orgId: string) {
 }
 
 export interface FindingsFilter {
+  /** Server paging (the standing pagination rule); otherwise limit/offset. */
+  page?: number
+  page_size?: number
+  q?: string
+  sort?: string
+  dir?: 'asc' | 'desc'
   category?: FindingCategory | null
   severity?: FindingSeverity | null
   include_ignored?: boolean
@@ -194,8 +203,10 @@ export function useOrgAnalyzerFindings(
           ...(filter.category ? { category: filter.category } : {}),
           ...(filter.severity ? { severity: filter.severity } : {}),
           ...(filter.include_ignored ? { include_ignored: true } : {}),
-          limit: filter.limit ?? 100,
-          offset: filter.offset ?? 0,
+          ...(filter.page
+            ? { page: filter.page, page_size: filter.page_size ?? 25, ...(filter.q ? { q: filter.q } : {}),
+                ...(filter.sort ? { sort: filter.sort, dir: filter.dir ?? 'asc' } : {}) }
+            : { limit: filter.limit ?? 100, offset: filter.offset ?? 0 }),
         },
       }),
     enabled: !!orgId,
