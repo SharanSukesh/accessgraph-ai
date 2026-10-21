@@ -52,6 +52,13 @@ class body and keeps only that keyword, never the code (UNVERIFIED, as for
 API usage: whether the bodies are readable with the permissions above; if
 not, the sharing column is empty).
 
+It also documents in more detail, with no new permission:
+- **Flows:** for the active version of each flow (at most 150), it reads the element counts and the objects and fields each flow reads or writes. These come from the flow metadata Newton already reads to see who can run it.
+- **Page layouts:** the fields placed on each page layout, one query per layout, at most 300.
+- **Approval processes:** each approval process's steps, by name. Not the entry criteria or approvers: those need the Metadata API, which isn't confirmed to work with these permissions.
+- **External data sources:** name, label and type, never the endpoint, plus which profiles and permission sets can use each.
+- **Record types per permission set:** the record types each permission set makes available, read from the set's metadata, one query per set, at most 200. UNVERIFIED: whether that read works with these permissions. Newton stops at the first failure and the workbook says the column wasn't read.
+
 Newton changes nothing in Salesforce unless an engagement admin explicitly
 turns on **write-back** for that org (see section 6).
 
