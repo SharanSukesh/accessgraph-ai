@@ -1,7 +1,7 @@
 """Lumenvale's dates move with today (DemoFixture.anchor), so the runbook
 numbers hold on any day: Health 41, 18 findings, $183,180; License Fit
 $116,220. The 20 Oct failure: a synthetic user's last login crossed 90 days."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -10,6 +10,12 @@ from app.ingestion import demo_orgs
 from app.ingestion.demo_orgs import DEMO_FIXTURES, load_demo_data, load_fixture, shift_dates
 
 ANCHOR = datetime.fromisoformat(DEMO_FIXTURES["synthetic_mid_market"].anchor)
+
+
+def shifted(value: str) -> str:
+    """A fixture date as a demo synced now shows it: tests that name a date
+    from the fixture compare against this, not the raw date."""
+    return shift_dates(value, datetime.now(timezone.utc) - ANCHOR)
 
 
 def test_shift_keeps_formats_and_time_zones():
