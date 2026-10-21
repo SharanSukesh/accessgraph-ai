@@ -3103,3 +3103,39 @@ class AccessDraft(Base, TimestampMixin):
     source: Mapped[Optional[str]] = mapped_column(String(80))  # preset name or "restructure"
 
     __table_args__ = (Index("ix_access_draft_org", "organization_id"),)
+
+
+class FirmSetting(Base, TimestampMixin):
+    """The consulting firm's own data (P1): its rate card and remediation
+    playbooks. Keyed by the firm (the signed-in user's home organization),
+    never by a client org, so client erasure and privacy modes don't touch
+    it."""
+    __tablename__ = "firm_settings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    firm_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    key: Mapped[str] = mapped_column(String(40), nullable=False)  # "rate_card" | "playbooks"
+    value: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    updated_by: Mapped[Optional[str]] = mapped_column(String(255))
+
+    __table_args__ = (UniqueConstraint("firm_id", "key", name="uq_firm_setting_key"),)
+
+
+class EngagementRoadmap(Base, TimestampMixin):
+    """A priced roadmap for one client org (P1): work packages built from
+    the Health Report's findings, referenced by a key that survives a rerun
+    (so packages follow the findings' visibility), with inferred effort
+    from the firm's playbooks kept apart from consultant-confirmed effort."""
+    __tablename__ = "engagement_roadmaps"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255))
+    packages: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    # Per-engagement day rates by role, over the firm's rate card.
+    rate_overrides: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+
+    __table_args__ = (Index("ix_engagement_roadmap_org", "organization_id"),)

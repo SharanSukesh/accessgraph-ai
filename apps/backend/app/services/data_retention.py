@@ -102,6 +102,7 @@ CONFIG_TABLES = {
     "role_design_drafts",
     "item_reviews",
     "access_drafts",
+    "engagement_roadmaps",
 }
 
 RETENTION_CLASSES = {
