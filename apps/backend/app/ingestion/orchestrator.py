@@ -98,9 +98,9 @@ class SyncOrchestrator:
             # DEMO_MODE says; it has no Salesforce connection to read.
             org = await self.db.get(Organization, org_id)
             if org is not None and org.is_demo:
-                from app.ingestion.demo_orgs import fixture_key, load_fixture
+                from app.ingestion.demo_orgs import fixture_key, load_demo_data
                 logger.info("Demo org: loading fixture %s", fixture_key(org))
-                data = load_fixture(fixture_key(org))
+                data = load_demo_data(fixture_key(org))
                 # Ownership is read live on a real org; the fixture carries it.
                 owners = data.get("demo_live", {}).get("owner_counts", {})
                 data["record_owner_counts"] = {obj: owners.get(obj) for obj in ("Account", "Opportunity")}

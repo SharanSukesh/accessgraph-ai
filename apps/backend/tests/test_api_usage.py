@@ -126,11 +126,12 @@ async def test_lumenvale_api_usage_and_unchanged_health_report(async_db_session,
     snap = await _run(db, org_id)
     u = snap.metrics["api_usage"]
     assert u["status"] == "ok" and u["days_collected"] == 30
-    assert (u["first_day"], u["last_day"]) == ("2026-09-14", "2026-10-13")
+    from tests.test_demo_dates import shifted
+    assert (u["first_day"], u["last_day"]) == (shifted("2026-09-14"), shifted("2026-10-13"))  # moved with today
     assert u["by_app"][0]["name"] == "Warehouse Nightly ETL" and u["by_app"][0]["share_pct"] == 58.0
     assert len(u["by_app"]) == 6 and len(u["by_user"]) == 4
     assert u["by_user"][0]["name"] == "Ayla Zielinski"
-    assert u["peak"]["date"] == "2026-09-29" and u["peak"]["pct_of_limit"] == 96.2
+    assert u["peak"]["date"] == shifted("2026-09-29") and u["peak"]["pct_of_limit"] == 96.2
     assert u["limit"]["max"] == 1_015_000
     # No new findings: the runbook's numbers hold.
     rows = (await db.execute(select(OrgFinding).where(OrgFinding.snapshot_id == snap.id))).scalars().all()

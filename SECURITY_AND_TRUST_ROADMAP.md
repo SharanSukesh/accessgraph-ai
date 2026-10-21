@@ -463,6 +463,22 @@ section has the detail.
   values; whether AppMenuItem lists apps the integration user can't open;
   FieldSet has no documented object column, so the sheet doesn't show the
   object.
+- **Merged 19–20 Oct (the product owner's go-ahead for the open stack):**
+  #52, #53, #54, #55, #56 in that order (main fb90029). Each: green PR CI,
+  green main CI, both Railway deployments successful, merged diff identical
+  to the reviewed one; no migrations.
+- **#57 (fix, not merged): Lumenvale dates move with today.** On 20 Oct at
+  01:00 UTC a synthetic user (005000000000136DMO, last login 2026-07-22)
+  crossed the 90-day inactivity line, so the runbook savings read $185,520
+  instead of $183,180 and the runbook tests failed on main. The fixture's
+  dates are now as of an anchor (DemoFixture.anchor, 2026-10-19 22:00 UTC)
+  and a demo sync moves every date by the time since then
+  (demo_orgs.load_demo_data, shift_dates), so every "days since" and the
+  runbook numbers hold on any day. **Test:** re-sync Lumenvale, run the
+  Health Report and License Fit: 41 / 18 / $183,180 / $116,220
+  (tests/test_demo_dates.py checks 1, 30 and 200 days later, and that the
+  numbers do drift without the anchor). Production keeps the numbers of its
+  last run until this is merged and Lumenvale is re-synced.
 - **Next:** item 11 part c, stacked on #56: flow detail (#9: elements and
   the objects and fields each flow reads or writes, from the Flow metadata
   already read per active flow), the field × layout matrix (#4, Layout
