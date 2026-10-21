@@ -19,12 +19,8 @@ import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api/client'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { isFeatureAvailable } from '@/lib/privacy'
-import {
-  ObjectFieldsCard,
-  RelationshipsCard,
-  type FieldAttributes,
-  type Relationships,
-} from '@/components/schema/FieldMetadata'
+import { ObjectFieldsCard, RelationshipsCard, type SchemaSummary } from '@/components/schema/FieldMetadata'
+import { AccessCard, type AccessSummary } from '@/components/schema/AccessLists'
 import {
   useDataQualityObject,
   type ObjectScore,
@@ -54,17 +50,15 @@ interface ObjectDetail {
   apiName: string
   label: string
   isCustom: boolean
-  profilesWithAccess: PermissionDetail[]
-  permissionSetsWithAccess: PermissionDetail[]
-  usersWithAccess: UserAccess[]
-  totalUsers: number
+  access: AccessSummary
+  totalUsers: number | null
   totalProfiles: number
   totalPermissionSets: number
+  totalGroups: number
   schemaSynced?: boolean
-  fields?: FieldAttributes[] | null
+  schema?: SchemaSummary | null
   fieldsFromFieldDefinition?: number
   describeFailed?: boolean
-  relationships?: Relationships | null
 }
 
 export default function ObjectDetailPage() {
@@ -161,7 +155,7 @@ export default function ObjectDetailPage() {
                 Total Users with Access
               </p>
               <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                {objectDetail.totalUsers}
+                {objectDetail.totalUsers === null ? '—' : objectDetail.totalUsers.toLocaleString('en-US')}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-primary-50 dark:bg-primary-900/25">
@@ -210,289 +204,32 @@ export default function ObjectDetailPage() {
         <DataQualityCard score={dqScore} />
       )}
 
-      {/* Fields and relationships from the synced describe (roadmap item 8). */}
-      {objectDetail.fields && (
+      {/* Who can access it: counts per kind, the first 10, and View all (paged). */}
+      <AccessCard
+        orgId={orgId}
+        target="objects"
+        targetId={objectDetail.apiName}
+        summary={objectDetail.access}
+        title="Who can access this object"
+      />
+
+      {/* Fields and relationships from the synced describe (roadmap item 8): previews with View all. */}
+      {objectDetail.schema && (
         <ObjectFieldsCard
           orgId={orgId}
           objectName={objectDetail.apiName}
-          fields={objectDetail.fields}
+          summary={objectDetail.schema.fields}
           hiddenCount={objectDetail.fieldsFromFieldDefinition}
           describeFailed={objectDetail.describeFailed}
         />
       )}
-      {objectDetail.relationships && <RelationshipsCard orgId={orgId} relationships={objectDetail.relationships} />}
+      {objectDetail.schema && <RelationshipsCard orgId={orgId} objectName={objectDetail.apiName} summary={objectDetail.schema} />}
       {objectDetail.schemaSynced === false && (
         <p className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
           Fields and relationships appear after the next sync reads this org&apos;s field metadata.
         </p>
       )}
 
-      {/* Profiles with Access */}
-      {objectDetail.profilesWithAccess.length > 0 && (
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle>Profiles with Access ({objectDetail.profilesWithAccess.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Profile Name
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Read
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Create
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Edit
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Delete
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      View All
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Modify All
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
-                  {objectDetail.profilesWithAccess.map((profile) => (
-                    <tr key={profile.id} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                        {profile.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {profile.read ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {profile.create ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {profile.edit ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {profile.delete ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {profile.viewAll ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {profile.modifyAll ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Permission Sets with Access */}
-      {objectDetail.permissionSetsWithAccess.length > 0 && (
-        <Card variant="bordered">
-          <CardHeader>
-            <CardTitle>Permission Sets with Access ({objectDetail.permissionSetsWithAccess.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Permission Set Name
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Read
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Create
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Edit
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Delete
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      View All
-                    </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Modify All
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
-                  {objectDetail.permissionSetsWithAccess.map((ps) => (
-                    <tr key={ps.id} className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15">
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                          {ps.label || ps.name}
-                        </div>
-                        {ps.label && ps.name && ps.label !== ps.name && (
-                          <div className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 mt-1">
-                            API Name: {ps.name}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {ps.read ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {ps.create ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {ps.edit ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {ps.delete ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {ps.viewAll ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        {ps.modifyAll ? (
-                          <Check className="h-5 w-5 text-green-600 mx-auto" />
-                        ) : (
-                          <X className="h-5 w-5 text-grove-ink/50 dark:text-grove-ink-dk/50 mx-auto" />
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Users with Access */}
-      <Card variant="bordered">
-        <CardHeader>
-          <CardTitle>Users with Access ({objectDetail.usersWithAccess.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {objectDetail.usersWithAccess.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      User
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Access Via
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
-                  {objectDetail.usersWithAccess.map((user) => (
-                    <tr
-                      key={user.salesforceUserId}
-                      className="hover:bg-primary-50/40 dark:hover:bg-primary-900/15"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                            <span className="text-sm font-medium text-primary-600 dark:text-primary-400">
-                              {user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                            </span>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                              {user.name}
-                            </div>
-                            <div className="text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
-                              {user.email}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="default" size="sm">
-                          {user.accessVia}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => router.push(`/orgs/${orgId}/users/${user.salesforceUserId}`)}
-                        >
-                          View User
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Users className="mx-auto h-12 w-12 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <h3 className="mt-2 text-sm font-medium text-grove-ink dark:text-grove-ink-dk">
-                No users with access
-              </h3>
-              <p className="mt-1 text-sm text-grove-ink/55 dark:text-grove-ink-dk/55">
-                No users have access to this object through profiles or permission sets.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

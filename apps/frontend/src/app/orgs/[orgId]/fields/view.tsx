@@ -16,7 +16,11 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { TableSkeleton } from '@/components/shared/LoadingSkeleton'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Reveal } from '@/components/v2/motion'
-import { useFields } from '@/lib/api/hooks/useFields'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { SortHeader } from '@/components/shared/SortHeader'
 import { EncryptionBadge } from '@/components/schema/FieldMetadata'
 import { DocumentationDownload } from '@/components/schema/DocumentationDownload'
 
@@ -27,38 +31,18 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
   const router = useRouter()
   const orgId = params.orgId as string
 
-  const [search, setSearch] = useState('')
-  const [objectFilter, setObjectFilter] = useState<string>('')
-  const [selectedLetter, setSelectedLetter] = useState<string>('')
-  const [page, setPage] = useState(1)
-  const limit = 100
-
-  const { data, isLoading, error } = useFields(orgId, {
-    search: search || undefined,
-    objectName: objectFilter || undefined,
-    startsWith: selectedLetter || undefined,
-    page,
-    limit,
-  })
-
-  const fields = data?.fields || []
+  // Paged by the server; page, size, sort, search, object and letter live in the URL (f.*).
+  const { state, update } = useListState('f', { sort: 'apiName', filters: ['object_type', 'starts_with'] })
+  const { data, isLoading, error } = usePaged<any>(['fields', orgId], `/orgs/${orgId}/fields`, state)
+  const fields = data?.items || []
   // Field types come from the synced describe; the column appears only when some are known.
   const showType = fields.some((f: any) => f.dataType)
-  const pagination = data?.pagination
-  const schemaNotes = data?.schemaNotes || []
+  const schemaNotes: string[] = data?.schemaNotes || []
+  const selectedLetter = state.filters.starts_with || ''
+  const sortProps = { sort: state.sort, dir: state.dir, onSort: (c: string, d: 'asc' | 'desc') => update({ sort: c, dir: d }), className: 'px-6 py-3' }
 
   const handleLetterClick = (letter: string) => {
-    if (selectedLetter === letter) {
-      setSelectedLetter('')
-    } else {
-      setSelectedLetter(letter)
-    }
-    setPage(1) // Reset to first page
-  }
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    update({ filters: { starts_with: selectedLetter === letter ? '' : letter } })
   }
 
   if (error) {
@@ -89,7 +73,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                 Total Fields
               </p>
               <p className="mt-2 text-3xl font-bold text-grove-ink dark:text-grove-ink-dk">
-                {isLoading ? '...' : pagination?.total || 0}
+                {isLoading ? '...' : data?.total || 0}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-primary-100 dark:bg-primary-900">
@@ -121,7 +105,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                 Pages
               </p>
               <p className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
-                {isLoading ? '...' : `${pagination?.page || 1}/${pagination?.totalPages || 1}`}
+                {isLoading ? '...' : `${data?.page || 1}/${data?.pages || 1}`}
               </p>
             </div>
             <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900">
@@ -169,32 +153,14 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
       <Card variant="bordered">
         <CardContent className="py-4">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-grove-ink/50 dark:text-grove-ink-dk/50" />
-              <input
-                type="text"
-                placeholder="Search fields..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
-                }}
-                className="w-full pl-10 pr-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            <ListSearch value={state.q} onChange={(q) => update({ q })} placeholder="Search fields..." />
+            <div className="md:w-64">
+              <ListSearch
+                value={state.filters.object_type || ''}
+                onChange={(v) => update({ filters: { object_type: v } })}
+                placeholder="Filter by object..."
               />
             </div>
-
-            {/* Object Filter */}
-            <input
-              type="text"
-              placeholder="Filter by object..."
-              value={objectFilter}
-              onChange={(e) => {
-                setObjectFilter(e.target.value)
-                setPage(1)
-              }}
-              className="px-4 py-2 border border-grove-border dark:border-grove-border-dk rounded-lg bg-grove-surface dark:bg-grove-surface-dk text-grove-ink dark:text-grove-ink-dk focus:ring-2 focus:ring-primary-500 focus:border-transparent md:w-64"
-            />
           </div>
         </CardContent>
       </Card>
@@ -219,9 +185,9 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                 : 'All Fields'
               }
             </CardTitle>
-            {pagination && (
+            {data && (
               <div className="text-sm text-grove-ink/65 dark:text-grove-ink-dk/65">
-                Showing {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+                {data.total.toLocaleString('en-US')} fields
               </div>
             )}
           </div>
@@ -235,26 +201,14 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                 <table className="w-full">
                   <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                     <tr>
-                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                        Field
-                      </th>
-                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                        Object
-                      </th>
-                      <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                        API Name
-                      </th>
-                      {showType && (
-                        <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                          Type
-                        </th>
-                      )}
+                      <SortHeader label="Field" column="label" {...sortProps} />
+                      <SortHeader label="Object" column="object" {...sortProps} />
+                      <SortHeader label="API Name" column="apiName" {...sortProps} />
+                      {showType && <SortHeader label="Type" column="type" {...sortProps} />}
                       <th className="px-6 py-3 text-left v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
                         Properties
                       </th>
-                      <th className="px-6 py-3 text-right v2-micro text-grove-ink/55 dark:text-grove-ink-dk/55">
-                        Users
-                      </th>
+                      <SortHeader label="Users with Read" column="users" align="right" {...sortProps} />
                     </tr>
                   </thead>
                   <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
@@ -310,7 +264,7 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-grove-ink dark:text-grove-ink-dk font-semibold">
-                          {field.userCount || 0}
+                          {field.userCount === null ? '—' : field.userCount.toLocaleString('en-US')}
                         </td>
                       </tr>
                     ))}
@@ -318,60 +272,14 @@ export function FieldsView({ embedded = false }: { embedded?: boolean } = {}) {
                 </table>
               </div>
 
-              {/* Pagination Controls */}
-              {pagination && pagination.totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between border-t border-grove-border dark:border-grove-border-dk pt-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page === 1}
-                    className="flex items-center gap-2"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Previous
-                  </Button>
-
-                  <div className="flex items-center gap-2">
-                    {/* Show page numbers */}
-                    {Array.from({ length: Math.min(pagination.totalPages, 7) }, (_, i) => {
-                      let pageNum: number
-                      if (pagination.totalPages <= 7) {
-                        pageNum = i + 1
-                      } else if (page <= 4) {
-                        pageNum = i + 1
-                      } else if (page >= pagination.totalPages - 3) {
-                        pageNum = pagination.totalPages - 6 + i
-                      } else {
-                        pageNum = page - 3 + i
-                      }
-
-                      return (
-                        <Button
-                          key={pageNum}
-                          variant={page === pageNum ? 'primary' : 'ghost'}
-                          size="sm"
-                          onClick={() => handlePageChange(pageNum)}
-                          className="w-10 h-10 p-0"
-                        >
-                          {pageNum}
-                        </Button>
-                      )
-                    })}
-                  </div>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={!pagination.hasMore}
-                    className="flex items-center gap-2"
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <Pagination
+                page={data!.page}
+                pageSize={data!.page_size}
+                total={data!.total}
+                label="fields"
+                onPage={(page) => update({ page })}
+                onPageSize={(pageSize) => update({ pageSize })}
+              />
             </>
           ) : (
             <EmptyState

@@ -66,7 +66,9 @@ async def test_object_detail_lists_profiles_by_name(client, async_db_session):  
     body = r.json()
 
     assert r.status_code == 200
-    assert [p["name"] for p in body["profilesWithAccess"]] == ["Sales User"]
-    assert [p["label"] for p in body["permissionSetsWithAccess"]] == ["Sales Ops"]
-    via = {u["name"]: u["accessVia"] for u in body["usersWithAccess"]}
+    kinds = body["access"]["kinds"]
+    assert [p["name"] for p in kinds["profiles"]["preview"]] == ["Sales User"]
+    assert kinds["profiles"]["preview"][0]["id"] == "00eSALES"  # profile pages are keyed by profile id
+    assert [p["label"] for p in kinds["permission_sets"]["preview"]] == ["Sales Ops"]
+    via = {u["name"]: u["accessVia"] for u in kinds["users"]["preview"]}
     assert "Profile: Sales User" in via["Rep"]
