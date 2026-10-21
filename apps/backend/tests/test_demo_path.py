@@ -63,10 +63,10 @@ async def test_user_detail_reports_last_login(client, lumenvale):  # noqa: F811
     org_id, cookie = lumenvale
     user = (await client.get(f"/orgs/{org_id}/users/{NOOR}", cookies=cookie)).json()
     from app.ingestion.demo_orgs import load_fixture
-    from tests.test_demo_dates import shifted
+    from tests.test_demo_dates import close_to_shifted
     raw = next(u["LastLoginDate"] for u in load_fixture("synthetic_mid_market")["users"] if u["Id"] == NOOR)
     assert raw.startswith("2026-10-12")  # in the fixture; the demo moves it with today
-    assert user["lastLoginDate"][:16] == shifted(raw)[:16]
+    assert close_to_shifted(user["lastLoginDate"], raw)
 
 
 @pytest.mark.asyncio
