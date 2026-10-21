@@ -5,7 +5,7 @@
  * packages, each with an effort range (inferred from the firm's playbook,
  * or confirmed by a consultant, never merged), a price range from the rate
  * card, estimated savings and dependencies, in phases. Exported as Excel,
- * closing slides (PowerPoint) and an SOW appendix (PDF).
+ * closing slides (PowerPoint) and an SOW appendix (PDF or Word).
  */
 
 import { useState } from 'react'
@@ -133,7 +133,8 @@ export default function RoadmapPage() {
                 : <h2 className="flex-1 text-xl font-semibold">{r.name}</h2>}
               {([['export.xlsx', 'Excel', FileSpreadsheet, 'Every package, finding, rate and playbook'],
                  ['slides.pptx', 'Closing slides', Presentation, 'The roadmap, the packages by phase, one slide per package and the assumptions'],
-                 ['sow.pdf', 'SOW appendix', FileText, 'Scope, approach, prerequisites, risks, effort and price per package']] as const).map(([file, label, Icon, title]) => (
+                 ['sow.pdf', 'SOW appendix (PDF)', FileText, 'Scope, approach, prerequisites, risks, effort and price per package'],
+                 ['sow.docx', 'SOW appendix (Word)', FileText, 'The same appendix as an editable Word file']] as const).map(([file, label, Icon, title]) => (
                 <a key={file} href={`${API_BASE}/orgs/${orgId}/roadmaps/${r.id}/${file}`} title={title}
                   className="inline-flex items-center gap-2 rounded-md border border-grove-border px-3 py-1.5 text-sm font-medium dark:border-grove-border-dk">
                   <Icon className="h-4 w-4" aria-hidden />{label}</a>

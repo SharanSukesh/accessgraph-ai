@@ -248,6 +248,15 @@ async def test_slides_and_sow_appendix(client, async_db_session, lumenvale):  # 
     assert "Inferred: 2–5 days (sized by 27 users)" in html and "Confirmed: 3–4 days" in html
     assert "Out of scope for now: Data storage and field cleanup" in html and "Demo roadmap" in html
 
+    # The Word appendix: the same content, editable; needs no system libraries.
+    w = await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}/sow.docx", cookies=cookie)
+    assert w.status_code == 200 and 'filename="lumenvale-systems-demo-roadmap-sow-appendix.docx"' in w.headers["content-disposition"]
+    from docx import Document
+    text = "\n".join(p.text for p in Document(io.BytesIO(w.content)).paragraphs)
+    assert "Appendix: scope, effort and pricing" in text and "Confirmed: 3–4 days" in text
+    assert "Inferred: 2–5 days (sized by 27 users)" in text and "Out of scope for now: Data storage and field cleanup" in text
+    assert "Demo roadmap" in text
+
     if not _can_render():
         pytest.skip("WeasyPrint system libraries not installed")
     x = await client.get(f"/orgs/{org_id}/roadmaps/{r['id']}/slides.pptx", cookies=cookie)

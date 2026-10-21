@@ -8,9 +8,10 @@ Both are drawn from the same computed roadmap as the page and the Excel
   phase, one slide per package (what was found, what the work is, effort
   and price) and the assumptions. Like the image pack, slides carry no
   logos; demo decks say so in each slide's notes and the file name.
-- **SOW appendix**: an A4 PDF with the scope, approach, prerequisites,
-  risks, effort and price of each package, the rate card and the
-  assumptions, under the firm's name and accent colour.
+- **SOW appendix**: the scope, approach, prerequisites, risks, effort and
+  price of each package, the rate card and the assumptions, under the
+  firm's name and accent colour, as an A4 PDF or an editable Word file
+  (the same content).
 
 Effort and prices are always ranges. Inferred and confirmed effort are
 labelled as such; savings are labelled estimated; packages priced from
@@ -253,3 +254,108 @@ def build_sow_pdf(data: Dict[str, Any], org_name: str, firm_name: Optional[str],
     from weasyprint import HTML  # type: ignore
 
     return HTML(string=sow_html(data, org_name, firm_name, accent)).write_pdf()
+
+
+def _sow_parts(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Per package, the lines both SOW formats print."""
+    cur = data["currency"]
+    out = []
+    for p in _included(data):
+        effort = [f"Inferred: {_days(p['inferred'])}" + (f" (sized by {p['inferred']['size']} {p['inferred'].get('itemLabel') or 'items'})"
+                                                         if p.get("inferred") else "")]
+        if p.get("confirmed"):
+            effort.append(f"Confirmed: {_days(p['confirmed'])}")
+        effort += [f"Used: {_basis(p)}", f"Price: {_price(p['price'], cur)}"]
+        pb = (f"{p['playbookTitle']} {p['playbookVersion']}" + (" (example values)" if p["playbookExample"] else "")
+              if p["playbookTitle"] else "none")
+        out.append({"title": p["title"], "meta": f"Phase {p['phase']} · playbook {pb}", "sections": [
+            ("Scope: findings addressed", [f["title"] for f in p["findings"] if f["present"]], "Defined by the consultant."),
+            ("Approach", p.get("steps") or [], "To be agreed."),
+            ("Prerequisites", p.get("prerequisites") or [], "None listed."),
+            ("Risks", p.get("risks") or [], "None listed."),
+            ("Effort and price", effort, ""),
+        ], "notes": p.get("notes") or ""})
+    return out
+
+
+def build_sow_docx(data: Dict[str, Any], org_name: str, firm_name: Optional[str], accent: Optional[str]) -> bytes:
+    """The SOW appendix as an editable Word file: the PDF's content."""
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Mm, Pt, RGBColor
+
+    cur, t = data["currency"], data["totals"]
+    colour = RGBColor.from_string((accent or "#14532d").lstrip("#").upper())
+    doc = Document()
+    sec = doc.sections[0]
+    sec.page_width, sec.page_height = Mm(210), Mm(297)
+    sec.left_margin = sec.right_margin = Mm(16)
+    sec.top_margin, sec.bottom_margin = Mm(18), Mm(20)
+    doc.styles["Normal"].font.name = "Arial"
+    doc.styles["Normal"].font.size = Pt(10)
+
+    def heading(text: str, level: int) -> None:
+        h = doc.add_heading(text, level=level)
+        for run in h.runs:
+            run.font.color.rgb = colour
+
+    def meta(text: str) -> None:
+        run = doc.add_paragraph().add_run(text)
+        run.font.size, run.font.color.rgb = Pt(8.5), RGBColor(0x52, 0x51, 0x4E)
+
+    def bullets(items: List[str], empty: str) -> None:
+        if not items and empty:
+            meta(empty)
+        for i in items:
+            doc.add_paragraph(i, style="List Bullet")
+
+    def table(head: List[str], rows: List[List[str]], right: Tuple[int, ...] = ()) -> None:
+        tb = doc.add_table(rows=1, cols=len(head))
+        tb.style = "Table Grid"
+        for i, h in enumerate(head):
+            tb.rows[0].cells[i].text = h
+            tb.rows[0].cells[i].paragraphs[0].runs[0].font.bold = True
+        for row in rows:
+            cells = tb.add_row().cells
+            for i, v in enumerate(row):
+                cells[i].text = v
+                if i in right:
+                    cells[i].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    hr = (data.get("healthReport") or {}).get("at", "")[:10]
+    heading("Appendix: scope, effort and pricing", 1)
+    meta(data["name"] + ("" if data["name"].startswith(org_name) else f" · {org_name}")
+         + (f" · prepared by {firm_name}" if firm_name else "") + f" · {datetime.now(timezone.utc).strftime('%d %B %Y')}"
+         + (f" · Health Report of {hr}" if hr else ""))
+    if data["labels"].get("demo"):
+        doc.add_paragraph(data["labels"]["demo"]).runs[0].font.bold = True
+    heading("Summary", 2)
+    inc = _included(data)
+    table(["Phase", "Work package", "Effort", "Price"],
+          [[str(p["phase"]), p["title"], _basis(p), _price(p["price"], cur)] for p in inc]
+          + [["", "Total", _days(t["effort"]), _price(t["price"], cur) if t["price"]["high"] else "not priced"]], right=(0, 3))
+    doc.add_paragraph(f"Estimated annual savings from the findings addressed: {_money(t['savingsCents'] / 100, 'USD')} (estimated).")
+    left_out = [p["title"] for p in data["packages"] if not p.get("included", True)]
+    if left_out:
+        meta(f"Out of scope for now: {', '.join(left_out)}.")
+    heading("Work packages", 2)
+    for part in _sow_parts(data):
+        heading(part["title"], 3)
+        meta(part["meta"])
+        for label, items, empty in part["sections"]:
+            doc.add_paragraph().add_run(label).bold = True
+            bullets(items, empty)
+        if part["notes"]:
+            doc.add_paragraph().add_run("Notes").bold = True
+            doc.add_paragraph(part["notes"])
+    heading("Day rates", 2)
+    if data["rates"]:
+        table(["Role", "Day rate", "Source"], [[r["role"], _money(r["dayRate"], cur), "This engagement" if r["override"] else "Rate card"]
+                                               for r in data["rates"]], right=(1,))
+    else:
+        meta("No rate card set.")
+    heading("Assumptions", 2)
+    bullets(assumptions(data), "")
+    out = io.BytesIO()
+    doc.save(out)
+    return out.getvalue()

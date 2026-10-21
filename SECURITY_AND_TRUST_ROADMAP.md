@@ -975,8 +975,10 @@ section has the detail.
   and assumptions. Download buttons on the Roadmap page.
   **Test (Lumenvale, local):** 8 slides (5 packages); the SOW is 4 pages;
   package savings add up to $183,180.
-  **Question in the PR:** the SOW appendix is a PDF; a Word version needs
-  python-docx, a new dependency.
+  **Answered (20 Oct):** an editable Word SOW appendix (sow.docx, the same
+  content as the PDF) with python-docx 1.1.2 (MIT; dependencies lxml,
+  BSD-3-Clause, and typing_extensions, PSF-2.0; in
+  THIRD_PARTY_NOTICES.md). The backend Docker image builds and imports it.
 - **Next:** step 6: record access for Cases, Contacts and Leads (7), the
   full role impact preview (35c), the daily API usage collector (P3) and
   profile and permission set comparison (6).

@@ -19,6 +19,7 @@ Per client org:
   GET    /orgs/{org_id}/roadmaps/{id}/export.xlsx
   GET    /orgs/{org_id}/roadmaps/{id}/slides.pptx    closing slides (image pack renderer)
   GET    /orgs/{org_id}/roadmaps/{id}/sow.pdf        SOW appendix
+  GET    /orgs/{org_id}/roadmaps/{id}/sow.docx       the same, as an editable Word file
 
 Admins and analysts edit roadmaps; everyone with access reads them. Demo
 orgs use the demo rate card and playbooks and are labelled demo. The firm's
@@ -371,3 +372,14 @@ async def roadmap_sow(org_id: str, rid: str, request: Request, db: AsyncSession 
     return StreamingResponse(io.BytesIO(body), headers={
         "Content-Disposition": f'attachment; filename="{_file_name(r, bool(org.is_demo), "pdf", "sow-appendix")}"'},
         media_type="application/pdf")
+
+
+@router.get("/orgs/{org_id}/roadmaps/{rid}/sow.docx")
+async def roadmap_sow_docx(org_id: str, rid: str, request: Request, db: AsyncSession = Depends(get_database)) -> StreamingResponse:
+    from app.services.report.roadmap_deliverables import build_sow_docx
+
+    r, org, data, brand = await _deliverable_inputs(db, org_id, rid, request)
+    body = build_sow_docx(data, org.name, brand.firm_name, brand.accent_hex)
+    return StreamingResponse(io.BytesIO(body), headers={
+        "Content-Disposition": f'attachment; filename="{_file_name(r, bool(org.is_demo), "docx", "sow-appendix")}"'},
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
