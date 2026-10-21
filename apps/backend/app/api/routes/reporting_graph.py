@@ -11,14 +11,15 @@ prior_value + new_value in context_data.
 from __future__ import annotations
 
 import logging
-from typing import Iterable, List, Literal, Optional
+from typing import Any, Dict, Iterable, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.api.pagination import PageParams, page_params, paged, search, sort_rows
 from app.auth.deps import get_current_actor_email, require_org_access, require_org_admin
 from app.services import privacy_mode
 from app.services.write_back import require_write_back
@@ -179,6 +180,10 @@ async def get_reporting_graph(
     can be shown and flagged; the page hides inactive users unless asked.
     """
     await privacy_mode.require_feature(db, org_id, "reporting_graph")
+    return await _graph(db, org_id)
+
+
+async def _graph(db: AsyncSession, org_id: str) -> ReportingGraphResponse:
     users = (await db.execute(
         select(UserSnapshot).where(UserSnapshot.organization_id == org_id)
     )).scalars().all()
@@ -261,6 +266,106 @@ async def get_reporting_graph(
             ))
 
     return ReportingGraphResponse(nodes=nodes, edges=edges)
+
+
+def people_rows(graph: ReportingGraphResponse, include_inactive: bool = False) -> List[dict]:
+    """The People list: each person with their manager, direct and total
+    reports, by the same rules as the tree (lib/peopleTree.ts buildPeople).
+    Shown people are active users, plus inactive ones an active person still
+    reports to or delegates to; reports count shown people only."""
+    by_id = {n.user_sf_id: n for n in graph.nodes}
+    manager_of: Dict[str, str] = {}
+    approver_of: Dict[str, str] = {}
+    for e in graph.edges:
+        if e.source not in by_id or e.target not in by_id or e.source == e.target:
+            continue
+        (manager_of if e.edge_type == "manager" else approver_of)[e.source] = e.target
+    shown = {n.user_sf_id for n in graph.nodes if n.is_active}
+    for pid in list(shown):
+        for target in (manager_of.get(pid), approver_of.get(pid)):
+            t, seen = target, set()
+            while t and t not in shown and t not in seen:
+                seen.add(t)
+                shown.add(t)
+                t = manager_of.get(t)
+    reports: Dict[str, List[str]] = {}
+    for pid in shown:
+        m = manager_of.get(pid)
+        if m and m in shown:
+            reports.setdefault(m, []).append(pid)
+    total: Dict[str, int] = {}
+
+    def count(pid: str) -> int:
+        # Iterative, and nobody counted twice when the data has a manager loop.
+        below: set = set()
+        stack = list(reports.get(pid, ()))
+        while stack:
+            cur = stack.pop()
+            if cur in below or cur == pid:
+                continue
+            below.add(cur)
+            stack.extend(reports.get(cur, ()))
+        return len(below)
+
+    pool = by_id.keys() if include_inactive else shown
+    rows = []
+    for pid in pool:
+        n = by_id[pid]
+        if pid not in total:
+            total[pid] = count(pid)
+        m = manager_of.get(pid)
+        rows.append({**n.model_dump(), "manager_name": by_id[m].name if m else None,
+                     "direct": len(reports.get(pid, ())), "total": total[pid]})
+    return rows
+
+
+PEOPLE_SORTS: Dict[str, Any] = {
+    "name": lambda r: r["name"],
+    "title": lambda r: r["title"],
+    "role": lambda r: r["role_name"],
+    "manager": lambda r: r["manager_name"],
+    "direct": lambda r: r["direct"],
+    "total": lambda r: r["total"],
+}
+
+
+@router.get("/orgs/{org_id}/reporting-graph/people")
+async def list_people(
+    org_id: str,
+    department: Optional[str] = Query(None),
+    role: Optional[str] = Query(None),
+    profile: Optional[str] = Query(None),
+    high_risk: bool = Query(False, alias="highRisk"),
+    inactive: bool = Query(False),
+    flag: Optional[str] = Query(None),
+    manager: Optional[str] = Query(None, description="direct reports of this user"),
+    params: PageParams = Depends(page_params),
+    _org: str = Depends(require_org_access),
+    db: AsyncSession = Depends(get_database),
+):
+    """The People view as a paged list (the standing pagination rule): the
+    same filters as the graph, searched and sorted across everyone. Without
+    `page`, every row (for the CSV export)."""
+    await privacy_mode.require_feature(db, org_id, "reporting_graph")
+    rows = people_rows(await _graph(db, org_id), include_inactive=inactive)
+    rows = [r for r in rows if
+            (not department or r["department"] == department)
+            and (not role or r["role_name"] == role)
+            and (not profile or r["profile_name"] == profile)
+            and (not high_risk or r["risk_level"] in ("high", "critical"))
+            and (not inactive or not r["is_active"])
+            and (not flag or flag in r["flags"])
+            and (not manager or r["manager_id"] == manager)]
+
+    def text(r: dict) -> str:
+        return " ".join(x for x in (r["name"], r["title"], r["role_name"], r["department"]) if x)
+
+    if not params.paged:
+        rows = search(rows, params.q, text)
+        return {"items": sort_rows(rows, params, PEOPLE_SORTS, "name"), "total": len(rows)}
+    if params.sort is None:
+        params.sort, params.dir = "total", "desc"
+    return paged(rows, params, text=text, sorts=PEOPLE_SORTS, default_sort="total")
 
 
 @router.post(

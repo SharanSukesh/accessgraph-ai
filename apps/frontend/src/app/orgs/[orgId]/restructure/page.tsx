@@ -17,6 +17,8 @@
  * UI stays reactive.
  */
 
+import { useListState } from '@/lib/list/useListState'
+import { Pagination } from '@/components/shared/Pagination'
 import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import {
@@ -162,7 +164,6 @@ const BLAST_META: Record<
 // Page
 // ============================================================================
 
-const PAGE_SIZE = 30
 
 export default function RestructurePage() {
   return (
@@ -179,10 +180,13 @@ function RestructureContent() {
   const params = useParams()
   const orgId = params.orgId as string
 
-  const [moveTypeFilter, setMoveTypeFilter] = useState<string | undefined>()
-  const [blastFilter, setBlastFilter] = useState<string | undefined>()
-  const [statusFilter, setStatusFilter] = useState<string | undefined>()
-  const [page, setPage] = useState(0)
+  // Paged by the server; filters, page and size live in the URL (mv.*).
+  const { state: list, update } = useListState('mv', { filters: ['move_type', 'blast', 'status'] })
+  const moveTypeFilter = list.filters.move_type || undefined
+  const blastFilter = list.filters.blast || undefined
+  const statusFilter = list.filters.status || undefined
+  const page = list.page - 1
+  const setPage = (p: number) => update({ page: p + 1 })
   const [selectedMove, setSelectedMove] = useState<RestructureMove | null>(
     null,
   )
@@ -203,8 +207,8 @@ function RestructureContent() {
     move_type: moveTypeFilter,
     blast_tier: blastFilter,
     status: statusFilter,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    limit: list.pageSize,
+    offset: page * list.pageSize,
   })
 
   const runMutation = useRunRestructure(orgId)
@@ -297,24 +301,10 @@ function RestructureContent() {
             statusFilter={statusFilter}
             typeCounts={summary?.move_type_counts ?? {}}
             blastCounts={summary?.blast_tier_counts ?? {}}
-            onMoveType={(v) => {
-              setMoveTypeFilter(v)
-              setPage(0)
-            }}
-            onBlast={(v) => {
-              setBlastFilter(v)
-              setPage(0)
-            }}
-            onStatus={(v) => {
-              setStatusFilter(v)
-              setPage(0)
-            }}
-            onClear={() => {
-              setMoveTypeFilter(undefined)
-              setBlastFilter(undefined)
-              setStatusFilter(undefined)
-              setPage(0)
-            }}
+            onMoveType={(v) => update({ filters: { move_type: v ?? '' } })}
+            onBlast={(v) => update({ filters: { blast: v ?? '' } })}
+            onStatus={(v) => update({ filters: { status: v ?? '' } })}
+            onClear={() => update({ filters: { move_type: '', blast: '', status: '' } })}
           />
 
           {movesError ? (
@@ -348,12 +338,8 @@ function RestructureContent() {
                   />
                 ))}
               </div>
-              <PaginationBar
-                total={movesPage!.total}
-                page={page}
-                pageSize={PAGE_SIZE}
-                onChange={setPage}
-              />
+              <Pagination page={list.page} pageSize={list.pageSize} total={movesPage!.total} label="items"
+                onPage={(p) => update({ page: p })} onPageSize={(pageSize) => update({ pageSize })} />
             </div>
           ) : (
             <Card variant="bordered">
@@ -1363,10 +1349,13 @@ function PlanExportRow({
   // from the moves list, without maintaining a formal Plan row. Formal
   // plans are still supported by the API + hooks but we skip the extra
   // click in the studio for now.
+  // Every accepted move (a run has at most 500 moves, the endpoint's largest page),
+  // so the CSV is never cut at the default 100.
   const acceptedMoves = useRestructureMoves(orgId, {
     status: 'accepted',
+    limit: 500,
   })
-  const count = acceptedMoves.data?.moves.length ?? 0
+  const count = acceptedMoves.data?.total ?? acceptedMoves.data?.moves.length ?? 0
 
   const downloadCsv = () => {
     if (!acceptedMoves.data?.moves) return
@@ -1793,63 +1782,6 @@ function HelpMove({
 // Pagination
 // ============================================================================
 
-function PaginationBar({
-  total,
-  page,
-  pageSize,
-  onChange,
-}: {
-  total: number
-  page: number
-  pageSize: number
-  onChange: (next: number) => void
-}) {
-  if (total <= pageSize) {
-    return (
-      <p className="text-xs text-grove-ink/55 dark:text-grove-ink-dk/55 text-center py-3">
-        {total.toLocaleString()} matching move{total === 1 ? '' : 's'}
-      </p>
-    )
-  }
-  const totalPages = Math.ceil(total / pageSize)
-  const currentPage = page + 1
-  const firstOnPage = page * pageSize + 1
-  const lastOnPage = Math.min(total, (page + 1) * pageSize)
-  return (
-    <div className="flex items-center justify-between gap-3 py-3 mt-2 border-t border-grove-ink/10 dark:border-grove-ink-dk/15">
-      <p className="text-xs text-grove-ink/65 dark:text-grove-ink-dk/65">
-        Showing{' '}
-        <span className="tabular-nums text-grove-ink dark:text-grove-ink-dk">
-          {firstOnPage.toLocaleString()}–{lastOnPage.toLocaleString()}
-        </span>{' '}
-        of {total.toLocaleString()}
-      </p>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, page - 1))}
-          disabled={page === 0}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          Prev
-        </button>
-        <span className="text-xs tabular-nums text-grove-ink/60 dark:text-grove-ink-dk/60">
-          Page {currentPage} / {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
-          disabled={currentPage >= totalPages}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-grove-ink/70 dark:text-grove-ink-dk/70 hover:text-grove-ink dark:hover:text-grove-ink-dk disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Next
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  )
-}
 
 // ============================================================================
 // Helpers

@@ -16,6 +16,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_database
+from app.api.pagination import PageParams, page_params
 from app.auth.deps import get_current_actor_email, require_org_access
 from app.domain.models import InstalledPackage, PackageSprawlRun
 from app.services.package_sprawl import PackageSprawlService
@@ -105,6 +106,11 @@ class PackageResponse(BaseModel):
 
 
 class PackageListResponse(BaseModel):
+    # Set when a page was asked for (the standing pagination rule).
+    total: Optional[int] = None
+    page: Optional[int] = None
+    page_size: Optional[int] = None
+    pages: Optional[int] = None
     run_id: Optional[str]
     packages: List[PackageResponse]
 
@@ -223,11 +229,13 @@ async def list_packages(
         pattern="^(active|underused|unused)$",
         description="Filter to a single tier.",
     ),
+    params: PageParams = Depends(page_params),
     _org: str = Depends(require_org_access),
     db: AsyncSession = Depends(get_database),
 ) -> PackageListResponse:
     """Per-package list from the most recent run. Ordered unused-first
-    so consultants see the actionable items at the top."""
+    so consultants see the actionable items at the top. With `page`:
+    search (`q` over name and namespace) and one page."""
     run = await _latest_run(db, org_id)
     if run is None:
         return PackageListResponse(run_id=None, packages=[])
@@ -253,10 +261,20 @@ async def list_packages(
     # ORDER BY on the tier string alphabetises "active" first, which
     # is the wrong end of the actionability spectrum).
     rows.sort(key=lambda r: (tier_priority.get(r.utilization_tier, 99), r.name))
+    if params.q:
+        words = params.q.lower().split()
+        rows = [r for r in rows if all(w in f"{r.name} {r.namespace_prefix or ''}".lower() for w in words)]
+    if params.paged:
+        pages = max(1, -(-len(rows) // params.page_size))
+        page = min(params.page or 1, pages)
+        window = rows[(page - 1) * params.page_size: page * params.page_size]
+        return PackageListResponse(run_id=run.id, packages=[PackageResponse.from_orm(r) for r in window],
+                                   total=len(rows), page=page, page_size=params.page_size, pages=pages)
 
     return PackageListResponse(
         run_id=run.id,
         packages=[PackageResponse.from_orm(r) for r in rows],
+        total=len(rows),
     )
 
 

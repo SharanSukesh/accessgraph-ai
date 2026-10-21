@@ -8,6 +8,7 @@
  * and community roles sit in their own section, hidden by default.
  */
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Info, Search } from 'lucide-react'
 import { Badge, RiskBadge } from '@/components/shared/Badge'
@@ -19,6 +20,7 @@ import {
   type RoleFlag,
   type RoleHierarchy,
   type RoleNode,
+  type RoleUser,
   ancestry,
   countLabel,
   visibleFor,
@@ -112,6 +114,38 @@ function TreeRow({
   )
 }
 
+const PREVIEW = 10
+
+/** The role panel's first users; View all opens the paged list. */
+function RoleUsersTable({ users }: { users: RoleUser[] }) {
+  return (
+    <table className="w-full text-sm">
+      <thead className={`sticky top-0 bg-grove-surface text-xs dark:bg-grove-surface-dk ${MUTED}`}>
+        <tr>
+          <th className="py-1 text-left font-medium">Name</th>
+          <th className="py-1 text-left font-medium">Profile</th>
+          <th className="py-1 text-left font-medium">Risk</th>
+          <th className="py-1 text-right font-medium">Last login</th>
+        </tr>
+      </thead>
+      <tbody>
+        {users.map((u) => (
+          <tr key={u.id} className={`border-t border-grove-border dark:border-grove-border-dk ${u.is_active ? '' : 'opacity-60'}`}>
+            <td className="py-1">{u.name}{!u.is_active && <span className={`ml-1 text-xs ${MUTED}`}>(inactive)</span>}</td>
+            <td className={`py-1 ${MUTED}`}>{u.profile ?? '—'}</td>
+            <td className="py-1">
+              {u.risk_level ? <RiskBadge level={u.risk_level as 'low' | 'medium' | 'high' | 'critical'} size="sm" prefix={`${u.risk_score ?? ''} `} /> : <span className={MUTED}>Not scored</span>}
+            </td>
+            <td className={`v2-num py-1 text-right ${MUTED}`}>
+              {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 function Detail({ orgId, h, id }: { orgId: string; h: RoleHierarchy; id: string }) {
   const r = h.roles[id]
   const users = useRoleUsers(orgId, id, h.users_allowed)
@@ -190,35 +224,18 @@ function Detail({ orgId, h, id }: { orgId: string; h: RoleHierarchy; id: string 
           <p className={`text-sm ${MUTED}`}>{h.users_hidden_reason}</p>
         ) : users.isLoading ? (
           <TableSkeleton rows={3} />
-        ) : !users.data?.length ? (
+        ) : !users.data?.total ? (
           <p className={`text-sm ${MUTED}`}>No users in this role.</p>
         ) : (
-          <div className="max-h-80 overflow-auto">
-            <table className="w-full text-sm">
-              <thead className={`sticky top-0 bg-grove-surface text-xs dark:bg-grove-surface-dk ${MUTED}`}>
-                <tr>
-                  <th className="py-1 text-left font-medium">Name</th>
-                  <th className="py-1 text-left font-medium">Profile</th>
-                  <th className="py-1 text-left font-medium">Risk</th>
-                  <th className="py-1 text-right font-medium">Last login</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.data.map((u) => (
-                  <tr key={u.id} className={`border-t border-grove-border dark:border-grove-border-dk ${u.is_active ? '' : 'opacity-60'}`}>
-                    <td className="py-1">{u.name}{!u.is_active && <span className={`ml-1 text-xs ${MUTED}`}>(inactive)</span>}</td>
-                    <td className={`py-1 ${MUTED}`}>{u.profile ?? '—'}</td>
-                    <td className="py-1">
-                      {u.risk_level ? <RiskBadge level={u.risk_level as 'low' | 'medium' | 'high' | 'critical'} size="sm" prefix={`${u.risk_score ?? ''} `} /> : <span className={MUTED}>Not scored</span>}
-                    </td>
-                    <td className={`v2-num py-1 text-right ${MUTED}`}>
-                      {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <RoleUsersTable users={users.data.items.slice(0, PREVIEW)} />
+            {users.data.total > PREVIEW && (
+              <Link href={`/orgs/${orgId}/reporting-graph/roles/${encodeURIComponent(id)}/users`}
+                className="mt-2 inline-block text-xs font-medium text-primary-700 hover:underline dark:text-primary-300">
+                View all {users.data.total} users
+              </Link>
+            )}
+          </>
         )}
       </div>
     </div>
