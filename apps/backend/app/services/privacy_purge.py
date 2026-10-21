@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.models import (
     AccessAnomaly,
+    AccessDraft,
     AccountShareSnapshot,
     AccountTeamMemberSnapshot,
     AutomationInventoryItem,
@@ -85,7 +86,7 @@ HANDLED_TABLES = {
     "object_quality_scores", "org_analysis_snapshots", "org_findings",
     "installed_packages", "report_inventory_items", "automation_inventory_items",
     "compliance_scorecard_runs", "salesforce_connections", "role_design_drafts", "snapshot_items",
-    "item_reviews",
+    "item_reviews", "access_drafts",
 }
 UNAFFECTED_TABLES = {
     "audit_logs", "org_users", "org_access_grants", "sync_jobs", "brand_settings",
@@ -296,6 +297,11 @@ class _Purge:
                 UserSnapshot,
             ):
                 await self._delete(model)
+            # What-if scenarios keep their changes to sets and groups, not to people (item 15).
+            for draft in await self._rows(AccessDraft):
+                kept = [op for op in draft.operations or [] if not op.get("user")]
+                if kept != (draft.operations or []):
+                    self._set(draft, operations=kept)
             # Reviews of anomalies go with the anomalies (item 10).
             await self._delete(ItemReview, ItemReview.item_type == "anomaly")
             # Snapshots (item 21) follow the level in force: people go from every snapshot.

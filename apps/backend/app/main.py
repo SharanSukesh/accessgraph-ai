@@ -17,7 +17,7 @@ from app.api.routes import (
     change_risk_radar, package_sprawl, restructure, report_sprawl,
     automation_sprawl, license_fit, integration_sprawl, compliance, demo_orgs, roles, role_design,
     ui_access, documentation, access_lists, schema_lists, custom_metadata, cleanup, overview, snapshots,
-    org_compare, evidence,
+    org_compare, evidence, what_if,
 )
 from app.auth.deps import require_org_access
 from app.core.config import settings
@@ -196,6 +196,7 @@ app.include_router(overview.router, tags=["overview"], dependencies=_org_guard)
 app.include_router(snapshots.router, tags=["snapshots"], dependencies=_org_guard)
 app.include_router(org_compare.router, tags=["org-compare"], dependencies=_org_guard)
 app.include_router(evidence.router, tags=["evidence"], dependencies=_org_guard)
+app.include_router(what_if.router, tags=["what-if"], dependencies=_org_guard)
 app.include_router(access_lists.router, tags=["access-lists"], dependencies=_org_guard)
 app.include_router(schema_lists.router, tags=["schema-lists"], dependencies=_org_guard)
 app.include_router(compliance.router, tags=["compliance"], dependencies=_org_guard)

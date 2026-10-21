@@ -3083,3 +3083,23 @@ class ItemReview(Base, TimestampMixin):
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (Index("ix_item_review_org_key", "organization_id", "item_key", unique=True),)
+
+
+class AccessDraft(Base, TimestampMixin):
+    """A what-if scenario (roadmap item 15): staged permission changes
+    against a snapshot (item 21), stored in Newton and never sent to
+    Salesforce. The snapshot is the starting state, so the impact can be
+    recomputed later exactly; retention keeps a snapshot a draft uses."""
+    __tablename__ = "access_drafts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_by: Mapped[Optional[str]] = mapped_column(String(255))
+    base_snapshot_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    operations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    source: Mapped[Optional[str]] = mapped_column(String(80))  # preset name or "restructure"
+
+    __table_args__ = (Index("ix_access_draft_org", "organization_id"),)
