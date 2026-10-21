@@ -547,11 +547,15 @@ async def get_user_recommendations(
         {
             "id": r.id,
             "rec_type": r.rec_type.value,
+            # Required by RecommendationResponse; without it every user with an action got a 500.
+            "track": getattr(r.track, "value", r.track) or "security",
             "severity": r.severity.value,
             "target_entity_id": r.target_entity_id,
             "title": r.title,
             "description": r.description,
+            "rationale": r.rationale,
             "status": r.status.value,
+            "affected_access": r.affected_access,
         }
         for r in recs
     ]

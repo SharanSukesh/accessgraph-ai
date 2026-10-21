@@ -163,3 +163,15 @@ async def test_anomaly_priority_actions_use_base_risk_and_rank(async_db_session,
         select(Recommendation).where(Recommendation.organization_id == org_id))).scalars().all()
     got = sorted((r.title, r.severity.value) for r in recs)
     assert got == EXPECTED_ACTIONS
+
+
+@pytest.mark.asyncio
+async def test_user_recommendations_load(client, lumenvale):  # noqa: F811
+    """The user page's actions: every row carries its track (a missing one
+    made the response fail validation, a 500, for any user with actions)."""
+    org_id, cookie = lumenvale
+    recs = (await client.get(f"/orgs/{org_id}/recommendations", cookies=cookie)).json()
+    user = next(r["target_entity_id"] for r in (recs.get("items", recs) if isinstance(recs, dict) else recs)
+                if str(r.get("target_entity_id", "")).startswith("005"))
+    r = await client.get(f"/orgs/{org_id}/users/{user}/recommendations", cookies=cookie)
+    assert r.status_code == 200 and r.json() and all(x["track"] for x in r.json())
