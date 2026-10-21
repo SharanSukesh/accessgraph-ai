@@ -7,7 +7,7 @@
 
 import { Fragment, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   User,
@@ -30,6 +30,11 @@ import { ExplainAccessPanel } from '@/components/users/ExplainAccessPanel'
 import { Badge, BaseRiskBadge, RiskBadge, SeverityBadge } from '@/components/shared/Badge'
 import { anomalyTypeLabel, rankLabel } from '@/lib/anomalyTypes'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/shared/Tabs'
+import { useListState } from '@/lib/list/useListState'
+import { usePaged } from '@/lib/list/usePaged'
+import { Pagination } from '@/components/shared/Pagination'
+import { ListSearch } from '@/components/shared/ListSearch'
+import { SortHeader } from '@/components/shared/SortHeader'
 import { ErrorState } from '@/components/shared/ErrorState'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { PageHeader } from '@/components/shared/PageHeader'
@@ -50,8 +55,6 @@ import { RecordAccessInfo } from '@/components/users/RecordAccessInfo'
 import { RiskFactorBreakdown } from '@/components/users/RiskFactorBreakdown'
 import {
   useUser,
-  useUserObjectAccess,
-  useUserFieldAccess,
   useUserRisk,
   useUserAnomalies,
   useUserRecommendations,
@@ -76,7 +79,17 @@ function UserDetailContent() {
   const orgId = params.orgId as string
   const userId = params.userId as string
 
-  const [activeTab, setActiveTab] = useState('overview')
+  // The open tab lives in the URL (?tab=), so back and shared links return to it.
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const activeTab = searchParams?.get('tab') || 'overview'
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams?.toString() || '')
+    if (tab === 'overview') next.delete('tab')
+    else next.set('tab', tab)
+    const qs = next.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
   const { currentOrg } = useAuth()
   const masked = privacyModeOf(currentOrg) === 'masked'
   const recordsUnavailable = unavailableForDemo(currentOrg?.is_demo, 'records')
@@ -85,9 +98,18 @@ function UserDetailContent() {
 
   // Fetch user data
   const { data: user, isLoading: userLoading, error: userError } = useUser(orgId, userId)
-  const { data: objectAccess, isLoading: objectsLoading } = useUserObjectAccess(orgId, userId)
+  // Object and field access are paged by the server; each tab's state lives in the URL (uo.*, uf.*).
+  const objectList = useListState('uo', { sort: 'object', filters: ['sensitive'] })
+  const fieldList = useListState('uf', { sort: 'object', filters: ['sensitive'] })
+  const { data: objectPage, isLoading: objectsLoading } = usePaged<any>(
+    ['user-objects', orgId, userId], `/orgs/${orgId}/users/${userId}/access/objects`, objectList.state, !!userId)
+  const objectAccess: any[] | undefined = objectPage?.items
   const [explainObject, setExplainObject] = useState<string | null>(null)
-  const { data: fieldAccess, isLoading: fieldsLoading } = useUserFieldAccess(orgId, userId)
+  const { data: fieldPage, isLoading: fieldsLoading } = usePaged<any>(
+    ['user-fields', orgId, userId], `/orgs/${orgId}/users/${userId}/access/fields`, fieldList.state, !!userId)
+  const fieldAccess: any[] | undefined = fieldPage?.items
+  const objSort = { sort: objectList.state.sort, dir: objectList.state.dir, onSort: (c: string, d: 'asc' | 'desc') => objectList.update({ sort: c, dir: d }), className: 'px-6 py-3' }
+  const fldSort = { sort: fieldList.state.sort, dir: fieldList.state.dir, onSort: (c: string, d: 'asc' | 'desc') => fieldList.update({ sort: c, dir: d }), className: 'px-6 py-3' }
   const { data: risk, isLoading: riskLoading } = useUserRisk(orgId, userId)
   const { data: anomalies, isLoading: anomaliesLoading } = useUserAnomalies(orgId, userId)
   const { data: recommendations, isLoading: recommendationsLoading } = useUserRecommendations(orgId, userId)
@@ -330,7 +352,7 @@ function UserDetailContent() {
                       Objects Accessible
                     </span>
                     <span className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
-                      {objectsLoading ? '...' : objectAccess?.length || 0}
+                      {objectsLoading ? '...' : (objectPage?.total ?? 0).toLocaleString('en-US')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -338,7 +360,7 @@ function UserDetailContent() {
                       Fields Accessible
                     </span>
                     <span className="text-lg font-semibold text-grove-ink dark:text-grove-ink-dk">
-                      {fieldsLoading ? '...' : fieldAccess?.length || 0}
+                      {fieldsLoading ? '...' : (fieldPage?.total ?? 0).toLocaleString('en-US')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -379,6 +401,19 @@ function UserDetailContent() {
               <CardTitle>Object Access Permissions</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-3 flex flex-wrap gap-3">
+                <ListSearch value={objectList.state.q} onChange={(q) => objectList.update({ q })} placeholder="Search objects..." />
+                <select
+                  aria-label="Sensitivity"
+                  value={objectList.state.filters.sensitive || ''}
+                  onChange={(e) => objectList.update({ filters: { sensitive: e.target.value } })}
+                  className="rounded-md px-3 py-2 text-sm bg-grove-surface dark:bg-grove-canvas-dk ring-1 ring-grove-border dark:ring-grove-border-dk text-grove-ink dark:text-grove-ink-dk"
+                >
+                  <option value="">All</option>
+                  <option value="true">Sensitive only</option>
+                  <option value="false">Not flagged</option>
+                </select>
+              </div>
               {objectsLoading ? (
                 <TableSkeleton rows={5} />
               ) : objectAccess && objectAccess.length > 0 ? (
@@ -386,24 +421,12 @@ function UserDetailContent() {
                   <table className="w-full">
                     <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Object
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Read
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Create
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Edit
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Delete
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Sensitivity
-                        </th>
+                        <SortHeader label="Object" column="object" {...objSort} />
+                        <SortHeader label="Read" column="read" {...objSort} />
+                        <SortHeader label="Create" column="create" {...objSort} />
+                        <SortHeader label="Edit" column="edit" {...objSort} />
+                        <SortHeader label="Delete" column="delete" {...objSort} />
+                        <SortHeader label="Sensitivity" column="sensitivity" {...objSort} />
                         <th className="px-6 py-3" />
                       </tr>
                     </thead>
@@ -444,9 +467,9 @@ function UserDetailContent() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {obj.isSensitive ? (
-                              <Badge variant="warning" size="sm">Sensitive</Badge>
+                              <Badge variant="warning" size="sm">{obj.sensitivity ? `Sensitive: ${obj.sensitivity}` : 'Sensitive'}</Badge>
                             ) : (
-                              <Badge variant="default" size="sm">Standard</Badge>
+                              <Badge variant="default" size="sm">Not flagged</Badge>
                             )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -474,9 +497,11 @@ function UserDetailContent() {
                       ))}
                     </tbody>
                   </table>
+                  <Pagination page={objectPage!.page} pageSize={objectPage!.page_size} total={objectPage!.total} label="objects"
+                    onPage={(page) => objectList.update({ page })} onPageSize={(pageSize) => objectList.update({ pageSize })} />
                 </div>
               ) : (
-                <EmptyState title="No Object Access" description="No object permissions found" icon="database" />
+                <EmptyState title="No Object Access" description={objectList.state.q || objectList.state.filters.sensitive ? 'Nothing matches the search or filter.' : 'No object permissions found'} icon="database" />
               )}
             </CardContent>
           </Card>
@@ -491,6 +516,19 @@ function UserDetailContent() {
               <CardTitle>Field Access Permissions</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-3 flex flex-wrap gap-3">
+                <ListSearch value={fieldList.state.q} onChange={(q) => fieldList.update({ q })} placeholder="Search fields..." />
+                <select
+                  aria-label="Sensitivity"
+                  value={fieldList.state.filters.sensitive || ''}
+                  onChange={(e) => fieldList.update({ filters: { sensitive: e.target.value } })}
+                  className="rounded-md px-3 py-2 text-sm bg-grove-surface dark:bg-grove-canvas-dk ring-1 ring-grove-border dark:ring-grove-border-dk text-grove-ink dark:text-grove-ink-dk"
+                >
+                  <option value="">All</option>
+                  <option value="true">Sensitive only</option>
+                  <option value="false">Not flagged</option>
+                </select>
+              </div>
               {fieldsLoading ? (
                 <TableSkeleton rows={10} />
               ) : fieldAccess && fieldAccess.length > 0 ? (
@@ -498,21 +536,11 @@ function UserDetailContent() {
                   <table className="w-full">
                     <thead className="bg-primary-50/40 dark:bg-primary-900/10 border-b border-grove-border dark:border-grove-border-dk">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Object
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Field
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Read
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Edit
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-grove-ink/55 dark:text-grove-ink-dk/55 uppercase">
-                          Sensitivity
-                        </th>
+                        <SortHeader label="Object" column="object" {...fldSort} />
+                        <SortHeader label="Field" column="field" {...fldSort} />
+                        <SortHeader label="Read" column="read" {...fldSort} />
+                        <SortHeader label="Edit" column="edit" {...fldSort} />
+                        <SortHeader label="Sensitivity" column="sensitivity" {...fldSort} />
                       </tr>
                     </thead>
                     <tbody className="bg-grove-surface dark:bg-grove-canvas-dk divide-y divide-gray-200 dark:divide-gray-800">
@@ -540,18 +568,20 @@ function UserDetailContent() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {field.isSensitive ? (
-                              <Badge variant="warning" size="sm">Sensitive</Badge>
+                              <Badge variant="warning" size="sm">{field.sensitivity ? `Sensitive: ${field.sensitivity}` : 'Sensitive'}</Badge>
                             ) : (
-                              <Badge variant="default" size="sm">Standard</Badge>
+                              <Badge variant="default" size="sm">Not flagged</Badge>
                             )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  <Pagination page={fieldPage!.page} pageSize={fieldPage!.page_size} total={fieldPage!.total} label="fields"
+                    onPage={(page) => fieldList.update({ page })} onPageSize={(pageSize) => fieldList.update({ pageSize })} />
                 </div>
               ) : (
-                <EmptyState title="No Field Access" description="No field permissions found" icon="file-text" />
+                <EmptyState title="No Field Access" description={fieldList.state.q || fieldList.state.filters.sensitive ? 'Nothing matches the search or filter.' : 'No field permissions found'} icon="file-text" />
               )}
             </CardContent>
           </Card>
