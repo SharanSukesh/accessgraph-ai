@@ -125,6 +125,15 @@ async def test_restructure_moves_become_changes(client, async_db_session, lumenv
     assert changes[0]["set"] == b and changes[0]["into"] == a
     imp = (await _impact(client, org_id, d["id"], cookie)).json()
     assert imp["unpredictable"][0].startswith("Sharing rule changes")
+    # The move drawer's preview: the same simulation, nothing saved.
+    before = (await client.get(f"/orgs/{org_id}/what-if/drafts", cookies=cookie)).json()["drafts"]
+    pv = (await client.post(f"/orgs/{org_id}/what-if/preview", json={"restructure_moves": [merge.id]}, cookies=cookie)).json()
+    assert pv["computed"] is True and pv["usersAllowed"] is True and len(pv["items"]) <= 10
+    assert pv["summary"]["usersLosing"] == 0 and pv["summary"]["operations"] == 1
+    assert (await client.get(f"/orgs/{org_id}/what-if/drafts", cookies=cookie)).json()["drafts"] == before
+    roles_only = (await client.post(f"/orgs/{org_id}/what-if/preview", json={"restructure_moves": [share.id]},
+                                    cookies=cookie)).json()
+    assert roles_only["computed"] is False and roles_only["summary"]["usersAffected"] == 0
     # Merging adds b's access to a's holders but nobody who held b loses anything.
     lost = (await _impact(client, org_id, d["id"], cookie, view="changes", page_size=100)).json()["items"]
     assert not any(r["loses"] for r in lost if r["kind"] == "Object")
@@ -163,8 +172,11 @@ async def test_privacy_and_retention(client, async_db_session, lumenvale):  # no
     await enforce_privacy_mode(db, org)
     await db.commit()
     assert (await _impact(client, org_id, d["id"], cookie)).status_code == 409
+    pv = (await client.post(f"/orgs/{org_id}/what-if/preview", json={"restructure_moves": []}, cookies=cookie)).json()
+    assert pv["usersAllowed"] is False and pv["items"] == [] and set(pv["summary"]) == {"operations"}
     src = (await _impact(client, org_id, d["id"], cookie, view="sources")).json()
-    assert src["usersAllowed"] is False and "metadata only" in src["note"] and "usersAffected" not in src["summary"]
+    assert src["usersAllowed"] is False and "usersAffected" not in src["summary"]
+    assert src["note"].startswith("User and role counts need a privacy level that keeps users")
     assert src["total"] > 0  # the new groups still gain what their sets grant
     row = await db.get(AccessDraft, d["id"])
     await db.refresh(row)
@@ -186,3 +198,20 @@ async def test_privacy_and_retention(client, async_db_session, lumenvale):  # no
     left = (await db.execute(select(OrgSnapshot.seq).where(OrgSnapshot.organization_id == other.id))).scalars().all()
     assert sorted(left) == [1, 3]
     assert "assignment" in await snapshots.load_state(db, other.id, s1)
+
+
+def test_merging_profile_sets_moves_the_profile_users():
+    state = {
+        "user": {"005A": {"Name": "Ada", "IsActive": True, "ProfileId": "00eRep"},
+                 "005B": {"Name": "Bo", "IsActive": True, "ProfileId": "00eStd"}},
+        "profile": {"00eRep": {"Name": "Sales Rep"}, "00eStd": {"Name": "Standard User"}},
+        "permission_set": {"0PSrep": {"IsOwnedByProfile": True, "ProfileId": "00eRep"},
+                           "0PSstd": {"IsOwnedByProfile": True, "ProfileId": "00eStd"}},
+        "object_permission": {"0PSrep:Lead": {"ParentId": "0PSrep", "SobjectType": "Lead", "PermissionsRead": True},
+                              "0PSstd:Task": {"ParentId": "0PSstd", "SobjectType": "Task", "PermissionsRead": True}},
+    }
+    out = access_sim.simulate(state, [{"op": "merge_into", "set": "0PSrep", "into": "0PSstd"}])
+    # A merge is a superset: nobody loses; each profile's users gain the other's access.
+    assert out["summary"]["usersLosing"] == 0
+    assert [(r["user"], r["item"], r["gains"]) for r in out["changes"]] == [("005A", "Task", ["Read"]), ("005B", "Lead", ["Read"])]
+    assert out["profileMoves"] == [{"from": "Sales Rep", "to": "Standard User", "users": 1}]

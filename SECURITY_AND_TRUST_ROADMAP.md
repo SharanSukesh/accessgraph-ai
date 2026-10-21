@@ -917,9 +917,17 @@ section has the detail.
   Manager Bundle" (228 changes): 103 affected, 53 lose, 55 gain (the
   bundle's muting set doesn't carry over, so Opportunity widens for 49),
   412 remaining paths. Migration up, down, up on Postgres.
-  **Questions in the PR:** whether the drawer's percentages should go
-  once the breakdown is trusted (kept for now: the CSV and GAEA use them);
-  "counts by role" at Metadata only (shown by profile, set and group).
+  **Answered (20 Oct):** the breakdown is the drawer's main view (computed
+  by POST /what-if/preview, nothing saved, first 10 objects with View all
+  in What-if); "access preserved %" stays as a secondary figure labelled
+  "kept (rule)": a figure set by the move type, not computed from the
+  org's data, still in the CSV and used by GAEA. At Metadata only there
+  are no user or role counts; the screen says they need a privacy level
+  that keeps users. Fixed while checking: merging two profiles' own sets
+  dropped the second profile's access instead of moving its users (on
+  Lumenvale it showed 69 users losing access; the two profiles are
+  identical, so nobody does); the drawer now says how many users move
+  profile.
 - **Next:** step 5, the priced roadmap builder.
 
 ## Build order

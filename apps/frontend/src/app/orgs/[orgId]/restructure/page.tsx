@@ -21,7 +21,7 @@ import { useListState } from '@/lib/list/useListState'
 import { Pagination } from '@/components/shared/Pagination'
 import { useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Wrench,
   Sparkles,
@@ -793,7 +793,7 @@ function MoveCard({
               {typeof move.impact.object_access_preserved_pct === 'number' && (
                 <ImpactChip
                   icon={ShieldCheck}
-                  label="object access preserved"
+                  label="object access kept (rule for this move type)"
                   value={`${move.impact.object_access_preserved_pct.toFixed(0)}%`}
                 />
               )}
@@ -994,10 +994,14 @@ function MoveDrawer({
             </p>
           </section>
 
+          {/* Who gains, loses and keeps access (item 15): computed from the latest snapshot. */}
+          <MoveAccessBreakdown orgId={orgId} moveId={move.id} canWrite={canWrite} opening={simulateMove.isPending}
+            onOpen={() => simulateMove.mutate({ name: `Move: ${move.primary_component_name ?? meta.label}`, restructure_moves: [move.id] })} />
+
           {/* Impact detail */}
           <section>
             <h3 className="text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2">
-              Impact
+              Other measures
             </h3>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <ImpactRow
@@ -1009,7 +1013,7 @@ function MoveDrawer({
                 value={`${move.impact.blast_tier} (${Math.round(move.impact.blast_score)}/100)`}
               />
               <ImpactRow
-                label="Object access preserved"
+                label="Object access kept (rule)"
                 value={
                   move.impact.object_access_preserved_pct !== null
                     ? `${move.impact.object_access_preserved_pct.toFixed(1)}%`
@@ -1017,7 +1021,7 @@ function MoveDrawer({
                 }
               />
               <ImpactRow
-                label="Field access preserved"
+                label="Field access kept (rule)"
                 value={
                   move.impact.field_access_preserved_pct !== null
                     ? `${move.impact.field_access_preserved_pct.toFixed(1)}%`
@@ -1059,15 +1063,11 @@ function MoveDrawer({
                 }
               />
             </div>
-            {canWrite && <button
-              type="button"
-              onClick={() => simulateMove.mutate({ name: `Move: ${move.primary_component_name ?? meta.label}`, restructure_moves: [move.id] })}
-              disabled={simulateMove.isPending}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-700 hover:underline disabled:opacity-50 dark:text-primary-300"
-            >
-              <Shuffle className="h-3.5 w-3.5" />
-              See who gains, loses and keeps access, and any remaining paths
-            </button>}
+            <p className="mt-2 text-[11px] leading-snug text-grove-ink/60 dark:text-grove-ink-dk/60">
+              &ldquo;Kept (rule)&rdquo; is the share of the affected users&apos; object or field access a move of this kind keeps,
+              set by the move type rather than computed from this org&apos;s data. The breakdown above is computed. The CSV
+              export and the equity analysis use these figures.
+            </p>
           </section>
 
           {/* Deep analysis */}
@@ -1343,6 +1343,86 @@ function ConstraintsPanel({
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+// ============================================================================
+// Who gains, loses and keeps access for one move (item 15)
+// ============================================================================
+
+interface MovePreview {
+  summary: { usersAffected?: number; usersLosing?: number; usersGaining?: number; kept?: number; remainingPaths?: number; operations: number }
+  unpredictable: string[]; usersAllowed: boolean; note: string | null; computed: boolean
+  items: { kind: string; item: string; usersLosing: number; usersGaining: number }[]; itemsTotal: number
+  sources: { source: string; object: string; gains: string[]; loses: string[] }[]; sourcesTotal: number
+  profileMoves: { from: string; to: string; users: number | null }[]
+}
+
+function MoveAccessBreakdown({ orgId, moveId, canWrite, opening, onOpen }: {
+  orgId: string; moveId: string; canWrite: boolean; opening: boolean; onOpen: () => void
+}) {
+  const q = useQuery({
+    queryKey: ['what-if-preview', orgId, moveId],
+    queryFn: () => apiClient.post<MovePreview>(`/orgs/${orgId}/what-if/preview`, { restructure_moves: [moveId] }),
+  })
+  const h3 = 'text-[10px] font-mono uppercase tracking-wider text-grove-ink/60 dark:text-grove-ink-dk/60 mb-2'
+  const muted = 'text-grove-ink/60 dark:text-grove-ink-dk/60'
+  const d = q.data
+  const s = d?.summary
+  return (
+    <section aria-label="Who gains, loses and keeps access">
+      <h3 className={h3}>Who gains, loses and keeps access</h3>
+      {q.isLoading ? <p className={`text-xs ${muted}`}>Simulating against the latest snapshot…</p>
+        : q.error ? <p className={`text-xs ${muted}`}>{(q.error as Error).message}</p>
+        : d && (
+        <div className="space-y-3">
+          {d.profileMoves.map((m) => (
+            <p key={`${m.from}-${m.to}`} className="text-xs">
+              {m.users !== null ? `${m.users.toLocaleString('en-US')} users move` : 'Users move'} from the {m.from} profile to {m.to}; the counts below are what changes in their access.
+            </p>
+          ))}
+          {!d.computed && <p className="text-xs">This move changes record access through roles. Object and field access don&apos;t change; which records each user gains or loses can&apos;t be predicted.</p>}
+          {d.usersAllowed && s ? (
+            <div className="grid grid-cols-5 gap-2 text-xs">
+              {([['Users affected', s.usersAffected], ['Lose access', s.usersLosing], ['Gain access', s.usersGaining], ['Permissions kept', s.kept], ['Still has it another way', s.remainingPaths]] as const).map(([l, v]) => (
+                <div key={l} className="rounded-md border border-grove-border px-2 py-1.5 dark:border-grove-border-dk">
+                  <p className={muted}>{l}</p><p className="v2-num text-base font-semibold">{(v ?? 0).toLocaleString('en-US')}</p>
+                </div>
+              ))}
+            </div>
+          ) : d.note && <p className="text-xs">{d.note}</p>}
+          {d.usersAllowed ? d.items.length > 0 && (
+            <ul className="space-y-0.5 text-xs">
+              {d.items.map((i) => (
+                <li key={`${i.kind}-${i.item}`} className="flex gap-3"><span className="flex-1 font-mono">{i.item}</span>
+                  {i.usersLosing > 0 && <span className="text-red-700 dark:text-red-300">{i.usersLosing} lose</span>}
+                  {i.usersGaining > 0 && <span className="text-emerald-700 dark:text-emerald-300">{i.usersGaining} gain</span>}</li>
+              ))}
+              {d.itemsTotal > d.items.length && <li className={muted}>Showing 10 of {d.itemsTotal} objects and fields.</li>}
+            </ul>
+          ) : d.sources.length > 0 && (
+            <ul className="space-y-0.5 text-xs">
+              {d.sources.map((r, i) => (
+                <li key={i}>{r.source} · <span className="font-mono">{r.object}</span>
+                  {r.loses.length > 0 && <span className="text-red-700 dark:text-red-300"> loses {r.loses.join(', ')}</span>}
+                  {r.gains.length > 0 && <span className="text-emerald-700 dark:text-emerald-300"> gains {r.gains.join(', ')}</span>}</li>
+              ))}
+              {d.sourcesTotal > d.sources.length && <li className={muted}>Showing 10 of {d.sourcesTotal}.</li>}
+            </ul>
+          )}
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            <p className="font-semibold">What this can&apos;t predict</p>
+            <ul className="list-disc pl-4">{d.unpredictable.map((u) => <li key={u}>{u}</li>)}</ul>
+          </div>
+          {canWrite && (
+            <button type="button" onClick={onOpen} disabled={opening}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-700 hover:underline disabled:opacity-50 dark:text-primary-300">
+              <Shuffle className="h-3.5 w-3.5" />View all in What-if: every user, object and remaining path
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 

@@ -92,6 +92,17 @@ def apply(state: Dict[str, Dict[str, Dict[str, Any]]], ops: List[Dict[str, Any]]
                 s["permission_set"][into] = {**s["permission_set"][into], "systemPermissions": sorted(merged)}
             for a in [a for a in s["assignment"].values() if a.get("PermissionSetId") == sid]:
                 s["assignment"][f"{a['AssigneeId']}:{into}"] = {"AssigneeId": a["AssigneeId"], "PermissionSetId": into}
+            # A profile's own set isn't assigned: its users come with the profile. Merging it moves
+            # them to the target's profile, or gives them the target set.
+            src_ps, dst_ps = s["permission_set"].get(sid) or {}, s["permission_set"].get(into) or {}
+            if src_ps.get("IsOwnedByProfile") and src_ps.get("ProfileId"):
+                for uid, u in list(s["user"].items()):
+                    if u.get("ProfileId") != src_ps["ProfileId"]:
+                        continue
+                    if dst_ps.get("IsOwnedByProfile") and dst_ps.get("ProfileId"):
+                        s["user"][uid] = {**u, "ProfileId": dst_ps["ProfileId"]}
+                    else:
+                        s["assignment"][f"{uid}:{into}"] = {"AssigneeId": uid, "PermissionSetId": into}
             s["permission_set"].pop(sid, None)
             for k in [k for k, a in s["assignment"].items() if a.get("PermissionSetId") == sid]:
                 s["assignment"].pop(k)
@@ -244,6 +255,17 @@ def source_changes(before: Dict[str, Any], after: Dict[str, Any]) -> List[Dict[s
     return out
 
 
+def profile_moves(before: Dict[str, Any], after: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Users moved to another profile (merging profile sets), as counts."""
+    names = {k: v.get("Name") or k for k, v in (before.get("profile") or {}).items()}
+    moved: Dict[Tuple[str, str], int] = defaultdict(int)
+    for uid, u in (before.get("user") or {}).items():
+        new = ((after.get("user") or {}).get(uid) or {}).get("ProfileId")
+        if u.get("ProfileId") and new and new != u.get("ProfileId"):
+            moved[(u["ProfileId"], new)] += 1
+    return [{"from": names.get(a, a), "to": names.get(b, b), "users": n} for (a, b), n in sorted(moved.items())]
+
+
 def simulate(state: Dict[str, Any], ops: List[Dict[str, Any]]) -> Dict[str, Any]:
     after = apply(state, ops)
     before_acc, after_acc = effective_access(state), effective_access(after)
@@ -359,6 +381,7 @@ def simulate(state: Dict[str, Any], ops: List[Dict[str, Any]]) -> Dict[str, Any]
         "paths": [{**p, "name": (users.get(p["user"]) or {}).get("Name") or p["user"]} for p in paths],
         "unpredictable": unpredictable,
         "sources": source_changes(state, after),
+        "profileMoves": profile_moves(state, after),
     }
 
 

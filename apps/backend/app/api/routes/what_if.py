@@ -11,6 +11,10 @@
   GET    /orgs/{org_id}/what-if/drafts/{id}/impact   view=users|changes|items|paths|sources,
                                                      paged; summary and what can't
                                                      be predicted on every page
+  POST   /orgs/{org_id}/what-if/preview            {restructure_moves:[ids]}: the summary,
+                                                     the top objects and what can't be
+                                                     predicted, without saving a scenario
+                                                     (Restructure Studio's move drawer)
   GET    /orgs/{org_id}/what-if/catalog              users, sets, groups, roles,
                                                      objects of the starting state,
                                                      paged, for building changes
@@ -168,6 +172,42 @@ async def delete_draft(org_id: str, draft_id: str, request: Request, db: AsyncSe
     return {"deleted": draft_id}
 
 
+USERS_NOTE = ("User and role counts need a privacy level that keeps users; this org is at Metadata only. "
+              "The changes per profile, permission set and group are shown.")
+
+
+def _privacy_extra(result: Dict[str, Any], users_ok: bool, n_ops: int) -> Dict[str, Any]:
+    """The summary and notes every impact response carries. At Metadata only
+    there are no user or role counts at all, only the operation count."""
+    return {"summary": result["summary"] if users_ok else {"operations": n_ops},
+            "unpredictable": result["unpredictable"], "usersAllowed": users_ok,
+            "note": None if users_ok else USERS_NOTE}
+
+
+class Preview(BaseModel):
+    restructure_moves: List[str]
+
+
+@router.post("/orgs/{org_id}/what-if/preview")
+async def preview(org_id: str, body: Preview, db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
+    snap = await snaps.latest(db, org_id)
+    if snap is None:
+        raise HTTPException(status_code=409, detail="No snapshot yet: sync the org first.")
+    org = await db.get(Organization, org_id)
+    users_ok = org is not None and privacy_mode.allows(org, privacy_mode.USER_RECORDS)
+    moves = (await db.execute(select(RestructureMove).where(RestructureMove.organization_id == org_id,
+                                                            RestructureMove.id.in_(body.restructure_moves)))).scalars().all()
+    order = {mid: i for i, mid in enumerate(body.restructure_moves)}
+    ops = _from_moves(sorted(moves, key=lambda m: order[m.id]))
+    result = sim.simulate(await snaps.load_state(db, org_id, snap), ops)
+    return {**_privacy_extra(result, users_ok, len(ops)), "base": {"label": snap.label or f"Snapshot {snap.seq}"},
+            "computed": any(op["op"] != "sharing_rule" for op in ops),
+            "items": result["items"][:10] if users_ok else [], "itemsTotal": len(result["items"]) if users_ok else 0,
+            "sources": result["sources"][:10], "sourcesTotal": len(result["sources"]),
+            # Profiles are configuration; the user count goes with the privacy level.
+            "profileMoves": [{**m, "users": m["users"] if users_ok else None} for m in result["profileMoves"]]}
+
+
 @router.get("/orgs/{org_id}/what-if/drafts/{draft_id}/impact")
 async def impact(org_id: str, draft_id: str, view: str = Query("users"), params: PageParams = Depends(page_params),
                  db: AsyncSession = Depends(get_database)) -> Dict[str, Any]:
@@ -178,10 +218,7 @@ async def impact(org_id: str, draft_id: str, view: str = Query("users"), params:
     users_ok = org is not None and privacy_mode.allows(org, privacy_mode.USER_RECORDS)
     snap, state = await _base(db, d)
     result = sim.simulate(state, d.operations or [])
-    extra = {"view": view, "summary": result["summary"] if users_ok else {"operations": len(d.operations or [])},
-             "unpredictable": result["unpredictable"], "usersAllowed": users_ok,
-             "note": None if users_ok else ("Who is affected is left out at this org's privacy level (metadata only); "
-                                            "the changes per profile, set and group are shown.")}
+    extra = {"view": view, **_privacy_extra(result, users_ok, len(d.operations or []))}
     if view in USER_VIEWS and not users_ok:
         raise HTTPException(status_code=409, detail=extra["note"])
     rows = result[view]
